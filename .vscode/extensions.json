@@ -1,0 +1,6 @@
+{
+  "recommendations": [
+    "msjsdiag.vscode-react-native",
+    "expo.vscode-expo-tools"
+  ]
+}

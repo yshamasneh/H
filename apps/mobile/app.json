@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "TasawaQ",
+    "slug": "wasel",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.wasel.app"
+    },
+    "android": {
+      "package": "com.wasel.app"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F5FAFC",
+          "image": "./assets/logo/TasawaQ.png",
+          "imageWidth": 260,
+          "resizeMode": "contain"
+        }
+      ]
+    ]
+  }
+}

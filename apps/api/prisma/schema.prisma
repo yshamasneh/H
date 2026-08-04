@@ -1,0 +1,93 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  RESTAURANT
+  DRIVER
+  ADMIN
+}
+
+enum OtpPurpose {
+  CUSTOMER_SIGNUP
+  PASSWORD_RESET
+}
+
+model User {
+  id                  String               @id @default(uuid()) @db.Uuid
+  fullName            String
+  phone               String               @unique
+  email               String?              @unique
+  passwordHash        String
+  role                UserRole
+  phoneVerifiedAt     DateTime?
+  isActive            Boolean              @default(true)
+  tokenVersion        Int                  @default(0)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  refreshSessions     RefreshSession[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([role, isActive])
+}
+
+model RefreshSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model PhoneVerificationChallenge {
+  id                String     @id @default(uuid()) @db.Uuid
+  phone             String
+  purpose           OtpPurpose
+  codeHash          String
+  expiresAt         DateTime
+  attemptCount      Int        @default(0)
+  maxAttempts       Int
+  resendAvailableAt DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@index([phone, purpose, createdAt])
+  @@index([expiresAt])
+}
+
+model PendingCustomerRegistration {
+  id           String   @id @default(uuid()) @db.Uuid
+  fullName     String
+  phone        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@index([expiresAt])
+}

@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: tasawaq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tasawaq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tasawaq_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tasawaq}
+    ports:
+      - "5432:5432"
+    volumes:
+      - tasawaq_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  tasawaq_postgres_data:

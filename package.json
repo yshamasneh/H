@@ -1,0 +1,36 @@
+{
+  "name": "wasel",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@12.0.2",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:api",
+    "dev:api": "npm run dev --workspace @wasel/api",
+    "dev:mobile": "npm run start --workspace @wasel/mobile",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f db",
+    "prisma:generate": "npm run prisma:generate --workspace @wasel/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace @wasel/api",
+    "prisma:deploy": "npm run prisma:deploy --workspace @wasel/api",
+    "prisma:seed": "npm run prisma:seed --workspace @wasel/api",
+    "prisma:validate": "npm run prisma:validate --workspace @wasel/api",
+    "prisma:studio": "npm run prisma:studio --workspace @wasel/api",
+    "android": "npm run android --workspace @wasel/mobile",
+    "ios": "npm run ios --workspace @wasel/mobile",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.9.1": true,
+    "@scarf/scarf@1.4.0": false,
+    "argon2@0.45.1": true,
+    "esbuild@0.28.1": true,
+    "prisma@7.9.1": true
+  }
+}
