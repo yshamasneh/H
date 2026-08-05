@@ -40,3 +40,22 @@ The mobile app preserves its lightweight typed state navigation instead of intro
 ## Development infrastructure
 
 Docker Compose runs PostgreSQL 17 with a health check and named persistent volume. Prisma migration `20260804190000_customer_phone_auth` creates all authentication tables, constraints, enums, indexes, and foreign keys. The native splash, TasawaQ logo, Android project, Expo development-client configuration, and VS Code tasks remain in place.
+
+## Restaurants and menus
+
+`Restaurant` belongs to exactly one `RESTAURANT`-role `User` (`ownerUserId`, unique). `status` is `PENDING | APPROVED | REJECTED`; `isOpen` is a separate toggle the owner controls directly. A restaurant only appears in the public catalog when `status = APPROVED AND isOpen = true`; its detail and menu endpoints only require `status = APPROVED`, so a temporarily closed restaurant stays reachable by direct link. `MenuCategory` and `MenuItem` belong to a restaurant; items also belong to a category. `MenuItem.priceMinor` is a Postgres `INTEGER` (never a float), matching the money-handling rule in the product spec. Categories use `isActive` and items use `isAvailable` as soft-disable flags instead of deletion, so historical orders (once orders exist) can still reference a since-hidden item.
+
+### Restaurant onboarding sequence
+
+1. `POST /api/v1/restaurants/register` validates a strong password pair, normalizes the phone the same way customer signup does, and rejects an already-registered phone with `PHONE_ALREADY_REGISTERED`.
+2. One transaction creates a `RESTAURANT` `User` (with `phoneVerifiedAt` set immediately — there is no OTP step for restaurant onboarding) and a `PENDING` `Restaurant` owned by that user.
+3. The owner logs in through the existing, unmodified `POST /api/v1/auth/login`. They can manage their profile and menu while `PENDING`; only the public catalog is gated on approval.
+4. An `ADMIN` calls `POST /api/v1/admin/restaurants/:id/approve` (or `/reject`). Both only accept a restaurant currently in `PENDING` status.
+
+### Restaurant-portal ownership
+
+Every `/api/v1/restaurant/me/...` route resolves the caller's restaurant from `Restaurant.ownerUserId = request.user.id` — never from a client-supplied restaurant id. Where a category or item id does appear in a URL, the service re-verifies that resource's `restaurantId` matches the caller's own restaurant before reading or writing it, returning `404` (not `403`) on a mismatch. Role enforcement is a new `RolesGuard` + `@Roles()` decorator (`common/guards`, `common/decorators`) layered on top of the existing `JwtAuthGuard`, which is reused unchanged.
+
+### Public catalog
+
+`GET /api/v1/restaurants` (paginated), `GET /api/v1/restaurants/:id`, and `GET /api/v1/restaurants/:id/menu` require no authentication. The menu response only includes active categories and available items, each already filtered server-side — the mobile client does no additional filtering.

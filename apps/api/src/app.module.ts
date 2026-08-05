@@ -6,6 +6,7 @@ import { AuthModule } from "./auth/auth.module";
 import { validateEnvironment } from "./config/environment";
 import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { RestaurantsModule } from "./restaurants/restaurants.module";
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { PrismaModule } from "./prisma/prisma.module";
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     PrismaModule,
     AuthModule,
-    HealthModule
+    HealthModule,
+    RestaurantsModule
   ],
   providers: [
     {

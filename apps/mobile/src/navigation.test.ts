@@ -4,7 +4,10 @@ import {
   accountNotFoundToSignup,
   authResultToHome,
   forgotRequestToOtp,
+  goToRestaurantMenu,
+  goToRestaurants,
   goToSignup,
+  homeForUser,
   resetOtpToNewPassword,
   signupRequestToOtp
 } from "./navigation";
@@ -62,4 +65,25 @@ test("successful customer authentication navigates to Customer Home", () => {
   });
   assert.equal(screen.name, "home");
   assert.equal(screen.name === "home" && screen.user.role, "CUSTOMER");
+});
+
+const customer = { id: "1", fullName: "Customer", phone: "+970591234567", role: "CUSTOMER" as const };
+
+test("browsing restaurants carries the current user", () => {
+  const screen = goToRestaurants(customer);
+  assert.equal(screen.name, "restaurants");
+  assert.equal(screen.user.id, customer.id);
+});
+
+test("opening a restaurant navigates to its menu with the current user", () => {
+  const screen = goToRestaurantMenu(customer, { id: "r1", name: "Falafel House" });
+  assert.equal(screen.name, "restaurant-menu");
+  assert.equal(screen.restaurantId, "r1");
+  assert.equal(screen.restaurantName, "Falafel House");
+  assert.equal(screen.user.id, customer.id);
+});
+
+test("leaving restaurant browsing returns to Home for the same user", () => {
+  const screen = homeForUser(customer);
+  assert.deepEqual(screen, { name: "home", user: customer });
 });

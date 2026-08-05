@@ -40,8 +40,27 @@ async function main(): Promise<void> {
       isActive: true
     }
   });
-
   console.log("Seeded local customer: +970590000000");
+
+  await prisma.user.upsert({
+    where: { phone: "+970590000001" },
+    create: {
+      fullName: "admin",
+      phone: "+970590000001",
+      passwordHash,
+      role: UserRole.ADMIN,
+      phoneVerifiedAt: new Date(),
+      isActive: true
+    },
+    update: {
+      fullName: "admin",
+      passwordHash,
+      role: UserRole.ADMIN,
+      phoneVerifiedAt: new Date(),
+      isActive: true
+    }
+  });
+  console.log("Seeded local admin: +970590000001");
 }
 
 main()

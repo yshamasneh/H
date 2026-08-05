@@ -21,6 +21,12 @@ enum OtpPurpose {
   PASSWORD_RESET
 }
 
+enum RestaurantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id                  String               @id @default(uuid()) @db.Uuid
   fullName            String
@@ -35,6 +41,7 @@ model User {
   updatedAt           DateTime             @updatedAt
   refreshSessions     RefreshSession[]
   passwordResetTokens PasswordResetToken[]
+  restaurant          Restaurant?
 
   @@index([role, isActive])
 }
@@ -90,4 +97,55 @@ model PasswordResetToken {
 
   @@index([userId, consumedAt])
   @@index([expiresAt])
+}
+
+model Restaurant {
+  id           String           @id @default(uuid()) @db.Uuid
+  ownerUserId  String           @unique @db.Uuid
+  name         String
+  description  String?
+  phone        String
+  status       RestaurantStatus @default(PENDING)
+  isOpen       Boolean          @default(false)
+  addressLine  String
+  logoUrl      String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  owner        User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  categories   MenuCategory[]
+  items        MenuItem[]
+
+  @@index([status, isOpen])
+}
+
+model MenuCategory {
+  id           String     @id @default(uuid()) @db.Uuid
+  restaurantId String     @db.Uuid
+  name         String
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items        MenuItem[]
+
+  @@index([restaurantId, sortOrder])
+}
+
+model MenuItem {
+  id           String       @id @default(uuid()) @db.Uuid
+  restaurantId String       @db.Uuid
+  categoryId   String       @db.Uuid
+  name         String
+  description  String?
+  priceMinor   Int
+  imageUrl     String?
+  isAvailable  Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  category     MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId, isAvailable])
+  @@index([categoryId])
 }

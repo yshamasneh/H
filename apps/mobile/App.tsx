@@ -27,12 +27,16 @@ import {
   authResultToHome,
   forgotRequestToOtp,
   goToLogin,
+  goToRestaurantMenu,
+  goToRestaurants,
   goToSignup,
+  homeForUser,
   initialScreen,
   resetOtpToNewPassword,
   signupRequestToOtp,
   type AppScreen
 } from "./src/navigation";
+import { RestaurantListScreen, RestaurantMenuScreen } from "./src/restaurant-screens";
 
 const accessTokenStorageKey = "wasel_access_token";
 const refreshTokenStorageKey = "wasel_refresh_token";
@@ -187,7 +191,31 @@ function TasawaQApp() {
         />
       );
     case "home":
-      return <HomeScreen notice={screen.notice} onLogout={handleLogout} user={screen.user} />;
+      return (
+        <HomeScreen
+          notice={screen.notice}
+          onBrowseRestaurants={
+            screen.user.role === "CUSTOMER" ? () => setScreen(goToRestaurants(screen.user)) : undefined
+          }
+          onLogout={handleLogout}
+          user={screen.user}
+        />
+      );
+    case "restaurants":
+      return (
+        <RestaurantListScreen
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onOpenRestaurant={(restaurant) => setScreen(goToRestaurantMenu(screen.user, restaurant))}
+        />
+      );
+    case "restaurant-menu":
+      return (
+        <RestaurantMenuScreen
+          onBack={() => setScreen(goToRestaurants(screen.user))}
+          restaurantId={screen.restaurantId}
+          restaurantName={screen.restaurantName}
+        />
+      );
   }
 }
 

@@ -381,7 +381,12 @@ export function NewPasswordScreen(props: {
   );
 }
 
-export function HomeScreen(props: { user: PublicUser; notice?: string; onLogout: () => Promise<void> }) {
+export function HomeScreen(props: {
+  user: PublicUser;
+  notice?: string;
+  onLogout: () => Promise<void>;
+  onBrowseRestaurants?: () => void;
+}) {
   const [loading, setLoading] = useState(false);
   async function submitLogout() {
     setLoading(true);
@@ -405,6 +410,9 @@ export function HomeScreen(props: { user: PublicUser; notice?: string; onLogout:
           <Text style={styles.roleBadgeText}>{props.user.role}</Text>
         </View>
       </View>
+      {props.onBrowseRestaurants ? (
+        <PrimaryButton label="Browse Restaurants" onPress={props.onBrowseRestaurants} />
+      ) : null}
       <SecondaryButton label="Log out" loading={loading} onPress={submitLogout} />
     </AuthLayout>
   );

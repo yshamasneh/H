@@ -38,7 +38,7 @@ async function bootstrap() {
     const swaggerConfig = new DocumentBuilder()
       .setTitle("TasawaQ API")
       .setDescription("TasawaQ local development API")
-      .setVersion("0.2.0")
+      .setVersion("0.3.0")
       .addBearerAuth()
       .build();
     SwaggerModule.setup("api/docs", app, SwaggerModule.createDocument(app, swaggerConfig));

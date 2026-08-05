@@ -40,6 +40,43 @@ export type PhoneInput = {
 
 export type VerifyOtpInput = PhoneInput & { code: string };
 
+export type RestaurantSummary = {
+  id: string;
+  name: string;
+  description: string | null;
+  phone: string;
+  addressLine: string;
+  logoUrl: string | null;
+  isOpen: boolean;
+};
+
+export type MenuItemSummary = {
+  id: string;
+  name: string;
+  description: string | null;
+  priceMinor: number;
+  imageUrl: string | null;
+};
+
+export type MenuCategorySummary = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  items: MenuItemSummary[];
+};
+
+export type RestaurantMenu = {
+  restaurant: RestaurantSummary;
+  categories: MenuCategorySummary[];
+};
+
+export type Page<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
 type ApiErrorPayload = {
   statusCode?: number;
   code?: string;
@@ -112,9 +149,17 @@ export function resetPassword(input: {
   return request("/api/v1/auth/password/reset", { method: "POST", body: input });
 }
 
+export function listRestaurants(page = 1, pageSize = 20): Promise<Page<RestaurantSummary>> {
+  return request(`/api/v1/restaurants?page=${page}&pageSize=${pageSize}`);
+}
+
+export function getRestaurantMenu(restaurantId: string): Promise<RestaurantMenu> {
+  return request(`/api/v1/restaurants/${restaurantId}/menu`);
+}
+
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown; accessToken?: string }
+  options: { method?: "GET" | "POST"; body?: unknown; accessToken?: string } = {}
 ): Promise<T> {
   let response: Response;
   try {

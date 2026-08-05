@@ -1,4 +1,4 @@
-import type { AuthResult, OtpRequestResult, PublicUser, SignupInput } from "./api";
+import type { AuthResult, OtpRequestResult, PublicUser, RestaurantSummary, SignupInput } from "./api";
 import type { CountryCode } from "./phone";
 
 export type PhonePrefill = { countryCode: CountryCode; phoneNumber: string };
@@ -17,7 +17,9 @@ export type AppScreen =
       signupDraft?: SignupInput;
     }
   | { name: "new-password"; resetToken: string }
-  | { name: "home"; user: PublicUser; notice?: string };
+  | { name: "home"; user: PublicUser; notice?: string }
+  | { name: "restaurants"; user: PublicUser }
+  | { name: "restaurant-menu"; user: PublicUser; restaurantId: string; restaurantName: string };
 
 export const initialScreen: AppScreen = { name: "login" };
 
@@ -72,4 +74,19 @@ export function resetOtpToNewPassword(
 
 export function authResultToHome(result: AuthResult): Extract<AppScreen, { name: "home" }> {
   return { name: "home", user: result.user };
+}
+
+export function goToRestaurants(user: PublicUser): Extract<AppScreen, { name: "restaurants" }> {
+  return { name: "restaurants", user };
+}
+
+export function goToRestaurantMenu(
+  user: PublicUser,
+  restaurant: Pick<RestaurantSummary, "id" | "name">
+): Extract<AppScreen, { name: "restaurant-menu" }> {
+  return { name: "restaurant-menu", user, restaurantId: restaurant.id, restaurantName: restaurant.name };
+}
+
+export function homeForUser(user: PublicUser): Extract<AppScreen, { name: "home" }> {
+  return { name: "home", user };
 }

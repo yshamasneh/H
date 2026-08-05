@@ -1,6 +1,6 @@
 # TasawaQ
 
-TasawaQ is a React Native food-delivery app with a NestJS API, PostgreSQL, and Prisma. Customer authentication uses a verified `+970` or `+972` phone number and password. The Android app is an Expo development build; Expo Go is not required.
+TasawaQ is a React Native food-delivery app with a NestJS API, PostgreSQL, and Prisma. Customer authentication uses a verified `+970` or `+972` phone number and password. Customers can browse approved, open restaurants and their menus. The Android app is an Expo development build; Expo Go is not required.
 
 ## Stack
 
@@ -127,15 +127,20 @@ $env:EXPO_PUBLIC_API_URL="http://YOUR_COMPUTER_LAN_IP:3000"
 npm run dev:mobile
 ```
 
-## Local development customer
+## Local development accounts
 
-This account is for local development only:
+These accounts are for local development only:
 
 ```text
 Full name: test
 Phone: +970590000000
 Password: Test@12345
 Role: CUSTOMER
+
+Full name: admin
+Phone: +970590000001
+Password: Test@12345
+Role: ADMIN
 ```
 
 The seed hashes the password and uses an idempotent upsert. Running `npm run prisma:seed` repeatedly does not create duplicates and never sends an OTP.
@@ -147,6 +152,12 @@ Signup collects a full name, one of the two supported country codes, a local pho
 Login normalizes the phone, checks an active verified PostgreSQL user, returns access and refresh tokens, and routes by the server-provided role. The customer home screen shows only the customer's name, normalized phone, role, and logout action.
 
 Forgot Password creates a reset OTP only for an existing account. An unknown number receives `ACCOUNT_NOT_FOUND`, and the app offers Customer Sign Up with the phone prefilled. A valid reset OTP produces a short-lived, single-use reset token. Changing the password consumes that token and revokes existing refresh sessions.
+
+## Restaurants and menus
+
+A restaurant owner registers with `POST /api/v1/restaurants/register` (phone, password, restaurant name, and address); this creates a `RESTAURANT`-role account and a restaurant in `PENDING` status, no OTP required. The owner logs in with the same phone/password Login screen the app already has, then manages their profile and menu through the `/api/v1/restaurant/me/...` endpoints. A restaurant only appears to customers once an `ADMIN` approves it with `POST /api/v1/admin/restaurants/:id/approve`.
+
+There is no restaurant-owner or admin screen in the mobile app yet — Phase 3 only added the customer-facing browse/menu screens. Use the Swagger UI at `http://localhost:3000/api/docs` to register a restaurant, log in as the seeded admin (`+970590000001` / `Test@12345`) to approve it, then log in as the restaurant owner to add a menu category and item. Once approved and open, the restaurant shows up in the mobile app's Customer Home under "Browse Restaurants".
 
 ## Checks
 
