@@ -63,3 +63,35 @@ Remaining before Phase 4 (cart/checkout/orders) can start:
 - `Restaurant.status` has no `SUSPENDED` state and no endpoint changes an already-approved restaurant's status; that decision is deferred (see `docs/decisions.md`).
 - The public menu and detail endpoints are unauthenticated by design (matches the spec), but there is still no rate limiting tuned specifically for catalog browsing beyond the global throttler defaults.
 - Phase 4 will need `Order`, `OrderItem`, and a local cart; menu items and categories created in this phase are ready to be referenced by `menuItemId` with server-side price snapshots.
+
+## 2026-08-06: Phase 4 — Cart, Checkout & Orders
+
+Completed:
+
+- Added `Order` and `OrderItem` to the Prisma schema plus migration `20260806000000_orders_cart_checkout`, with `OrderStatus` (`PLACED | CANCELLED`, only `PLACED` reachable this phase) and `OrderPaymentMethod` (`CASH` only, modeled as an enum for future extension). `OrderItem` stores an immutable `nameSnapshot`/`priceMinorSnapshot` taken at order-creation time; order totals and item prices are never recalculated from live `MenuItem` data afterward. Added indexes on `(customerId, createdAt)` and `(restaurantId, createdAt)` for the two "my orders, most recent first" query patterns, plus DB-level `CHECK` constraints on every money/quantity column, matching Phase 3's migration style.
+- Added `POST /api/v1/orders`: validates the restaurant is `APPROVED` and `isOpen`, validates every `menuItemId` belongs to that restaurant and is `isAvailable`, rejects the whole order (no partial creation) if any line fails either check, re-reads current `priceMinor` from the database for every line (the DTO does not even accept a client-supplied price field), and creates the `Order` plus all `OrderItem` rows atomically inside a single Prisma transaction. Delivery fee and service fee are computed by an isolated `calculateOrderFees()` function (`apps/api/src/orders/pricing.ts`) using a flat-rate placeholder, documented as the single point to swap in real pricing logic later.
+- Added `GET /api/v1/orders/me` (paginated, most recent first, includes items and restaurant summary) and `GET /api/v1/orders/:id` (customer's own order only, generic `ORDER_NOT_FOUND` on mismatch) for customers.
+- Added `GET /api/v1/restaurant/me/orders` and `GET /api/v1/restaurant/me/orders/:id` for restaurant owners, with ownership resolved from `Restaurant.ownerUserId = request.user.id` exactly as Phase 3's menu endpoints do it — never from a client-supplied restaurant id.
+- Added a mobile cart (`src/cart.ts`, pure functions, no new state library — a `useState<Cart | null>` lifted into `App.tsx`), scoped to a single restaurant; adding an item from a different restaurant while the cart is non-empty prompts a native confirm dialog to clear it first.
+- Added mobile Cart, Checkout, Order Confirmation, Order History, and Order Detail screens (`src/cart-screens.tsx`), and extended `RestaurantMenuScreen` with per-item "Add" buttons and a floating "View Cart" bar. Checkout collects a delivery address label/line and a payment method (cash only, rendered from an array so future methods appear automatically), calls `POST /orders`, and only displays the server-returned authoritative totals — the cart screen's running subtotal is explicitly labeled as an estimate throughout.
+- Extracted SecureStore token access from `App.tsx` into `src/session.ts` so the new checkout/order screens can read the access token without prop-drilling it through unrelated screens; login/logout/restore-session behavior is unchanged.
+- Added 9 new backend tests (`orders.service.test.ts`) covering: server ignores a client-supplied price and uses the real database price; rejection when the restaurant is unapproved or closed; rejection (with no partial order) when a requested item is unavailable or belongs to a different restaurant; server-computed totals; customer A cannot read customer B's order; restaurant A cannot read restaurant B's incoming orders or list; and order item snapshots stay correct after the underlying menu item's price and name change post-order. Added 7 new mobile tests (`cart.test.ts`) covering the pure cart logic (add/increment, remove-at-zero, restaurant scoping, subtotal/count).
+
+Verified:
+
+- `npm run lint`, `npm run typecheck`, and `npm test` pass across both workspaces (63 tests total: 46 API — 37 prior + 9 new — and 17 mobile — 10 prior + 7 new).
+- `npm run build --workspace @wasel/api` (includes `prisma generate`) and `npm run prisma:validate` succeed.
+- `npx expo export --platform all` bundles both the Android and iOS mobile bundles cleanly (703/705 modules) with the new cart/checkout/order screens wired in.
+- The auth module (`apps/api/src/auth/**`) and Phase 3's restaurant/menu module internals were not modified; `OrdersService` reads `Restaurant` and `MenuItem` rows directly through the shared Prisma client rather than importing `RestaurantsService`.
+
+Known gap — not run in this environment:
+
+- This development environment has no Docker daemon and no local PostgreSQL install, so the `20260806000000_orders_cart_checkout` migration was hand-authored (following Phase 3's existing migration SQL style exactly) rather than generated and applied via `prisma migrate dev` against a live database. `prisma generate` and `prisma validate` both succeed and the full test suite runs against in-memory fakes, but the migration itself has not been executed against Postgres. Run `npm run prisma:migrate` (or `prisma migrate deploy` in a deployed environment) once a database is reachable, before relying on this schema in a running instance.
+
+Remaining before Phase 5 (restaurant order operations) can start:
+
+- Orders stay at `PLACED` forever in this phase by design — there is no accept/reject/preparing/ready transition, no `OrderStatusHistory`, and no customer-facing cancel endpoint yet. All of that is Phase 5's transition-map work.
+- No real payment gateway; `CASH` is the only payment method, matching the spec's own MVP scope.
+- Delivery fee/service fee are a flat-rate placeholder (`apps/api/src/orders/pricing.ts`); no real pricing rules engine exists yet.
+- There is still no saved-address book (`Address` model/CRUD) — delivery address is entered fresh at checkout each time as plain fields on `Order`. Latitude/longitude columns exist on `Order` but have no input UI yet (no map/location picker in the app).
+- No WebSocket/real-time order updates and no push/in-app notifications yet — those are Phase 7.

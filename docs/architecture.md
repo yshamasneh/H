@@ -59,3 +59,21 @@ Every `/api/v1/restaurant/me/...` route resolves the caller's restaurant from `R
 ### Public catalog
 
 `GET /api/v1/restaurants` (paginated), `GET /api/v1/restaurants/:id`, and `GET /api/v1/restaurants/:id/menu` require no authentication. The menu response only includes active categories and available items, each already filtered server-side — the mobile client does no additional filtering.
+
+## Cart, checkout, and orders
+
+`Order` belongs to one `CUSTOMER` `User` and one `Restaurant`. `OrderItem` belongs to an `Order` and references a `MenuItem`, but stores its own immutable `nameSnapshot`/`priceMinorSnapshot` taken at creation time — the two are never re-derived from live `MenuItem` rows after the order exists, even if the restaurant later changes that item's price or name. `OrderStatus` (`PLACED | CANCELLED`) and `OrderPaymentMethod` (`CASH`, modeled as an enum for future methods) are both intentionally minimal for this phase; every order created here stays `PLACED`, and the restaurant-side accept/reject/preparing transition map is Phase 5's work. Delivery address is three-to-four plain columns on `Order` (`deliveryLabel`, `deliveryAddressLine`, optional `deliveryLatitude`/`deliveryLongitude`) rather than a reusable `Address` model, since no address book exists yet in this codebase.
+
+### Order-creation sequence
+
+1. `POST /api/v1/orders` (`CUSTOMER`, JWT) runs entirely inside one Prisma transaction. It re-reads the restaurant by id and requires `status = APPROVED` and `isOpen = true`, re-reads every requested `menuItemId` scoped to that restaurant and requires `isAvailable = true` for all of them — if any single line fails, the whole order is rejected and nothing is written (no partial orders).
+2. Subtotal is computed entirely from server-read `MenuItem.priceMinor` values; the create-order DTO does not even accept a client-supplied price field. `calculateOrderFees(subtotalMinor)` (`apps/api/src/orders/pricing.ts`) — an isolated, named function — returns a flat placeholder delivery fee and service fee that can be replaced with a real rules engine later without touching the transaction logic. `discountMinor` is hardcoded to `0` (no coupon system yet).
+3. The `Order` and all `OrderItem` rows are created together in the same transaction, with snapshots taken at that moment, and the full order (items + restaurant summary) is returned to the client as the authoritative result.
+
+### Order ownership
+
+`GET /api/v1/orders/me` and `GET /api/v1/orders/:id` scope to `request.user.id` as `customerId`; a mismatched order id returns a generic `ORDER_NOT_FOUND`, the same pattern Phase 3 uses for cross-restaurant menu access. `GET /api/v1/restaurant/me/orders` and `.../:id` resolve the caller's restaurant the same way Phase 3's `RestaurantsService.requireOwnRestaurant` does (`Restaurant.ownerUserId = request.user.id`), but `OrdersService` runs that lookup itself via the shared Prisma client rather than importing `RestaurantsService`, keeping the `orders` and `restaurants` Nest modules decoupled.
+
+### Mobile cart
+
+The cart is a single `useState<Cart | null>` lifted into `App.tsx` (no new state-management library), backed by pure functions in `src/cart.ts`. It is scoped to one restaurant at a time; adding an item while the cart holds items from a different restaurant triggers a native `Alert.alert` confirm/cancel prompt before clearing it. The cart screen's running subtotal is explicitly labeled an estimate; checkout only ever displays totals returned by `POST /orders`, never a locally computed total. `src/session.ts` centralizes SecureStore access-token/refresh-token storage (extracted from `App.tsx`) so the new checkout/order-history/order-detail screens can read the access token without prop-drilling it through unrelated screens.

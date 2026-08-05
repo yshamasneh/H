@@ -77,6 +77,57 @@ export type Page<T> = {
   total: number;
 };
 
+export const orderPaymentMethods = ["CASH"] as const;
+export type OrderPaymentMethod = (typeof orderPaymentMethods)[number];
+export type OrderStatusValue = "PLACED" | "CANCELLED";
+
+export type OrderItemView = {
+  id: string;
+  menuItemId: string;
+  nameSnapshot: string;
+  priceMinorSnapshot: number;
+  quantity: number;
+  lineTotalMinor: number;
+};
+
+export type OrderRestaurantSummary = {
+  id: string;
+  name: string;
+};
+
+export type OrderDetail = {
+  id: string;
+  status: OrderStatusValue;
+  paymentMethod: OrderPaymentMethod;
+  restaurant: OrderRestaurantSummary;
+  deliveryLabel: string;
+  deliveryAddressLine: string;
+  deliveryLatitude: number | null;
+  deliveryLongitude: number | null;
+  items: OrderItemView[];
+  subtotalMinor: number;
+  deliveryFeeMinor: number;
+  serviceFeeMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  createdAt: string;
+};
+
+export type CreateOrderItemInput = {
+  menuItemId: string;
+  quantity: number;
+};
+
+export type CreateOrderInput = {
+  restaurantId: string;
+  items: CreateOrderItemInput[];
+  deliveryLabel: string;
+  deliveryAddressLine: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
+  paymentMethod: OrderPaymentMethod;
+};
+
 type ApiErrorPayload = {
   statusCode?: number;
   code?: string;
@@ -155,6 +206,18 @@ export function listRestaurants(page = 1, pageSize = 20): Promise<Page<Restauran
 
 export function getRestaurantMenu(restaurantId: string): Promise<RestaurantMenu> {
   return request(`/api/v1/restaurants/${restaurantId}/menu`);
+}
+
+export function createOrder(accessToken: string, input: CreateOrderInput): Promise<OrderDetail> {
+  return request("/api/v1/orders", { method: "POST", body: input, accessToken });
+}
+
+export function listMyOrders(accessToken: string, page = 1, pageSize = 20): Promise<Page<OrderDetail>> {
+  return request(`/api/v1/orders/me?page=${page}&pageSize=${pageSize}`, { accessToken });
+}
+
+export function getMyOrder(accessToken: string, orderId: string): Promise<OrderDetail> {
+  return request(`/api/v1/orders/${orderId}`, { accessToken });
 }
 
 async function request<T>(

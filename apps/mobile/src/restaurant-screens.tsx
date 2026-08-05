@@ -15,9 +15,11 @@ import {
   getRestaurantMenu,
   listRestaurants,
   type MenuCategorySummary,
+  type MenuItemSummary,
   type RestaurantMenu,
   type RestaurantSummary
 } from "./api";
+import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
 
 const currencyCode = "ILS";
 
@@ -92,7 +94,10 @@ export function RestaurantListScreen(props: RestaurantListScreenProps) {
 type RestaurantMenuScreenProps = {
   restaurantId: string;
   restaurantName: string;
+  cart: Cart | null;
   onBack: () => void;
+  onAddItem: (item: MenuItemSummary) => void;
+  onViewCart: () => void;
 };
 
 export function RestaurantMenuScreen(props: RestaurantMenuScreenProps) {
@@ -114,6 +119,8 @@ export function RestaurantMenuScreen(props: RestaurantMenuScreenProps) {
       isMounted = false;
     };
   }, [props.restaurantId]);
+
+  const showCartBar = props.cart !== null && cartBelongsToRestaurant(props.cart, props.restaurantId);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -140,14 +147,25 @@ export function RestaurantMenuScreen(props: RestaurantMenuScreenProps) {
           contentContainerStyle={styles.listContent}
           data={menu.categories}
           keyExtractor={(category) => category.id}
-          renderItem={({ item }) => <MenuCategorySection category={item} />}
+          renderItem={({ item }) => <MenuCategorySection category={item} onAddItem={props.onAddItem} />}
         />
       )}
+      {showCartBar ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={props.onViewCart}
+          style={({ pressed }) => [styles.cartBar, pressed && styles.cartBarPressed]}
+        >
+          <Text style={styles.cartBarText}>
+            View Cart ({cartItemCount(props.cart!)}) - {formatPrice(cartSubtotalMinor(props.cart!))}
+          </Text>
+        </Pressable>
+      ) : null}
     </SafeAreaView>
   );
 }
 
-function MenuCategorySection(props: { category: MenuCategorySummary }) {
+function MenuCategorySection(props: { category: MenuCategorySummary; onAddItem: (item: MenuItemSummary) => void }) {
   return (
     <View style={styles.categorySection}>
       <Text style={styles.categoryTitle}>{props.category.name}</Text>
@@ -156,8 +174,16 @@ function MenuCategorySection(props: { category: MenuCategorySummary }) {
           <View style={styles.itemInfo}>
             <Text style={styles.itemName}>{item.name}</Text>
             {item.description ? <Text style={styles.itemDescription}>{item.description}</Text> : null}
+            <Text style={styles.itemPrice}>{formatPrice(item.priceMinor)}</Text>
           </View>
-          <Text style={styles.itemPrice}>{formatPrice(item.priceMinor)}</Text>
+          <Pressable
+            accessibilityLabel={`Add ${item.name} to cart`}
+            accessibilityRole="button"
+            onPress={() => props.onAddItem(item)}
+            style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+          >
+            <Text style={styles.addButtonText}>Add</Text>
+          </Pressable>
         </View>
       ))}
     </View>
@@ -253,7 +279,28 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1, paddingRight: 12 },
   itemName: { color: "#0F172A", fontSize: 15, fontWeight: "700" },
   itemDescription: { color: "#64748B", fontSize: 13, marginTop: 4 },
-  itemPrice: { color: "#0F766E", fontSize: 15, fontWeight: "800" },
+  itemPrice: { color: "#0F766E", fontSize: 15, fontWeight: "800", marginTop: 6 },
+  addButton: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: "#0F766E",
+    borderRadius: 10,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10
+  },
+  addButtonPressed: { opacity: 0.85 },
+  addButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  cartBar: {
+    backgroundColor: "#0F766E",
+    bottom: 0,
+    left: 0,
+    padding: 16,
+    position: "absolute",
+    right: 0
+  },
+  cartBarPressed: { opacity: 0.9 },
+  cartBarText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800", textAlign: "center" },
   errorBox: { alignItems: "center" },
   errorText: { color: "#B91C1C", fontSize: 14, lineHeight: 20, textAlign: "center" },
   retryButton: {

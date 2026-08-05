@@ -1,7 +1,7 @@
-import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   StatusBar,
   StyleSheet,
@@ -12,7 +12,9 @@ import {
   fetchCurrentUser,
   logout,
   refreshSession,
-  type AuthResult
+  type AuthResult,
+  type MenuItemSummary,
+  type RestaurantSummary
 } from "./src/api";
 import {
   ForgotPasswordScreen,
@@ -23,23 +25,41 @@ import {
   SignupScreen
 } from "./src/auth-screens";
 import {
+  addCartItem,
+  removeCartItem,
+  setCartItemQuantity,
+  startCart,
+  type Cart
+} from "./src/cart";
+import {
+  CartScreen,
+  CheckoutScreen,
+  OrderConfirmationScreen,
+  OrderDetailScreen,
+  OrderHistoryScreen
+} from "./src/cart-screens";
+import {
   accountNotFoundToSignup,
   authResultToHome,
   forgotRequestToOtp,
+  goToCart,
+  goToCheckout,
   goToLogin,
+  goToOrderDetail,
+  goToOrderHistory,
   goToRestaurantMenu,
   goToRestaurants,
   goToSignup,
   homeForUser,
   initialScreen,
+  orderToConfirmation,
   resetOtpToNewPassword,
   signupRequestToOtp,
   type AppScreen
 } from "./src/navigation";
 import { RestaurantListScreen, RestaurantMenuScreen } from "./src/restaurant-screens";
+import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./src/session";
 
-const accessTokenStorageKey = "wasel_access_token";
-const refreshTokenStorageKey = "wasel_refresh_token";
 const splashDurationMs = 3000;
 const logo = require("./assets/logo/TasawaQ.png");
 
@@ -55,6 +75,7 @@ function TasawaQApp() {
   const [screen, setScreen] = useState<AppScreen>(initialScreen);
   const [isBooting, setIsBooting] = useState(true);
   const [isSplashVisible, setIsSplashVisible] = useState(true);
+  const [cart, setCart] = useState<Cart | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -64,10 +85,7 @@ function TasawaQApp() {
 
     async function restoreSession() {
       try {
-        const [accessToken, storedRefreshToken] = await Promise.all([
-          SecureStore.getItemAsync(accessTokenStorageKey),
-          SecureStore.getItemAsync(refreshTokenStorageKey)
-        ]);
+        const [accessToken, storedRefreshToken] = await Promise.all([getAccessToken(), getRefreshToken()]);
         if (!accessToken) return;
 
         try {
@@ -99,7 +117,7 @@ function TasawaQApp() {
   }
 
   async function handleLogout() {
-    const accessToken = await SecureStore.getItemAsync(accessTokenStorageKey);
+    const accessToken = await getAccessToken();
     if (accessToken) {
       try {
         await logout(accessToken);
@@ -108,7 +126,49 @@ function TasawaQApp() {
       }
     }
     await clearTokens();
+    setCart(null);
     setScreen(goToLogin());
+  }
+
+  function handleAddToCart(restaurant: Pick<RestaurantSummary, "id" | "name">, item: MenuItemSummary) {
+    if (cart && cart.restaurantId !== restaurant.id) {
+      Alert.alert(
+        "Start a new cart?",
+        `Your cart has items from ${cart.restaurantName}. Adding an item from ${restaurant.name} will clear it and start a new order.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Clear Cart",
+            style: "destructive",
+            onPress: () => setCart(startCart(restaurant, item))
+          }
+        ]
+      );
+      return;
+    }
+    setCart((current) => (current ? addCartItem(current, item) : startCart(restaurant, item)));
+  }
+
+  function handleIncrementCartItem(menuItemId: string) {
+    setCart((current) => {
+      if (!current) return current;
+      const line = current.items.find((item) => item.menuItemId === menuItemId);
+      if (!line) return current;
+      return setCartItemQuantity(current, menuItemId, line.quantity + 1);
+    });
+  }
+
+  function handleDecrementCartItem(menuItemId: string) {
+    setCart((current) => {
+      if (!current) return current;
+      const line = current.items.find((item) => item.menuItemId === menuItemId);
+      if (!line) return current;
+      return setCartItemQuantity(current, menuItemId, line.quantity - 1);
+    });
+  }
+
+  function handleRemoveCartItem(menuItemId: string) {
+    setCart((current) => (current ? removeCartItem(current, menuItemId) : current));
   }
 
   if (isSplashVisible) {
@@ -198,6 +258,9 @@ function TasawaQApp() {
             screen.user.role === "CUSTOMER" ? () => setScreen(goToRestaurants(screen.user)) : undefined
           }
           onLogout={handleLogout}
+          onViewOrders={
+            screen.user.role === "CUSTOMER" ? () => setScreen(goToOrderHistory(screen.user)) : undefined
+          }
           user={screen.user}
         />
       );
@@ -211,26 +274,58 @@ function TasawaQApp() {
     case "restaurant-menu":
       return (
         <RestaurantMenuScreen
+          cart={cart}
+          onAddItem={(item) =>
+            handleAddToCart({ id: screen.restaurantId, name: screen.restaurantName }, item)
+          }
           onBack={() => setScreen(goToRestaurants(screen.user))}
+          onViewCart={() => setScreen(goToCart(screen.user))}
           restaurantId={screen.restaurantId}
           restaurantName={screen.restaurantName}
         />
       );
+    case "cart":
+      return (
+        <CartScreen
+          cart={cart}
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onCheckout={() => setScreen(goToCheckout(screen.user))}
+          onDecrement={handleDecrementCartItem}
+          onIncrement={handleIncrementCartItem}
+          onRemove={handleRemoveCartItem}
+        />
+      );
+    case "checkout":
+      return (
+        <CheckoutScreen
+          cart={cart}
+          onBack={() => setScreen(goToCart(screen.user))}
+          onPlaced={(order) => {
+            setCart(null);
+            setScreen(orderToConfirmation(screen.user, order));
+          }}
+        />
+      );
+    case "order-confirmation":
+      return (
+        <OrderConfirmationScreen
+          onDone={() => setScreen(homeForUser(screen.user))}
+          onViewOrders={() => setScreen(goToOrderHistory(screen.user))}
+          order={screen.order}
+        />
+      );
+    case "order-history":
+      return (
+        <OrderHistoryScreen
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onOpenOrder={(orderId) => setScreen(goToOrderDetail(screen.user, orderId))}
+        />
+      );
+    case "order-detail":
+      return (
+        <OrderDetailScreen onBack={() => setScreen(goToOrderHistory(screen.user))} orderId={screen.orderId} />
+      );
   }
-}
-
-async function saveTokens(result: AuthResult): Promise<void> {
-  await Promise.all([
-    SecureStore.setItemAsync(accessTokenStorageKey, result.accessToken),
-    SecureStore.setItemAsync(refreshTokenStorageKey, result.refreshToken)
-  ]);
-}
-
-async function clearTokens(): Promise<void> {
-  await Promise.all([
-    SecureStore.deleteItemAsync(accessTokenStorageKey),
-    SecureStore.deleteItemAsync(refreshTokenStorageKey)
-  ]);
 }
 
 const styles = StyleSheet.create({

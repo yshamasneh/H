@@ -27,6 +27,15 @@ enum RestaurantStatus {
   REJECTED
 }
 
+enum OrderPaymentMethod {
+  CASH
+}
+
+enum OrderStatus {
+  PLACED
+  CANCELLED
+}
+
 model User {
   id                  String               @id @default(uuid()) @db.Uuid
   fullName            String
@@ -42,6 +51,7 @@ model User {
   refreshSessions     RefreshSession[]
   passwordResetTokens PasswordResetToken[]
   restaurant          Restaurant?
+  orders              Order[]
 
   @@index([role, isActive])
 }
@@ -114,6 +124,7 @@ model Restaurant {
   owner        User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   categories   MenuCategory[]
   items        MenuItem[]
+  orders       Order[]
 
   @@index([status, isOpen])
 }
@@ -145,7 +156,46 @@ model MenuItem {
   updatedAt    DateTime     @updatedAt
   restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   category     MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems   OrderItem[]
 
   @@index([restaurantId, isAvailable])
   @@index([categoryId])
+}
+
+model Order {
+  id                  String             @id @default(uuid()) @db.Uuid
+  customerId          String             @db.Uuid
+  restaurantId        String             @db.Uuid
+  status              OrderStatus        @default(PLACED)
+  paymentMethod       OrderPaymentMethod
+  deliveryLabel       String
+  deliveryAddressLine String
+  deliveryLatitude    Float?
+  deliveryLongitude   Float?
+  subtotalMinor       Int
+  deliveryFeeMinor    Int
+  serviceFeeMinor     Int
+  discountMinor       Int                @default(0)
+  totalMinor          Int
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  customer            User               @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  restaurant          Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items               OrderItem[]
+
+  @@index([customerId, createdAt])
+  @@index([restaurantId, createdAt])
+}
+
+model OrderItem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  orderId            String   @db.Uuid
+  menuItemId         String   @db.Uuid
+  nameSnapshot       String
+  priceMinorSnapshot Int
+  quantity           Int
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem           MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
 }

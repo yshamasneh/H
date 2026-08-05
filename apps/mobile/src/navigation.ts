@@ -1,4 +1,4 @@
-import type { AuthResult, OtpRequestResult, PublicUser, RestaurantSummary, SignupInput } from "./api";
+import type { AuthResult, OrderDetail, OtpRequestResult, PublicUser, RestaurantSummary, SignupInput } from "./api";
 import type { CountryCode } from "./phone";
 
 export type PhonePrefill = { countryCode: CountryCode; phoneNumber: string };
@@ -19,7 +19,12 @@ export type AppScreen =
   | { name: "new-password"; resetToken: string }
   | { name: "home"; user: PublicUser; notice?: string }
   | { name: "restaurants"; user: PublicUser }
-  | { name: "restaurant-menu"; user: PublicUser; restaurantId: string; restaurantName: string };
+  | { name: "restaurant-menu"; user: PublicUser; restaurantId: string; restaurantName: string }
+  | { name: "cart"; user: PublicUser }
+  | { name: "checkout"; user: PublicUser }
+  | { name: "order-confirmation"; user: PublicUser; order: OrderDetail }
+  | { name: "order-history"; user: PublicUser }
+  | { name: "order-detail"; user: PublicUser; orderId: string };
 
 export const initialScreen: AppScreen = { name: "login" };
 
@@ -89,4 +94,30 @@ export function goToRestaurantMenu(
 
 export function homeForUser(user: PublicUser): Extract<AppScreen, { name: "home" }> {
   return { name: "home", user };
+}
+
+export function goToCart(user: PublicUser): Extract<AppScreen, { name: "cart" }> {
+  return { name: "cart", user };
+}
+
+export function goToCheckout(user: PublicUser): Extract<AppScreen, { name: "checkout" }> {
+  return { name: "checkout", user };
+}
+
+export function orderToConfirmation(
+  user: PublicUser,
+  order: OrderDetail
+): Extract<AppScreen, { name: "order-confirmation" }> {
+  return { name: "order-confirmation", user, order };
+}
+
+export function goToOrderHistory(user: PublicUser): Extract<AppScreen, { name: "order-history" }> {
+  return { name: "order-history", user };
+}
+
+export function goToOrderDetail(
+  user: PublicUser,
+  orderId: string
+): Extract<AppScreen, { name: "order-detail" }> {
+  return { name: "order-detail", user, orderId };
 }

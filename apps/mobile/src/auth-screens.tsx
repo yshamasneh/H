@@ -386,6 +386,7 @@ export function HomeScreen(props: {
   notice?: string;
   onLogout: () => Promise<void>;
   onBrowseRestaurants?: () => void;
+  onViewOrders?: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   async function submitLogout() {
@@ -413,6 +414,7 @@ export function HomeScreen(props: {
       {props.onBrowseRestaurants ? (
         <PrimaryButton label="Browse Restaurants" onPress={props.onBrowseRestaurants} />
       ) : null}
+      {props.onViewOrders ? <SecondaryButton label="My Orders" onPress={props.onViewOrders} /> : null}
       <SecondaryButton label="Log out" loading={loading} onPress={submitLogout} />
     </AuthLayout>
   );

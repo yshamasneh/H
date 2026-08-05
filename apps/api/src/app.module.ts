@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AuthModule } from "./auth/auth.module";
 import { validateEnvironment } from "./config/environment";
 import { HealthModule } from "./health/health.module";
+import { OrdersModule } from "./orders/orders.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RestaurantsModule } from "./restaurants/restaurants.module";
 
@@ -19,7 +20,8 @@ import { RestaurantsModule } from "./restaurants/restaurants.module";
     PrismaModule,
     AuthModule,
     HealthModule,
-    RestaurantsModule
+    RestaurantsModule,
+    OrdersModule
   ],
   providers: [
     {
