@@ -15,7 +15,7 @@ import {
 } from "class-validator";
 import { PhoneDto, strongPasswordPattern } from "../auth/auth.dto";
 
-export const restaurantStatusValues = ["PENDING", "APPROVED", "REJECTED"] as const;
+export const restaurantStatusValues = ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"] as const;
 export type RestaurantStatusValue = (typeof restaurantStatusValues)[number];
 
 export class RestaurantRegisterDto extends PhoneDto {
@@ -216,4 +216,18 @@ export class AdminRestaurantsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(restaurantStatusValues)
   status?: RestaurantStatusValue;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isOpen?: boolean;
+}
+
+export class AdminActionReasonDto {
+  @ApiProperty({ example: "Multiple hygiene complaints" })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  reason!: string;
 }

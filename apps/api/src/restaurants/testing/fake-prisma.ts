@@ -52,17 +52,54 @@ type MenuItemRecord = {
   updatedAt: Date;
 };
 
+type OrderRecord = {
+  id: string;
+  restaurantId: string;
+  customerId: string;
+  status: string;
+  totalMinor: number;
+  createdAt: Date;
+};
+
+type NotificationRecord = {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  relatedEntityId: string | null;
+  isRead: boolean;
+  createdAt: Date;
+};
+
+type AuditLogRecord = {
+  id: string;
+  actorUserId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  reason: string | null;
+  metadataJson: unknown;
+  createdAt: Date;
+};
+
 export class FakeRestaurantPrisma {
   readonly users: UserRecord[] = [];
   readonly restaurants: RestaurantRecord[] = [];
   readonly menuCategories: MenuCategoryRecord[] = [];
   readonly menuItems: MenuItemRecord[] = [];
+  readonly orders: OrderRecord[] = [];
+  readonly notifications: NotificationRecord[] = [];
+  readonly auditLogs: AuditLogRecord[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly user = {} as any;
   readonly restaurant = {} as any;
   readonly menuCategory = {} as any;
   readonly menuItem = {} as any;
+  readonly order = {} as any;
+  readonly notification = {} as any;
+  readonly auditLog = {} as any;
 
   constructor() {
     this.user.findUnique = async ({ where }: any) =>
@@ -89,10 +126,13 @@ export class FakeRestaurantPrisma {
       return user;
     };
 
-    this.restaurant.findUnique = async ({ where }: any) =>
-      this.restaurants.find((restaurant) =>
-        where.id ? restaurant.id === where.id : restaurant.ownerUserId === where.ownerUserId
-      ) ?? null;
+    this.restaurant.findUnique = async ({ where, include }: any) => {
+      const restaurant = this.restaurants.find((candidate) =>
+        where.id ? candidate.id === where.id : candidate.ownerUserId === where.ownerUserId
+      );
+      if (!restaurant) return null;
+      return include?.owner ? { ...restaurant, owner: this.users.find((user) => user.id === restaurant.ownerUserId)! } : restaurant;
+    };
     this.restaurant.findFirst = async ({ where }: any) =>
       this.restaurants.find(
         (restaurant) =>
@@ -227,6 +267,56 @@ export class FakeRestaurantPrisma {
       item.updatedAt = new Date();
       return item;
     };
+
+    this.order.count = async ({ where }: any) =>
+      this.orders.filter((order) => !where?.restaurantId || order.restaurantId === where.restaurantId).length;
+    this.order.findMany = async ({ where, select, skip = 0, take, orderBy }: any) => {
+      let matches = this.orders.filter(
+        (order) =>
+          (!where?.restaurantId || order.restaurantId === where.restaurantId) &&
+          (!where?.status || order.status === where.status)
+      );
+      if (orderBy?.createdAt === "desc") {
+        matches = [...matches].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+      }
+      const sliced = typeof take === "number" ? matches.slice(skip, skip + take) : matches.slice(skip);
+      if (!select) return sliced;
+      return sliced.map((order) => {
+        const projected: Record<string, unknown> = {};
+        for (const key of Object.keys(select)) projected[key] = (order as any)[key];
+        return projected;
+      });
+    };
+
+    this.notification.create = async ({ data }: any) => {
+      const notification: NotificationRecord = {
+        id: randomUUID(),
+        userId: data.userId,
+        type: data.type,
+        title: data.title,
+        body: data.body,
+        relatedEntityId: data.relatedEntityId ?? null,
+        isRead: false,
+        createdAt: new Date()
+      };
+      this.notifications.push(notification);
+      return notification;
+    };
+
+    this.auditLog.create = async ({ data }: any) => {
+      const entry: AuditLogRecord = {
+        id: randomUUID(),
+        actorUserId: data.actorUserId,
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        reason: data.reason ?? null,
+        metadataJson: data.metadataJson ?? null,
+        createdAt: new Date()
+      };
+      this.auditLogs.push(entry);
+      return entry;
+    };
   }
 
   async $transaction<T>(operation: (transaction: this) => Promise<T>): Promise<T> {
@@ -241,6 +331,20 @@ export class FakeRestaurantPrisma {
     } finally {
       release();
     }
+  }
+
+  seedOrder(restaurantId: string, overrides: Partial<OrderRecord> = {}): OrderRecord {
+    const order: OrderRecord = {
+      id: randomUUID(),
+      restaurantId,
+      customerId: randomUUID(),
+      status: "DELIVERED",
+      totalMinor: 2000,
+      createdAt: new Date(),
+      ...overrides
+    };
+    this.orders.push(order);
+    return order;
   }
 
   seedApprovedOpenRestaurant(overrides: Partial<RestaurantRecord> = {}): RestaurantRecord {

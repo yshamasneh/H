@@ -3,13 +3,15 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { ApiException } from "../common/api.exception";
 import { RestaurantStatus } from "../generated/prisma/client";
+import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
 import { FakeOrdersPrisma } from "./testing/fake-prisma";
 import { OrdersService } from "./orders.service";
 
 function createService() {
   const prisma = new FakeOrdersPrisma();
-  const service = new OrdersService(prisma as never);
-  return { prisma, service };
+  const realtime = new FakeRealtimeGateway();
+  const service = new OrdersService(prisma as never, realtime as never);
+  return { prisma, realtime, service };
 }
 
 function baseInput(restaurantId: string, menuItemId: string, overrides: Record<string, unknown> = {}) {
@@ -296,6 +298,121 @@ test("customer sees the full status history via GET /orders/:id", async () => {
     view.statusHistory.map((entry) => entry.toStatus),
     ["PLACED", "ACCEPTED"]
   );
+});
+
+test("placing an order notifies the restaurant owner and emits a realtime event", async () => {
+  const { prisma, realtime, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const notification = prisma.notifications.find((entry) => entry.userId === restaurant.ownerUserId);
+  assert.ok(notification);
+  assert.equal(notification!.type, "ORDER_PLACED");
+  assert.ok(realtime.emitted.some((event) => event.room === `restaurant:${restaurant.id}` && event.event === "order.created"));
+  assert.ok(realtime.emitted.some((event) => event.room === "admins" && event.event === "order.created"));
+  void order;
+});
+
+test("customer cancels their own PLACED order", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+
+  const cancelled = await service.cancelForCustomer(customerId, order.id);
+  assert.equal(cancelled.status, "CANCELLED");
+
+  const restaurantNotification = prisma.notifications.find(
+    (entry) => entry.userId === restaurant.ownerUserId && entry.title === "Order cancelled by customer"
+  );
+  assert.ok(restaurantNotification);
+});
+
+test("customer cannot cancel an order the restaurant has already accepted", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+
+  await assert.rejects(service.cancelForCustomer(customerId, order.id), hasCode("ORDER_NOT_CANCELLABLE"));
+});
+
+test("customer B cannot cancel customer A's order", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const customerA = randomUUID();
+  const order = await service.createOrder(customerA, baseInput(restaurant.id, menuItem.id) as never);
+
+  await assert.rejects(service.cancelForCustomer(randomUUID(), order.id), hasCode("ORDER_NOT_FOUND"));
+});
+
+test("admin cancels an ACCEPTED order with a reason, writing an AuditLog entry and notifying both parties", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const adminId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+
+  const cancelled = await service.adminCancelOrder(adminId, order.id, "Restaurant called in sick, no capacity");
+  assert.equal(cancelled.status, "CANCELLED");
+
+  const auditEntry = prisma.auditLogs.find((entry) => entry.entityId === order.id);
+  assert.ok(auditEntry);
+  assert.equal(auditEntry!.action, "ORDER_CANCELLED_BY_ADMIN");
+  assert.equal(auditEntry!.actorUserId, adminId);
+  assert.equal(auditEntry!.reason, "Restaurant called in sick, no capacity");
+
+  assert.ok(prisma.notifications.some((entry) => entry.userId === customerId && entry.title === "Your order was cancelled"));
+  assert.ok(prisma.notifications.some((entry) => entry.userId === restaurant.ownerUserId));
+});
+
+test("admin cannot cancel an already-DELIVERED order", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  // DriversService normally moves an order to DELIVERED as a side effect of completing its delivery;
+  // this test only needs the end state, so the order's status is set directly on the fake store.
+  const raw = prisma.orders.find((candidate) => candidate.id === order.id)!;
+  raw.status = "DELIVERED" as never;
+
+  await assert.rejects(service.adminCancelOrder(randomUUID(), order.id, "too late"), hasCode("ORDER_NOT_CANCELLABLE"));
+});
+
+test("adminListOrders filters by status and restaurant", async () => {
+  const { prisma, service } = createService();
+  const restaurantA = prisma.seedRestaurant();
+  const restaurantB = prisma.seedRestaurant({ name: "Other" });
+  const itemA = prisma.seedMenuItem(restaurantA.id);
+  const itemB = prisma.seedMenuItem(restaurantB.id);
+  const orderA = await service.createOrder(randomUUID(), baseInput(restaurantA.id, itemA.id) as never);
+  await service.createOrder(randomUUID(), baseInput(restaurantB.id, itemB.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurantA.ownerUserId, orderA.id, "ACCEPTED", undefined);
+
+  const acceptedOnly = await service.adminListOrders({ status: "ACCEPTED" } as never, 1, 20);
+  assert.equal(acceptedOnly.total, 1);
+  assert.equal(acceptedOnly.items[0].id, orderA.id);
+
+  const restaurantAOnly = await service.adminListOrders({ restaurantId: restaurantA.id } as never, 1, 20);
+  assert.equal(restaurantAOnly.total, 1);
+});
+
+test("adminGetOrder returns any order regardless of ownership", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const view = await service.adminGetOrder(order.id);
+  assert.equal(view.id, order.id);
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

@@ -1,0 +1,277 @@
+export const apiBaseUrl = (import.meta as any).env?.VITE_API_URL || "http://localhost:3000";
+
+export type UserRole = "CUSTOMER" | "RESTAURANT" | "DRIVER" | "ADMIN";
+
+export type PublicUser = { id: string; fullName: string; phone: string; role: UserRole };
+
+export type AuthResult = {
+  accessToken: string;
+  refreshToken: string;
+  expiresInSeconds: number;
+  refreshExpiresInSeconds: number;
+  user: PublicUser;
+};
+
+export type Page<T> = { items: T[]; page: number; pageSize: number; total: number };
+
+export type RestaurantStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
+
+export type RestaurantProfile = {
+  id: string;
+  name: string;
+  description: string | null;
+  phone: string;
+  addressLine: string;
+  logoUrl: string | null;
+  isOpen: boolean;
+  status: RestaurantStatus;
+  createdAt: string;
+};
+
+export type AdminRestaurantView = RestaurantProfile & {
+  ownerFullName: string;
+  ownerPhone: string;
+  totalOrdersCount: number;
+  revenueMinor: number;
+};
+
+export type AdminMenuView = {
+  categories: {
+    id: string;
+    name: string;
+    isActive: boolean;
+    items: { id: string; name: string; description: string | null; priceMinor: number; isAvailable: boolean }[];
+  }[];
+};
+
+export type OrderStatus = "PLACED" | "ACCEPTED" | "PREPARING" | "READY_FOR_PICKUP" | "DELIVERED" | "REJECTED" | "CANCELLED";
+export type DeliveryStatus = "PENDING_ASSIGNMENT" | "ASSIGNED" | "PICKED_UP" | "ON_THE_WAY" | "DELIVERED" | "CANCELLED";
+
+export type OrderStatusHistoryEntry = {
+  id: string;
+  fromStatus: OrderStatus | null;
+  toStatus: OrderStatus;
+  changedByUserId: string;
+  note: string | null;
+  createdAt: string;
+};
+
+export type OrderDetail = {
+  id: string;
+  status: OrderStatus;
+  paymentMethod: string;
+  restaurant: { id: string; name: string };
+  deliveryLabel: string;
+  deliveryAddressLine: string;
+  items: { id: string; nameSnapshot: string; quantity: number; lineTotalMinor: number }[];
+  subtotalMinor: number;
+  deliveryFeeMinor: number;
+  serviceFeeMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  createdAt: string;
+  statusHistory: OrderStatusHistoryEntry[];
+  delivery: { id: string; status: DeliveryStatus; assignedAt: string | null; pickedUpAt: string | null; onTheWayAt: string | null; deliveredAt: string | null } | null;
+};
+
+export type DriverApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
+
+export type AdminDriverView = {
+  userId: string;
+  fullName: string;
+  phone: string;
+  isActive: boolean;
+  status: DriverApprovalStatus;
+  isOnline: boolean;
+  completedDeliveriesCount: number;
+  activeDeliveryId: string | null;
+  createdAt: string;
+};
+
+export type AdminUserView = {
+  id: string;
+  fullName: string;
+  phone: string;
+  role: UserRole;
+  isActive: boolean;
+  phoneVerifiedAt: string | null;
+  createdAt: string;
+};
+
+export type DashboardActivityEntry = {
+  id: string;
+  orderId: string;
+  restaurantName: string;
+  toStatus: OrderStatus;
+  createdAt: string;
+};
+
+export type DashboardOverview = {
+  ordersToday: number;
+  revenueTodayMinor: number;
+  activeDeliveries: number;
+  pendingRestaurantApprovals: number;
+  onlineDriversCount: number;
+  newCustomerSignupsToday: number;
+  activityFeed: DashboardActivityEntry[];
+};
+
+export type AuditLogEntry = {
+  id: string;
+  actorUserId: string;
+  actorFullName: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  reason: string | null;
+  metadataJson: unknown;
+  createdAt: string;
+};
+
+export class ApiError extends Error {
+  constructor(
+    readonly statusCode: number,
+    readonly code: string,
+    message: string,
+    readonly details: unknown = null
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export const accessTokenStorageKey = "wasel_admin_access_token";
+
+export function getAccessToken(): string | null {
+  return localStorage.getItem(accessTokenStorageKey);
+}
+
+export function setAccessToken(token: string | null): void {
+  if (token) localStorage.setItem(accessTokenStorageKey, token);
+  else localStorage.removeItem(accessTokenStorageKey);
+}
+
+export function login(input: { countryCode: string; phoneNumber: string; password: string }): Promise<AuthResult> {
+  return request("/api/v1/auth/login", { method: "POST", body: input });
+}
+
+export function fetchCurrentUser(): Promise<PublicUser> {
+  return request<{ user: PublicUser }>("/api/v1/auth/me").then((response) => response.user);
+}
+
+export function logout(): Promise<{ message: string }> {
+  return request("/api/v1/auth/logout", { method: "POST" });
+}
+
+export function getDashboard(): Promise<DashboardOverview> {
+  return request("/api/v1/admin/dashboard");
+}
+
+export function listAdminRestaurants(params: { status?: string; isOpen?: boolean } = {}): Promise<Page<RestaurantProfile>> {
+  return request(`/api/v1/admin/restaurants${toQuery(params)}`);
+}
+
+export function getAdminRestaurant(id: string): Promise<AdminRestaurantView> {
+  return request(`/api/v1/admin/restaurants/${id}`);
+}
+
+export function getAdminRestaurantMenu(id: string): Promise<AdminMenuView> {
+  return request(`/api/v1/admin/restaurants/${id}/menu`);
+}
+
+export function getAdminRestaurantOrders(id: string): Promise<Page<{ id: string; status: OrderStatus; totalMinor: number; createdAt: string }>> {
+  return request(`/api/v1/admin/restaurants/${id}/orders`);
+}
+
+export function approveRestaurant(id: string): Promise<RestaurantProfile> {
+  return request(`/api/v1/admin/restaurants/${id}/approve`, { method: "POST" });
+}
+
+export function rejectRestaurant(id: string): Promise<RestaurantProfile> {
+  return request(`/api/v1/admin/restaurants/${id}/reject`, { method: "POST" });
+}
+
+export function suspendRestaurant(id: string, reason: string): Promise<RestaurantProfile> {
+  return request(`/api/v1/admin/restaurants/${id}/suspend`, { method: "POST", body: { reason } });
+}
+
+export function reactivateRestaurant(id: string): Promise<RestaurantProfile> {
+  return request(`/api/v1/admin/restaurants/${id}/reactivate`, { method: "POST" });
+}
+
+export function listAdminOrders(
+  params: { status?: string; restaurantId?: string; customerId?: string; fromDate?: string; toDate?: string; page?: number } = {}
+): Promise<Page<OrderDetail>> {
+  return request(`/api/v1/admin/orders${toQuery(params)}`);
+}
+
+export function getAdminOrder(id: string): Promise<OrderDetail> {
+  return request(`/api/v1/admin/orders/${id}`);
+}
+
+export function cancelAdminOrder(id: string, reason: string): Promise<OrderDetail> {
+  return request(`/api/v1/admin/orders/${id}/cancel`, { method: "POST", body: { reason } });
+}
+
+export function listAdminDrivers(): Promise<AdminDriverView[]> {
+  return request("/api/v1/admin/drivers");
+}
+
+export function approveDriver(userId: string): Promise<AdminDriverView> {
+  return request(`/api/v1/admin/drivers/${userId}/approve`, { method: "POST" });
+}
+
+export function rejectDriver(userId: string, reason: string): Promise<AdminDriverView> {
+  return request(`/api/v1/admin/drivers/${userId}/reject`, { method: "POST", body: { reason } });
+}
+
+export function suspendDriver(userId: string, reason: string): Promise<AdminDriverView> {
+  return request(`/api/v1/admin/drivers/${userId}/suspend`, { method: "POST", body: { reason } });
+}
+
+export function reactivateDriver(userId: string): Promise<AdminDriverView> {
+  return request(`/api/v1/admin/drivers/${userId}/reactivate`, { method: "POST" });
+}
+
+export function listAdminUsers(params: { role?: string; search?: string } = {}): Promise<Page<AdminUserView>> {
+  return request(`/api/v1/admin/users${toQuery(params)}`);
+}
+
+export function listAuditLog(
+  params: { actorUserId?: string; action?: string; fromDate?: string; toDate?: string; page?: number } = {}
+): Promise<Page<AuditLogEntry>> {
+  return request(`/api/v1/admin/audit-log${toQuery(params)}`);
+}
+
+function toQuery(params: Record<string, unknown>): string {
+  const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== "");
+  if (entries.length === 0) return "";
+  const search = new URLSearchParams(entries.map(([key, value]) => [key, String(value)]));
+  return `?${search.toString()}`;
+}
+
+async function request<T>(path: string, options: { method?: "GET" | "POST" | "PATCH"; body?: unknown } = {}): Promise<T> {
+  const accessToken = getAccessToken();
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      method: options.method ?? "GET",
+      headers: {
+        Accept: "application/json",
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+  } catch {
+    throw new ApiError(0, "NETWORK_ERROR", "Cannot connect to the TasawaQ server.");
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = payload ?? {};
+    if (response.status === 401) setAccessToken(null);
+    throw new ApiError(response.status, error.code ?? "API_ERROR", error.message ?? "The request could not be completed.", error.details ?? null);
+  }
+  return payload as T;
+}

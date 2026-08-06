@@ -68,6 +68,38 @@ type DeliveryRecord = {
   updatedAt: Date;
 };
 
+type NotificationRecord = {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  relatedEntityId: string | null;
+  isRead: boolean;
+  createdAt: Date;
+};
+
+type AuditLogRecord = {
+  id: string;
+  actorUserId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  reason: string | null;
+  metadataJson: unknown;
+  createdAt: Date;
+};
+
+function matchesOrderFilters(order: OrderRecord, where: any): boolean {
+  if (!where) return true;
+  if (where.customerId && order.customerId !== where.customerId) return false;
+  if (where.restaurantId && order.restaurantId !== where.restaurantId) return false;
+  if (where.status && order.status !== where.status) return false;
+  if (where.createdAt?.gte && order.createdAt < where.createdAt.gte) return false;
+  if (where.createdAt?.lte && order.createdAt > where.createdAt.lte) return false;
+  return true;
+}
+
 export class FakeOrdersPrisma {
   readonly restaurants: RestaurantRecord[] = [];
   readonly menuItems: MenuItemRecord[] = [];
@@ -75,6 +107,8 @@ export class FakeOrdersPrisma {
   readonly orderItems: OrderItemRecord[] = [];
   readonly orderStatusHistories: OrderStatusHistoryRecord[] = [];
   readonly deliveries: DeliveryRecord[] = [];
+  readonly notifications: NotificationRecord[] = [];
+  readonly auditLogs: AuditLogRecord[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly restaurant = {} as any;
@@ -83,6 +117,8 @@ export class FakeOrdersPrisma {
   readonly orderStatusHistory = {} as any;
   readonly delivery = {} as any;
   readonly driverProfile = {} as any;
+  readonly notification = {} as any;
+  readonly auditLog = {} as any;
 
   constructor() {
     this.restaurant.findUnique = async ({ where }: any) =>
@@ -140,11 +176,7 @@ export class FakeOrdersPrisma {
     };
 
     this.order.findMany = async ({ where, orderBy, skip = 0, take }: any) => {
-      let matches = this.orders.filter(
-        (order) =>
-          (!where?.customerId || order.customerId === where.customerId) &&
-          (!where?.restaurantId || order.restaurantId === where.restaurantId)
-      );
+      let matches = this.orders.filter((order) => matchesOrderFilters(order, where));
       if (orderBy?.createdAt === "desc") {
         matches = [...matches].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
       }
@@ -152,12 +184,7 @@ export class FakeOrdersPrisma {
       return sliced.map((order) => this.hydrateOrder(order));
     };
 
-    this.order.count = async ({ where }: any) =>
-      this.orders.filter(
-        (order) =>
-          (!where?.customerId || order.customerId === where.customerId) &&
-          (!where?.restaurantId || order.restaurantId === where.restaurantId)
-      ).length;
+    this.order.count = async ({ where }: any) => this.orders.filter((order) => matchesOrderFilters(order, where)).length;
 
     this.order.updateMany = async ({ where, data }: any) => {
       const matches = this.orders.filter(
@@ -232,6 +259,36 @@ export class FakeOrdersPrisma {
     };
 
     this.driverProfile.findUnique = async () => null;
+
+    this.notification.create = async ({ data }: any) => {
+      const notification: NotificationRecord = {
+        id: randomUUID(),
+        userId: data.userId,
+        type: data.type,
+        title: data.title,
+        body: data.body,
+        relatedEntityId: data.relatedEntityId ?? null,
+        isRead: false,
+        createdAt: new Date()
+      };
+      this.notifications.push(notification);
+      return notification;
+    };
+
+    this.auditLog.create = async ({ data }: any) => {
+      const entry: AuditLogRecord = {
+        id: randomUUID(),
+        actorUserId: data.actorUserId,
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        reason: data.reason ?? null,
+        metadataJson: data.metadataJson ?? null,
+        createdAt: new Date()
+      };
+      this.auditLogs.push(entry);
+      return entry;
+    };
   }
 
   private hydrateOrder(order: OrderRecord) {

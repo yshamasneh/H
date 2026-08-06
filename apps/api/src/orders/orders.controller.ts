@@ -33,4 +33,10 @@ export class OrdersController {
   getOne(@Req() request: AuthenticatedRequest, @Param("orderId", new ParseUUIDPipe()) orderId: string) {
     return this.orders.getForCustomer(request.user.id, orderId);
   }
+
+  @Post(":orderId/cancel")
+  @ApiOperation({ summary: "Cancel one of the authenticated customer's own orders, only while still PLACED" })
+  cancel(@Req() request: AuthenticatedRequest, @Param("orderId", new ParseUUIDPipe()) orderId: string) {
+    return this.orders.cancelForCustomer(request.user.id, orderId);
+  }
 }

@@ -53,3 +53,14 @@ export type Page<T> = {
   pageSize: number;
   total: number;
 };
+
+export type AdminRestaurantView = RestaurantProfileView & {
+  ownerFullName: string;
+  ownerPhone: string;
+  totalOrdersCount: number;
+  revenueMinor: number;
+};
+
+export type AdminMenuItemView = MenuItemOwnerView & {
+  categoryName: string;
+};

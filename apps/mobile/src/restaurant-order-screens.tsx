@@ -11,6 +11,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRealtimeEvent } from "./socket";
 import {
   ApiError,
   getRestaurantOrder,
@@ -65,6 +66,9 @@ export function RestaurantOrdersScreen(props: RestaurantOrdersScreenProps) {
   useEffect(() => {
     void load();
   }, []);
+
+  useRealtimeEvent("order.created", () => void load());
+  useRealtimeEvent("order.status.changed", () => void load());
 
   async function refresh() {
     setRefreshing(true);
@@ -140,6 +144,11 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
   useEffect(() => {
     void load();
   }, [props.orderId]);
+
+  useRealtimeEvent("order.status.changed", (payload: any) => {
+    if (payload?.orderId === props.orderId) void load();
+  });
+  useRealtimeEvent("delivery.status.changed", () => void load());
 
   async function performAction(action: RestaurantOrderStatusAction) {
     setActionError(null);

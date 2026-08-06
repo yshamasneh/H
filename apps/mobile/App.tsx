@@ -47,6 +47,7 @@ import {
   goToDeliveryDetail,
   goToDriverHome,
   goToLogin,
+  goToNotifications,
   goToOrderDetail,
   goToOrderHistory,
   goToRestaurantMenu,
@@ -62,9 +63,11 @@ import {
   type AppScreen
 } from "./src/navigation";
 import { DeliveryDetailScreen, DriverHomeScreen } from "./src/driver-screens";
+import { NotificationInboxScreen } from "./src/notification-screens";
 import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/restaurant-order-screens";
 import { RestaurantListScreen, RestaurantMenuScreen } from "./src/restaurant-screens";
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./src/session";
+import { disconnectSocket } from "./src/socket";
 
 const splashDurationMs = 3000;
 const logo = require("./assets/logo/TasawaQ.png");
@@ -132,6 +135,7 @@ function TasawaQApp() {
       }
     }
     await clearTokens();
+    disconnectSocket();
     setCart(null);
     setScreen(goToLogin());
   }
@@ -270,6 +274,7 @@ function TasawaQApp() {
           onOpenDriverDashboard={
             screen.user.role === "DRIVER" ? () => setScreen(goToDriverHome(screen.user)) : undefined
           }
+          onOpenNotifications={() => setScreen(goToNotifications(screen.user))}
           onViewOrders={
             screen.user.role === "CUSTOMER" ? () => setScreen(goToOrderHistory(screen.user)) : undefined
           }
@@ -362,6 +367,8 @@ function TasawaQApp() {
       return (
         <DeliveryDetailScreen deliveryId={screen.deliveryId} onBack={() => setScreen(goToDriverHome(screen.user))} />
       );
+    case "notifications":
+      return <NotificationInboxScreen onBack={() => setScreen(homeForUser(screen.user))} />;
   }
 }
 

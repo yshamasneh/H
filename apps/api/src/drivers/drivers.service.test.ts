@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { ApiException } from "../common/api.exception";
-import { OrderStatus } from "../generated/prisma/client";
+import { DriverApprovalStatus, OrderStatus } from "../generated/prisma/client";
+import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
 import { DriversService } from "./drivers.service";
 import { FakeDriversPrisma } from "./testing/fake-prisma";
 
 function createService() {
   const prisma = new FakeDriversPrisma();
-  const service = new DriversService(prisma as never);
-  return { prisma, service };
+  const realtime = new FakeRealtimeGateway();
+  const service = new DriversService(prisma as never, realtime as never);
+  return { prisma, realtime, service };
 }
 
 function registerInput(overrides: Record<string, unknown> = {}) {
@@ -191,6 +193,89 @@ test("available deliveries only include unclaimed ones, and own deliveries only 
   const mine = await service.listOwnDeliveries(driver.userId, 1, 20);
   assert.equal(mine.total, 1);
   assert.equal(mine.items[0].id, deliveryA.id);
+});
+
+test("a newly registered driver starts PENDING and cannot go online until approved", async () => {
+  const { prisma, service } = createService();
+  const result = await service.register(registerInput() as never);
+  assert.equal(prisma.driverProfiles[0].status, DriverApprovalStatus.PENDING);
+
+  await assert.rejects(service.setOnlineStatus(result.userId, true), hasCode("DRIVER_NOT_APPROVED"));
+});
+
+test("an approved driver can go online", async () => {
+  const { prisma, service } = createService();
+  const driver = prisma.seedDriver({ status: DriverApprovalStatus.APPROVED, isOnline: false });
+
+  const profile = await service.setOnlineStatus(driver.userId, true);
+  assert.equal(profile.isOnline, true);
+});
+
+test("admin approves a pending driver, records an AuditLog entry, and notifies the driver", async () => {
+  const { prisma, realtime, service } = createService();
+  const admin = randomUUID();
+  const driver = prisma.seedDriver({ status: DriverApprovalStatus.PENDING, isOnline: false });
+
+  const approved = await service.adminApprove(admin, driver.userId);
+  assert.equal(approved.status, "APPROVED");
+
+  const auditEntry = prisma.auditLogs.find((entry) => entry.entityId === driver.userId);
+  assert.ok(auditEntry);
+  assert.equal(auditEntry!.action, "DRIVER_APPROVED");
+  assert.equal(auditEntry!.actorUserId, admin);
+
+  const notification = prisma.notifications.find((entry) => entry.userId === driver.userId);
+  assert.ok(notification);
+  assert.equal(notification!.type, "DRIVER_APPROVED");
+  assert.ok(realtime.emitted.some((event) => event.room === `user:${driver.userId}` && event.event === "notification.created"));
+});
+
+test("admin rejects a pending driver with a reason, recorded in the AuditLog", async () => {
+  const { prisma, service } = createService();
+  const admin = randomUUID();
+  const driver = prisma.seedDriver({ status: DriverApprovalStatus.PENDING, isOnline: false });
+
+  const rejected = await service.adminReject(admin, driver.userId, "Failed background check");
+  assert.equal(rejected.status, "REJECTED");
+
+  const auditEntry = prisma.auditLogs.find((entry) => entry.entityId === driver.userId);
+  assert.equal(auditEntry!.reason, "Failed background check");
+});
+
+test("admin cannot approve a driver that is not currently pending", async () => {
+  const { prisma, service } = createService();
+  const admin = randomUUID();
+  const driver = prisma.seedDriver({ status: DriverApprovalStatus.APPROVED });
+
+  await assert.rejects(service.adminApprove(admin, driver.userId), hasCode("DRIVER_INVALID_TRANSITION"));
+});
+
+test("admin suspends an approved driver, which also forces them offline, then reactivates them", async () => {
+  const { prisma, service } = createService();
+  const admin = randomUUID();
+  const driver = prisma.seedDriver({ status: DriverApprovalStatus.APPROVED, isOnline: true });
+
+  const suspended = await service.adminSuspend(admin, driver.userId, "Customer complaints");
+  assert.equal(suspended.status, "SUSPENDED");
+  assert.equal(suspended.isOnline, false);
+
+  const reactivated = await service.adminReactivate(admin, driver.userId);
+  assert.equal(reactivated.status, "APPROVED");
+});
+
+test("adminListDrivers reports completed-delivery counts and the current active delivery", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const completedOrder = prisma.seedOrder(restaurant.id);
+  const activeOrder = prisma.seedOrder(restaurant.id);
+  const driver = prisma.seedDriver({ status: DriverApprovalStatus.APPROVED });
+  prisma.seedDelivery(completedOrder.id, { driverId: driver.userId, status: "DELIVERED" as never });
+  const activeDelivery = prisma.seedDelivery(activeOrder.id, { driverId: driver.userId, status: "PICKED_UP" as never });
+
+  const list = await service.adminListDrivers();
+  const view = list.find((item) => item.userId === driver.userId)!;
+  assert.equal(view.completedDeliveriesCount, 1);
+  assert.equal(view.activeDeliveryId, activeDelivery.id);
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

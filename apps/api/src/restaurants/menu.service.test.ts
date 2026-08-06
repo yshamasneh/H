@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ApiException } from "../common/api.exception";
 import { RestaurantStatus } from "../generated/prisma/client";
+import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
 import { MenuService } from "./menu.service";
 import { RestaurantsService } from "./restaurants.service";
 import { FakeRestaurantPrisma } from "./testing/fake-prisma";
@@ -9,7 +10,7 @@ import { FakeRestaurantPrisma } from "./testing/fake-prisma";
 function createServices() {
   const prisma = new FakeRestaurantPrisma();
   const menu = new MenuService(prisma as never);
-  const restaurants = new RestaurantsService(prisma as never);
+  const restaurants = new RestaurantsService(prisma as never, new FakeRealtimeGateway() as never);
   return { prisma, menu, restaurants };
 }
 

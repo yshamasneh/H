@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { DeliveryStatus, OrderStatus, UserRole } from "../../generated/prisma/client";
+import { DeliveryStatus, DriverApprovalStatus, OrderStatus, UserRole } from "../../generated/prisma/client";
 
 type UserRecord = {
   id: string;
@@ -15,6 +15,7 @@ type UserRecord = {
 
 type DriverProfileRecord = {
   userId: string;
+  status: DriverApprovalStatus;
   isOnline: boolean;
   lastLatitude: number | null;
   lastLongitude: number | null;
@@ -30,6 +31,7 @@ type RestaurantRecord = {
 
 type OrderRecord = {
   id: string;
+  customerId: string;
   restaurantId: string;
   status: OrderStatus;
   deliveryLabel: string;
@@ -61,6 +63,36 @@ type DeliveryRecord = {
   updatedAt: Date;
 };
 
+type NotificationRecord = {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  relatedEntityId: string | null;
+  isRead: boolean;
+  createdAt: Date;
+};
+
+type AuditLogRecord = {
+  id: string;
+  actorUserId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  reason: string | null;
+  metadataJson: unknown;
+  createdAt: Date;
+};
+
+function matchesStatus(actual: unknown, where: unknown): boolean {
+  if (where === undefined) return true;
+  if (typeof where === "object" && where !== null && "in" in (where as Record<string, unknown>)) {
+    return ((where as { in: unknown[] }).in).includes(actual);
+  }
+  return actual === where;
+}
+
 export class FakeDriversPrisma {
   readonly users: UserRecord[] = [];
   readonly driverProfiles: DriverProfileRecord[] = [];
@@ -68,6 +100,8 @@ export class FakeDriversPrisma {
   readonly orders: OrderRecord[] = [];
   readonly orderStatusHistories: OrderStatusHistoryRecord[] = [];
   readonly deliveries: DeliveryRecord[] = [];
+  readonly notifications: NotificationRecord[] = [];
+  readonly auditLogs: AuditLogRecord[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly user = {} as any;
@@ -75,6 +109,8 @@ export class FakeDriversPrisma {
   readonly order = {} as any;
   readonly orderStatusHistory = {} as any;
   readonly delivery = {} as any;
+  readonly notification = {} as any;
+  readonly auditLog = {} as any;
 
   constructor() {
     this.user.findUnique = async ({ where }: any) =>
@@ -103,6 +139,7 @@ export class FakeDriversPrisma {
       const now = new Date();
       const profile: DriverProfileRecord = {
         userId: data.userId,
+        status: data.status ?? DriverApprovalStatus.PENDING,
         isOnline: data.isOnline ?? false,
         lastLatitude: data.lastLatitude ?? null,
         lastLongitude: data.lastLongitude ?? null,
@@ -112,14 +149,29 @@ export class FakeDriversPrisma {
       this.driverProfiles.push(profile);
       return profile;
     };
-    this.driverProfile.findUnique = async ({ where }: any) =>
-      this.driverProfiles.find((profile) => profile.userId === where.userId) ?? null;
-    this.driverProfile.update = async ({ where, data }: any) => {
+    this.driverProfile.findUnique = async ({ where, include }: any) => {
+      const profile = this.driverProfiles.find((candidate) => candidate.userId === where.userId) ?? null;
+      if (!profile) return null;
+      return include?.user ? { ...profile, user: this.users.find((user) => user.id === profile.userId)! } : profile;
+    };
+    this.driverProfile.findMany = async ({ include, orderBy }: any) => {
+      let matches = [...this.driverProfiles];
+      if (orderBy?.createdAt === "desc") {
+        matches.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+      } else if (orderBy?.createdAt === "asc") {
+        matches.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+      }
+      return matches.map((profile) =>
+        include?.user ? { ...profile, user: this.users.find((user) => user.id === profile.userId)! } : profile
+      );
+    };
+    this.driverProfile.update = async ({ where, data, include }: any) => {
       const profile = this.driverProfiles.find((candidate) => candidate.userId === where.userId);
       if (!profile) throw new Error("missing driver profile");
       if (data.isOnline !== undefined) profile.isOnline = data.isOnline;
+      if (data.status !== undefined) profile.status = data.status;
       profile.updatedAt = new Date();
-      return profile;
+      return include?.user ? { ...profile, user: this.users.find((user) => user.id === profile.userId)! } : profile;
     };
 
     this.order.findUnique = async ({ where }: any) => this.orders.find((order) => order.id === where.id) ?? null;
@@ -144,22 +196,51 @@ export class FakeDriversPrisma {
       return entry;
     };
 
-    this.delivery.findUnique = async ({ where }: any) =>
-      this.deliveries.find((delivery) =>
+    this.notification.create = async ({ data }: any) => {
+      const notification: NotificationRecord = {
+        id: randomUUID(),
+        userId: data.userId,
+        type: data.type,
+        title: data.title,
+        body: data.body,
+        relatedEntityId: data.relatedEntityId ?? null,
+        isRead: false,
+        createdAt: new Date()
+      };
+      this.notifications.push(notification);
+      return notification;
+    };
+
+    this.auditLog.create = async ({ data }: any) => {
+      const entry: AuditLogRecord = {
+        id: randomUUID(),
+        actorUserId: data.actorUserId,
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        reason: data.reason ?? null,
+        metadataJson: data.metadataJson ?? null,
+        createdAt: new Date()
+      };
+      this.auditLogs.push(entry);
+      return entry;
+    };
+
+    this.delivery.findUnique = async ({ where }: any) => {
+      const found = this.deliveries.find((delivery) =>
         where.id ? delivery.id === where.id : delivery.orderId === where.orderId
-      )
-        ? this.hydrateDelivery(
-            this.deliveries.find((delivery) =>
-              where.id ? delivery.id === where.id : delivery.orderId === where.orderId
-            )!
-          )
-        : null;
+      );
+      return found ? this.hydrateDelivery(found) : null;
+    };
 
     this.delivery.findMany = async ({ where, orderBy, skip = 0, take }: any) => {
       let matches = this.deliveries.filter(
         (delivery) =>
-          (!where?.status || delivery.status === where.status) &&
-          (!where?.driverId || delivery.driverId === where.driverId)
+          matchesStatus(delivery.status, where?.status) &&
+          (!where?.driverId ||
+            (typeof where.driverId === "object" && where.driverId !== null && "in" in where.driverId
+              ? where.driverId.in.includes(delivery.driverId)
+              : delivery.driverId === where.driverId))
       );
       if (orderBy?.createdAt === "desc") {
         matches = [...matches].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
@@ -172,9 +253,7 @@ export class FakeDriversPrisma {
 
     this.delivery.count = async ({ where }: any) =>
       this.deliveries.filter(
-        (delivery) =>
-          (!where?.status || delivery.status === where.status) &&
-          (!where?.driverId || delivery.driverId === where.driverId)
+        (delivery) => matchesStatus(delivery.status, where?.status) && (!where?.driverId || delivery.driverId === where.driverId)
       ).length;
 
     this.delivery.updateMany = async ({ where, data }: any) => {
@@ -226,6 +305,7 @@ export class FakeDriversPrisma {
   seedOrder(restaurantId: string, overrides: Partial<OrderRecord> = {}): OrderRecord {
     const order: OrderRecord = {
       id: randomUUID(),
+      customerId: randomUUID(),
       restaurantId,
       status: OrderStatus.READY_FOR_PICKUP,
       deliveryLabel: "Home",
@@ -274,6 +354,7 @@ export class FakeDriversPrisma {
     });
     this.driverProfiles.push({
       userId,
+      status: overrides.status ?? DriverApprovalStatus.APPROVED,
       isOnline: overrides.isOnline ?? true,
       lastLatitude: null,
       lastLongitude: null,

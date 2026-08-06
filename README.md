@@ -7,6 +7,8 @@ TasawaQ is a React Native food-delivery app with a NestJS API, PostgreSQL, and P
 - Expo SDK 54, React Native 0.81.5, and React 19
 - Native Android development build with the existing TasawaQ splash and logo
 - NestJS 11 and TypeScript
+- React 19 + Vite admin web dashboard (`apps/admin`), talking to the same API over REST and WebSocket
+- Socket.IO realtime layer (order/delivery status changes, admin dashboard live updates, in-app notifications)
 - PostgreSQL 17 in Docker Compose with a persistent named volume
 - Prisma 7
 - Argon2id password hashing, HMAC-protected development OTPs, JWT access tokens, and rotating refresh sessions
@@ -126,6 +128,16 @@ The Android emulator reaches the host API through `http://10.0.2.2:3000`. A phys
 $env:EXPO_PUBLIC_API_URL="http://YOUR_COMPUTER_LAN_IP:3000"
 npm run dev:mobile
 ```
+
+## Run the admin web dashboard
+
+The API must be running first (see above).
+
+```powershell
+npm run dev:admin
+```
+
+Open `http://localhost:5173` and sign in with the seeded admin account below. The dashboard covers restaurant approval/suspension, driver approval/suspension, order search and admin-override cancellation, a searchable user directory, and a full audit log — all with live updates pushed over the same WebSocket gateway the API exposes.
 
 ## Local development accounts
 

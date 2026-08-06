@@ -1,9 +1,10 @@
 # Architecture
 
-TasawaQ is an npm workspace with two runnable applications:
+TasawaQ is an npm workspace with three runnable applications:
 
 - `apps/mobile`: Expo React Native application and native Android development project.
 - `apps/api`: NestJS API backed by PostgreSQL through Prisma.
+- `apps/admin`: React + Vite web application — the operations dashboard, added in Phase 7. It is a separate deployable from the mobile app because admins run the business from a desk, not a phone; it talks to the same NestJS API over REST and the same WebSocket gateway, secured by the identical JWT + `ADMIN`-role guard pattern as every other admin-scoped route. See "Admin web app" below for the framework choice.
 
 ## Authentication data
 
@@ -90,5 +91,38 @@ The cart is a single `useState<Cart | null>` lifted into `App.tsx` (no new state
 - **Atomic claim**: `POST /driver/me/deliveries/:id/accept` requires the driver to be online, then claims the delivery with `delivery.updateMany({ where: { id, status: PENDING_ASSIGNMENT, driverId: null }, data: { status: ASSIGNED, driverId, assignedAt } })` and checks `count === 1` inside a transaction — the same conditional-update-plus-count-check race guard used everywhere else in this codebase (refresh rotation, Phase 5's status transitions). Two simultaneous accept calls for the same delivery: exactly one succeeds, the other gets `DELIVERY_ALREADY_CLAIMED`.
 - **Pickup-to-delivered**: `PATCH /driver/me/deliveries/:id/status` validates `PICKED_UP -> ON_THE_WAY -> DELIVERED` against an `allowedDeliveryTransitions` map and rejects any delivery not assigned to the calling driver (generic `DELIVERY_NOT_FOUND`, not `403`, to avoid confirming another driver's delivery exists — the same privacy pattern as cross-restaurant order access). Reaching `DELIVERED` also updates the parent `Order.status` to `DELIVERED` and appends an `OrderStatusHistory` row with `changedByUserId` set to the driver, inside the same transaction.
 - **Availability**: `GET /driver/me/deliveries/available` lists every `PENDING_ASSIGNMENT` delivery — any online driver can see and accept any of them; there is no distance/matching algorithm, per this phase's explicit scope boundary. `GET /driver/me/deliveries` lists only the caller's own deliveries.
-- **Driver onboarding**: `POST /api/v1/drivers/register` mirrors the restaurant self-registration pattern exactly (creates a `DRIVER` user with `phoneVerifiedAt` set immediately, self-attested, then the existing unmodified `POST /auth/login` works) — no admin-approval workflow, since building one would mean admin-facing endpoints, which this phase's scope explicitly excludes.
+- **Driver onboarding**: `POST /api/v1/drivers/register` mirrors the restaurant self-registration pattern exactly (creates a `DRIVER` user with `phoneVerifiedAt` set immediately, self-attested, then the existing unmodified `POST /auth/login` works). As of Phase 7, the created `DriverProfile.status` starts `PENDING` and an admin must approve it before the driver can go online — see "Admin dashboard" below.
 - **Customer visibility**: `GET /orders/:id` includes a `delivery` summary (status + timestamps, no driver PII) whenever a `Delivery` row exists for that order.
+
+## Admin dashboard, realtime, and notifications (Phase 7)
+
+### Admin web app
+
+`apps/admin` is a React 19 + Vite + TypeScript single-page app, chosen over Next.js because this app has no server-rendering or SEO requirement — it is an internal tool sitting entirely behind a login wall — and Vite gives the fastest possible dev loop to stand up against an already-existing NestJS API. Routing uses `react-router-dom` (a real, standard choice for a multi-page admin app with bookmarkable URLs and working browser back/forward, unlike the mobile app's deliberate lightweight-state-machine navigation, which exists for different reasons — no router dependency, no deep-linking need). Styling is hand-written CSS with a small CSS-variable design system (`src/styles.css`) rather than a UI framework, to keep the app dependency-light and give full control over the "dark sidebar, light content" operations-console look. The access token is stored in `localStorage` (the browser analogue of the mobile app's SecureStore) and attached to every request exactly like the mobile client's `Authorization: Bearer` pattern; a non-`ADMIN` login is rejected client-side even though the server would also reject any admin-scoped call.
+
+### Restaurant suspension and driver approval
+
+`RestaurantStatus` gained `SUSPENDED` (alongside `PENDING | APPROVED | REJECTED`). `POST /admin/restaurants/:id/suspend` (`APPROVED -> SUSPENDED`, forces `isOpen = false`) and `.../reactivate` (`SUSPENDED -> APPROVED`) both require a transaction, an `AuditLog` row, and a notification to the owner; suspend requires a reason, matching the product spec's own admin-override requirement ("reason non-empty, creates AuditLog"). `DriverProfile` gained a `DriverApprovalStatus` (`PENDING | APPROVED | REJECTED | SUSPENDED`, defaulting to `PENDING` at registration) mirroring the same shape — `PATCH /driver/me/status` (the online toggle) now rejects with `DRIVER_NOT_APPROVED` unless the driver's status is `APPROVED`. `POST /admin/drivers/:id/{approve,reject,suspend,reactivate}` are the admin-facing mutations, each writing an `AuditLog` entry and a notification the same way the restaurant endpoints do.
+
+### Order cancellation: customer vs. admin
+
+Two independent code paths write `OrderStatus.CANCELLED`, deliberately kept separate because their allowed source states differ:
+
+- **Customer** (`POST /orders/:id/cancel`): only from `PLACED`, using the existing `allowedOrderTransitions` map — once a restaurant has accepted an order, the customer can no longer self-cancel it (`ORDER_NOT_CANCELLABLE`).
+- **Admin override** (`POST /admin/orders/:id/cancel`): from any non-terminal status (`PLACED | ACCEPTED | PREPARING | READY_FOR_PICKUP`), bypassing the normal transition map entirely — this is a deliberate override, not a bug, matching the product spec's admin-override concept ("solve support issues with a reason and an AuditLog"). It requires a non-empty `reason`, writes an `AuditLog` entry, and notifies both the customer and the restaurant owner.
+
+### AuditLog
+
+Every admin-mutating endpoint added or touched in this phase (`restaurants.service.ts`, `drivers.service.ts`, `orders.service.ts`'s `adminCancelOrder`) writes one `AuditLog` row (`actorUserId`, `action`, `entityType`, `entityId`, optional `reason`, optional `metadataJson`) inside the same Prisma transaction as the mutation itself, via a shared `writeAuditLog()` helper (`apps/api/src/common/audit-log.util.ts`) — a plain function, not a NestJS service, so it can be called from any domain module's transaction without introducing a new cross-module dependency. `GET /admin/audit-log` (filterable by actor, action, date range) is the admin-facing viewer.
+
+### Notifications
+
+`Notification` (`userId`, `type`, `title`, `body`, `relatedEntityId`, `isRead`, `createdAt`) is written by a shared `createNotification()` helper (`apps/api/src/notifications/notification.util.ts`) that also emits the realtime `notification.created` event to the recipient — the same "plain function over a transaction client" pattern as `writeAuditLog`, for the same reason. Every domain service that changes something a user cares about calls it inline: order placed (restaurant owner), order status changed (customer), delivery assigned/status changed (customer), restaurant approved/rejected/suspended (owner), driver approved/rejected/suspended (driver). `GET /notifications/me` and `PATCH /notifications/:id/read` (any authenticated role, ownership resolved from the JWT) are the read side. Device push notifications (Expo push, APNs/FCM) are explicitly out of scope for this phase — in-app only, per the task's own boundary; the mobile app's inbox screen and unread-count badge are the entire delivery mechanism for now.
+
+### Realtime layer
+
+`RealtimeGateway` (`apps/api/src/realtime/realtime.gateway.ts`) is a NestJS `@WebSocketGateway` on Socket.IO, provided by a `@Global()` `RealtimeModule` so any domain service can inject it directly — the one deliberate exception to this codebase's "no cross-module service imports" rule, because emitting a realtime event is infrastructure, not domain business logic, the same category `PrismaService` and `ConfigService` already occupy as global providers. Authentication happens in `handleConnection`: the client sends its access token via `socket.handshake.auth.token`, the gateway runs the exact same checks `JwtAuthGuard` runs over REST (signature, `typ === "access"`, session exists/not revoked/not expired, user active and phone-verified, token version matches) and disconnects immediately on any failure. On success the socket joins a `user:{id}` room, plus `admins` for `ADMIN` role and `restaurant:{restaurantId}` for a `RESTAURANT` owner; clients additionally request an `order:{orderId}` room via an `order.subscribe` message, which the gateway only grants after verifying the caller actually owns (or administrates) that order.
+
+Events emitted: `order.created` (to the restaurant's room and to `admins`), `order.status.changed` (to the order's room and to `admins`), `delivery.status.changed` (to the order's room), `restaurant.pending.created` (to `admins`, on new restaurant registration), and `notification.created` (to the recipient's user room, from the shared notification helper).
+
+**REST remains the only source of truth.** No client — admin, mobile, or otherwise — ever applies a socket payload directly to its state; every handler treats the event purely as a "something changed, go re-fetch over REST" signal (see `apps/admin/src/socket.ts`'s and `apps/mobile/src/socket.ts`'s `useRealtimeEvent` hook, and every page/screen that uses it). This means a client that missed events entirely (backgrounded, reconnecting, cold start) is always correct once it re-fetches — nothing depends on socket delivery guarantees. The admin dashboard's live metrics/activity feed, the admin orders list, the mobile customer order-detail screen, and the mobile restaurant incoming-orders screen all follow this pattern.

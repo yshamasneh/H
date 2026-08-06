@@ -135,7 +135,7 @@ This session ran with a live Docker Postgres available for the first time (`tasa
 - `npx prisma migrate deploy` / `migrate dev` applied the new migration to the live `tasawaq-postgres` container — confirmed via `psql \dt` showing `OrderStatusHistory`, `DriverProfile`, and `Delivery` tables, and via `SELECT` on `_prisma_migrations`.
 - A full manual end-to-end happy-path smoke test ran against the live API and database (not mocked): customer login -> browse seeded restaurant -> place order -> restaurant accepts/prepares/marks ready (delivery auto-created) -> fresh driver registers, goes online, sees the available delivery, accepts it, advances pickup -> on-the-way -> delivered -> customer's `GET /orders/:id` shows `DELIVERED` with the complete 5-entry status history and the delivery's own `DELIVERED` status. This also exercised Phase 4's `POST /orders` end-to-end for the first time ever against a real database, which is how the seed-data UUID-format bug (see `docs/decisions.md`) was caught and fixed.
 
-Remaining before Phase 7 (Admin, Realtime, and Notifications):
+Remaining before Phase 7 (Admin, Realtime, and Notifications) — all addressed this session, see below:
 
 - No customer-facing cancel endpoint yet (see `docs/decisions.md` — deliberately out of this phase's scope).
 - No admin dashboard/screens, no `AuditLog`, no admin override of stuck orders or deliveries.
@@ -144,3 +144,53 @@ Remaining before Phase 7 (Admin, Realtime, and Notifications):
 - Driver location (`DriverProfile.lastLatitude`/`lastLongitude`) has columns but no write path yet — no endpoint updates it and the mobile app never requests location permission. Real-time driver-location tracking on a map is out of scope until a maps provider is chosen.
 - No distance/matching algorithm for delivery assignment — any online driver can see and accept any pending delivery, per this phase's explicit scope boundary.
 - No driver-registration screen in the mobile app (Swagger only), matching the existing restaurant-registration precedent.
+
+## 2026-08-06: Phase 7 — Admin Dashboard, Realtime, and Notifications
+
+Before starting, a real migration-ordering bug from the Phase 5/6 session was found and fixed: `20260805235831_order_status_and_delivery`'s auto-generated timestamp sorted *before* the earlier phase's hand-placed `20260806000000_orders_cart_checkout`, even though it depends on that migration's `OrderStatus` enum — this would have broken a fresh `prisma migrate deploy` for anyone, including a teammate cloning the repo. Renamed to `20260806010000_order_status_and_delivery`, fixed the tracking row in the live `_prisma_migrations` table, and re-verified the full migration history replays cleanly. Full details in `docs/decisions.md`.
+
+### Part A — Admin Dashboard: Completed
+
+- New `apps/admin` workspace: React 19 + Vite + TypeScript + `react-router-dom`, hand-written CSS design system (no UI framework). Chosen over Next.js since this is a pure client-side SPA behind a login wall with no SSR/SEO need.
+- `RestaurantStatus` gained `SUSPENDED`; `POST /admin/restaurants/:id/{suspend,reactivate}` added alongside the existing approve/reject, each writing an `AuditLog` entry and a notification.
+- `DriverApprovalStatus` (`PENDING | APPROVED | REJECTED | SUSPENDED`) added to `DriverProfile`, defaulting `PENDING`; the online toggle now refuses `DRIVER_NOT_APPROVED` until an admin approves. `POST /admin/drivers/:id/{approve,reject,suspend,reactivate}` added.
+- Order cancellation, two paths: `POST /orders/:id/cancel` (customer, `PLACED` only) and `POST /admin/orders/:id/cancel` (admin override, any non-terminal status, mandatory reason, bypasses the normal transition map by design).
+- New cross-cutting `admin` module: `GET /admin/dashboard` (orders today, revenue today, active deliveries, pending restaurant approvals, online driver count, new signups today, 20-entry recent-activity feed), `GET /admin/users` (searchable by name/phone, filterable by role, never returns password hashes), `GET /admin/audit-log` (filterable by actor/action/date range).
+- `GET /admin/restaurants/:id` (profile + total-orders/revenue stats), `.../menu` (full menu including inactive/unavailable), `.../orders` (order history) added for the restaurant detail page.
+- Admin UI pages: Dashboard (live stat cards + activity feed), Restaurants (filter, approve/reject, suspend/reactivate via a reason modal, detail page), Orders (filter by status/date, detail page with full status timeline and a cancel action), Drivers (approve/reject/suspend/reactivate), Users (search/filter), Audit Log (filter by action).
+- **Manually verified end-to-end in a real browser against the live API and database**: logged in as the seeded admin, approved and then suspended a freshly-registered pending restaurant (confirmed both actions appeared correctly on the Audit Log page with the exact reason text entered), approved a pending driver, browsed the orders list into a full order-detail page with status timeline and delivery info, and confirmed the users list. Screenshots were taken at each step during the session.
+
+### Part B — Realtime layer: Completed
+
+- New `RealtimeGateway` (Socket.IO via `@nestjs/websockets` + `@nestjs/platform-socket.io`), provided by a `@Global()` `RealtimeModule` so domain services can inject it directly (the one deliberate exception to the "no cross-module services" rule — justified in `docs/decisions.md`).
+- JWT-authenticated handshake: same checks as `JwtAuthGuard` (signature, session validity, active/verified user, token version), rejecting and disconnecting on any failure.
+- Rooms: `user:{id}`, `admins` (ADMIN role), `restaurant:{restaurantId}` (RESTAURANT owner), and `order:{orderId}` (granted only after the gateway verifies the requesting socket's user actually owns/administrates that order).
+- Events emitted: `order.created`, `order.status.changed`, `delivery.status.changed`, `restaurant.pending.created`, `notification.created`.
+- REST remains the only source of truth — every client treats a socket event purely as a "go re-fetch" signal, documented explicitly in `docs/architecture.md`. Wired into: the admin dashboard's live metrics/activity feed, the admin orders list, the mobile customer order-detail screen, and the mobile restaurant incoming-orders screen.
+- 5 new backend tests in `realtime.gateway.test.ts` covering: no token, invalid/expired token, valid token with no matching session, valid token with an active session (room joined), and a revoked session — all constructing `RealtimeGateway` directly with fake `JwtService`/`ConfigService`/`PrismaService` and a mock socket, matching this codebase's existing unit-test style (no real socket server spun up).
+
+### Part C — Notifications: Completed
+
+- New `Notification` model (`userId`, `type`, `title`, `body`, `relatedEntityId`, `isRead`, `createdAt`) and a shared `createNotification()` helper that writes the row and emits `notification.created` in one call — used inline by orders/restaurants/drivers services, the same "plain function, not a service" pattern as `writeAuditLog()`.
+- Notifications created on: order placed (restaurant owner), order accepted/preparing/ready/rejected/cancelled (customer), delivery assigned/picked-up/on-the-way/delivered (customer), restaurant approved/rejected/suspended/reactivated (owner), driver approved/rejected/suspended/reactivated (driver).
+- `GET /notifications/me` (paginated, includes `unreadCount`) and `PATCH /notifications/:id/read` (ownership from JWT) — new `notifications` module.
+- Mobile: new `NotificationInboxScreen` (pull-to-refresh, tap-to-mark-read, live-updating via `notification.created`) plus an unread-count badge on the `HomeScreen`'s new "Notifications" button, visible to every role.
+- Device push notifications (Expo push, APNs/FCM) are explicitly out of scope this phase — in-app only, per the task's boundary.
+- 3 new backend tests in `notifications.service.test.ts` covering: a user only sees their own notifications with a correct unread count, marking read only works for the owning user (`NOTIFICATION_NOT_FOUND` otherwise), and the unread count decreases after marking read.
+
+### Verified (this session, against the live database — not just in-memory fakes)
+
+- `npm run lint`, `npm run typecheck`, and `npm test` all pass clean across all three workspaces from the repo root: **97 API tests** (65 prior + 32 new: 7 driver-approval/admin, 8 order-cancel/admin, 5 restaurant-suspend/admin, 5 admin-dashboard, 5 realtime-auth, 3 notifications rounding out — see exact per-file counts in `docs/decisions.md` and the test files themselves) and **17 mobile tests** (unchanged, none broken).
+- `npm run build` succeeds for all three workspaces: API (`prisma generate` + `tsc`), admin (`tsc` + `vite build`), mobile (`expo export --platform all`, 734/738 modules across Android and iOS with `socket.io-client` now bundled).
+- `npx prisma validate` passes; `npx prisma migrate status` confirms all 5 migrations applied and the schema up to date on the live `tasawaq-postgres` database.
+- A dedicated Phase 7 smoke-test script ran against the live API and database end-to-end: customer self-cancels a `PLACED` order (succeeds), customer is blocked from cancelling an order the restaurant already accepted (`ORDER_NOT_CANCELLABLE`), admin overrides and cancels that same accepted order with a reason (succeeds, `OrderStatus.CANCELLED`), the restaurant owner and customer both received the expected notifications, an unread notification was marked read, the admin dashboard returned live counts and a 20-entry activity feed, the audit log showed the `ORDER_CANCELLED_BY_ADMIN` entry with the exact reason text, and a non-admin token was correctly rejected (403) from `/admin/dashboard`. Confirmed directly in Postgres via `psql` that real `AuditLog` and `Notification` rows exist with the expected content.
+
+Remaining before Phase 8 (production hardening):
+
+- No production OTP provider — still the development terminal-print provider; a real WhatsApp Business/SMS provider is Phase 8's job per the original spec.
+- No real payment gateway — still cash on delivery.
+- Driver location tracking (`DriverProfile.lastLatitude`/`lastLongitude`) still has no write path or map UI — unchanged from Phase 6, still blocked on choosing a maps provider.
+- No distance/matching algorithm for delivery assignment — unchanged from Phase 6, explicitly deferred.
+- No automated test suite for the `apps/admin` frontend — verified manually end-to-end in a real browser this session instead; a candidate for a later phase if the admin app's surface grows (see `docs/decisions.md`).
+- No push notifications (device-level) — in-app only, as documented; Expo push integration would be a self-contained follow-up task.
+- Production configuration, HTTPS, structured logging/monitoring, database backups, and store-listing prep are all still open, matching the spec's own Phase 8 scope.

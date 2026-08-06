@@ -25,6 +25,28 @@ enum RestaurantStatus {
   PENDING
   APPROVED
   REJECTED
+  SUSPENDED
+}
+
+enum DriverApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum NotificationType {
+  ORDER_PLACED
+  ORDER_STATUS_CHANGED
+  DELIVERY_ASSIGNED
+  DELIVERY_STATUS_CHANGED
+  RESTAURANT_APPROVED
+  RESTAURANT_REJECTED
+  RESTAURANT_SUSPENDED
+  DRIVER_APPROVED
+  DRIVER_REJECTED
+  DRIVER_SUSPENDED
+  ADMIN_ALERT
 }
 
 enum OrderPaymentMethod {
@@ -69,6 +91,8 @@ model User {
   orderStatusChanges  OrderStatusHistory[]
   driverProfile       DriverProfile?
   deliveriesAsDriver  Delivery[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
 
   @@index([role, isActive])
 }
@@ -114,34 +138,34 @@ model PendingCustomerRegistration {
 }
 
 model PasswordResetToken {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @db.Uuid
-  tokenHash String    @unique
-  expiresAt DateTime
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  expiresAt  DateTime
   consumedAt DateTime?
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, consumedAt])
   @@index([expiresAt])
 }
 
 model Restaurant {
-  id           String           @id @default(uuid()) @db.Uuid
-  ownerUserId  String           @unique @db.Uuid
-  name         String
-  description  String?
-  phone        String
-  status       RestaurantStatus @default(PENDING)
-  isOpen       Boolean          @default(false)
-  addressLine  String
-  logoUrl      String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  owner        User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  categories   MenuCategory[]
-  items        MenuItem[]
-  orders       Order[]
+  id          String           @id @default(uuid()) @db.Uuid
+  ownerUserId String           @unique @db.Uuid
+  name        String
+  description String?
+  phone       String
+  status      RestaurantStatus @default(PENDING)
+  isOpen      Boolean          @default(false)
+  addressLine String
+  logoUrl     String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  owner       User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  categories  MenuCategory[]
+  items       MenuItem[]
+  orders      Order[]
 
   @@index([status, isOpen])
 }
@@ -180,10 +204,10 @@ model MenuItem {
 }
 
 model Order {
-  id                  String             @id @default(uuid()) @db.Uuid
-  customerId          String             @db.Uuid
-  restaurantId        String             @db.Uuid
-  status              OrderStatus        @default(PLACED)
+  id                  String               @id @default(uuid()) @db.Uuid
+  customerId          String               @db.Uuid
+  restaurantId        String               @db.Uuid
+  status              OrderStatus          @default(PLACED)
   paymentMethod       OrderPaymentMethod
   deliveryLabel       String
   deliveryAddressLine String
@@ -192,12 +216,12 @@ model Order {
   subtotalMinor       Int
   deliveryFeeMinor    Int
   serviceFeeMinor     Int
-  discountMinor       Int                @default(0)
+  discountMinor       Int                  @default(0)
   totalMinor          Int
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  customer            User               @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  restaurant          Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  customer            User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  restaurant          Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   items               OrderItem[]
   statusHistory       OrderStatusHistory[]
   delivery            Delivery?
@@ -234,13 +258,16 @@ model OrderItem {
 }
 
 model DriverProfile {
-  userId        String   @id @db.Uuid
-  isOnline      Boolean  @default(false)
+  userId        String               @id @db.Uuid
+  status        DriverApprovalStatus @default(PENDING)
+  isOnline      Boolean              @default(false)
   lastLatitude  Float?
   lastLongitude Float?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, isOnline])
 }
 
 model Delivery {
@@ -258,4 +285,33 @@ model Delivery {
   driver      User?          @relation(fields: [driverId], references: [id])
 
   @@index([status, driverId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorUserId  String   @db.Uuid
+  action       String
+  entityType   String
+  entityId     String
+  reason       String?
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+  actor        User     @relation(fields: [actorUserId], references: [id])
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId])
+}
+
+model Notification {
+  id              String           @id @default(uuid()) @db.Uuid
+  userId          String           @db.Uuid
+  type            NotificationType
+  title           String
+  body            String
+  relatedEntityId String?          @db.Uuid
+  isRead          Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
 }

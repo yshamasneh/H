@@ -1,15 +1,33 @@
 import { Injectable } from "@nestjs/common";
 import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
+import { writeAuditLog } from "../common/audit-log.util";
 import { ApiException } from "../common/api.exception";
-import { Prisma, RestaurantStatus, UserRole, type Restaurant } from "../generated/prisma/client";
+import {
+  NotificationType,
+  OrderStatus,
+  Prisma,
+  RestaurantStatus,
+  UserRole,
+  type Restaurant
+} from "../generated/prisma/client";
+import { createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeGateway } from "../realtime/realtime.gateway";
 import type { AdminRestaurantsQueryDto, RestaurantRegisterDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
-import type { Page, RestaurantProfileView, RestaurantPublicView } from "./restaurants.types";
+import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantProfileView, RestaurantPublicView } from "./restaurants.types";
+
+const suspendableStatuses: Record<"suspend" | "reactivate", RestaurantStatus> = {
+  suspend: RestaurantStatus.APPROVED,
+  reactivate: RestaurantStatus.SUSPENDED
+};
 
 @Injectable()
 export class RestaurantsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeGateway
+  ) {}
 
   async register(input: RestaurantRegisterDto): Promise<{ message: string; restaurantId: string; status: RestaurantStatus }> {
     this.assertPasswordsMatch(input.password, input.confirmPassword);
@@ -55,6 +73,8 @@ export class RestaurantsService {
           }
         });
       });
+
+      this.realtime.emitToAdmins("restaurant.pending.created", { restaurantId: restaurant.id, name: restaurant.name });
 
       return {
         message: "Your restaurant application was submitted and is awaiting admin approval. Log in with your phone number and password once it is approved.",
@@ -148,7 +168,10 @@ export class RestaurantsService {
   async adminList(query: AdminRestaurantsQueryDto): Promise<Page<RestaurantProfileView>> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const where = query.status ? { status: query.status as RestaurantStatus } : {};
+    const where: Prisma.RestaurantWhereInput = {
+      status: query.status ? (query.status as RestaurantStatus) : undefined,
+      isOpen: query.isOpen
+    };
     const [restaurants, total] = await Promise.all([
       this.prisma.restaurant.findMany({
         where,
@@ -161,12 +184,169 @@ export class RestaurantsService {
     return { items: restaurants.map(toProfileView), page, pageSize, total };
   }
 
-  async approve(restaurantId: string): Promise<RestaurantProfileView> {
-    return this.transitionPendingStatus(restaurantId, RestaurantStatus.APPROVED);
+  async adminGetRestaurant(restaurantId: string): Promise<AdminRestaurantView> {
+    const restaurant = await this.prisma.restaurant.findUnique({ where: { id: restaurantId }, include: { owner: true } });
+    if (!restaurant) {
+      throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
+    }
+    const [totalOrdersCount, deliveredOrders] = await Promise.all([
+      this.prisma.order.count({ where: { restaurantId } }),
+      this.prisma.order.findMany({ where: { restaurantId, status: OrderStatus.DELIVERED }, select: { totalMinor: true } })
+    ]);
+    const revenueMinor = deliveredOrders.reduce((sum, order) => sum + order.totalMinor, 0);
+    return {
+      ...toProfileView(restaurant),
+      ownerFullName: restaurant.owner.fullName,
+      ownerPhone: restaurant.owner.phone,
+      totalOrdersCount,
+      revenueMinor
+    };
   }
 
-  async reject(restaurantId: string): Promise<RestaurantProfileView> {
-    return this.transitionPendingStatus(restaurantId, RestaurantStatus.REJECTED);
+  async adminGetRestaurantMenu(restaurantId: string): Promise<{ categories: { id: string; name: string; isActive: boolean; items: AdminMenuItemView[] }[] }> {
+    const restaurant = await this.prisma.restaurant.findUnique({ where: { id: restaurantId } });
+    if (!restaurant) {
+      throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
+    }
+    const categories = await this.prisma.menuCategory.findMany({
+      where: { restaurantId },
+      orderBy: { sortOrder: "asc" },
+      include: { items: { orderBy: { name: "asc" } } }
+    });
+    return {
+      categories: categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        isActive: category.isActive,
+        items: category.items.map((item) => ({
+          id: item.id,
+          categoryId: item.categoryId,
+          categoryName: category.name,
+          name: item.name,
+          description: item.description,
+          priceMinor: item.priceMinor,
+          imageUrl: item.imageUrl,
+          isAvailable: item.isAvailable
+        }))
+      }))
+    };
+  }
+
+  async adminListRestaurantOrders(restaurantId: string, page: number, pageSize: number) {
+    const where = { restaurantId };
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { id: true, status: true, totalMinor: true, createdAt: true, customerId: true }
+      }),
+      this.prisma.order.count({ where })
+    ]);
+    return { items: orders, page, pageSize, total };
+  }
+
+  async approve(adminUserId: string, restaurantId: string): Promise<RestaurantProfileView> {
+    return this.transitionPendingStatus(adminUserId, restaurantId, RestaurantStatus.APPROVED, "RESTAURANT_APPROVED");
+  }
+
+  async reject(adminUserId: string, restaurantId: string): Promise<RestaurantProfileView> {
+    return this.transitionPendingStatus(adminUserId, restaurantId, RestaurantStatus.REJECTED, "RESTAURANT_REJECTED");
+  }
+
+  async adminSuspend(adminUserId: string, restaurantId: string, reason: string): Promise<RestaurantProfileView> {
+    return this.adminStatusChange(adminUserId, restaurantId, RestaurantStatus.SUSPENDED, suspendableStatuses.suspend, "RESTAURANT_SUSPENDED", reason);
+  }
+
+  async adminReactivate(adminUserId: string, restaurantId: string): Promise<RestaurantProfileView> {
+    return this.adminStatusChange(adminUserId, restaurantId, RestaurantStatus.APPROVED, suspendableStatuses.reactivate, "RESTAURANT_REACTIVATED", undefined);
+  }
+
+  private async transitionPendingStatus(
+    adminUserId: string,
+    restaurantId: string,
+    status: RestaurantStatus,
+    auditAction: string
+  ): Promise<RestaurantProfileView> {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const restaurant = await tx.restaurant.findUnique({ where: { id: restaurantId } });
+      if (!restaurant) {
+        throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
+      }
+      if (restaurant.status !== RestaurantStatus.PENDING) {
+        throw new ApiException(
+          409,
+          "RESTAURANT_NOT_PENDING",
+          "Only a restaurant awaiting approval can be approved or rejected."
+        );
+      }
+      const next = await tx.restaurant.update({ where: { id: restaurantId }, data: { status } });
+      await writeAuditLog(tx, {
+        actorUserId: adminUserId,
+        action: auditAction,
+        entityType: "Restaurant",
+        entityId: restaurantId,
+        metadata: { fromStatus: restaurant.status, toStatus: status }
+      });
+      await createNotification(tx, this.realtime, {
+        userId: restaurant.ownerUserId,
+        type: status === RestaurantStatus.APPROVED ? NotificationType.RESTAURANT_APPROVED : NotificationType.RESTAURANT_REJECTED,
+        title: status === RestaurantStatus.APPROVED ? "Your restaurant was approved" : "Your restaurant application was rejected",
+        body:
+          status === RestaurantStatus.APPROVED
+            ? "Congratulations! Your restaurant is now live and can start accepting orders."
+            : "Your restaurant application was not approved. Please contact support for details.",
+        relatedEntityId: restaurantId
+      });
+      return next;
+    });
+    return toProfileView(updated);
+  }
+
+  private async adminStatusChange(
+    adminUserId: string,
+    restaurantId: string,
+    targetStatus: RestaurantStatus,
+    requiredCurrentStatus: RestaurantStatus,
+    auditAction: string,
+    reason: string | undefined
+  ): Promise<RestaurantProfileView> {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const restaurant = await tx.restaurant.findUnique({ where: { id: restaurantId } });
+      if (!restaurant) {
+        throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
+      }
+      if (restaurant.status !== requiredCurrentStatus) {
+        throw new ApiException(
+          409,
+          "RESTAURANT_INVALID_TRANSITION",
+          `Restaurant cannot move from ${restaurant.status} to ${targetStatus}.`
+        );
+      }
+      const data: Prisma.RestaurantUpdateInput = { status: targetStatus };
+      if (targetStatus === RestaurantStatus.SUSPENDED) {
+        data.isOpen = false;
+      }
+      const next = await tx.restaurant.update({ where: { id: restaurantId }, data });
+      await writeAuditLog(tx, {
+        actorUserId: adminUserId,
+        action: auditAction,
+        entityType: "Restaurant",
+        entityId: restaurantId,
+        reason: reason ?? null,
+        metadata: { fromStatus: restaurant.status, toStatus: targetStatus }
+      });
+      await createNotification(tx, this.realtime, {
+        userId: restaurant.ownerUserId,
+        type: targetStatus === RestaurantStatus.SUSPENDED ? NotificationType.RESTAURANT_SUSPENDED : NotificationType.RESTAURANT_APPROVED,
+        title: targetStatus === RestaurantStatus.SUSPENDED ? "Your restaurant has been suspended" : "Your restaurant has been reactivated",
+        body: reason ? `Reason: ${reason}` : "Your restaurant can accept orders again.",
+        relatedEntityId: restaurantId
+      });
+      return next;
+    });
+    return toProfileView(updated);
   }
 
   private async requireApprovedRestaurant(restaurantId: string): Promise<Restaurant> {
@@ -177,22 +357,6 @@ export class RestaurantsService {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant is not available.");
     }
     return restaurant;
-  }
-
-  private async transitionPendingStatus(restaurantId: string, status: RestaurantStatus): Promise<RestaurantProfileView> {
-    const restaurant = await this.prisma.restaurant.findUnique({ where: { id: restaurantId } });
-    if (!restaurant) {
-      throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
-    }
-    if (restaurant.status !== RestaurantStatus.PENDING) {
-      throw new ApiException(
-        409,
-        "RESTAURANT_NOT_PENDING",
-        "Only a restaurant awaiting approval can be approved or rejected."
-      );
-    }
-    const updated = await this.prisma.restaurant.update({ where: { id: restaurantId }, data: { status } });
-    return toProfileView(updated);
   }
 
   private assertPasswordsMatch(password: string, confirmation: string): void {

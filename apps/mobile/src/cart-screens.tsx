@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ApiError,
+  cancelMyOrder,
   createOrder,
   getMyOrder,
   listMyOrders,
@@ -28,6 +29,7 @@ import {
   type Cart
 } from "./cart";
 import { getAccessToken } from "./session";
+import { useRealtimeEvent } from "./socket";
 
 const currencyCode = "ILS";
 
@@ -330,6 +332,7 @@ type OrderDetailScreenProps = {
 export function OrderDetailScreen(props: OrderDetailScreenProps) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   async function load() {
     setError(null);
@@ -349,6 +352,28 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
     void load();
   }, [props.orderId]);
 
+  useRealtimeEvent("order.status.changed", (payload: any) => {
+    if (payload?.orderId === props.orderId) void load();
+  });
+  useRealtimeEvent("delivery.status.changed", () => void load());
+
+  async function cancelOrder() {
+    setCancelling(true);
+    setError(null);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setError("Your session has expired. Please log in again.");
+        return;
+      }
+      setOrder(await cancelMyOrder(accessToken, props.orderId));
+    } catch (requestError) {
+      setError(readError(requestError));
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
@@ -366,6 +391,9 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
           <OrderSummaryCard order={order} />
           {order.delivery ? <DeliveryProgressCard delivery={order.delivery} /> : null}
           <StatusTimeline history={order.statusHistory} />
+          {order.status === "PLACED" ? (
+            <PrimaryButton destructive label="Cancel Order" loading={cancelling} onPress={cancelOrder} />
+          ) : null}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -513,12 +541,16 @@ function ErrorText({ message }: { message: string | null }) {
   return <Text style={styles.inlineErrorText}>{message}</Text>;
 }
 
-function PrimaryButton(props: { label: string; loading?: boolean; onPress: () => void }) {
+function PrimaryButton(props: { label: string; loading?: boolean; destructive?: boolean; onPress: () => void }) {
   return (
     <Pressable
       disabled={props.loading}
       onPress={props.onPress}
-      style={({ pressed }) => [styles.primaryButton, (pressed || props.loading) && styles.buttonPressed]}
+      style={({ pressed }) => [
+        styles.primaryButton,
+        props.destructive && styles.destructiveButton,
+        (pressed || props.loading) && styles.buttonPressed
+      ]}
     >
       {props.loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{props.label}</Text>}
     </Pressable>
@@ -684,6 +716,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14
   },
   primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+  destructiveButton: { backgroundColor: "#B91C1C" },
   secondaryButton: {
     alignItems: "center",
     borderColor: "#0F766E",

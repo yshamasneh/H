@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ApiError,
   apiBaseUrl,
+  listMyNotifications,
   login,
   requestPasswordResetCode,
   requestSignupCode,
@@ -36,6 +37,8 @@ import {
   PhoneValidationError,
   type CountryCode
 } from "./phone";
+import { getAccessToken } from "./session";
+import { useRealtimeEvent } from "./socket";
 
 const logo = require("../assets/logo/TasawaQ.png");
 const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,72}$/;
@@ -389,8 +392,28 @@ export function HomeScreen(props: {
   onViewOrders?: () => void;
   onManageOrders?: () => void;
   onOpenDriverDashboard?: () => void;
+  onOpenNotifications: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  async function loadUnreadCount() {
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) return;
+      const page = await listMyNotifications(accessToken, 1, 1);
+      setUnreadCount(page.unreadCount);
+    } catch {
+      // A failed unread-count fetch is not worth surfacing on the home screen.
+    }
+  }
+
+  useEffect(() => {
+    void loadUnreadCount();
+  }, []);
+
+  useRealtimeEvent("notification.created", () => void loadUnreadCount());
+
   async function submitLogout() {
     setLoading(true);
     try {
@@ -421,6 +444,10 @@ export function HomeScreen(props: {
       {props.onOpenDriverDashboard ? (
         <PrimaryButton label="Delivery Dashboard" onPress={props.onOpenDriverDashboard} />
       ) : null}
+      <SecondaryButton
+        label={unreadCount > 0 ? `Notifications (${unreadCount})` : "Notifications"}
+        onPress={props.onOpenNotifications}
+      />
       <SecondaryButton label="Log out" loading={loading} onPress={submitLogout} />
     </AuthLayout>
   );

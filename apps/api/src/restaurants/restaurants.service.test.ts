@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { ApiException } from "../common/api.exception";
 import { RestaurantStatus, UserRole } from "../generated/prisma/client";
+import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
 import { FakeRestaurantPrisma } from "./testing/fake-prisma";
 import { RestaurantsService } from "./restaurants.service";
 
@@ -17,8 +19,9 @@ const registerInput = {
 
 function createService() {
   const prisma = new FakeRestaurantPrisma();
-  const service = new RestaurantsService(prisma as never);
-  return { prisma, service };
+  const realtime = new FakeRealtimeGateway();
+  const service = new RestaurantsService(prisma as never, realtime as never);
+  return { prisma, realtime, service };
 }
 
 test("registering a restaurant creates a RESTAURANT-role user and a PENDING restaurant", async () => {
@@ -87,20 +90,91 @@ test("an approved-but-closed restaurant's menu is still viewable by id, just not
 test("admin can approve a pending restaurant exactly once", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedApprovedOpenRestaurant({ status: RestaurantStatus.PENDING, isOpen: false });
+  const adminId = randomUUID();
 
-  const approved = await service.approve(restaurant.id);
+  const approved = await service.approve(adminId, restaurant.id);
   assert.equal(approved.status, RestaurantStatus.APPROVED);
 
-  await assert.rejects(service.approve(restaurant.id), hasCode("RESTAURANT_NOT_PENDING"));
-  await assert.rejects(service.reject(restaurant.id), hasCode("RESTAURANT_NOT_PENDING"));
+  await assert.rejects(service.approve(adminId, restaurant.id), hasCode("RESTAURANT_NOT_PENDING"));
+  await assert.rejects(service.reject(adminId, restaurant.id), hasCode("RESTAURANT_NOT_PENDING"));
 });
 
 test("admin can reject a pending restaurant", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedApprovedOpenRestaurant({ status: RestaurantStatus.PENDING, isOpen: false });
 
-  const rejected = await service.reject(restaurant.id);
+  const rejected = await service.reject(randomUUID(), restaurant.id);
   assert.equal(rejected.status, RestaurantStatus.REJECTED);
+});
+
+test("approving a restaurant writes an AuditLog entry and notifies the owner", async () => {
+  const { prisma, realtime, service } = createService();
+  const restaurant = prisma.seedApprovedOpenRestaurant({ status: RestaurantStatus.PENDING, isOpen: false });
+  const adminId = randomUUID();
+
+  await service.approve(adminId, restaurant.id);
+
+  const auditEntry = prisma.auditLogs.find((entry) => entry.entityId === restaurant.id);
+  assert.ok(auditEntry);
+  assert.equal(auditEntry!.action, "RESTAURANT_APPROVED");
+  assert.equal(auditEntry!.actorUserId, adminId);
+
+  const notification = prisma.notifications.find((entry) => entry.userId === restaurant.ownerUserId);
+  assert.ok(notification);
+  assert.equal(notification!.type, "RESTAURANT_APPROVED");
+  assert.ok(realtime.emitted.some((event) => event.event === "notification.created"));
+});
+
+test("admin suspends an approved restaurant, closing it, then reactivates it", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedApprovedOpenRestaurant();
+  const adminId = randomUUID();
+
+  const suspended = await service.adminSuspend(adminId, restaurant.id, "Health code violation");
+  assert.equal(suspended.status, RestaurantStatus.SUSPENDED);
+  assert.equal(suspended.isOpen, false);
+
+  const auditEntry = prisma.auditLogs.find((entry) => entry.entityId === restaurant.id && entry.action === "RESTAURANT_SUSPENDED");
+  assert.equal(auditEntry!.reason, "Health code violation");
+
+  const reactivated = await service.adminReactivate(adminId, restaurant.id);
+  assert.equal(reactivated.status, RestaurantStatus.APPROVED);
+});
+
+test("admin cannot suspend a restaurant that is not currently approved", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedApprovedOpenRestaurant({ status: RestaurantStatus.PENDING });
+
+  await assert.rejects(
+    service.adminSuspend(randomUUID(), restaurant.id, "reason"),
+    hasCode("RESTAURANT_INVALID_TRANSITION")
+  );
+});
+
+test("adminGetRestaurant reports total order count and revenue from delivered orders only", async () => {
+  const { prisma, service } = createService();
+  const ownerUserId = randomUUID();
+  prisma.users.push({
+    id: ownerUserId,
+    fullName: "Owner Name",
+    phone: "+970591112222",
+    email: null,
+    passwordHash: "hash",
+    role: UserRole.RESTAURANT,
+    phoneVerifiedAt: new Date(),
+    isActive: true,
+    tokenVersion: 0,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  const restaurant = prisma.seedApprovedOpenRestaurant({ ownerUserId });
+  prisma.seedOrder(restaurant.id, { status: "DELIVERED", totalMinor: 1000 });
+  prisma.seedOrder(restaurant.id, { status: "DELIVERED", totalMinor: 1500 });
+  prisma.seedOrder(restaurant.id, { status: "CANCELLED", totalMinor: 5000 });
+
+  const view = await service.adminGetRestaurant(restaurant.id);
+  assert.equal(view.totalOrdersCount, 3);
+  assert.equal(view.revenueMinor, 2500);
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

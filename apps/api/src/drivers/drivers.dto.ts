@@ -3,6 +3,14 @@ import { Type } from "class-transformer";
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PhoneDto, strongPasswordPattern } from "../auth/auth.dto";
 
+export class AdminActionReasonDto {
+  @ApiProperty({ example: "Repeated late deliveries" })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  reason!: string;
+}
+
 export class DriverRegisterDto extends PhoneDto {
   @ApiProperty({ example: "Driver Name" })
   @IsString()

@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "npm run dev:api",
     "dev:api": "npm run dev --workspace @wasel/api",
+    "dev:admin": "npm run dev --workspace @wasel/admin",
     "dev:mobile": "npm run start --workspace @wasel/mobile",
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",

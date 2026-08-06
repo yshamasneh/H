@@ -1,22 +1,29 @@
 import { Injectable } from "@nestjs/common";
+import { writeAuditLog } from "../common/audit-log.util";
 import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { ApiException } from "../common/api.exception";
 import {
   DeliveryStatus,
+  DriverApprovalStatus,
+  NotificationType,
   OrderStatus,
   Prisma,
   UserRole,
   type Delivery,
   type DriverProfile,
   type Order,
-  type Restaurant
+  type Restaurant,
+  type User
 } from "../generated/prisma/client";
+import { createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeGateway } from "../realtime/realtime.gateway";
 import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
-import type { DeliveryView, DriverProfileView, Page } from "./drivers.types";
+import type { AdminDriverView, DeliveryView, DriverProfileView, Page } from "./drivers.types";
 
 type DeliveryWithRelations = Delivery & { order: Order & { restaurant: Restaurant } };
+type DriverWithUser = DriverProfile & { user: User };
 
 const deliveryInclude = { order: { include: { restaurant: true } } } as const;
 
@@ -37,7 +44,10 @@ const allowedDeliveryTransitions: Record<DeliveryStatus, DeliveryStatus[]> = {
 
 @Injectable()
 export class DriversService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeGateway
+  ) {}
 
   async register(input: DriverRegisterDto): Promise<{ message: string; userId: string }> {
     this.assertPasswordsMatch(input.password, input.confirmPassword);
@@ -70,12 +80,15 @@ export class DriversService {
             isActive: true
           }
         });
-        await transaction.driverProfile.create({ data: { userId: user.id, isOnline: false } });
+        await transaction.driverProfile.create({
+          data: { userId: user.id, status: DriverApprovalStatus.PENDING, isOnline: false }
+        });
         return user;
       });
 
       return {
-        message: "Your driver account was created. Log in with your phone number and password.",
+        message:
+          "Your driver account was created and is awaiting admin approval. Log in with your phone number and password once it is approved.",
         userId: driver.id
       };
     } catch (error) {
@@ -88,6 +101,13 @@ export class DriversService {
 
   async setOnlineStatus(driverUserId: string, isOnline: boolean): Promise<DriverProfileView> {
     const profile = await this.requireOwnProfile(driverUserId);
+    if (isOnline && profile.status !== DriverApprovalStatus.APPROVED) {
+      throw new ApiException(
+        403,
+        "DRIVER_NOT_APPROVED",
+        "Your driver account has not been approved yet. Please wait for admin approval."
+      );
+    }
     const updated = await this.prisma.driverProfile.update({ where: { userId: profile.userId }, data: { isOnline } });
     return toProfileView(updated);
   }
@@ -138,6 +158,17 @@ export class DriversService {
           "This delivery has already been accepted by another driver."
         );
       }
+      const order = await tx.order.findUnique({ where: { id: existing.orderId } });
+      if (order) {
+        await createNotification(tx, this.realtime, {
+          userId: order.customerId,
+          type: NotificationType.DELIVERY_ASSIGNED,
+          title: "A driver is on the way",
+          body: "A driver has been assigned to pick up your order.",
+          relatedEntityId: order.id
+        });
+        this.realtime.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: DeliveryStatus.ASSIGNED });
+      }
       return tx.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
     });
 
@@ -169,9 +200,9 @@ export class DriversService {
         throw invalidDeliveryTransition(existing.status, targetStatus);
       }
 
-      if (targetStatus === DeliveryStatus.DELIVERED) {
-        const order = await tx.order.findUnique({ where: { id: existing.orderId } });
-        if (order && order.status !== OrderStatus.DELIVERED) {
+      const order = await tx.order.findUnique({ where: { id: existing.orderId } });
+      if (order) {
+        if (targetStatus === DeliveryStatus.DELIVERED && order.status !== OrderStatus.DELIVERED) {
           await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.DELIVERED } });
           await tx.orderStatusHistory.create({
             data: {
@@ -182,12 +213,125 @@ export class DriversService {
             }
           });
         }
+        await createNotification(tx, this.realtime, {
+          userId: order.customerId,
+          type: NotificationType.DELIVERY_STATUS_CHANGED,
+          title: deliveryStatusNotificationTitle(targetStatus),
+          body: deliveryStatusNotificationBody(targetStatus),
+          relatedEntityId: order.id
+        });
+        this.realtime.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: targetStatus });
+        if (targetStatus === DeliveryStatus.DELIVERED) {
+          this.realtime.emitToOrder(order.id, "order.status.changed", { orderId: order.id, status: OrderStatus.DELIVERED });
+        }
       }
 
       return tx.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
     });
 
     return toDeliveryView(updated!);
+  }
+
+  async adminListDrivers(): Promise<AdminDriverView[]> {
+    const profiles = await this.prisma.driverProfile.findMany({
+      include: { user: true },
+      orderBy: { createdAt: "desc" }
+    });
+    const driverIds = profiles.map((profile) => profile.userId);
+    const allRelevantDeliveries = await this.prisma.delivery.findMany({
+      where: {
+        driverId: { in: driverIds },
+        status: {
+          in: [DeliveryStatus.DELIVERED, DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP, DeliveryStatus.ON_THE_WAY]
+        }
+      }
+    });
+    const completedByDriver = new Map<string, number>();
+    const activeByDriver = new Map<string, string>();
+    for (const delivery of allRelevantDeliveries) {
+      if (!delivery.driverId) continue;
+      if (delivery.status === DeliveryStatus.DELIVERED) {
+        completedByDriver.set(delivery.driverId, (completedByDriver.get(delivery.driverId) ?? 0) + 1);
+      } else {
+        activeByDriver.set(delivery.driverId, delivery.id);
+      }
+    }
+
+    return profiles.map((profile) =>
+      toAdminView(profile, completedByDriver.get(profile.userId) ?? 0, activeByDriver.get(profile.userId) ?? null)
+    );
+  }
+
+  async adminApprove(adminUserId: string, driverUserId: string): Promise<AdminDriverView> {
+    return this.adminTransition(adminUserId, driverUserId, DriverApprovalStatus.APPROVED, [DriverApprovalStatus.PENDING], "DRIVER_APPROVED", undefined);
+  }
+
+  async adminReject(adminUserId: string, driverUserId: string, reason: string): Promise<AdminDriverView> {
+    return this.adminTransition(adminUserId, driverUserId, DriverApprovalStatus.REJECTED, [DriverApprovalStatus.PENDING], "DRIVER_REJECTED", reason);
+  }
+
+  async adminSuspend(adminUserId: string, driverUserId: string, reason: string): Promise<AdminDriverView> {
+    return this.adminTransition(adminUserId, driverUserId, DriverApprovalStatus.SUSPENDED, [DriverApprovalStatus.APPROVED], "DRIVER_SUSPENDED", reason);
+  }
+
+  async adminReactivate(adminUserId: string, driverUserId: string): Promise<AdminDriverView> {
+    return this.adminTransition(adminUserId, driverUserId, DriverApprovalStatus.APPROVED, [DriverApprovalStatus.SUSPENDED], "DRIVER_REACTIVATED", undefined);
+  }
+
+  private async adminTransition(
+    adminUserId: string,
+    driverUserId: string,
+    targetStatus: DriverApprovalStatus,
+    allowedFrom: DriverApprovalStatus[],
+    auditAction: string,
+    reason: string | undefined
+  ): Promise<AdminDriverView> {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const profile = await tx.driverProfile.findUnique({ where: { userId: driverUserId }, include: { user: true } });
+      if (!profile) {
+        throw new ApiException(404, "DRIVER_NOT_FOUND", "This driver account does not exist.");
+      }
+      if (!allowedFrom.includes(profile.status)) {
+        throw new ApiException(
+          409,
+          "DRIVER_INVALID_TRANSITION",
+          `Driver cannot move from ${profile.status} to ${targetStatus}.`
+        );
+      }
+
+      const data: Prisma.DriverProfileUpdateInput = { status: targetStatus };
+      if (targetStatus !== DriverApprovalStatus.APPROVED) {
+        data.isOnline = false;
+      }
+      const next = await tx.driverProfile.update({ where: { userId: driverUserId }, data, include: { user: true } });
+
+      await writeAuditLog(tx, {
+        actorUserId: adminUserId,
+        action: auditAction,
+        entityType: "DriverProfile",
+        entityId: driverUserId,
+        reason: reason ?? null,
+        metadata: { fromStatus: profile.status, toStatus: targetStatus }
+      });
+
+      const notificationType =
+        targetStatus === DriverApprovalStatus.APPROVED
+          ? NotificationType.DRIVER_APPROVED
+          : targetStatus === DriverApprovalStatus.REJECTED
+            ? NotificationType.DRIVER_REJECTED
+            : NotificationType.DRIVER_SUSPENDED;
+      await createNotification(tx, this.realtime, {
+        userId: driverUserId,
+        type: notificationType,
+        title: driverStatusNotificationTitle(targetStatus),
+        body: reason ? `Reason: ${reason}` : driverStatusNotificationTitle(targetStatus),
+        relatedEntityId: driverUserId
+      });
+
+      return next;
+    });
+
+    return toAdminView(updated, 0, null);
   }
 
   private async requireOwnProfile(driverUserId: string): Promise<DriverProfile> {
@@ -218,12 +362,66 @@ function deliveryTimestampField(status: DeliveryStatus): "pickedUpAt" | "onTheWa
   }
 }
 
+function deliveryStatusNotificationTitle(status: DeliveryStatus): string {
+  switch (status) {
+    case DeliveryStatus.PICKED_UP:
+      return "Your order has been picked up";
+    case DeliveryStatus.ON_THE_WAY:
+      return "Your order is on the way";
+    case DeliveryStatus.DELIVERED:
+      return "Your order has been delivered";
+    default:
+      return "Delivery update";
+  }
+}
+
+function deliveryStatusNotificationBody(status: DeliveryStatus): string {
+  switch (status) {
+    case DeliveryStatus.PICKED_UP:
+      return "The driver has picked up your order from the restaurant.";
+    case DeliveryStatus.ON_THE_WAY:
+      return "The driver is on the way to your delivery address.";
+    case DeliveryStatus.DELIVERED:
+      return "Enjoy your meal! Your order has been marked delivered.";
+    default:
+      return "Your delivery status has changed.";
+  }
+}
+
+function driverStatusNotificationTitle(status: DriverApprovalStatus): string {
+  switch (status) {
+    case DriverApprovalStatus.APPROVED:
+      return "Your driver account has been approved";
+    case DriverApprovalStatus.REJECTED:
+      return "Your driver application was not approved";
+    case DriverApprovalStatus.SUSPENDED:
+      return "Your driver account has been suspended";
+    default:
+      return "Your driver account status has changed";
+  }
+}
+
 function toProfileView(profile: DriverProfile): DriverProfileView {
   return {
     userId: profile.userId,
+    status: profile.status,
     isOnline: profile.isOnline,
     lastLatitude: profile.lastLatitude,
     lastLongitude: profile.lastLongitude
+  };
+}
+
+function toAdminView(profile: DriverWithUser, completedDeliveriesCount: number, activeDeliveryId: string | null): AdminDriverView {
+  return {
+    userId: profile.userId,
+    fullName: profile.user.fullName,
+    phone: profile.user.phone,
+    isActive: profile.user.isActive,
+    status: profile.status,
+    isOnline: profile.isOnline,
+    completedDeliveriesCount,
+    activeDeliveryId,
+    createdAt: profile.createdAt
   };
 }
 

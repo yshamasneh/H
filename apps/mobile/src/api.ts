@@ -337,6 +337,43 @@ export function updateDeliveryStatus(
   });
 }
 
+export type NotificationType =
+  | "ORDER_PLACED"
+  | "ORDER_STATUS_CHANGED"
+  | "DELIVERY_ASSIGNED"
+  | "DELIVERY_STATUS_CHANGED"
+  | "RESTAURANT_APPROVED"
+  | "RESTAURANT_REJECTED"
+  | "RESTAURANT_SUSPENDED"
+  | "DRIVER_APPROVED"
+  | "DRIVER_REJECTED"
+  | "DRIVER_SUSPENDED"
+  | "ADMIN_ALERT";
+
+export type NotificationView = {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  relatedEntityId: string | null;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export type NotificationsPage = Page<NotificationView> & { unreadCount: number };
+
+export function listMyNotifications(accessToken: string, page = 1, pageSize = 20): Promise<NotificationsPage> {
+  return request(`/api/v1/notifications/me?page=${page}&pageSize=${pageSize}`, { accessToken });
+}
+
+export function markNotificationRead(accessToken: string, notificationId: string): Promise<NotificationView> {
+  return request(`/api/v1/notifications/${notificationId}/read`, { method: "PATCH", accessToken });
+}
+
+export function cancelMyOrder(accessToken: string, orderId: string): Promise<OrderDetail> {
+  return request(`/api/v1/orders/${orderId}/cancel`, { method: "POST", accessToken });
+}
+
 async function request<T>(
   path: string,
   options: { method?: "GET" | "POST" | "PATCH"; body?: unknown; accessToken?: string } = {}

@@ -1,10 +1,23 @@
-import type { DeliveryStatus, OrderPaymentMethod } from "../generated/prisma/enums";
+import type { DeliveryStatus, DriverApprovalStatus, OrderPaymentMethod } from "../generated/prisma/enums";
 
 export type DriverProfileView = {
   userId: string;
+  status: DriverApprovalStatus;
   isOnline: boolean;
   lastLatitude: number | null;
   lastLongitude: number | null;
+};
+
+export type AdminDriverView = {
+  userId: string;
+  fullName: string;
+  phone: string;
+  isActive: boolean;
+  status: DriverApprovalStatus;
+  isOnline: boolean;
+  completedDeliveriesCount: number;
+  activeDeliveryId: string | null;
+  createdAt: Date;
 };
 
 export type DeliveryOrderSummary = {

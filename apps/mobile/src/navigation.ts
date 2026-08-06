@@ -28,7 +28,8 @@ export type AppScreen =
   | { name: "restaurant-orders"; user: PublicUser }
   | { name: "restaurant-order-detail"; user: PublicUser; orderId: string }
   | { name: "driver-home"; user: PublicUser }
-  | { name: "delivery-detail"; user: PublicUser; deliveryId: string };
+  | { name: "delivery-detail"; user: PublicUser; deliveryId: string }
+  | { name: "notifications"; user: PublicUser };
 
 export const initialScreen: AppScreen = { name: "login" };
 
@@ -146,6 +147,10 @@ export function goToDeliveryDetail(
   deliveryId: string
 ): Extract<AppScreen, { name: "delivery-detail" }> {
   return { name: "delivery-detail", user, deliveryId };
+}
+
+export function goToNotifications(user: PublicUser): Extract<AppScreen, { name: "notifications" }> {
+  return { name: "notifications", user };
 }
 
 export function deliveryToDetail(

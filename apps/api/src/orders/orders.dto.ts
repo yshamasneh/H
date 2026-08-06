@@ -105,3 +105,64 @@ export class OrdersPaginationQueryDto {
   @Max(50)
   pageSize?: number;
 }
+
+export const orderStatusValues = [
+  "PLACED",
+  "ACCEPTED",
+  "PREPARING",
+  "READY_FOR_PICKUP",
+  "DELIVERED",
+  "REJECTED",
+  "CANCELLED"
+] as const;
+export type OrderStatusValue = (typeof orderStatusValues)[number];
+
+export class CancelOrderReasonDto {
+  @ApiProperty({ example: "Restaurant is closed today, customer requested a refund" })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(300)
+  reason!: string;
+}
+
+export class AdminOrdersFilterDto {
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  pageSize?: number;
+
+  @ApiPropertyOptional({ enum: orderStatusValues })
+  @IsOptional()
+  @IsIn(orderStatusValues)
+  status?: OrderStatusValue;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  restaurantId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  customerId?: string;
+
+  @ApiPropertyOptional({ example: "2026-08-01T00:00:00.000Z" })
+  @IsOptional()
+  @IsString()
+  fromDate?: string;
+
+  @ApiPropertyOptional({ example: "2026-08-31T23:59:59.999Z" })
+  @IsOptional()
+  @IsString()
+  toDate?: string;
+}
