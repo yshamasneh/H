@@ -79,7 +79,22 @@ export type Page<T> = {
 
 export const orderPaymentMethods = ["CASH"] as const;
 export type OrderPaymentMethod = (typeof orderPaymentMethods)[number];
-export type OrderStatusValue = "PLACED" | "CANCELLED";
+export type OrderStatusValue =
+  | "PLACED"
+  | "ACCEPTED"
+  | "PREPARING"
+  | "READY_FOR_PICKUP"
+  | "DELIVERED"
+  | "REJECTED"
+  | "CANCELLED";
+
+export const restaurantOrderStatusActions = ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "REJECTED"] as const;
+export type RestaurantOrderStatusAction = (typeof restaurantOrderStatusActions)[number];
+
+export type DeliveryStatusValue = "PENDING_ASSIGNMENT" | "ASSIGNED" | "PICKED_UP" | "ON_THE_WAY" | "DELIVERED" | "CANCELLED";
+
+export const driverDeliveryStatusActions = ["PICKED_UP", "ON_THE_WAY", "DELIVERED"] as const;
+export type DriverDeliveryStatusAction = (typeof driverDeliveryStatusActions)[number];
 
 export type OrderItemView = {
   id: string;
@@ -93,6 +108,24 @@ export type OrderItemView = {
 export type OrderRestaurantSummary = {
   id: string;
   name: string;
+};
+
+export type OrderStatusHistoryEntry = {
+  id: string;
+  fromStatus: OrderStatusValue | null;
+  toStatus: OrderStatusValue;
+  changedByUserId: string;
+  note: string | null;
+  createdAt: string;
+};
+
+export type DeliveryStatusSummary = {
+  id: string;
+  status: DeliveryStatusValue;
+  assignedAt: string | null;
+  pickedUpAt: string | null;
+  onTheWayAt: string | null;
+  deliveredAt: string | null;
 };
 
 export type OrderDetail = {
@@ -110,6 +143,41 @@ export type OrderDetail = {
   serviceFeeMinor: number;
   discountMinor: number;
   totalMinor: number;
+  createdAt: string;
+  statusHistory: OrderStatusHistoryEntry[];
+  delivery: DeliveryStatusSummary | null;
+};
+
+export type DriverProfileView = {
+  userId: string;
+  isOnline: boolean;
+  lastLatitude: number | null;
+  lastLongitude: number | null;
+};
+
+export type DeliveryOrderSummary = {
+  id: string;
+  deliveryLabel: string;
+  deliveryAddressLine: string;
+  totalMinor: number;
+  paymentMethod: OrderPaymentMethod;
+};
+
+export type DeliveryRestaurantSummary = {
+  id: string;
+  name: string;
+  addressLine: string;
+};
+
+export type DeliveryView = {
+  id: string;
+  status: DeliveryStatusValue;
+  order: DeliveryOrderSummary;
+  restaurant: DeliveryRestaurantSummary;
+  assignedAt: string | null;
+  pickedUpAt: string | null;
+  onTheWayAt: string | null;
+  deliveredAt: string | null;
   createdAt: string;
 };
 
@@ -220,9 +288,58 @@ export function getMyOrder(accessToken: string, orderId: string): Promise<OrderD
   return request(`/api/v1/orders/${orderId}`, { accessToken });
 }
 
+export function listRestaurantOrders(accessToken: string, page = 1, pageSize = 20): Promise<Page<OrderDetail>> {
+  return request(`/api/v1/restaurant/me/orders?page=${page}&pageSize=${pageSize}`, { accessToken });
+}
+
+export function getRestaurantOrder(accessToken: string, orderId: string): Promise<OrderDetail> {
+  return request(`/api/v1/restaurant/me/orders/${orderId}`, { accessToken });
+}
+
+export function updateOrderStatus(
+  accessToken: string,
+  orderId: string,
+  status: RestaurantOrderStatusAction,
+  note?: string
+): Promise<OrderDetail> {
+  return request(`/api/v1/restaurant/me/orders/${orderId}/status`, {
+    method: "PATCH",
+    body: { status, note },
+    accessToken
+  });
+}
+
+export function setDriverOnlineStatus(accessToken: string, isOnline: boolean): Promise<DriverProfileView> {
+  return request("/api/v1/driver/me/status", { method: "PATCH", body: { isOnline }, accessToken });
+}
+
+export function listAvailableDeliveries(accessToken: string): Promise<DeliveryView[]> {
+  return request("/api/v1/driver/me/deliveries/available", { accessToken });
+}
+
+export function listMyDeliveries(accessToken: string, page = 1, pageSize = 20): Promise<Page<DeliveryView>> {
+  return request(`/api/v1/driver/me/deliveries?page=${page}&pageSize=${pageSize}`, { accessToken });
+}
+
+export function acceptDelivery(accessToken: string, deliveryId: string): Promise<DeliveryView> {
+  return request(`/api/v1/driver/me/deliveries/${deliveryId}/accept`, { method: "POST", accessToken });
+}
+
+export function updateDeliveryStatus(
+  accessToken: string,
+  deliveryId: string,
+  status: DriverDeliveryStatusAction
+): Promise<DeliveryView> {
+  return request(`/api/v1/driver/me/deliveries/${deliveryId}/status`, {
+    method: "PATCH",
+    body: { status },
+    accessToken
+  });
+}
+
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown; accessToken?: string } = {}
+  options: { method?: "GET" | "POST" | "PATCH"; body?: unknown; accessToken?: string } = {}
 ): Promise<T> {
   let response: Response;
   try {

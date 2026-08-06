@@ -1,4 +1,4 @@
-import type { AuthResult, OrderDetail, OtpRequestResult, PublicUser, RestaurantSummary, SignupInput } from "./api";
+import type { AuthResult, DeliveryView, OrderDetail, OtpRequestResult, PublicUser, RestaurantSummary, SignupInput } from "./api";
 import type { CountryCode } from "./phone";
 
 export type PhonePrefill = { countryCode: CountryCode; phoneNumber: string };
@@ -24,7 +24,11 @@ export type AppScreen =
   | { name: "checkout"; user: PublicUser }
   | { name: "order-confirmation"; user: PublicUser; order: OrderDetail }
   | { name: "order-history"; user: PublicUser }
-  | { name: "order-detail"; user: PublicUser; orderId: string };
+  | { name: "order-detail"; user: PublicUser; orderId: string }
+  | { name: "restaurant-orders"; user: PublicUser }
+  | { name: "restaurant-order-detail"; user: PublicUser; orderId: string }
+  | { name: "driver-home"; user: PublicUser }
+  | { name: "delivery-detail"; user: PublicUser; deliveryId: string };
 
 export const initialScreen: AppScreen = { name: "login" };
 
@@ -120,4 +124,33 @@ export function goToOrderDetail(
   orderId: string
 ): Extract<AppScreen, { name: "order-detail" }> {
   return { name: "order-detail", user, orderId };
+}
+
+export function goToRestaurantOrders(user: PublicUser): Extract<AppScreen, { name: "restaurant-orders" }> {
+  return { name: "restaurant-orders", user };
+}
+
+export function goToRestaurantOrderDetail(
+  user: PublicUser,
+  orderId: string
+): Extract<AppScreen, { name: "restaurant-order-detail" }> {
+  return { name: "restaurant-order-detail", user, orderId };
+}
+
+export function goToDriverHome(user: PublicUser): Extract<AppScreen, { name: "driver-home" }> {
+  return { name: "driver-home", user };
+}
+
+export function goToDeliveryDetail(
+  user: PublicUser,
+  deliveryId: string
+): Extract<AppScreen, { name: "delivery-detail" }> {
+  return { name: "delivery-detail", user, deliveryId };
+}
+
+export function deliveryToDetail(
+  user: PublicUser,
+  delivery: Pick<DeliveryView, "id">
+): Extract<AppScreen, { name: "delivery-detail" }> {
+  return goToDeliveryDetail(user, delivery.id);
 }

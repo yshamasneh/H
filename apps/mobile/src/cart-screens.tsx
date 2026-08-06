@@ -364,6 +364,8 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
       ) : (
         <ScrollView contentContainerStyle={styles.formContent}>
           <OrderSummaryCard order={order} />
+          {order.delivery ? <DeliveryProgressCard delivery={order.delivery} /> : null}
+          <StatusTimeline history={order.statusHistory} />
         </ScrollView>
       )}
     </SafeAreaView>
@@ -422,12 +424,61 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
 }
 
 function StatusBadge(props: { status: OrderDetail["status"] }) {
-  const isPlaced = props.status === "PLACED";
+  const palette = statusPalette(props.status);
   return (
-    <View style={[styles.statusBadge, isPlaced ? styles.statusBadgePlaced : styles.statusBadgeCancelled]}>
-      <Text style={[styles.statusBadgeText, isPlaced ? styles.statusBadgeTextPlaced : styles.statusBadgeTextCancelled]}>
-        {props.status}
-      </Text>
+    <View style={[styles.statusBadge, { backgroundColor: palette.background }]}>
+      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{props.status.replace(/_/g, " ")}</Text>
+    </View>
+  );
+}
+
+function statusPalette(status: OrderDetail["status"]): { background: string; text: string } {
+  switch (status) {
+    case "PLACED":
+      return { background: "#FEF9C3", text: "#854D0E" };
+    case "ACCEPTED":
+    case "PREPARING":
+      return { background: "#DBEAFE", text: "#1E40AF" };
+    case "READY_FOR_PICKUP":
+      return { background: "#E0E7FF", text: "#3730A3" };
+    case "DELIVERED":
+      return { background: "#DCFCE7", text: "#166534" };
+    case "REJECTED":
+    case "CANCELLED":
+      return { background: "#FEE2E2", text: "#B91C1C" };
+  }
+}
+
+function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
+  if (props.history.length === 0) return null;
+  return (
+    <View style={styles.summaryCard}>
+      <Text style={styles.sectionTitle}>Status history</Text>
+      {props.history.map((entry) => (
+        <View key={entry.id} style={styles.timelineRow}>
+          <Text style={styles.timelineStatus}>{entry.toStatus.replace(/_/g, " ")}</Text>
+          <Text style={styles.timelineDate}>{formatDate(entry.createdAt)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function DeliveryProgressCard(props: { delivery: NonNullable<OrderDetail["delivery"]> }) {
+  const { delivery } = props;
+  return (
+    <View style={styles.summaryCard}>
+      <Text style={styles.sectionTitle}>Delivery progress</Text>
+      <Text style={styles.addressText}>{delivery.status.replace(/_/g, " ")}</Text>
+      {delivery.pickedUpAt ? (
+        <Text style={styles.footerNote}>Picked up: {formatDate(delivery.pickedUpAt)}</Text>
+      ) : null}
+      {delivery.onTheWayAt ? (
+        <Text style={styles.footerNote}>On the way: {formatDate(delivery.onTheWayAt)}</Text>
+      ) : null}
+      {delivery.deliveredAt ? (
+        <Text style={styles.footerNote}>Delivered: {formatDate(delivery.deliveredAt)}</Text>
+      ) : null}
     </View>
   );
 }
@@ -542,11 +593,10 @@ const styles = StyleSheet.create({
   orderRowHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   orderRowTotal: { color: "#0F766E", fontSize: 16, fontWeight: "800", marginTop: 8 },
   statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  statusBadgePlaced: { backgroundColor: "#DCFCE7" },
-  statusBadgeCancelled: { backgroundColor: "#FEE2E2" },
   statusBadgeText: { fontSize: 11, fontWeight: "800" },
-  statusBadgeTextPlaced: { color: "#166534" },
-  statusBadgeTextCancelled: { color: "#B91C1C" },
+  timelineRow: { borderColor: "#E2E8F0", borderTopWidth: 1, paddingVertical: 8 },
+  timelineStatus: { color: "#0F172A", fontSize: 14, fontWeight: "700" },
+  timelineDate: { color: "#64748B", fontSize: 12, marginTop: 2 },
   cartRow: {
     backgroundColor: "#FFFFFF",
     borderColor: "#E2E8F0",

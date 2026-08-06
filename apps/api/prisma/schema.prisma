@@ -33,6 +33,20 @@ enum OrderPaymentMethod {
 
 enum OrderStatus {
   PLACED
+  ACCEPTED
+  PREPARING
+  READY_FOR_PICKUP
+  DELIVERED
+  REJECTED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING_ASSIGNMENT
+  ASSIGNED
+  PICKED_UP
+  ON_THE_WAY
+  DELIVERED
   CANCELLED
 }
 
@@ -52,6 +66,9 @@ model User {
   passwordResetTokens PasswordResetToken[]
   restaurant          Restaurant?
   orders              Order[]
+  orderStatusChanges  OrderStatusHistory[]
+  driverProfile       DriverProfile?
+  deliveriesAsDriver  Delivery[]
 
   @@index([role, isActive])
 }
@@ -182,9 +199,25 @@ model Order {
   customer            User               @relation(fields: [customerId], references: [id], onDelete: Cascade)
   restaurant          Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   items               OrderItem[]
+  statusHistory       OrderStatusHistory[]
+  delivery            Delivery?
 
   @@index([customerId, createdAt])
   @@index([restaurantId, createdAt])
+}
+
+model OrderStatusHistory {
+  id              String       @id @default(uuid()) @db.Uuid
+  orderId         String       @db.Uuid
+  fromStatus      OrderStatus?
+  toStatus        OrderStatus
+  changedByUserId String       @db.Uuid
+  note            String?
+  createdAt       DateTime     @default(now())
+  order           Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy       User         @relation(fields: [changedByUserId], references: [id])
+
+  @@index([orderId, createdAt])
 }
 
 model OrderItem {
@@ -198,4 +231,31 @@ model OrderItem {
   menuItem           MenuItem @relation(fields: [menuItemId], references: [id])
 
   @@index([orderId])
+}
+
+model DriverProfile {
+  userId        String   @id @db.Uuid
+  isOnline      Boolean  @default(false)
+  lastLatitude  Float?
+  lastLongitude Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Delivery {
+  id          String         @id @default(uuid()) @db.Uuid
+  orderId     String         @unique @db.Uuid
+  driverId    String?        @db.Uuid
+  status      DeliveryStatus @default(PENDING_ASSIGNMENT)
+  assignedAt  DateTime?
+  pickedUpAt  DateTime?
+  onTheWayAt  DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driver      User?          @relation(fields: [driverId], references: [id])
+
+  @@index([status, driverId])
 }

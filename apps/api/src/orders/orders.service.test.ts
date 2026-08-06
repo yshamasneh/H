@@ -185,6 +185,119 @@ test("order item snapshots remain correct even after the underlying menu item's 
   assert.equal(refetched.items[0].nameSnapshot, "Original Name");
 });
 
+test("a freshly placed order has one status history entry recording PLACED", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  assert.equal(order.statusHistory.length, 1);
+  assert.equal(order.statusHistory[0].fromStatus, null);
+  assert.equal(order.statusHistory[0].toStatus, "PLACED");
+  assert.equal(order.delivery, null);
+});
+
+test("restaurant owner accepts a placed order and it advances through preparing to ready-for-pickup", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const accepted = await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+  assert.equal(accepted.status, "ACCEPTED");
+
+  const preparing = await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "PREPARING", undefined);
+  assert.equal(preparing.status, "PREPARING");
+
+  const ready = await service.updateStatusForRestaurantOwner(
+    restaurant.ownerUserId,
+    order.id,
+    "READY_FOR_PICKUP",
+    "Bag is on the counter"
+  );
+  assert.equal(ready.status, "READY_FOR_PICKUP");
+
+  assert.deepEqual(
+    ready.statusHistory.map((entry) => entry.toStatus),
+    ["PLACED", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP"]
+  );
+  assert.equal(ready.statusHistory.at(-1)!.note, "Bag is on the counter");
+  assert.equal(ready.statusHistory.at(-1)!.changedByUserId, restaurant.ownerUserId);
+});
+
+test("restaurant owner rejects a placed order", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const rejected = await service.updateStatusForRestaurantOwner(
+    restaurant.ownerUserId,
+    order.id,
+    "REJECTED",
+    "Out of stock"
+  );
+  assert.equal(rejected.status, "REJECTED");
+});
+
+test("out-of-order transitions are rejected, e.g. PLACED cannot jump straight to READY_FOR_PICKUP", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  await assert.rejects(
+    service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined),
+    hasCode("ORDER_INVALID_TRANSITION")
+  );
+});
+
+test("a terminal order status cannot transition further", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "REJECTED", undefined);
+
+  await assert.rejects(
+    service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined),
+    hasCode("ORDER_INVALID_TRANSITION")
+  );
+});
+
+test("restaurant A cannot change the status of restaurant B's order", async () => {
+  const { prisma, service } = createService();
+  const restaurantA = prisma.seedRestaurant();
+  const restaurantB = prisma.seedRestaurant({ name: "Other" });
+  const itemA = prisma.seedMenuItem(restaurantA.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurantA.id, itemA.id) as never);
+
+  await assert.rejects(
+    service.updateStatusForRestaurantOwner(restaurantB.ownerUserId, order.id, "ACCEPTED", undefined),
+    hasCode("ORDER_NOT_FOUND")
+  );
+
+  const untouched = await service.getForRestaurantOwner(restaurantA.ownerUserId, order.id);
+  assert.equal(untouched.status, "PLACED");
+});
+
+test("customer sees the full status history via GET /orders/:id", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+
+  const view = await service.getForCustomer(customerId, order.id);
+  assert.equal(view.status, "ACCEPTED");
+  assert.deepEqual(
+    view.statusHistory.map((entry) => entry.toStatus),
+    ["PLACED", "ACCEPTED"]
+  );
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

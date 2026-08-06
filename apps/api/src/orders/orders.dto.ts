@@ -74,6 +74,21 @@ export class CreateOrderDto {
   paymentMethod!: OrderPaymentMethodValue;
 }
 
+export const restaurantOrderStatusActionValues = ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "REJECTED"] as const;
+export type RestaurantOrderStatusAction = (typeof restaurantOrderStatusActionValues)[number];
+
+export class UpdateOrderStatusDto {
+  @ApiProperty({ enum: restaurantOrderStatusActionValues, example: "ACCEPTED" })
+  @IsIn(restaurantOrderStatusActionValues)
+  status!: RestaurantOrderStatusAction;
+
+  @ApiPropertyOptional({ example: "Out of falafel today" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  note?: string;
+}
+
 export class OrdersPaginationQueryDto {
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()

@@ -1,4 +1,4 @@
-import type { OrderPaymentMethod, OrderStatus } from "../generated/prisma/enums";
+import type { DeliveryStatus, OrderPaymentMethod, OrderStatus } from "../generated/prisma/enums";
 
 export type OrderItemView = {
   id: string;
@@ -12,6 +12,24 @@ export type OrderItemView = {
 export type OrderRestaurantSummary = {
   id: string;
   name: string;
+};
+
+export type OrderStatusHistoryEntry = {
+  id: string;
+  fromStatus: OrderStatus | null;
+  toStatus: OrderStatus;
+  changedByUserId: string;
+  note: string | null;
+  createdAt: Date;
+};
+
+export type DeliveryStatusSummary = {
+  id: string;
+  status: DeliveryStatus;
+  assignedAt: Date | null;
+  pickedUpAt: Date | null;
+  onTheWayAt: Date | null;
+  deliveredAt: Date | null;
 };
 
 export type OrderDetailView = {
@@ -30,6 +48,8 @@ export type OrderDetailView = {
   discountMinor: number;
   totalMinor: number;
   createdAt: Date;
+  statusHistory: OrderStatusHistoryEntry[];
+  delivery: DeliveryStatusSummary | null;
 };
 
 export type Page<T> = {

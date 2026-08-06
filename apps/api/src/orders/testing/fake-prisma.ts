@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { OrderPaymentMethod, OrderStatus, RestaurantStatus } from "../../generated/prisma/client";
+import { DeliveryStatus, OrderPaymentMethod, OrderStatus, RestaurantStatus } from "../../generated/prisma/client";
 
 type RestaurantRecord = {
   id: string;
@@ -45,16 +45,44 @@ type OrderRecord = {
   updatedAt: Date;
 };
 
+type OrderStatusHistoryRecord = {
+  id: string;
+  orderId: string;
+  fromStatus: OrderStatus | null;
+  toStatus: OrderStatus;
+  changedByUserId: string;
+  note: string | null;
+  createdAt: Date;
+};
+
+type DeliveryRecord = {
+  id: string;
+  orderId: string;
+  driverId: string | null;
+  status: DeliveryStatus;
+  assignedAt: Date | null;
+  pickedUpAt: Date | null;
+  onTheWayAt: Date | null;
+  deliveredAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export class FakeOrdersPrisma {
   readonly restaurants: RestaurantRecord[] = [];
   readonly menuItems: MenuItemRecord[] = [];
   readonly orders: OrderRecord[] = [];
   readonly orderItems: OrderItemRecord[] = [];
+  readonly orderStatusHistories: OrderStatusHistoryRecord[] = [];
+  readonly deliveries: DeliveryRecord[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly restaurant = {} as any;
   readonly menuItem = {} as any;
   readonly order = {} as any;
+  readonly orderStatusHistory = {} as any;
+  readonly delivery = {} as any;
+  readonly driverProfile = {} as any;
 
   constructor() {
     this.restaurant.findUnique = async ({ where }: any) =>
@@ -130,12 +158,88 @@ export class FakeOrdersPrisma {
           (!where?.customerId || order.customerId === where.customerId) &&
           (!where?.restaurantId || order.restaurantId === where.restaurantId)
       ).length;
+
+    this.order.updateMany = async ({ where, data }: any) => {
+      const matches = this.orders.filter(
+        (order) => order.id === where.id && (!where.status || order.status === where.status)
+      );
+      for (const order of matches) {
+        if (data.status !== undefined) order.status = data.status;
+        order.updatedAt = new Date();
+      }
+      return { count: matches.length };
+    };
+
+    this.orderStatusHistory.create = async ({ data }: any) => {
+      const entry: OrderStatusHistoryRecord = {
+        id: randomUUID(),
+        orderId: data.orderId,
+        fromStatus: data.fromStatus ?? null,
+        toStatus: data.toStatus,
+        changedByUserId: data.changedByUserId,
+        note: data.note ?? null,
+        createdAt: new Date(Date.now() + this.orderStatusHistories.length)
+      };
+      this.orderStatusHistories.push(entry);
+      return entry;
+    };
+
+    this.orderStatusHistory.findMany = async ({ where }: any) =>
+      this.orderStatusHistories.filter((entry) => !where?.orderId || entry.orderId === where.orderId);
+
+    this.delivery.create = async ({ data }: any) => {
+      const now = new Date();
+      const delivery: DeliveryRecord = {
+        id: data.id ?? randomUUID(),
+        orderId: data.orderId,
+        driverId: data.driverId ?? null,
+        status: data.status ?? DeliveryStatus.PENDING_ASSIGNMENT,
+        assignedAt: data.assignedAt ?? null,
+        pickedUpAt: data.pickedUpAt ?? null,
+        onTheWayAt: data.onTheWayAt ?? null,
+        deliveredAt: data.deliveredAt ?? null,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.deliveries.push(delivery);
+      return delivery;
+    };
+
+    this.delivery.findUnique = async ({ where }: any) =>
+      this.deliveries.find((candidate) =>
+        where.id ? candidate.id === where.id : candidate.orderId === where.orderId
+      ) ?? null;
+
+    this.delivery.findMany = async ({ where }: any) =>
+      this.deliveries.filter(
+        (delivery) =>
+          (!where?.status || delivery.status === where.status) &&
+          (!where?.driverId || delivery.driverId === where.driverId)
+      );
+
+    this.delivery.updateMany = async ({ where, data }: any) => {
+      const matches = this.deliveries.filter(
+        (delivery) =>
+          delivery.id === where.id &&
+          (!where.status || delivery.status === where.status) &&
+          (where.driverId !== null || delivery.driverId === null)
+      );
+      for (const delivery of matches) {
+        Object.assign(delivery, data);
+        delivery.updatedAt = new Date();
+      }
+      return { count: matches.length };
+    };
+
+    this.driverProfile.findUnique = async () => null;
   }
 
   private hydrateOrder(order: OrderRecord) {
     const restaurant = this.restaurants.find((candidate) => candidate.id === order.restaurantId)!;
     const items = this.orderItems.filter((item) => item.orderId === order.id);
-    return { ...order, items, restaurant };
+    const statusHistory = this.orderStatusHistories.filter((entry) => entry.orderId === order.id);
+    const delivery = this.deliveries.find((candidate) => candidate.orderId === order.id) ?? null;
+    return { ...order, items, restaurant, statusHistory, delivery };
   }
 
   async $transaction<T>(operation: (transaction: this) => Promise<T>): Promise<T> {

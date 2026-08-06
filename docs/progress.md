@@ -95,3 +95,52 @@ Remaining before Phase 5 (restaurant order operations) can start:
 - Delivery fee/service fee are a flat-rate placeholder (`apps/api/src/orders/pricing.ts`); no real pricing rules engine exists yet.
 - There is still no saved-address book (`Address` model/CRUD) — delivery address is entered fresh at checkout each time as plain fields on `Order`. Latitude/longitude columns exist on `Order` but have no input UI yet (no map/location picker in the app).
 - No WebSocket/real-time order updates and no push/in-app notifications yet — those are Phase 7.
+
+## 2026-08-06: Phase 5 — Restaurant Order Handling, and Phase 6 — Driver & Delivery Flow
+
+This session ran with a live Docker Postgres available for the first time (`tasawaq-postgres`, already running). Before starting new work, the Phase 4 "known gap" above was closed: `npm run prisma:migrate` applied cleanly to the live database (see `docs/decisions.md`), and the demo seed script (extended this session to also create an `APPROVED`/open demo restaurant with 2 categories and 5 menu items, so the app has something to browse out of the box) was run successfully. `npm install` also had to repair a missing `@nestjs/cli` dependency before `nest start --watch` would run.
+
+### Phase 5 — Completed
+
+- `OrderStatus` extended from `PLACED | CANCELLED` to `PLACED | ACCEPTED | PREPARING | READY_FOR_PICKUP | DELIVERED | REJECTED | CANCELLED`, with an explicit `allowedOrderTransitions` map in `OrdersService` — no endpoint can write an arbitrary status.
+- New `OrderStatusHistory` model (`orderId`, nullable `fromStatus`, `toStatus`, `changedByUserId`, optional `note`, `createdAt`), written on every transition including order creation itself (`null -> PLACED`).
+- `PATCH /api/v1/restaurant/me/orders/:id/status` (`RESTAURANT` role): accepts `ACCEPTED | PREPARING | READY_FOR_PICKUP | REJECTED` plus an optional `note`; ownership resolved from the JWT exactly like Phase 3/4; invalid transitions return `409 ORDER_INVALID_TRANSITION`; the status write itself is a conditional `updateMany` + count check (not a plain `update`), the same race-guard pattern already used for refresh-token rotation.
+- `GET /orders/:id` (customer) and `GET /restaurant/me/orders/:id` both now return the full `statusHistory` array, ordered oldest-first.
+- 7 new backend tests in `orders.service.test.ts` covering: fresh-order history, the full accept -> preparing -> ready-for-pickup happy path with a note, rejection from `PLACED`, out-of-order transitions (`PLACED -> READY_FOR_PICKUP` directly), terminal-status immutability, cross-restaurant ownership isolation, and the customer-visible history.
+
+### Phase 6 — Completed
+
+- New Prisma models: `DriverProfile` (keyed directly by `userId`, `isOnline`, optional last lat/lng) and `Delivery` (1:1 with `Order`, `DeliveryStatus` enum `PENDING_ASSIGNMENT | ASSIGNED | PICKED_UP | ON_THE_WAY | DELIVERED | CANCELLED`, per-transition timestamps). Both models and the `OrderStatusHistory` model from Phase 5 were added in one migration, `20260805235831_order_status_and_delivery`, generated and applied via `prisma migrate dev` against the live database (not hand-authored, unlike Phase 4's migration).
+- New `drivers` Nest module: `POST /api/v1/drivers/register` (public, mirrors restaurant self-registration — no OTP, no admin approval), `PATCH /driver/me/status` (online/offline toggle), `GET /driver/me/deliveries/available` (unclaimed deliveries, any online driver), `GET /driver/me/deliveries` (the caller's own), `POST /driver/me/deliveries/:id/accept` (atomic claim), `PATCH /driver/me/deliveries/:id/status` (pickup -> on-the-way -> delivered).
+- Delivery auto-creation: `OrdersService`'s `READY_FOR_PICKUP` transition now also creates the `Delivery` row (`PENDING_ASSIGNMENT`) in the same transaction — the one place Phase 6 touches Phase 5's code, as the task explicitly allowed.
+- Atomic accept: `delivery.updateMany({ where: { id, status: PENDING_ASSIGNMENT, driverId: null }, ... })` + `count === 1` check inside a transaction. Two drivers accepting the same delivery simultaneously: exactly one succeeds, verified by a dedicated `Promise.allSettled` concurrency test mirroring the existing "concurrent signup verification" test's style.
+- Completing a delivery (`DELIVERED`) also updates the parent `Order.status` to `DELIVERED` and appends an `OrderStatusHistory` row, closing the loop back to the customer's order view.
+- `GET /orders/:id` now also returns a `delivery` summary (status + timestamps) whenever one exists.
+- 12 new backend tests in `drivers.service.test.ts` covering: registration, duplicate-phone rejection, online/offline toggle, offline-driver rejection, successful accept, already-claimed rejection, the two-simultaneous-accepts race (exactly one wins), the full pickup -> on-the-way -> delivered progression (including the `Order`/`OrderStatusHistory` side effects), out-of-order delivery transitions, cross-driver ownership isolation, and available/own-deliveries list scoping.
+
+### Mobile — Completed
+
+- Restaurant: new `RestaurantOrdersScreen` (incoming orders list) and `RestaurantOrderDetailScreen` (status timeline + Accept/Reject/Start Preparing/Ready-for-Pickup buttons, each only shown when valid for the order's current status).
+- Driver: new `DriverHomeScreen` (online/offline switch, active-deliveries list, available-deliveries list with Accept) and `DeliveryDetailScreen` (pickup address, delivery address, order total, single "next action" button that advances through pickup/on-the-way/delivered).
+- Customer: `OrderDetailScreen` now renders a `DeliveryProgressCard` (when a delivery exists) and a full status-history timeline; the shared `StatusBadge` now colors all 7 order statuses instead of just PLACED/CANCELLED.
+- `HomeScreen` gained two new role-gated entry points: "Manage Incoming Orders" (`RESTAURANT`) and "Delivery Dashboard" (`DRIVER`), following the same `user.role === "..."` pattern the existing customer-only buttons already use.
+- No new state-management library, no new navigation library — same lifted-`useState` + typed-union `AppScreen` pattern as every prior phase.
+- No driver-registration screen was added, matching the precedent that restaurant registration also has no mobile UI (Swagger only) — see `docs/decisions.md`.
+
+### Verified (this session, against the live database — not just in-memory fakes)
+
+- `npm run lint`, `npm run typecheck`, and `npm test` all pass clean across both workspaces from the repo root: **65 API tests** (46 prior + 7 new Phase 5 tests + 12 new Phase 6 tests) and **17 mobile tests** (unchanged from Phase 4, none broken) — **82 tests total, 0 failures**.
+- `npm run build` succeeds for both workspaces (`prisma generate` + `tsc` for the API, `expo export --platform all` for mobile — 704/707 modules, both Android and iOS bundles).
+- `npx prisma validate` passes.
+- `npx prisma migrate deploy` / `migrate dev` applied the new migration to the live `tasawaq-postgres` container — confirmed via `psql \dt` showing `OrderStatusHistory`, `DriverProfile`, and `Delivery` tables, and via `SELECT` on `_prisma_migrations`.
+- A full manual end-to-end happy-path smoke test ran against the live API and database (not mocked): customer login -> browse seeded restaurant -> place order -> restaurant accepts/prepares/marks ready (delivery auto-created) -> fresh driver registers, goes online, sees the available delivery, accepts it, advances pickup -> on-the-way -> delivered -> customer's `GET /orders/:id` shows `DELIVERED` with the complete 5-entry status history and the delivery's own `DELIVERED` status. This also exercised Phase 4's `POST /orders` end-to-end for the first time ever against a real database, which is how the seed-data UUID-format bug (see `docs/decisions.md`) was caught and fixed.
+
+Remaining before Phase 7 (Admin, Realtime, and Notifications):
+
+- No customer-facing cancel endpoint yet (see `docs/decisions.md` — deliberately out of this phase's scope).
+- No admin dashboard/screens, no `AuditLog`, no admin override of stuck orders or deliveries.
+- No WebSocket layer — order/delivery status changes require polling (pull-to-refresh) in the mobile app; REST remains the only source of truth, matching the spec's own guidance to build this after the core order/delivery cycle is stable.
+- No push notifications and no in-app `Notification` model/inbox yet.
+- Driver location (`DriverProfile.lastLatitude`/`lastLongitude`) has columns but no write path yet — no endpoint updates it and the mobile app never requests location permission. Real-time driver-location tracking on a map is out of scope until a maps provider is chosen.
+- No distance/matching algorithm for delivery assignment — any online driver can see and accept any pending delivery, per this phase's explicit scope boundary.
+- No driver-registration screen in the mobile app (Swagger only), matching the existing restaurant-registration precedent.

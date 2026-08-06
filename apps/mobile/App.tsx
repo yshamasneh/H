@@ -44,10 +44,14 @@ import {
   forgotRequestToOtp,
   goToCart,
   goToCheckout,
+  goToDeliveryDetail,
+  goToDriverHome,
   goToLogin,
   goToOrderDetail,
   goToOrderHistory,
   goToRestaurantMenu,
+  goToRestaurantOrderDetail,
+  goToRestaurantOrders,
   goToRestaurants,
   goToSignup,
   homeForUser,
@@ -57,6 +61,8 @@ import {
   signupRequestToOtp,
   type AppScreen
 } from "./src/navigation";
+import { DeliveryDetailScreen, DriverHomeScreen } from "./src/driver-screens";
+import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/restaurant-order-screens";
 import { RestaurantListScreen, RestaurantMenuScreen } from "./src/restaurant-screens";
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./src/session";
 
@@ -258,6 +264,12 @@ function TasawaQApp() {
             screen.user.role === "CUSTOMER" ? () => setScreen(goToRestaurants(screen.user)) : undefined
           }
           onLogout={handleLogout}
+          onManageOrders={
+            screen.user.role === "RESTAURANT" ? () => setScreen(goToRestaurantOrders(screen.user)) : undefined
+          }
+          onOpenDriverDashboard={
+            screen.user.role === "DRIVER" ? () => setScreen(goToDriverHome(screen.user)) : undefined
+          }
           onViewOrders={
             screen.user.role === "CUSTOMER" ? () => setScreen(goToOrderHistory(screen.user)) : undefined
           }
@@ -324,6 +336,31 @@ function TasawaQApp() {
     case "order-detail":
       return (
         <OrderDetailScreen onBack={() => setScreen(goToOrderHistory(screen.user))} orderId={screen.orderId} />
+      );
+    case "restaurant-orders":
+      return (
+        <RestaurantOrdersScreen
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onOpenOrder={(orderId) => setScreen(goToRestaurantOrderDetail(screen.user, orderId))}
+        />
+      );
+    case "restaurant-order-detail":
+      return (
+        <RestaurantOrderDetailScreen
+          onBack={() => setScreen(goToRestaurantOrders(screen.user))}
+          orderId={screen.orderId}
+        />
+      );
+    case "driver-home":
+      return (
+        <DriverHomeScreen
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onOpenDelivery={(deliveryId) => setScreen(goToDeliveryDetail(screen.user, deliveryId))}
+        />
+      );
+    case "delivery-detail":
+      return (
+        <DeliveryDetailScreen deliveryId={screen.deliveryId} onBack={() => setScreen(goToDriverHome(screen.user))} />
       );
   }
 }

@@ -1,21 +1,51 @@
 import { Injectable } from "@nestjs/common";
 import { ApiException } from "../common/api.exception";
 import {
+  DeliveryStatus,
   OrderStatus,
   RestaurantStatus,
+  type Delivery,
   type Order,
   type OrderItem,
+  type OrderStatusHistory,
   type Restaurant
 } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import type { CreateOrderDto } from "./orders.dto";
+import type { CreateOrderDto, RestaurantOrderStatusAction } from "./orders.dto";
 import type { Page } from "./orders.types";
 import type { OrderDetailView } from "./orders.types";
 import { calculateOrderFees } from "./pricing";
 
-type OrderWithRelations = Order & { items: OrderItem[]; restaurant: Restaurant };
+type OrderWithRelations = Order & {
+  items: OrderItem[];
+  restaurant: Restaurant;
+  statusHistory: OrderStatusHistory[];
+  delivery: Delivery | null;
+};
 
-const orderInclude = { items: true, restaurant: true } as const;
+const orderInclude = {
+  items: true,
+  restaurant: true,
+  statusHistory: { orderBy: { createdAt: "asc" as const } },
+  delivery: true
+} as const;
+
+const restaurantStatusTransitions: Record<RestaurantOrderStatusAction, OrderStatus> = {
+  ACCEPTED: OrderStatus.ACCEPTED,
+  PREPARING: OrderStatus.PREPARING,
+  READY_FOR_PICKUP: OrderStatus.READY_FOR_PICKUP,
+  REJECTED: OrderStatus.REJECTED
+};
+
+const allowedOrderTransitions: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.PLACED]: [OrderStatus.ACCEPTED, OrderStatus.REJECTED, OrderStatus.CANCELLED],
+  [OrderStatus.ACCEPTED]: [OrderStatus.PREPARING],
+  [OrderStatus.PREPARING]: [OrderStatus.READY_FOR_PICKUP],
+  [OrderStatus.READY_FOR_PICKUP]: [OrderStatus.DELIVERED],
+  [OrderStatus.DELIVERED]: [],
+  [OrderStatus.REJECTED]: [],
+  [OrderStatus.CANCELLED]: []
+};
 
 @Injectable()
 export class OrdersService {
@@ -64,7 +94,7 @@ export class OrdersService {
       const discountMinor = 0;
       const totalMinor = subtotalMinor + deliveryFeeMinor + serviceFeeMinor - discountMinor;
 
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           customerId,
           restaurantId: restaurant.id,
@@ -83,6 +113,15 @@ export class OrdersService {
         },
         include: orderInclude
       });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: created.id,
+          fromStatus: null,
+          toStatus: OrderStatus.PLACED,
+          changedByUserId: customerId
+        }
+      });
+      return { ...created, statusHistory: await tx.orderStatusHistory.findMany({ where: { orderId: created.id } }) };
     });
 
     return toOrderDetailView(order);
@@ -136,6 +175,49 @@ export class OrdersService {
     return toOrderDetailView(order);
   }
 
+  async updateStatusForRestaurantOwner(
+    ownerUserId: string,
+    orderId: string,
+    action: RestaurantOrderStatusAction,
+    note: string | undefined
+  ): Promise<OrderDetailView> {
+    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    const targetStatus = restaurantStatusTransitions[action];
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.order.findUnique({ where: { id: orderId } });
+      if (!existing || existing.restaurantId !== restaurant.id) {
+        throw orderNotFound();
+      }
+      if (!allowedOrderTransitions[existing.status].includes(targetStatus)) {
+        throw invalidTransition(existing.status, targetStatus);
+      }
+
+      const changed = await tx.order.updateMany({
+        where: { id: orderId, status: existing.status },
+        data: { status: targetStatus }
+      });
+      if (changed.count !== 1) {
+        throw invalidTransition(existing.status, targetStatus);
+      }
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+          fromStatus: existing.status,
+          toStatus: targetStatus,
+          changedByUserId: ownerUserId,
+          note: note?.trim() || null
+        }
+      });
+      if (targetStatus === OrderStatus.READY_FOR_PICKUP) {
+        await tx.delivery.create({ data: { orderId, status: DeliveryStatus.PENDING_ASSIGNMENT } });
+      }
+      return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
+    });
+
+    return toOrderDetailView(updated!);
+  }
+
   private async requireOwnRestaurant(ownerUserId: string): Promise<Restaurant> {
     const restaurant = await this.prisma.restaurant.findUnique({ where: { ownerUserId } });
     if (!restaurant) {
@@ -149,6 +231,10 @@ function orderNotFound(): ApiException {
   return new ApiException(404, "ORDER_NOT_FOUND", "This order does not exist.");
 }
 
+function invalidTransition(from: OrderStatus, to: OrderStatus): ApiException {
+  return new ApiException(409, "ORDER_INVALID_TRANSITION", `Order cannot move from ${from} to ${to}.`);
+}
+
 function toOrderDetailView(order: OrderWithRelations): OrderDetailView {
   return {
     id: order.id,
@@ -159,6 +245,27 @@ function toOrderDetailView(order: OrderWithRelations): OrderDetailView {
     deliveryAddressLine: order.deliveryAddressLine,
     deliveryLatitude: order.deliveryLatitude,
     deliveryLongitude: order.deliveryLongitude,
+    statusHistory: order.statusHistory
+      .slice()
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+      .map((entry) => ({
+        id: entry.id,
+        fromStatus: entry.fromStatus,
+        toStatus: entry.toStatus,
+        changedByUserId: entry.changedByUserId,
+        note: entry.note,
+        createdAt: entry.createdAt
+      })),
+    delivery: order.delivery
+      ? {
+          id: order.delivery.id,
+          status: order.delivery.status,
+          assignedAt: order.delivery.assignedAt,
+          pickedUpAt: order.delivery.pickedUpAt,
+          onTheWayAt: order.delivery.onTheWayAt,
+          deliveredAt: order.delivery.deliveredAt
+        }
+      : null,
     items: order.items.map((item) => ({
       id: item.id,
       menuItemId: item.menuItemId,
