@@ -70,6 +70,17 @@ export type RestaurantMenu = {
   categories: MenuCategorySummary[];
 };
 
+export type RestaurantOffer = {
+  id: string;
+  title: string;
+  description: string | null;
+  discountPercent: number | null;
+  imageUrl: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  restaurant: Pick<RestaurantSummary, "id" | "name" | "logoUrl">;
+};
+
 export type Page<T> = {
   items: T[];
   page: number;
@@ -216,14 +227,19 @@ export class ApiError extends Error {
   }
 }
 
-export const apiBaseUrl =
-  process.env?.EXPO_PUBLIC_API_URL ||
+const configuredApiUrl = process.env?.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
+const developmentApiUrl =
   Platform.select({
     android: "http://10.0.2.2:3000",
     ios: "http://localhost:3000",
     default: "http://localhost:3000"
-  }) ||
-  "http://localhost:3000";
+  }) || "http://localhost:3000";
+
+if (!__DEV__ && (!configuredApiUrl || !configuredApiUrl.startsWith("https://"))) {
+  throw new Error("Production builds require an HTTPS EXPO_PUBLIC_API_URL.");
+}
+
+export const apiBaseUrl = configuredApiUrl || developmentApiUrl;
 
 export function requestSignupCode(input: SignupInput): Promise<OtpRequestResult> {
   return request("/api/v1/auth/customer/signup/request-code", { method: "POST", body: input });
@@ -274,6 +290,10 @@ export function listRestaurants(page = 1, pageSize = 20): Promise<Page<Restauran
 
 export function getRestaurantMenu(restaurantId: string): Promise<RestaurantMenu> {
   return request(`/api/v1/restaurants/${restaurantId}/menu`);
+}
+
+export function listActiveRestaurantOffers(): Promise<RestaurantOffer[]> {
+  return request("/api/v1/restaurants/offers/active");
 }
 
 export function createOrder(accessToken: string, input: CreateOrderInput): Promise<OrderDetail> {
@@ -362,6 +382,74 @@ export type NotificationView = {
 
 export type NotificationsPage = Page<NotificationView> & { unreadCount: number };
 
+export type RestaurantStatusValue = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
+
+export type AdminRestaurant = RestaurantSummary & {
+  status: RestaurantStatusValue;
+  createdAt: string;
+};
+
+export type AdminRestaurantDetail = AdminRestaurant & {
+  ownerFullName: string;
+  ownerPhone: string;
+  totalOrdersCount: number;
+  revenueMinor: number;
+};
+
+export type DriverApprovalStatusValue = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
+
+export type AdminDriver = {
+  userId: string;
+  fullName: string;
+  phone: string;
+  isActive: boolean;
+  status: DriverApprovalStatusValue;
+  isOnline: boolean;
+  completedDeliveriesCount: number;
+  activeDeliveryId: string | null;
+  createdAt: string;
+};
+
+export type AdminUser = {
+  id: string;
+  fullName: string;
+  phone: string;
+  role: UserRole;
+  isActive: boolean;
+  phoneVerifiedAt: string | null;
+  createdAt: string;
+};
+
+export type AdminDashboardActivity = {
+  id: string;
+  orderId: string;
+  restaurantName: string;
+  toStatus: OrderStatusValue;
+  createdAt: string;
+};
+
+export type AdminDashboard = {
+  ordersToday: number;
+  revenueTodayMinor: number;
+  activeDeliveries: number;
+  pendingRestaurantApprovals: number;
+  onlineDriversCount: number;
+  newCustomerSignupsToday: number;
+  activityFeed: AdminDashboardActivity[];
+};
+
+export type AdminAuditLogEntry = {
+  id: string;
+  actorUserId: string;
+  actorFullName: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  reason: string | null;
+  metadataJson: unknown;
+  createdAt: string;
+};
+
 export function listMyNotifications(accessToken: string, page = 1, pageSize = 20): Promise<NotificationsPage> {
   return request(`/api/v1/notifications/me?page=${page}&pageSize=${pageSize}`, { accessToken });
 }
@@ -372,6 +460,114 @@ export function markNotificationRead(accessToken: string, notificationId: string
 
 export function cancelMyOrder(accessToken: string, orderId: string): Promise<OrderDetail> {
   return request(`/api/v1/orders/${orderId}/cancel`, { method: "POST", accessToken });
+}
+
+export function getAdminDashboard(accessToken: string): Promise<AdminDashboard> {
+  return request("/api/v1/admin/dashboard", { accessToken });
+}
+
+export function listAdminRestaurants(
+  accessToken: string,
+  params: { status?: RestaurantStatusValue; isOpen?: boolean } = {}
+): Promise<Page<AdminRestaurant>> {
+  return request(`/api/v1/admin/restaurants${toQuery(params)}`, { accessToken });
+}
+
+export function getAdminRestaurant(accessToken: string, restaurantId: string): Promise<AdminRestaurantDetail> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}`, { accessToken });
+}
+
+export function approveAdminRestaurant(accessToken: string, restaurantId: string): Promise<AdminRestaurant> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/approve`, { method: "POST", accessToken });
+}
+
+export function rejectAdminRestaurant(accessToken: string, restaurantId: string): Promise<AdminRestaurant> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/reject`, { method: "POST", accessToken });
+}
+
+export function suspendAdminRestaurant(
+  accessToken: string,
+  restaurantId: string,
+  reason: string
+): Promise<AdminRestaurant> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/suspend`, {
+    method: "POST",
+    body: { reason },
+    accessToken
+  });
+}
+
+export function reactivateAdminRestaurant(accessToken: string, restaurantId: string): Promise<AdminRestaurant> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/reactivate`, { method: "POST", accessToken });
+}
+
+export function listAdminOrders(
+  accessToken: string,
+  params: { status?: OrderStatusValue; restaurantId?: string; customerId?: string; page?: number } = {}
+): Promise<Page<OrderDetail>> {
+  return request(`/api/v1/admin/orders${toQuery(params)}`, { accessToken });
+}
+
+export function getAdminOrder(accessToken: string, orderId: string): Promise<OrderDetail> {
+  return request(`/api/v1/admin/orders/${orderId}`, { accessToken });
+}
+
+export function cancelAdminOrder(accessToken: string, orderId: string, reason: string): Promise<OrderDetail> {
+  return request(`/api/v1/admin/orders/${orderId}/cancel`, {
+    method: "POST",
+    body: { reason },
+    accessToken
+  });
+}
+
+export function listAdminDrivers(accessToken: string): Promise<AdminDriver[]> {
+  return request("/api/v1/admin/drivers", { accessToken });
+}
+
+export function approveAdminDriver(accessToken: string, userId: string): Promise<AdminDriver> {
+  return request(`/api/v1/admin/drivers/${userId}/approve`, { method: "POST", accessToken });
+}
+
+export function rejectAdminDriver(accessToken: string, userId: string, reason: string): Promise<AdminDriver> {
+  return request(`/api/v1/admin/drivers/${userId}/reject`, {
+    method: "POST",
+    body: { reason },
+    accessToken
+  });
+}
+
+export function suspendAdminDriver(accessToken: string, userId: string, reason: string): Promise<AdminDriver> {
+  return request(`/api/v1/admin/drivers/${userId}/suspend`, {
+    method: "POST",
+    body: { reason },
+    accessToken
+  });
+}
+
+export function reactivateAdminDriver(accessToken: string, userId: string): Promise<AdminDriver> {
+  return request(`/api/v1/admin/drivers/${userId}/reactivate`, { method: "POST", accessToken });
+}
+
+export function listAdminUsers(
+  accessToken: string,
+  params: { role?: UserRole; search?: string } = {}
+): Promise<Page<AdminUser>> {
+  return request(`/api/v1/admin/users${toQuery(params)}`, { accessToken });
+}
+
+export function listAdminAuditLog(
+  accessToken: string,
+  params: { action?: string; actorUserId?: string; page?: number } = {}
+): Promise<Page<AdminAuditLogEntry>> {
+  return request(`/api/v1/admin/audit-log${toQuery(params)}`, { accessToken });
+}
+
+function toQuery(params: Record<string, unknown>): string {
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join("&");
+  return query ? `?${query}` : "";
 }
 
 async function request<T>(

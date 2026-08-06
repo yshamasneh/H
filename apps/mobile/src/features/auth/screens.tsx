@@ -28,20 +28,20 @@ import {
   type OtpRequestResult,
   type PublicUser,
   type SignupInput
-} from "./api";
-import type { AppScreen, PhonePrefill } from "./navigation";
+} from "../../core/api";
+import type { AppScreen, PhonePrefill } from "../../navigation/navigation";
 import {
   countryCodes,
   maskPhone,
   normalizePhoneNumber,
   PhoneValidationError,
   type CountryCode
-} from "./phone";
-import { getAccessToken } from "./session";
-import { useRealtimeEvent } from "./socket";
+} from "../../core/phone";
+import { getAccessToken } from "../../core/session";
+import { useRealtimeEvent } from "../../core/socket";
+import { strongPasswordPattern } from "./auth.rules";
 
-const logo = require("../assets/logo/TasawaQ.png");
-const strongPasswordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,72}$/;
+const logo = require("../../../assets/logo/TasawaQ.png");
 
 type LoginScreenProps = {
   prefill?: PhonePrefill;

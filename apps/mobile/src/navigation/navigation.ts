@@ -1,5 +1,5 @@
-import type { AuthResult, DeliveryView, OrderDetail, OtpRequestResult, PublicUser, RestaurantSummary, SignupInput } from "./api";
-import type { CountryCode } from "./phone";
+import type { AuthResult, DeliveryView, OrderDetail, OtpRequestResult, PublicUser, RestaurantSummary, SignupInput } from "../core/api";
+import type { CountryCode } from "../core/phone";
 
 export type PhonePrefill = { countryCode: CountryCode; phoneNumber: string };
 
@@ -29,7 +29,15 @@ export type AppScreen =
   | { name: "restaurant-order-detail"; user: PublicUser; orderId: string }
   | { name: "driver-home"; user: PublicUser }
   | { name: "delivery-detail"; user: PublicUser; deliveryId: string }
-  | { name: "notifications"; user: PublicUser };
+  | { name: "notifications"; user: PublicUser }
+  | { name: "admin-dashboard"; user: PublicUser }
+  | { name: "admin-restaurants"; user: PublicUser }
+  | { name: "admin-restaurant-detail"; user: PublicUser; restaurantId: string }
+  | { name: "admin-orders"; user: PublicUser }
+  | { name: "admin-order-detail"; user: PublicUser; orderId: string }
+  | { name: "admin-drivers"; user: PublicUser }
+  | { name: "admin-users"; user: PublicUser }
+  | { name: "admin-audit-log"; user: PublicUser };
 
 export const initialScreen: AppScreen = { name: "login" };
 
@@ -82,8 +90,8 @@ export function resetOtpToNewPassword(
   return { name: "new-password", resetToken };
 }
 
-export function authResultToHome(result: AuthResult): Extract<AppScreen, { name: "home" }> {
-  return { name: "home", user: result.user };
+export function authResultToHome(result: AuthResult): AppScreen {
+  return homeForUser(result.user);
 }
 
 export function goToRestaurants(user: PublicUser): Extract<AppScreen, { name: "restaurants" }> {
@@ -97,8 +105,8 @@ export function goToRestaurantMenu(
   return { name: "restaurant-menu", user, restaurantId: restaurant.id, restaurantName: restaurant.name };
 }
 
-export function homeForUser(user: PublicUser): Extract<AppScreen, { name: "home" }> {
-  return { name: "home", user };
+export function homeForUser(user: PublicUser): AppScreen {
+  return user.role === "ADMIN" ? { name: "admin-dashboard", user } : { name: "home", user };
 }
 
 export function goToCart(user: PublicUser): Extract<AppScreen, { name: "cart" }> {
@@ -151,6 +159,44 @@ export function goToDeliveryDetail(
 
 export function goToNotifications(user: PublicUser): Extract<AppScreen, { name: "notifications" }> {
   return { name: "notifications", user };
+}
+
+export function goToAdminDashboard(user: PublicUser): Extract<AppScreen, { name: "admin-dashboard" }> {
+  return { name: "admin-dashboard", user };
+}
+
+export function goToAdminRestaurants(user: PublicUser): Extract<AppScreen, { name: "admin-restaurants" }> {
+  return { name: "admin-restaurants", user };
+}
+
+export function goToAdminRestaurantDetail(
+  user: PublicUser,
+  restaurantId: string
+): Extract<AppScreen, { name: "admin-restaurant-detail" }> {
+  return { name: "admin-restaurant-detail", user, restaurantId };
+}
+
+export function goToAdminOrders(user: PublicUser): Extract<AppScreen, { name: "admin-orders" }> {
+  return { name: "admin-orders", user };
+}
+
+export function goToAdminOrderDetail(
+  user: PublicUser,
+  orderId: string
+): Extract<AppScreen, { name: "admin-order-detail" }> {
+  return { name: "admin-order-detail", user, orderId };
+}
+
+export function goToAdminDrivers(user: PublicUser): Extract<AppScreen, { name: "admin-drivers" }> {
+  return { name: "admin-drivers", user };
+}
+
+export function goToAdminUsers(user: PublicUser): Extract<AppScreen, { name: "admin-users" }> {
+  return { name: "admin-users", user };
+}
+
+export function goToAdminAuditLog(user: PublicUser): Extract<AppScreen, { name: "admin-audit-log" }> {
+  return { name: "admin-audit-log", user };
 }
 
 export function deliveryToDetail(

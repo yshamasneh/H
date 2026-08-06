@@ -22,18 +22,11 @@ import {
   type DeliveryStatusValue,
   type DeliveryView,
   type DriverDeliveryStatusAction
-} from "./api";
-import { getAccessToken } from "./session";
+} from "../../core/api";
+import { getAccessToken } from "../../core/session";
+import { activeDeliveryStatuses, nextDriverActionByStatus } from "./delivery.rules";
 
 const currencyCode = "ILS";
-
-const activeDeliveryStatuses: DeliveryStatusValue[] = ["ASSIGNED", "PICKED_UP", "ON_THE_WAY"];
-
-const nextActionByStatus: Partial<Record<DeliveryStatusValue, { action: DriverDeliveryStatusAction; label: string }>> = {
-  ASSIGNED: { action: "PICKED_UP", label: "Mark Picked Up" },
-  PICKED_UP: { action: "ON_THE_WAY", label: "Start Delivery" },
-  ON_THE_WAY: { action: "DELIVERED", label: "Mark Delivered" }
-};
 
 type DriverHomeScreenProps = {
   onBack: () => void;
@@ -223,7 +216,7 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
 
   async function advance() {
     if (!delivery) return;
-    const next = nextActionByStatus[delivery.status];
+    const next = nextDriverActionByStatus[delivery.status];
     if (!next) return;
     setActing(true);
     setActionError(null);
@@ -275,9 +268,9 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
             </Text>
           </View>
 
-          {nextActionByStatus[delivery.status] ? (
+          {nextDriverActionByStatus[delivery.status] ? (
             <ActionButton
-              label={nextActionByStatus[delivery.status]!.label}
+              label={nextDriverActionByStatus[delivery.status]!.label}
               loading={acting}
               onPress={advance}
             />

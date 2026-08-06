@@ -5,6 +5,7 @@ dist-android/
 .env
 .env.*
 !.env.example
+!.env.production.example
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
@@ -12,4 +13,6 @@ yarn-error.log*
 coverage/
 *.tsbuildinfo
 logs/
+backups/
+secrets/
 apps/api/src/generated/

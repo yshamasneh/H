@@ -14,13 +14,9 @@ import {
 import { createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import { restaurantModerationTransitions } from "./restaurant.rules";
 import type { AdminRestaurantsQueryDto, RestaurantRegisterDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
-import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantProfileView, RestaurantPublicView } from "./restaurants.types";
-
-const suspendableStatuses: Record<"suspend" | "reactivate", RestaurantStatus> = {
-  suspend: RestaurantStatus.APPROVED,
-  reactivate: RestaurantStatus.SUSPENDED
-};
+import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantOfferPublicView, RestaurantProfileView, RestaurantPublicView } from "./restaurants.types";
 
 @Injectable()
 export class RestaurantsService {
@@ -140,6 +136,35 @@ export class RestaurantsService {
     return toPublicView(restaurant);
   }
 
+  async listPublicOffers(): Promise<RestaurantOfferPublicView[]> {
+    const now = new Date();
+    const offers = await this.prisma.offer.findMany({
+      where: {
+        isActive: true,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+        restaurant: { status: RestaurantStatus.APPROVED, isOpen: true }
+      },
+      include: { restaurant: true },
+      orderBy: { createdAt: "desc" }
+    });
+
+    return offers.map((offer) => ({
+      id: offer.id,
+      title: offer.title,
+      description: offer.description,
+      discountPercent: offer.discountPercent,
+      imageUrl: offer.imageUrl,
+      startsAt: offer.startsAt,
+      endsAt: offer.endsAt,
+      restaurant: {
+        id: offer.restaurant.id,
+        name: offer.restaurant.name,
+        logoUrl: offer.restaurant.logoUrl
+      }
+    }));
+  }
+
   async getPublicMenu(restaurantId: string) {
     const restaurant = await this.requireApprovedRestaurant(restaurantId);
     const categories = await this.prisma.menuCategory.findMany({
@@ -256,11 +281,11 @@ export class RestaurantsService {
   }
 
   async adminSuspend(adminUserId: string, restaurantId: string, reason: string): Promise<RestaurantProfileView> {
-    return this.adminStatusChange(adminUserId, restaurantId, RestaurantStatus.SUSPENDED, suspendableStatuses.suspend, "RESTAURANT_SUSPENDED", reason);
+    return this.adminStatusChange(adminUserId, restaurantId, RestaurantStatus.SUSPENDED, restaurantModerationTransitions.suspend, "RESTAURANT_SUSPENDED", reason);
   }
 
   async adminReactivate(adminUserId: string, restaurantId: string): Promise<RestaurantProfileView> {
-    return this.adminStatusChange(adminUserId, restaurantId, RestaurantStatus.APPROVED, suspendableStatuses.reactivate, "RESTAURANT_REACTIVATED", undefined);
+    return this.adminStatusChange(adminUserId, restaurantId, RestaurantStatus.APPROVED, restaurantModerationTransitions.reactivate, "RESTAURANT_REACTIVATED", undefined);
   }
 
   private async transitionPendingStatus(

@@ -1,3 +1,4 @@
+/** Customer-only cart state and calculations shared by native and web builds. */
 export type CartItem = {
   menuItemId: string;
   name: string;

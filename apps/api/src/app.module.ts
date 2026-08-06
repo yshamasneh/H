@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AdminModule } from "./admin/admin.module";
@@ -8,6 +8,7 @@ import { validateEnvironment } from "./config/environment";
 import { DriversModule } from "./drivers/drivers.module";
 import { HealthModule } from "./health/health.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { ObservabilityModule } from "./observability/observability.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RealtimeModule } from "./realtime/realtime.module";
@@ -20,8 +21,17 @@ import { RestaurantsModule } from "./restaurants/restaurants.module";
       isGlobal: true,
       validate: validateEnvironment
     }),
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: config.get<number>("RATE_LIMIT_TTL_MS", 60_000),
+          limit: config.get<number>("RATE_LIMIT_LIMIT", 60)
+        }
+      ]
+    }),
     PrismaModule,
+    ObservabilityModule,
     RealtimeModule,
     AuthModule,
     HealthModule,

@@ -16,17 +16,15 @@ import {
 import { createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import {
+  allowedOrderTransitions,
+  cancellableByAdminStatuses,
+  restaurantStatusTransitions
+} from "./order.rules";
 import type { AdminOrdersFilterDto, CreateOrderDto, RestaurantOrderStatusAction } from "./orders.dto";
 import type { Page } from "./orders.types";
 import type { OrderDetailView } from "./orders.types";
 import { calculateOrderFees } from "./pricing";
-
-const cancellableByAdminStatuses: OrderStatus[] = [
-  OrderStatus.PLACED,
-  OrderStatus.ACCEPTED,
-  OrderStatus.PREPARING,
-  OrderStatus.READY_FOR_PICKUP
-];
 
 type OrderWithRelations = Order & {
   items: OrderItem[];
@@ -41,23 +39,6 @@ const orderInclude = {
   statusHistory: { orderBy: { createdAt: "asc" as const } },
   delivery: true
 } as const;
-
-const restaurantStatusTransitions: Record<RestaurantOrderStatusAction, OrderStatus> = {
-  ACCEPTED: OrderStatus.ACCEPTED,
-  PREPARING: OrderStatus.PREPARING,
-  READY_FOR_PICKUP: OrderStatus.READY_FOR_PICKUP,
-  REJECTED: OrderStatus.REJECTED
-};
-
-const allowedOrderTransitions: Record<OrderStatus, OrderStatus[]> = {
-  [OrderStatus.PLACED]: [OrderStatus.ACCEPTED, OrderStatus.REJECTED, OrderStatus.CANCELLED],
-  [OrderStatus.ACCEPTED]: [OrderStatus.PREPARING],
-  [OrderStatus.PREPARING]: [OrderStatus.READY_FOR_PICKUP],
-  [OrderStatus.READY_FOR_PICKUP]: [OrderStatus.DELIVERED],
-  [OrderStatus.DELIVERED]: [],
-  [OrderStatus.REJECTED]: [],
-  [OrderStatus.CANCELLED]: []
-};
 
 @Injectable()
 export class OrdersService {

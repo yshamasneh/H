@@ -11,7 +11,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRealtimeEvent } from "./socket";
+import { useRealtimeEvent } from "../../core/socket";
 import {
   ApiError,
   getRestaurantOrder,
@@ -20,23 +20,11 @@ import {
   type OrderDetail,
   type OrderStatusValue,
   type RestaurantOrderStatusAction
-} from "./api";
-import { getAccessToken } from "./session";
+} from "../../core/api";
+import { getAccessToken } from "../../core/session";
+import { nextRestaurantActionsByStatus } from "./order.rules";
 
 const currencyCode = "ILS";
-
-const nextActionsByStatus: Record<OrderStatusValue, { action: RestaurantOrderStatusAction; label: string }[]> = {
-  PLACED: [
-    { action: "ACCEPTED", label: "Accept Order" },
-    { action: "REJECTED", label: "Reject Order" }
-  ],
-  ACCEPTED: [{ action: "PREPARING", label: "Start Preparing" }],
-  PREPARING: [{ action: "READY_FOR_PICKUP", label: "Mark Ready for Pickup" }],
-  READY_FOR_PICKUP: [],
-  DELIVERED: [],
-  REJECTED: [],
-  CANCELLED: []
-};
 
 type RestaurantOrdersScreenProps = {
   onBack: () => void;
@@ -209,9 +197,9 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
 
           <StatusTimeline history={order.statusHistory} />
 
-          {nextActionsByStatus[order.status].length > 0 ? (
+          {nextRestaurantActionsByStatus[order.status].length > 0 ? (
             <View style={styles.actionRow}>
-              {nextActionsByStatus[order.status].map(({ action, label }) => (
+              {nextRestaurantActionsByStatus[order.status].map(({ action, label }) => (
                 <ActionButton
                   destructive={action === "REJECTED"}
                   key={action}

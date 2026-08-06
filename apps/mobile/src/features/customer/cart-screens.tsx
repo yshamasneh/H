@@ -22,14 +22,15 @@ import {
   type CreateOrderInput,
   type OrderDetail,
   type OrderPaymentMethod
-} from "./api";
+} from "../../core/api";
 import {
   cartItemCount,
   cartSubtotalMinor,
   type Cart
 } from "./cart";
-import { getAccessToken } from "./session";
-import { useRealtimeEvent } from "./socket";
+import { getAccessToken } from "../../core/session";
+import { useRealtimeEvent } from "../../core/socket";
+import { customerTheme } from "./theme";
 
 const currencyCode = "ILS";
 
@@ -46,10 +47,12 @@ export function CartScreen(props: CartScreenProps) {
   const isEmpty = !props.cart || props.cart.items.length === 0;
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? "Your cart is empty"} title="Your Cart" />
       {isEmpty ? (
         <View style={styles.centered}>
+          <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>🛒</Text></View>
+          <Text style={styles.emptyTitle}>Your basket is waiting</Text>
           <Text style={styles.emptyText}>Add items from a restaurant menu to start an order.</Text>
         </View>
       ) : (
@@ -60,9 +63,20 @@ export function CartScreen(props: CartScreenProps) {
             keyExtractor={(item) => item.menuItemId}
             renderItem={({ item }) => (
               <View style={styles.cartRow}>
-                <View style={styles.cartRowInfo}>
-                  <Text style={styles.cartRowName}>{item.name}</Text>
-                  <Text style={styles.cartRowUnitPrice}>{formatPrice(item.priceMinor)} each</Text>
+                <View style={styles.cartItemTop}>
+                  <View style={styles.cartItemVisual}><Text style={styles.cartItemEmoji}>🍽️</Text></View>
+                  <View style={styles.cartRowInfo}>
+                    <Text style={styles.cartRowName}>{item.name}</Text>
+                    <Text style={styles.cartRowUnitPrice}>{formatPrice(item.priceMinor)} each</Text>
+                    <Text style={styles.cartRowLineTotal}>{formatPrice(item.priceMinor * item.quantity)}</Text>
+                  </View>
+                  <Pressable
+                    accessibilityLabel={`Remove ${item.name} from cart`}
+                    onPress={() => props.onRemove(item.menuItemId)}
+                    style={styles.removeButton}
+                  >
+                    <Text style={styles.removeButtonText}>×</Text>
+                  </Pressable>
                 </View>
                 <View style={styles.quantityStepper}>
                   <Pressable
@@ -81,14 +95,6 @@ export function CartScreen(props: CartScreenProps) {
                     <Text style={styles.stepperButtonText}>+</Text>
                   </Pressable>
                 </View>
-                <Text style={styles.cartRowLineTotal}>{formatPrice(item.priceMinor * item.quantity)}</Text>
-                <Pressable
-                  accessibilityLabel={`Remove ${item.name} from cart`}
-                  onPress={() => props.onRemove(item.menuItemId)}
-                  style={styles.removeButton}
-                >
-                  <Text style={styles.removeButtonText}>Remove</Text>
-                </Pressable>
               </View>
             )}
           />
@@ -160,9 +166,17 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? "Checkout"} title="Checkout" />
       <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.checkoutSteps}>
+          <View style={styles.stepComplete}><Text style={styles.stepCompleteText}>✓</Text></View>
+          <View style={styles.stepLine} />
+          <View style={styles.stepActive}><Text style={styles.stepActiveText}>2</Text></View>
+          <View style={styles.stepLineMuted} />
+          <View style={styles.stepMuted}><Text style={styles.stepMutedText}>3</Text></View>
+        </View>
+        <View style={styles.stepLabels}><Text style={styles.stepLabel}>Basket</Text><Text style={styles.stepLabel}>Details</Text><Text style={styles.stepLabel}>Done</Text></View>
         {props.cart ? (
           <View style={styles.summaryCard}>
             <Text style={styles.sectionTitle}>Order summary (estimate)</Text>
@@ -235,12 +249,14 @@ type OrderConfirmationScreenProps = {
 export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <Header onBack={props.onDone} subtitle={props.order.restaurant.name} title="Order Placed" />
       <ScrollView contentContainerStyle={styles.formContent}>
         <View style={styles.successBanner}>
+          <View style={styles.successIcon}><Text style={styles.successIconText}>✓</Text></View>
+          <Text style={styles.successTitle}>Your order is confirmed!</Text>
           <Text style={styles.successBannerText}>
-            Your order was placed successfully. These are the official totals confirmed by the server.
+            The restaurant has received your order. We’ll keep you updated at every step.
           </Text>
         </View>
         <OrderSummaryCard order={props.order} />
@@ -288,14 +304,16 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle="Most recent first" title="My Orders" />
       {orders === null ? (
         <View style={styles.centered}>
-          {error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color="#0F766E" size="large" />}
+          {error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color={customerTheme.colors.primary} size="large" />}
         </View>
       ) : orders.length === 0 ? (
         <View style={styles.centered}>
+          <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>🧾</Text></View>
+          <Text style={styles.emptyTitle}>No orders yet</Text>
           <Text style={styles.emptyText}>You have not placed any orders yet.</Text>
         </View>
       ) : (
@@ -303,13 +321,14 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
           contentContainerStyle={styles.listContent}
           data={orders}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor="#0F766E" />}
+          refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor={customerTheme.colors.primary} />}
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"
               onPress={() => props.onOpenOrder(item.id)}
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
             >
+              <View style={styles.orderIcon}><Text style={styles.orderIconText}>▤</Text></View>
               <View style={styles.orderRowHeader}>
                 <Text style={styles.cardTitle}>{item.restaurant.name}</Text>
                 <StatusBadge status={item.status} />
@@ -376,7 +395,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={order?.restaurant.name ?? "Order"} title="Order Details" />
       {error ? (
         <View style={styles.centered}>
@@ -384,7 +403,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
         </View>
       ) : order === null ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#0F766E" size="large" />
+          <ActivityIndicator color={customerTheme.colors.primary} size="large" />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.formContent}>
@@ -482,10 +501,16 @@ function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
   return (
     <View style={styles.summaryCard}>
       <Text style={styles.sectionTitle}>Status history</Text>
-      {props.history.map((entry) => (
+      {props.history.map((entry, index) => (
         <View key={entry.id} style={styles.timelineRow}>
-          <Text style={styles.timelineStatus}>{entry.toStatus.replace(/_/g, " ")}</Text>
-          <Text style={styles.timelineDate}>{formatDate(entry.createdAt)}</Text>
+          <View style={styles.timelineMarker}>
+            <View style={styles.timelineDot} />
+            {index < props.history.length - 1 ? <View style={styles.timelineLine} /> : null}
+          </View>
+          <View style={styles.timelineCopy}>
+            <Text style={styles.timelineStatus}>{entry.toStatus.replace(/_/g, " ")}</Text>
+            <Text style={styles.timelineDate}>{formatDate(entry.createdAt)}</Text>
+          </View>
         </View>
       ))}
     </View>
@@ -496,7 +521,10 @@ function DeliveryProgressCard(props: { delivery: NonNullable<OrderDetail["delive
   const { delivery } = props;
   return (
     <View style={styles.summaryCard}>
-      <Text style={styles.sectionTitle}>Delivery progress</Text>
+      <View style={styles.deliveryHeading}>
+        <View style={styles.deliveryIcon}><Text style={styles.deliveryIconText}>⌖</Text></View>
+        <View><Text style={styles.sectionTitle}>Delivery progress</Text><Text style={styles.footerNote}>Live updates from your driver</Text></View>
+      </View>
       <Text style={styles.addressText}>{delivery.status.replace(/_/g, " ")}</Text>
       {delivery.pickedUpAt ? (
         <Text style={styles.footerNote}>Picked up: {formatDate(delivery.pickedUpAt)}</Text>
@@ -515,10 +543,13 @@ function Header(props: { title: string; subtitle: string; onBack: () => void }) 
   return (
     <View style={styles.header}>
       <Pressable accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
-        <Text style={styles.backButtonText}>Back</Text>
+        <Text style={styles.backButtonText}>‹</Text>
       </Pressable>
-      <Text style={styles.headerTitle}>{props.title}</Text>
-      <Text style={styles.headerSubtitle}>{props.subtitle}</Text>
+      <View style={styles.headerCopy}>
+        <Text style={styles.headerTitle}>{props.title}</Text>
+        <Text numberOfLines={1} style={styles.headerSubtitle}>{props.subtitle}</Text>
+      </View>
+      <View style={styles.headerSpacer} />
     </View>
   );
 }
@@ -595,148 +626,191 @@ function readError(error: unknown): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: "#F5FAFC", flex: 1 },
+  screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   header: {
-    backgroundColor: "#FFFFFF",
-    borderBottomColor: "#D9E2EC",
+    alignItems: "center",
+    backgroundColor: customerTheme.colors.background,
+    borderBottomColor: customerTheme.colors.border,
     borderBottomWidth: 1,
-    padding: 20,
-    paddingTop: 12
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14
   },
-  backButton: { alignSelf: "flex-start", marginBottom: 10, paddingVertical: 4 },
-  backButtonText: { color: "#0369A1", fontSize: 14, fontWeight: "700" },
-  headerTitle: { color: "#0F172A", fontSize: 24, fontWeight: "800" },
-  headerSubtitle: { color: "#64748B", fontSize: 14, marginTop: 4 },
+  backButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: 15, height: 44, justifyContent: "center", width: 44, ...customerTheme.shadow },
+  backButtonText: { color: customerTheme.colors.text, fontSize: 29, fontWeight: "500", marginTop: -3 },
+  headerCopy: { alignItems: "center", flex: 1 },
+  headerSpacer: { width: 44 },
+  headerTitle: { color: customerTheme.colors.text, fontSize: 20, fontWeight: "900" },
+  headerSubtitle: { color: customerTheme.colors.textMuted, fontSize: 12, marginTop: 3, maxWidth: 250 },
   centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: 24 },
-  emptyText: { color: "#64748B", fontSize: 15, textAlign: "center" },
-  listContent: { padding: 16, paddingBottom: 40 },
-  formContent: { padding: 16, paddingBottom: 40 },
+  emptyIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 42, height: 84, justifyContent: "center", marginBottom: 18, width: 84 },
+  emptyIconText: { fontSize: 38 },
+  emptyTitle: { color: customerTheme.colors.text, fontSize: 21, fontWeight: "900", marginBottom: 7 },
+  emptyText: { color: customerTheme.colors.textMuted, fontSize: 14, lineHeight: 20, maxWidth: 310, textAlign: "center" },
+  listContent: { alignSelf: "center", maxWidth: 900, padding: 18, paddingBottom: 40, width: "100%" },
+  formContent: { alignSelf: "center", maxWidth: 900, padding: 18, paddingBottom: 50, width: "100%" },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D9E2EC",
-    borderRadius: 14,
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 12,
-    padding: 16
+    marginBottom: 15,
+    padding: 17,
+    ...customerTheme.shadow
   },
-  cardPressed: { backgroundColor: "#F0FDFA", borderColor: "#0F766E" },
-  cardTitle: { color: "#0F172A", fontSize: 17, fontWeight: "800" },
-  cardSubtitle: { color: "#64748B", fontSize: 13, marginTop: 4 },
+  cardPressed: { opacity: 0.72, transform: [{ scale: 0.995 }] },
+  cardTitle: { color: customerTheme.colors.text, fontSize: 17, fontWeight: "900" },
+  cardSubtitle: { color: customerTheme.colors.textMuted, fontSize: 12, marginTop: 4 },
+  orderIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 13, height: 42, justifyContent: "center", marginBottom: 12, width: 42 },
+  orderIconText: { color: customerTheme.colors.primary, fontSize: 20, fontWeight: "900" },
   orderRowHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  orderRowTotal: { color: "#0F766E", fontSize: 16, fontWeight: "800", marginTop: 8 },
-  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  statusBadgeText: { fontSize: 11, fontWeight: "800" },
-  timelineRow: { borderColor: "#E2E8F0", borderTopWidth: 1, paddingVertical: 8 },
-  timelineStatus: { color: "#0F172A", fontSize: 14, fontWeight: "700" },
-  timelineDate: { color: "#64748B", fontSize: 12, marginTop: 2 },
+  orderRowTotal: { color: customerTheme.colors.primary, fontSize: 16, fontWeight: "900", marginTop: 9 },
+  statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  statusBadgeText: { fontSize: 10, fontWeight: "900" },
+  timelineRow: { flexDirection: "row", minHeight: 58 },
+  timelineMarker: { alignItems: "center", marginRight: 12, width: 16 },
+  timelineDot: { backgroundColor: customerTheme.colors.primary, borderColor: customerTheme.colors.primarySoft, borderRadius: 8, borderWidth: 4, height: 16, width: 16 },
+  timelineLine: { backgroundColor: customerTheme.colors.primarySoft, flex: 1, width: 3 },
+  timelineCopy: { flex: 1, paddingBottom: 13 },
+  timelineStatus: { color: customerTheme.colors.text, fontSize: 14, fontWeight: "800" },
+  timelineDate: { color: customerTheme.colors.textMuted, fontSize: 11, marginTop: 3 },
+  deliveryHeading: { alignItems: "center", flexDirection: "row", gap: 12, marginBottom: 12 },
+  deliveryIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 15, height: 48, justifyContent: "center", width: 48 },
+  deliveryIconText: { color: customerTheme.colors.primary, fontSize: 23, fontWeight: "900" },
   cartRow: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 10,
-    padding: 14
+    marginBottom: 13,
+    padding: 14,
+    ...customerTheme.shadow
   },
-  cartRowInfo: { marginBottom: 8 },
-  cartRowName: { color: "#0F172A", fontSize: 15, fontWeight: "700" },
-  cartRowUnitPrice: { color: "#64748B", fontSize: 13, marginTop: 2 },
-  quantityStepper: { alignItems: "center", flexDirection: "row", gap: 12, marginBottom: 8 },
+  cartItemTop: { alignItems: "center", flexDirection: "row" },
+  cartItemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: 15, height: 72, justifyContent: "center", marginRight: 13, width: 72 },
+  cartItemEmoji: { fontSize: 34 },
+  cartRowInfo: { flex: 1 },
+  cartRowName: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "900" },
+  cartRowUnitPrice: { color: customerTheme.colors.textMuted, fontSize: 12, marginTop: 3 },
+  quantityStepper: { alignItems: "center", alignSelf: "flex-end", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: 12, flexDirection: "row", gap: 13, marginTop: 12, padding: 4 },
   stepperButton: {
     alignItems: "center",
-    backgroundColor: "#F0FDFA",
-    borderColor: "#0F766E",
-    borderRadius: 8,
-    borderWidth: 1,
+    backgroundColor: customerTheme.colors.surface,
+    borderRadius: 9,
     height: 32,
     justifyContent: "center",
     width: 32
   },
-  stepperButtonText: { color: "#0F766E", fontSize: 18, fontWeight: "800" },
-  stepperValue: { color: "#0F172A", fontSize: 15, fontWeight: "700", minWidth: 24, textAlign: "center" },
-  cartRowLineTotal: { color: "#0F766E", fontSize: 15, fontWeight: "800", marginBottom: 8 },
-  removeButton: { alignSelf: "flex-start" },
-  removeButtonText: { color: "#B91C1C", fontSize: 13, fontWeight: "700" },
+  stepperButtonText: { color: customerTheme.colors.primary, fontSize: 18, fontWeight: "900" },
+  stepperValue: { color: customerTheme.colors.text, fontSize: 14, fontWeight: "900", minWidth: 20, textAlign: "center" },
+  cartRowLineTotal: { color: customerTheme.colors.primary, fontSize: 14, fontWeight: "900", marginTop: 8 },
+  removeButton: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#FDE8E5", borderRadius: 12, height: 32, justifyContent: "center", width: 32 },
+  removeButtonText: { color: customerTheme.colors.danger, fontSize: 21, fontWeight: "500", marginTop: -2 },
   footer: {
-    backgroundColor: "#FFFFFF",
-    borderTopColor: "#D9E2EC",
+    alignSelf: "center",
+    backgroundColor: customerTheme.colors.surface,
+    borderTopColor: customerTheme.colors.border,
     borderTopWidth: 1,
-    padding: 16
+    maxWidth: 900,
+    padding: 18,
+    width: "100%"
   },
   footerRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  footerLabel: { color: "#0F172A", fontSize: 16, fontWeight: "700" },
-  footerValue: { color: "#0F766E", fontSize: 16, fontWeight: "800" },
-  footerNote: { color: "#64748B", fontSize: 12, marginBottom: 12, marginTop: 4 },
-  sectionTitle: { color: "#0F172A", fontSize: 16, fontWeight: "800", marginBottom: 10, marginTop: 6 },
+  footerLabel: { color: customerTheme.colors.text, fontSize: 16, fontWeight: "800" },
+  footerValue: { color: customerTheme.colors.primary, fontSize: 18, fontWeight: "900" },
+  footerNote: { color: customerTheme.colors.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 12, marginTop: 5 },
+  sectionTitle: { color: customerTheme.colors.text, fontSize: 17, fontWeight: "900", marginBottom: 12, marginTop: 7 },
   summaryCard: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D9E2EC",
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 18,
+    padding: 18,
+    ...customerTheme.shadow
+  },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  summaryRowLabel: { color: customerTheme.colors.textMuted, flex: 1, fontSize: 13, paddingRight: 8 },
+  summaryRowValue: { color: customerTheme.colors.text, fontSize: 13, fontWeight: "700" },
+  summaryRowLabelBold: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "900" },
+  summaryRowValueBold: { color: customerTheme.colors.primary, fontSize: 17, fontWeight: "900" },
+  summaryDivider: { backgroundColor: customerTheme.colors.border, height: 1, marginVertical: 10 },
+  label: { color: customerTheme.colors.text, fontSize: 12, fontWeight: "900", marginBottom: 7, marginTop: 12 },
+  addressText: { color: customerTheme.colors.text, fontSize: 13, lineHeight: 19 },
+  input: {
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
     borderRadius: 14,
     borderWidth: 1,
-    marginBottom: 20,
+    color: customerTheme.colors.text,
+    fontSize: 14,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 13
+  },
+  multilineInput: { minHeight: 86, textAlignVertical: "top" },
+  paymentOption: {
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 9,
     padding: 16
   },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-  summaryRowLabel: { color: "#475569", flex: 1, fontSize: 14, paddingRight: 8 },
-  summaryRowValue: { color: "#0F172A", fontSize: 14, fontWeight: "600" },
-  summaryRowLabelBold: { color: "#0F172A", fontSize: 15, fontWeight: "800" },
-  summaryRowValueBold: { color: "#0F766E", fontSize: 15, fontWeight: "800" },
-  summaryDivider: { backgroundColor: "#E2E8F0", height: 1, marginVertical: 8 },
-  label: { color: "#334155", fontSize: 13, fontWeight: "700", marginBottom: 6, marginTop: 10 },
-  addressText: { color: "#0F172A", fontSize: 14 },
-  input: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D9E2EC",
-    borderRadius: 10,
-    borderWidth: 1,
-    color: "#0F172A",
-    fontSize: 15,
-    marginBottom: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 12
-  },
-  multilineInput: { minHeight: 70, textAlignVertical: "top" },
-  paymentOption: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D9E2EC",
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 8,
-    padding: 14
-  },
-  paymentOptionSelected: { backgroundColor: "#F0FDFA", borderColor: "#0F766E" },
-  paymentOptionText: { color: "#0F172A", fontSize: 15, fontWeight: "600" },
-  paymentOptionTextSelected: { color: "#0F766E", fontWeight: "800" },
-  successBanner: { backgroundColor: "#DCFCE7", borderRadius: 12, marginBottom: 16, padding: 14 },
-  successBannerText: { color: "#166534", fontSize: 14, lineHeight: 20 },
+  paymentOptionSelected: { backgroundColor: customerTheme.colors.primarySoft, borderColor: customerTheme.colors.primary },
+  paymentOptionText: { color: customerTheme.colors.text, fontSize: 14, fontWeight: "700" },
+  paymentOptionTextSelected: { color: customerTheme.colors.primaryDark, fontWeight: "900" },
+  checkoutSteps: { alignItems: "center", flexDirection: "row", justifyContent: "center", marginTop: 2 },
+  stepComplete: { alignItems: "center", backgroundColor: customerTheme.colors.success, borderRadius: 17, height: 34, justifyContent: "center", width: 34 },
+  stepCompleteText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  stepActive: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: 17, height: 34, justifyContent: "center", width: 34 },
+  stepActiveText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  stepMuted: { alignItems: "center", backgroundColor: "#E5E7E6", borderRadius: 17, height: 34, justifyContent: "center", width: 34 },
+  stepMutedText: { color: customerTheme.colors.textMuted, fontSize: 13, fontWeight: "800" },
+  stepLine: { backgroundColor: customerTheme.colors.success, height: 3, width: 70 },
+  stepLineMuted: { backgroundColor: "#E5E7E6", height: 3, width: 70 },
+  stepLabels: { flexDirection: "row", justifyContent: "space-between", marginBottom: 18, marginHorizontal: 35, marginTop: 7 },
+  stepLabel: { color: customerTheme.colors.textMuted, fontSize: 10, fontWeight: "800" },
+  successBanner: { alignItems: "center", backgroundColor: customerTheme.colors.successSoft, borderRadius: 22, marginBottom: 18, padding: 24 },
+  successIcon: { alignItems: "center", backgroundColor: customerTheme.colors.success, borderRadius: 35, height: 70, justifyContent: "center", width: 70 },
+  successIconText: { color: "#FFFFFF", fontSize: 34, fontWeight: "900" },
+  successTitle: { color: customerTheme.colors.text, fontSize: 22, fontWeight: "900", marginTop: 16 },
+  successBannerText: { color: customerTheme.colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: "center" },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: "#0F766E",
-    borderRadius: 12,
+    backgroundColor: customerTheme.colors.primary,
+    borderRadius: 15,
     marginTop: 14,
-    paddingVertical: 14
+    minHeight: 54,
+    justifyContent: "center",
+    paddingVertical: 14,
+    ...customerTheme.shadow
   },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
-  destructiveButton: { backgroundColor: "#B91C1C" },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  destructiveButton: { backgroundColor: customerTheme.colors.danger },
   secondaryButton: {
     alignItems: "center",
-    borderColor: "#0F766E",
-    borderRadius: 12,
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.primarySoft,
+    borderRadius: 15,
     borderWidth: 1,
     marginTop: 10,
+    minHeight: 52,
+    justifyContent: "center",
     paddingVertical: 14
   },
-  secondaryButtonText: { color: "#0F766E", fontSize: 15, fontWeight: "800" },
-  buttonPressed: { opacity: 0.85 },
+  secondaryButtonText: { color: customerTheme.colors.primary, fontSize: 14, fontWeight: "900" },
+  buttonPressed: { opacity: 0.7, transform: [{ scale: 0.995 }] },
   errorBox: { alignItems: "center" },
-  errorText: { color: "#B91C1C", fontSize: 14, lineHeight: 20, textAlign: "center" },
-  inlineErrorText: { color: "#B91C1C", fontSize: 13, marginTop: 8 },
+  errorText: { color: customerTheme.colors.danger, fontSize: 14, lineHeight: 20, textAlign: "center" },
+  inlineErrorText: { backgroundColor: "#FDE8E5", borderRadius: 10, color: customerTheme.colors.danger, fontSize: 13, marginTop: 8, padding: 11 },
   retryButton: {
-    borderColor: "#0F766E",
-    borderRadius: 10,
-    borderWidth: 1,
+    backgroundColor: customerTheme.colors.primary,
+    borderRadius: 12,
     marginTop: 16,
     paddingHorizontal: 20,
     paddingVertical: 10
   },
-  retryButtonText: { color: "#0F766E", fontSize: 14, fontWeight: "800" }
+  retryButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" }
 });

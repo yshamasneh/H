@@ -2,16 +2,34 @@
   "expo": {
     "name": "TasawaQ",
     "slug": "wasel",
-    "version": "0.1.0",
+    "version": "0.8.0",
+    "scheme": "tasawaq",
+    "icon": "./assets/store/app-icon-1024.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.wasel.app"
+      "bundleIdentifier": "com.wasel.app",
+      "buildNumber": "8",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.wasel.app"
+      "package": "com.wasel.app",
+      "versionCode": 8,
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/logo/TasawaQ.png"
     },
     "plugins": [
       [
@@ -23,6 +41,9 @@
           "resizeMode": "contain"
         }
       ]
-    ]
+    ],
+    "updates": {
+      "enabled": false
+    }
   }
 }

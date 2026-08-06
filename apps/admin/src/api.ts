@@ -1,4 +1,8 @@
-export const apiBaseUrl = (import.meta as any).env?.VITE_API_URL || "http://localhost:3000";
+const configuredApiUrl = (import.meta as any).env?.VITE_API_URL?.replace(/\/$/, "");
+if ((import.meta as any).env?.PROD && (!configuredApiUrl || !configuredApiUrl.startsWith("https://"))) {
+  throw new Error("Production builds require an HTTPS VITE_API_URL.");
+}
+export const apiBaseUrl = configuredApiUrl || "http://localhost:3000";
 
 export type UserRole = "CUSTOMER" | "RESTAURANT" | "DRIVER" | "ADMIN";
 

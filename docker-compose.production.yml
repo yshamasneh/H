@@ -1,0 +1,52 @@
+services:
+  migrate:
+    build:
+      context: .
+      target: migration
+    env_file:
+      - ${PRODUCTION_ENV_FILE:-.env.production}
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build:
+      context: .
+      target: runtime
+    env_file:
+      - ${PRODUCTION_ENV_FILE:-.env.production}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/mobile/Dockerfile.web
+      args:
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:?Set EXPO_PUBLIC_API_URL in .env.production}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ${TLS_CERTIFICATE_PATH:?Set TLS_CERTIFICATE_PATH in .env.production}:/etc/nginx/tls/fullchain.pem:ro
+      - ${TLS_PRIVATE_KEY_PATH:?Set TLS_PRIVATE_KEY_PATH in .env.production}:/etc/nginx/tls/privkey.pem:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s

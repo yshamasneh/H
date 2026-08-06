@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import { PrismaPg } from "@prisma/adapter-pg";
 import argon2 from "argon2";
-import { PrismaClient, RestaurantStatus, UserRole } from "../src/generated/prisma/client";
+import { DriverApprovalStatus, PrismaClient, RestaurantStatus, UserRole } from "../src/generated/prisma/client";
 
 dotenv.config({ path: "../../.env" });
 
@@ -81,6 +81,39 @@ async function main(): Promise<void> {
     }
   });
   console.log("Seeded local restaurant owner: +970590000002");
+
+  const driver = await prisma.user.upsert({
+    where: { phone: "+970590000003" },
+    create: {
+      fullName: "Demo Driver",
+      phone: "+970590000003",
+      passwordHash,
+      role: UserRole.DRIVER,
+      phoneVerifiedAt: new Date(),
+      isActive: true
+    },
+    update: {
+      fullName: "Demo Driver",
+      passwordHash,
+      role: UserRole.DRIVER,
+      phoneVerifiedAt: new Date(),
+      isActive: true
+    }
+  });
+
+  await prisma.driverProfile.upsert({
+    where: { userId: driver.id },
+    create: {
+      userId: driver.id,
+      status: DriverApprovalStatus.APPROVED,
+      isOnline: false
+    },
+    update: {
+      status: DriverApprovalStatus.APPROVED,
+      isOnline: false
+    }
+  });
+  console.log("Seeded approved local driver: +970590000003");
 
   const restaurant = await prisma.restaurant.upsert({
     where: { ownerUserId: restaurantOwner.id },

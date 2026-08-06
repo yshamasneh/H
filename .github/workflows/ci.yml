@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_ENV: test
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tasawaq_test?schema=public
+  JWT_ACCESS_SECRET: ci-access-secret-that-is-longer-than-thirty-two-characters
+  JWT_REFRESH_SECRET: ci-refresh-secret-that-is-longer-than-thirty-two-characters
+  OTP_HASH_SECRET: ci-otp-secret-that-is-longer-than-thirty-two-characters
+  OTP_PROVIDER: development
+  CORS_ORIGIN: "*"
+  EXPO_PUBLIC_API_URL: https://app.example.test
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tasawaq_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d tasawaq_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run prisma:deploy
+      - run: npm run prisma:validate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev --workspace @wasel/api --audit-level=high
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build API runtime image
+        run: docker build --target runtime -t tasawaq-api:ci .
+      - name: Build web image
+        run: docker build -f apps/mobile/Dockerfile.web --build-arg EXPO_PUBLIC_API_URL=https://app.example.test -t tasawaq-web:ci .

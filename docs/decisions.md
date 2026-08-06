@@ -135,3 +135,19 @@ Every domain service (`OrdersService`, `RestaurantsService`, `DriversService`) i
 ## 2026-08-06: Phase 7 — No automated test suite for the admin web app
 
 The task's explicit test-coverage list was entirely backend-focused (role guards, AuditLog writes, notification creation, ownership isolation, transition logic, WebSocket auth) and all of it was implemented as `node:test` unit tests against fake Prisma doubles, matching every prior phase's testing style exactly — 97 API tests total after this phase, up from 65. The admin web app was instead verified by hand end-to-end in a real browser against the live API and live database: login, dashboard live metrics, restaurant approve/suspend (with the reason modal and resulting AuditLog entry confirmed on the Audit Log page), driver approve, order detail with status timeline, and the users list. Given the phase's already-large scope (backend admin module, realtime layer, notifications, a brand-new frontend workspace, and mobile wiring), adding a frontend test harness (Vitest + React Testing Library, browser mocking for `fetch`/`socket.io-client`) was judged lower priority than the manual, real-database verification already performed, and is left as a candidate for a later phase if the admin app's surface area grows enough to justify it.
+
+## 2026-08-06: Phase 8 — Vendor-neutral HTTPS bridges instead of guessed providers
+
+No SMS/WhatsApp, error-tracking, payment, or maps vendor had been selected. Production readiness could not leave terminal OTP enabled, but hard-coding an unapproved vendor would create contractual, regional, and data-routing assumptions. Phase 8 therefore adds small authenticated HTTPS adapters for OTP delivery and error tracking, with strict production URL/token validation. The operator can place a minimal provider bridge in front of the chosen vendor without changing authentication business logic. Payments, continuous location/maps, distance matching, and device push remain separate reviewed integrations because enabling them would add new data, permissions, failure modes, and commercial policy—not merely production hardening.
+
+## 2026-08-06: Phase 8 — TLS edge and external production PostgreSQL
+
+The production Compose stack owns immutable API/web containers but not PostgreSQL. Nginx is the single public TLS/WebSocket edge; the API has no published port and trusts exactly one proxy hop. PostgreSQL must be supplied as an external `DATABASE_URL`, with provider HA/snapshots, while repository scripts create portable logical backups. This avoids coupling application teardown to production data and gives the restore drill a target independent of the running stack.
+
+## 2026-08-06: Phase 8 — Dependency-light observability with low-cardinality metrics
+
+Structured JSON logging, request correlation, Prometheus text, liveness/readiness, and generic error delivery were implemented with Nest/Node primitives already in the dependency graph. Metrics label only method and status class—never path/order/user IDs—to avoid unbounded cardinality. Requests do not log query strings, bodies, IP addresses, authorization, or cookies. A shared backend is deliberately deferred until the deployment scales beyond one API replica.
+
+## 2026-08-06: Phase 8 — Release candidate, not a fictitious store launch
+
+The repository now contains version/build metadata, EAS preview/production profiles, hardened Android release settings, a 1024×1024 icon master, bilingual store copy, policy drafts, and a closed-test/go-live checklist. It does not claim that TestFlight or Google closed testing happened: those actions require operator store accounts, legal identity, signing credentials, real provider endpoints, screenshots from staging, and human sign-off. `0.8.0` intentionally identifies this as the release candidate until those external gates are recorded.

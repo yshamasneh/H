@@ -6,6 +6,18 @@ TasawaQ is an npm workspace with three runnable applications:
 - `apps/api`: NestJS API backed by PostgreSQL through Prisma.
 - `apps/admin`: React + Vite web application — the operations dashboard, added in Phase 7. It is a separate deployable from the mobile app because admins run the business from a desk, not a phone; it talks to the same NestJS API over REST and the same WebSocket gateway, secured by the identical JWT + `ADMIN`-role guard pattern as every other admin-scoped route. See "Admin web app" below for the framework choice.
 
+## Production topology and observability (Phase 8)
+
+The supported small-scale production topology is a TLS Nginx edge serving the exported Expo web client and proxying `/api/*` plus `/socket.io/*` to one private NestJS container. PostgreSQL is intentionally external to `docker-compose.production.yml`: application teardown cannot delete production data, database HA/backups remain the database provider's responsibility, and the application adds portable logical dumps as a second layer. A one-shot migration image uses the exact checked-in Prisma migrations and must complete before the API health dependency can start.
+
+The API runtime is non-root, read-only, capability-free, and receives the validated production environment at runtime. `environment.ts` treats production as a different safety boundary: wildcard/non-HTTPS CORS, development/default/reused secrets, terminal OTP, missing monitoring/error tracking, and unsafe provider URLs stop startup. Nginx terminates TLS, redirects HTTP, applies CSP/HSTS and a body/rate boundary, and forwards a trusted HTTPS scheme; the API rejects insecure application routes if they bypass that edge. REST and Socket.IO share the same origin allowlist through `ConfiguredSocketIoAdapter`.
+
+`StructuredLogger` emits one JSON object per line. `createRequestMiddleware` assigns or validates `x-request-id`, excludes query/body/header data, measures duration, updates low-cardinality in-process metrics, and marks API responses `no-store`. The global exception filter sends the same request context to `ErrorReporterService`, whose vendor-neutral HTTPS webhook receives sanitized server errors without client bodies or credentials. `/health/live` measures process liveness, `/health/ready` checks PostgreSQL, and `/metrics` exposes Prometheus text only after a constant-time monitoring-token check. This deployment deliberately supports one API replica; a shared throttler/metrics backend is required before horizontal scaling.
+
+Production OTP uses `WebhookOtpProvider`: an authenticated HTTPS POST of `{ phone, purpose, code }` to an operator-controlled messaging bridge. That bridge, rather than this repository, adapts the selected SMS/WhatsApp provider. This keeps the domain/auth service vendor-neutral while making the development logger impossible in production.
+
+Database recovery uses custom-format `pg_dump` archives plus SHA-256 sidecars. Restore verification is non-destructive; actual restore ignores the normal `DATABASE_URL`, requires `RESTORE_DATABASE_URL`, and requires the target database name in `--confirm-restore`. The operational runbook requires off-host encrypted copies and quarterly isolated restore drills.
+
 ## Authentication data
 
 `User` is the persistent identity. Public signup can create only `CUSTOMER` users. Phone numbers are unique normalized E.164 values restricted to `+970` and `+972`. Passwords use Argon2id hashes.

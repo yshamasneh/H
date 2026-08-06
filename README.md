@@ -7,18 +7,32 @@ TasawaQ is a React Native food-delivery app with a NestJS API, PostgreSQL, and P
 - Expo SDK 54, React Native 0.81.5, and React 19
 - Native Android development build with the existing TasawaQ splash and logo
 - NestJS 11 and TypeScript
-- React 19 + Vite admin web dashboard (`apps/admin`), talking to the same API over REST and WebSocket
+- An in-app React Native administration dashboard routed automatically for `ADMIN` accounts
 - Socket.IO realtime layer (order/delivery status changes, admin dashboard live updates, in-app notifications)
 - PostgreSQL 17 in Docker Compose with a persistent named volume
 - Prisma 7
-- Argon2id password hashing, HMAC-protected development OTPs, JWT access tokens, and rotating refresh sessions
+- Argon2id password hashing, HMAC-protected OTPs, HTTPS production OTP delivery, JWT access tokens, and rotating refresh sessions
 
 ## Prerequisites
 
 - Node.js 22 or newer and npm
 - Docker Desktop with the Compose plugin
-- Android Studio, Android SDK, and an Android emulator
-- Windows PowerShell for the commands shown below
+- Android Studio, Android SDK, and an Android emulator (only for native Android development)
+
+## Run the complete project on the web
+
+After the one-time `npm install` and `.env` setup described below, this is the only command needed:
+
+```powershell
+npm.cmd run web
+```
+
+The command starts PostgreSQL in Docker, waits for it to become healthy, generates Prisma Client, applies migrations, loads idempotent demo data, and then starts the API and shared role-aware application:
+
+- Cross-platform customer, restaurant, driver, and admin app: `http://localhost:8081`
+- API and Swagger documentation: `http://localhost:3000/api/docs`
+
+Press `Ctrl+C` once to stop the application services. The PostgreSQL container and its persistent data remain available for the next run.
 
 ## Install and configure
 
@@ -35,7 +49,7 @@ The default database URL is:
 postgresql://tasawaq:tasawaq_dev_password@localhost:5432/tasawaq?schema=public
 ```
 
-## PostgreSQL and Prisma
+## PostgreSQL and Prisma (manual commands)
 
 Start PostgreSQL and check its health:
 
@@ -81,7 +95,7 @@ npm run db:down
 
 The `tasawaq_postgres_data` named volume is retained by that command. Do not add `--volumes` unless you intentionally want to erase the local database.
 
-## Run the NestJS API
+## Run the NestJS API manually
 
 PostgreSQL must be healthy and migrations must be applied first.
 
@@ -100,7 +114,7 @@ With `NODE_ENV=development` and `OTP_PROVIDER=development`, signup and password-
 [DEV OTP] PASSWORD_RESET +970591234567 => 746285
 ```
 
-No SMS or WhatsApp message is sent. The code is never returned by the API, stored as plaintext, or logged by the mobile app. The API refuses to start with the development provider in production. A real WhatsApp Business or SMS provider must replace it before production.
+No SMS or WhatsApp message is sent in development. The code is never returned by the API, stored as plaintext, or logged by the mobile app. Production refuses this provider and uses the authenticated `OTP_PROVIDER=webhook` adapter documented in `.env.production.example`; the operator connects that HTTPS bridge to the approved WhatsApp Business or SMS vendor.
 
 ## Run the Android development build
 
@@ -129,15 +143,9 @@ $env:EXPO_PUBLIC_API_URL="http://YOUR_COMPUTER_LAN_IP:3000"
 npm run dev:mobile
 ```
 
-## Run the admin web dashboard
+## Legacy admin web client
 
-The API must be running first (see above).
-
-```powershell
-npm run dev:admin
-```
-
-Open `http://localhost:5173` and sign in with the seeded admin account below. The dashboard covers restaurant approval/suspension, driver approval/suspension, order search and admin-override cancellation, a searchable user directory, and a full audit log — all with live updates pushed over the same WebSocket gateway the API exposes.
+`apps/admin` is preserved temporarily as the previous Vite implementation for reference, but it is not started by the unified command. The supported administration interface now lives inside the shared Expo application at `http://localhost:8081`; signing in with an `ADMIN` account opens it automatically.
 
 ## Local development accounts
 
@@ -153,6 +161,16 @@ Full name: admin
 Phone: +970590000001
 Password: Test@12345
 Role: ADMIN
+
+Full name: Demo Restaurant Owner
+Phone: +970590000002
+Password: Test@12345
+Role: RESTAURANT
+
+Full name: Demo Driver
+Phone: +970590000003
+Password: Test@12345
+Role: DRIVER (approved)
 ```
 
 The seed hashes the password and uses an idempotent upsert. Running `npm run prisma:seed` repeatedly does not create duplicates and never sends an OTP.
@@ -169,7 +187,54 @@ Forgot Password creates a reset OTP only for an existing account. An unknown num
 
 A restaurant owner registers with `POST /api/v1/restaurants/register` (phone, password, restaurant name, and address); this creates a `RESTAURANT`-role account and a restaurant in `PENDING` status, no OTP required. The owner logs in with the same phone/password Login screen the app already has, then manages their profile and menu through the `/api/v1/restaurant/me/...` endpoints. A restaurant only appears to customers once an `ADMIN` approves it with `POST /api/v1/admin/restaurants/:id/approve`.
 
-There is no restaurant-owner or admin screen in the mobile app yet — Phase 3 only added the customer-facing browse/menu screens. Use the Swagger UI at `http://localhost:3000/api/docs` to register a restaurant, log in as the seeded admin (`+970590000001` / `Test@12345`) to approve it, then log in as the restaurant owner to add a menu category and item. Once approved and open, the restaurant shows up in the mobile app's Customer Home under "Browse Restaurants".
+The shared Expo app routes customers, restaurant owners, drivers, and administrators to role-specific screens and runs from the same source on web, iOS, and Android. Restaurant profile and menu-write endpoints are currently available through the API; the restaurant-owner interface currently focuses on incoming-order management.
+
+## Project structure
+
+```text
+apps/
+  api/                         NestJS API, Prisma schema, migrations, and seed data
+  admin/                       Preserved legacy Vite admin client (not started by the unified command)
+  mobile/                      Shared Expo app for web, iOS, and Android
+    src/core/                  API client, session storage, phone handling, realtime socket
+    src/features/auth/         Shared authentication screens
+    src/features/customer/     Restaurant catalog, cart, checkout, and customer orders
+    src/features/restaurant/   Restaurant-owner order workflow
+    src/features/driver/       Driver availability and delivery workflow
+    src/features/admin/        In-app admin dashboard and management workflows
+    src/features/shared/       Cross-role screens such as notifications
+    src/navigation/            Typed role-aware navigation state
+scripts/start-web.mjs          One-command local web orchestrator
+scripts/backup-database.mjs    Custom-format PostgreSQL backup + SHA-256 + retention
+scripts/restore-database.mjs   Verify/restore command with explicit destructive confirmation
+docker-compose.yml             PostgreSQL development service and persistent volume
+docker-compose.production.yml  TLS web/API production deployment (external PostgreSQL)
+```
+
+## Phase 8 production release
+
+Phase 8 adds strict production environment validation, an HTTPS OTP bridge, structured/redacted logging, protected Prometheus metrics, error tracking, separate liveness/readiness probes, TLS reverse proxying, hardened non-root/read-only API containers, backup/restore tooling, CI/CodeQL/Dependabot, mobile release configuration, a 1024×1024 store icon, and the legal/store/operations package.
+
+Create the real deployment file and replace every placeholder:
+
+```powershell
+Copy-Item .env.production.example .env.production
+npm run release:check -- --env-file=.env.production
+npm run prod:config
+npm run prod:up
+```
+
+`DATABASE_URL` points to an external production PostgreSQL service; the production Compose file deliberately does not own or delete the database. The migration container completes before the API starts, and the web container terminates TLS and proxies REST/WebSocket traffic.
+
+Operational and release material:
+
+- `docs/security-review.md` — findings, controls, and accepted/external risks.
+- `docs/operations-runbook.md` — deploy, monitoring, backup/restore, rollback, and incident procedures.
+- `docs/launch-checklist.md` — technical, four-role, legal, closed-test, and go/no-go gates.
+- `docs/privacy-policy.md` and `docs/terms-of-service.md` — Arabic operator-review drafts.
+- `docs/store-listing.md` — Arabic/English metadata, privacy declarations, review-account guidance, and visual-asset inventory.
+
+The code/configuration portion of Phase 8 is complete. Public launch still requires operator-owned DNS/TLS, selected provider endpoints, legal identity/sign-off, store accounts, release signing, screenshots from staging, and recorded Android closed-test/TestFlight approval; those cannot be manufactured safely from repository code.
 
 ## Checks
 

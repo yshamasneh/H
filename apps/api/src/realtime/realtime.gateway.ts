@@ -26,7 +26,7 @@ function extractToken(client: Socket): string | null {
 }
 
 @Injectable()
-@WebSocketGateway({ cors: { origin: true }, transports: ["websocket", "polling"] })
+@WebSocketGateway({ transports: ["websocket", "polling"] })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;

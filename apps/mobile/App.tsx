@@ -5,6 +5,7 @@ import {
   Image,
   StatusBar,
   StyleSheet,
+  Platform,
   View
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -15,7 +16,7 @@ import {
   type AuthResult,
   type MenuItemSummary,
   type RestaurantSummary
-} from "./src/api";
+} from "./src/core/api";
 import {
   ForgotPasswordScreen,
   HomeScreen,
@@ -23,25 +24,33 @@ import {
   NewPasswordScreen,
   OtpScreen,
   SignupScreen
-} from "./src/auth-screens";
+} from "./src/features/auth/screens";
 import {
   addCartItem,
   removeCartItem,
   setCartItemQuantity,
   startCart,
   type Cart
-} from "./src/cart";
+} from "./src/features/customer/cart";
 import {
   CartScreen,
   CheckoutScreen,
   OrderConfirmationScreen,
   OrderDetailScreen,
   OrderHistoryScreen
-} from "./src/cart-screens";
+} from "./src/features/customer/cart-screens";
 import {
   accountNotFoundToSignup,
   authResultToHome,
   forgotRequestToOtp,
+  goToAdminAuditLog,
+  goToAdminDashboard,
+  goToAdminDrivers,
+  goToAdminOrderDetail,
+  goToAdminOrders,
+  goToAdminRestaurantDetail,
+  goToAdminRestaurants,
+  goToAdminUsers,
   goToCart,
   goToCheckout,
   goToDeliveryDetail,
@@ -61,13 +70,20 @@ import {
   resetOtpToNewPassword,
   signupRequestToOtp,
   type AppScreen
-} from "./src/navigation";
-import { DeliveryDetailScreen, DriverHomeScreen } from "./src/driver-screens";
-import { NotificationInboxScreen } from "./src/notification-screens";
-import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/restaurant-order-screens";
-import { RestaurantListScreen, RestaurantMenuScreen } from "./src/restaurant-screens";
-import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./src/session";
-import { disconnectSocket } from "./src/socket";
+} from "./src/navigation/navigation";
+import { DeliveryDetailScreen, DriverHomeScreen } from "./src/features/driver/screens";
+import { NotificationInboxScreen } from "./src/features/shared/notification-screens";
+import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/features/restaurant/order-screens";
+import { RestaurantListScreen, RestaurantMenuScreen } from "./src/features/customer/restaurant-screens";
+import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./src/core/session";
+import { disconnectSocket } from "./src/core/socket";
+import { AdminDashboardScreen } from "./src/features/admin/dashboard-screen";
+import { AdminRestaurantsScreen, AdminRestaurantDetailScreen } from "./src/features/admin/restaurants-screen";
+import { AdminDriversScreen } from "./src/features/admin/drivers-screen";
+import { AdminOrderDetailScreen, AdminOrdersScreen } from "./src/features/admin/orders-screen";
+import { AdminUsersScreen } from "./src/features/admin/users-screen";
+import { AdminAuditLogScreen } from "./src/features/admin/audit-log-screen";
+import { CustomerHomeScreen } from "./src/features/customer/home-screen";
 
 const splashDurationMs = 3000;
 const logo = require("./assets/logo/TasawaQ.png");
@@ -99,7 +115,7 @@ function TasawaQApp() {
 
         try {
           const user = await fetchCurrentUser(accessToken);
-          if (isMounted) setScreen({ name: "home", user });
+          if (isMounted) setScreen(homeForUser(user));
         } catch {
           if (!storedRefreshToken) throw new Error("No refresh token");
           const result = await refreshSession(storedRefreshToken);
@@ -122,7 +138,8 @@ function TasawaQApp() {
 
   async function handleAuthenticated(result: AuthResult, notice?: string) {
     await saveTokens(result);
-    setScreen({ ...authResultToHome(result), notice });
+    const destination = authResultToHome(result);
+    setScreen(destination.name === "home" ? { ...destination, notice } : destination);
   }
 
   async function handleLogout() {
@@ -142,9 +159,16 @@ function TasawaQApp() {
 
   function handleAddToCart(restaurant: Pick<RestaurantSummary, "id" | "name">, item: MenuItemSummary) {
     if (cart && cart.restaurantId !== restaurant.id) {
+      const confirmationMessage = `Your cart has items from ${cart.restaurantName}. Adding an item from ${restaurant.name} will clear it and start a new order.`;
+      if (Platform.OS === "web") {
+        if (typeof globalThis.confirm === "function" && globalThis.confirm(`Start a new cart?\n\n${confirmationMessage}`)) {
+          setCart(startCart(restaurant, item));
+        }
+        return;
+      }
       Alert.alert(
         "Start a new cart?",
-        `Your cart has items from ${cart.restaurantName}. Adding an item from ${restaurant.name} will clear it and start a new order.`,
+        confirmationMessage,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -261,12 +285,22 @@ function TasawaQApp() {
         />
       );
     case "home":
+      if (screen.user.role === "CUSTOMER") {
+        return (
+          <CustomerHomeScreen
+            notice={screen.notice}
+            onBrowseRestaurants={() => setScreen(goToRestaurants(screen.user))}
+            onLogout={handleLogout}
+            onOpenNotifications={() => setScreen(goToNotifications(screen.user))}
+            onOpenRestaurant={(restaurant) => setScreen(goToRestaurantMenu(screen.user, restaurant))}
+            onViewOrders={() => setScreen(goToOrderHistory(screen.user))}
+            user={screen.user}
+          />
+        );
+      }
       return (
         <HomeScreen
           notice={screen.notice}
-          onBrowseRestaurants={
-            screen.user.role === "CUSTOMER" ? () => setScreen(goToRestaurants(screen.user)) : undefined
-          }
           onLogout={handleLogout}
           onManageOrders={
             screen.user.role === "RESTAURANT" ? () => setScreen(goToRestaurantOrders(screen.user)) : undefined
@@ -275,9 +309,6 @@ function TasawaQApp() {
             screen.user.role === "DRIVER" ? () => setScreen(goToDriverHome(screen.user)) : undefined
           }
           onOpenNotifications={() => setScreen(goToNotifications(screen.user))}
-          onViewOrders={
-            screen.user.role === "CUSTOMER" ? () => setScreen(goToOrderHistory(screen.user)) : undefined
-          }
           user={screen.user}
         />
       );
@@ -367,6 +398,53 @@ function TasawaQApp() {
       return (
         <DeliveryDetailScreen deliveryId={screen.deliveryId} onBack={() => setScreen(goToDriverHome(screen.user))} />
       );
+    case "admin-dashboard":
+      return (
+        <AdminDashboardScreen
+          onAuditLog={() => setScreen(goToAdminAuditLog(screen.user))}
+          onDrivers={() => setScreen(goToAdminDrivers(screen.user))}
+          onLogout={handleLogout}
+          onNotifications={() => setScreen(goToNotifications(screen.user))}
+          onOrders={() => setScreen(goToAdminOrders(screen.user))}
+          onRestaurants={() => setScreen(goToAdminRestaurants(screen.user))}
+          onUsers={() => setScreen(goToAdminUsers(screen.user))}
+          user={screen.user}
+        />
+      );
+    case "admin-restaurants":
+      return (
+        <AdminRestaurantsScreen
+          onBack={() => setScreen(goToAdminDashboard(screen.user))}
+          onOpenRestaurant={(restaurantId) => setScreen(goToAdminRestaurantDetail(screen.user, restaurantId))}
+        />
+      );
+    case "admin-restaurant-detail":
+      return (
+        <AdminRestaurantDetailScreen
+          onBack={() => setScreen(goToAdminRestaurants(screen.user))}
+          restaurantId={screen.restaurantId}
+        />
+      );
+    case "admin-orders":
+      return (
+        <AdminOrdersScreen
+          onBack={() => setScreen(goToAdminDashboard(screen.user))}
+          onOpenOrder={(orderId) => setScreen(goToAdminOrderDetail(screen.user, orderId))}
+        />
+      );
+    case "admin-order-detail":
+      return (
+        <AdminOrderDetailScreen
+          onBack={() => setScreen(goToAdminOrders(screen.user))}
+          orderId={screen.orderId}
+        />
+      );
+    case "admin-drivers":
+      return <AdminDriversScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+    case "admin-users":
+      return <AdminUsersScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+    case "admin-audit-log":
+      return <AdminAuditLogScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "notifications":
       return <NotificationInboxScreen onBack={() => setScreen(homeForUser(screen.user))} />;
   }

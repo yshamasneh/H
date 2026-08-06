@@ -1,0 +1,37 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 2"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          DATABASE_URL: postgresql://build:build-only-password@localhost:5432/build
+          JWT_ACCESS_SECRET: codeql-access-secret-that-is-longer-than-thirty-two-characters
+          JWT_REFRESH_SECRET: codeql-refresh-secret-that-is-longer-than-thirty-two-characters
+          OTP_HASH_SECRET: codeql-otp-secret-that-is-longer-than-thirty-two-characters
+          OTP_PROVIDER: development
+          EXPO_PUBLIC_API_URL: https://app.example.test
+      - uses: github/codeql-action/analyze@v4

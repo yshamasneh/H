@@ -67,6 +67,17 @@ test("successful customer authentication navigates to Customer Home", () => {
   assert.equal(screen.name === "home" && screen.user.role, "CUSTOMER");
 });
 
+test("successful admin authentication opens the in-app admin dashboard", () => {
+  const screen = authResultToHome({
+    accessToken: "access",
+    refreshToken: "refresh",
+    expiresInSeconds: 900,
+    refreshExpiresInSeconds: 1000,
+    user: { id: "admin", fullName: "Admin", phone: "+970590000001", role: "ADMIN" }
+  });
+  assert.equal(screen.name, "admin-dashboard");
+});
+
 const customer = { id: "1", fullName: "Customer", phone: "+970591234567", role: "CUSTOMER" as const };
 
 test("browsing restaurants carries the current user", () => {

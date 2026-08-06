@@ -35,6 +35,17 @@ export type PublicMenuView = {
   categories: MenuCategoryPublicView[];
 };
 
+export type RestaurantOfferPublicView = {
+  id: string;
+  title: string;
+  description: string | null;
+  discountPercent: number | null;
+  imageUrl: string | null;
+  startsAt: Date;
+  endsAt: Date | null;
+  restaurant: Pick<RestaurantPublicView, "id" | "name" | "logoUrl">;
+};
+
 export type MenuCategoryOwnerView = {
   id: string;
   name: string;

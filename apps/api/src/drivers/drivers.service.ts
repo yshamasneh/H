@@ -19,6 +19,7 @@ import {
 import { createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import { allowedDeliveryTransitions, deliveryStatusTransitions } from "./delivery.rules";
 import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
 import type { AdminDriverView, DeliveryView, DriverProfileView, Page } from "./drivers.types";
 
@@ -26,21 +27,6 @@ type DeliveryWithRelations = Delivery & { order: Order & { restaurant: Restauran
 type DriverWithUser = DriverProfile & { user: User };
 
 const deliveryInclude = { order: { include: { restaurant: true } } } as const;
-
-const deliveryStatusTransitions: Record<DriverDeliveryStatusAction, DeliveryStatus> = {
-  PICKED_UP: DeliveryStatus.PICKED_UP,
-  ON_THE_WAY: DeliveryStatus.ON_THE_WAY,
-  DELIVERED: DeliveryStatus.DELIVERED
-};
-
-const allowedDeliveryTransitions: Record<DeliveryStatus, DeliveryStatus[]> = {
-  [DeliveryStatus.PENDING_ASSIGNMENT]: [],
-  [DeliveryStatus.ASSIGNED]: [DeliveryStatus.PICKED_UP],
-  [DeliveryStatus.PICKED_UP]: [DeliveryStatus.ON_THE_WAY],
-  [DeliveryStatus.ON_THE_WAY]: [DeliveryStatus.DELIVERED],
-  [DeliveryStatus.DELIVERED]: [],
-  [DeliveryStatus.CANCELLED]: []
-};
 
 @Injectable()
 export class DriversService {

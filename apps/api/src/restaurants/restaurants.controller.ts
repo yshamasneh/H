@@ -22,6 +22,12 @@ export class RestaurantsController {
     return this.restaurants.listPublicRestaurants(query.page ?? 1, query.pageSize ?? 20);
   }
 
+  @Get("offers/active")
+  @ApiOperation({ summary: "List active offers for approved, open restaurants" })
+  listOffers() {
+    return this.restaurants.listPublicOffers();
+  }
+
   @Get(":restaurantId")
   @ApiOperation({ summary: "Get a single approved restaurant's public profile" })
   getOne(@Param("restaurantId", new ParseUUIDPipe()) restaurantId: string) {

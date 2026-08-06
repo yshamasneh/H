@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ApiError, listMyNotifications, markNotificationRead, type NotificationView } from "./api";
-import { getAccessToken } from "./session";
-import { useRealtimeEvent } from "./socket";
+import { ApiError, listMyNotifications, markNotificationRead, type NotificationView } from "../../core/api";
+import { getAccessToken } from "../../core/session";
+import { useRealtimeEvent } from "../../core/socket";
 
 type NotificationInboxScreenProps = {
   onBack: () => void;

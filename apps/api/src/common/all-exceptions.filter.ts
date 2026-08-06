@@ -8,6 +8,7 @@ import {
   Logger
 } from "@nestjs/common";
 import type { Request, Response } from "express";
+import { ErrorReporterService } from "../observability/error-reporter.service";
 
 type ErrorBody = {
   statusCode: number;
@@ -20,6 +21,8 @@ type ErrorBody = {
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
+  constructor(private readonly errorReporter?: ErrorReporterService) {}
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const context = host.switchToHttp();
     const request = context.getRequest<Request>();
@@ -28,7 +31,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const body = this.toBody(exception);
 
     if (body.statusCode >= 500) {
-      this.logger.error(exception instanceof Error ? exception.stack : String(exception));
+      const errorContext = {
+        requestId,
+        method: request.method,
+        path: request.originalUrl.split("?", 1)[0],
+        statusCode: body.statusCode
+      };
+      this.logger.error({ event: "unhandled_exception", error: exception, ...errorContext });
+      this.errorReporter?.capture(exception, errorContext);
     }
 
     response.setHeader("x-request-id", requestId);

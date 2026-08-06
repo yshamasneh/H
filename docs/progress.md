@@ -194,3 +194,23 @@ Remaining before Phase 8 (production hardening):
 - No automated test suite for the `apps/admin` frontend — verified manually end-to-end in a real browser this session instead; a candidate for a later phase if the admin app's surface grows (see `docs/decisions.md`).
 - No push notifications (device-level) — in-app only, as documented; Expo push integration would be a self-contained follow-up task.
 - Production configuration, HTTPS, structured logging/monitoring, database backups, and store-listing prep are all still open, matching the spec's own Phase 8 scope.
+
+## 2026-08-06: Phase 8 — Production Hardening and Launch Preparation
+
+### Repository implementation: Completed
+
+- Production environment validation now rejects wildcard/non-HTTPS CORS, placeholder/reused secrets, terminal OTP, unsafe webhook URLs, and missing monitoring/error-tracking credentials. REST and Socket.IO use one explicit origin allowlist; application routes require HTTPS behind one trusted proxy hop.
+- Added `WebhookOtpProvider`, an authenticated vendor-neutral HTTPS adapter that never logs OTPs, plus production-only provider validation and unit coverage. The development terminal provider remains available locally and impossible in production.
+- Added one-line JSON logging with recursive credential redaction, validated/generated request IDs, request timing, sanitized 5xx error delivery, separate `/health/live` and `/health/ready`, and token-protected Prometheus `/metrics` output.
+- Added a hardened production topology: multi-stage non-root/read-only/capability-free API image, static Expo web image, Nginx TLS/HSTS/CSP edge with REST and WebSocket proxying, one-shot Prisma migration service, and external PostgreSQL ownership. `docker compose ... config --quiet` validates successfully; this machine has no running Docker daemon, so image construction/startup is also enforced in CI rather than claimed as locally executed.
+- Added `pg_dump` custom-archive backups with SHA-256 sidecars and retention, non-destructive archive verification, and a guarded restore flow that uses a separate `RESTORE_DATABASE_URL` and explicit target-database confirmation. Added deploy/monitoring/incident/rollback/restore-drill procedures.
+- Hardened mobile release configuration: version `0.8.0`/build 8, explicit scheme, HTTPS-only production API, Android cleartext/backup disabled, broad storage/overlay permissions removed, minification/resource shrinking enabled, and debug signing removed from release. Added EAS preview/production profiles.
+- Added a new 1024×1024 store icon derived from the established TasawaQ Android launcher identity, bilingual store metadata, Arabic privacy/terms drafts, security review, store declarations, and an explicit closed-test/go-no-go checklist.
+- Added GitHub CI for migration replay, lint, typecheck, tests, builds, API production audit, and both container builds; CodeQL JavaScript/TypeScript scanning; Dependabot for npm, Actions, and Docker; and a private vulnerability-reporting policy.
+- Added eight Phase 8 API tests (production config 4, OTP webhook 2, log redaction 2). The full suite passes: **105 API + 18 mobile = 123 tests, 0 failures**. `npm run lint`, `npm run typecheck`, production-targeted `npm run build`, `npm run prisma:validate`, offline cached API production audit, release structure/environment validation, and production Compose config all pass.
+
+### External launch gates: Not representable as code
+
+- Supply operator-owned DNS/TLS, production database, OTP/error-tracking endpoints and tokens, legal entity/contact/jurisdiction details, store accounts, and production signing credentials.
+- Publish the approved privacy/terms/support pages, capture screenshots from staging, complete Google Play closed testing and iOS TestFlight, run an isolated database restore drill, and record the four-role plus go/no-go sign-offs in `docs/launch-checklist.md`.
+- Online payments, continuous driver location/maps and distance matching, and device push notifications remain separate provider/product phases exactly as the original Phase 8 scope specifies; enabling any of them requires new privacy/security review.
