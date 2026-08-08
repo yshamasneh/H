@@ -1,6 +1,6 @@
 # TasawaQ
 
-TasawaQ is a React Native food-delivery app with a NestJS API, PostgreSQL, and Prisma. Customer authentication uses a verified `+970` or `+972` phone number and password. Customers can browse approved, open restaurants and their menus. The Android app is an Expo development build; Expo Go is not required.
+TasawaQ is a React Native restaurant and supermarket delivery app with a NestJS API, PostgreSQL, and Prisma. Customer authentication uses a verified `+970` or `+972` phone number and password. Customers can browse approved restaurants or supermarkets, search grocery catalogs, and place cash-on-delivery orders. The Android app is an Expo development build; Expo Go is not required.
 
 ## Stack
 
@@ -11,7 +11,28 @@ TasawaQ is a React Native food-delivery app with a NestJS API, PostgreSQL, and P
 - Socket.IO realtime layer (order/delivery status changes, admin dashboard live updates, in-app notifications)
 - PostgreSQL 17 in Docker Compose with a persistent named volume
 - Prisma 7
+- Admin-controlled product, order, delivery-percentage, and free-delivery offers
+- Supermarket departments, product search/details, reviewed substitutions, variable-weight cash totals, and inventory procurement
+- On-demand customer/store location capture with server-authoritative distance pricing and a 5 ILS default minimum
 - Argon2id password hashing, HMAC-protected OTPs, HTTPS production OTP delivery, JWT access tokens, and rotating refresh sessions
+
+## Phase 10 delivery pricing and offers
+
+Only cash on delivery is supported. At checkout, the customer explicitly chooses their current location, receives a server-calculated quote, and sees the cash due before placing the order. The default delivery rule is 5.00 ILS for the first 3 km plus 1.50 ILS for each additional started kilometer, with a 25 km maximum; operators can change these values through the documented environment variables without a code deployment.
+
+Administrators manage all promotions from the in-app **Offers** page. Product and whole-order offers compete for the best merchandise discount, while the best delivery offer can be combined with that winner. The server rechecks schedules, minimum subtotals, caps, restaurant/item scope, menu prices, and distance when the order is placed. Restaurants cannot create their own offers.
+
+## Phase 11 online supermarket
+
+Restaurants and supermarkets share the proven account, approval, cash-order, delivery-pricing, promotion, driver, and notification pipeline, while `BusinessType` keeps their public catalogs separate. Customers get a dedicated supermarket list, department filters, product/brand/SKU search, featured products, a product-detail page, selling-unit and stock visibility, and a per-line “allow similar replacement” preference.
+
+Supermarket owners use the same store workspace to manage departments and products, including brand, SKU, selling unit, optional tracked stock, featured state, price, image, and availability. Order creation reserves tracked inventory atomically; a rejected or cancelled order restores it. A null stock value intentionally means inventory is not tracked, while zero-stock products are hidden and cannot be ordered.
+
+## Phases 12 and 13 grocery operations
+
+During fulfillment, a supermarket can propose a customer-authorized replacement or enter the actual packed quantity for a variable-weight line. The customer approves or rejects each proposal before the store can accept the order. Approval updates the server-owned subtotal and cash-on-delivery total; all original, replacement, and packed-quantity reservations are reconciled transactionally and recorded in the stock ledger.
+
+The supermarket workspace now includes barcode/SKU lookup, low/out-of-stock counters, reasoned manual adjustments, an immutable movement history, suppliers, draft purchase orders, and purchase receiving. Receiving a purchase increases tracked stock and writes both movement and audit records. Restaurant accounts cannot use these supermarket-only endpoints.
 
 ## Prerequisites
 
@@ -171,6 +192,11 @@ Full name: Demo Driver
 Phone: +970590000003
 Password: Test@12345
 Role: DRIVER (approved)
+
+Full name: Demo Supermarket Owner
+Phone: +970590000004
+Password: Test@12345
+Role: RESTAURANT / SUPERMARKET owner (approved)
 ```
 
 The seed hashes the password and uses an idempotent upsert. Running `npm run prisma:seed` repeatedly does not create duplicates and never sends an OTP.
@@ -183,11 +209,11 @@ Login normalizes the phone, checks an active verified PostgreSQL user, returns a
 
 Forgot Password creates a reset OTP only for an existing account. An unknown number receives `ACCOUNT_NOT_FOUND`, and the app offers Customer Sign Up with the phone prefilled. A valid reset OTP produces a short-lived, single-use reset token. Changing the password consumes that token and revokes existing refresh sessions.
 
-## Restaurants and menus
+## Stores and catalogs
 
-A restaurant owner registers with `POST /api/v1/restaurants/register` (phone, password, restaurant name, and address); this creates a `RESTAURANT`-role account and a restaurant in `PENDING` status, no OTP required. The owner logs in with the same phone/password Login screen the app already has, then manages their profile and menu through the `/api/v1/restaurant/me/...` endpoints. A restaurant only appears to customers once an `ADMIN` approves it with `POST /api/v1/admin/restaurants/:id/approve`.
+A store owner registers with `POST /api/v1/restaurants/register` (phone, password, name, address, and `RESTAURANT` or `SUPERMARKET` business type); this creates a `RESTAURANT`-role owner account and a store in `PENDING` status, no OTP required. The owner logs in with the same phone/password Login screen, then manages the profile and menu/catalog through `/api/v1/restaurant/me/...`. A store only appears to customers once an `ADMIN` approves it with `POST /api/v1/admin/restaurants/:id/approve`.
 
-The shared Expo app routes customers, restaurant owners, drivers, and administrators to role-specific screens and runs from the same source on web, iOS, and Android. Restaurant profile and menu-write endpoints are currently available through the API; the restaurant-owner interface currently focuses on incoming-order management.
+The shared Expo app routes customers, restaurant owners, drivers, and administrators to role-specific screens and runs from the same source on web, iOS, and Android. Restaurant and driver applications are available from Login. Restaurant owners can prepare their profile, opening status, categories, items, prices, images, and availability in the in-app Restaurant Workspace while approval is pending; incoming-order operations remain a separate focused screen.
 
 ## Project structure
 
@@ -199,7 +225,7 @@ apps/
     src/core/                  API client, session storage, phone handling, realtime socket
     src/features/auth/         Shared authentication screens
     src/features/customer/     Restaurant catalog, cart, checkout, and customer orders
-    src/features/restaurant/   Restaurant-owner order workflow
+    src/features/restaurant/   Restaurant-owner profile, menu, and order workflows
     src/features/driver/       Driver availability and delivery workflow
     src/features/admin/        In-app admin dashboard and management workflows
     src/features/shared/       Cross-role screens such as notifications
@@ -236,10 +262,25 @@ Operational and release material:
 
 The code/configuration portion of Phase 8 is complete. Public launch still requires operator-owned DNS/TLS, selected provider endpoints, legal identity/sign-off, store accounts, release signing, screenshots from staging, and recorded Android closed-test/TestFlight approval; those cannot be manufactured safely from repository code.
 
+## Phase 9 integration completion
+
+Phase 9 closes the user-facing integration gaps left by the API-first restaurant and driver work. Login now links to restaurant and driver applications, successful applications return to a prefilled Login screen with an approval explanation, and restaurant owners have an in-app workspace for profile/open-status, category, and menu-item management.
+
+Order-detail screens now emit the authorized Socket.IO `order.subscribe` message before listening for order and delivery changes. The payload remains only a refresh signal; REST is still the source of truth. A focused unit test verifies subscription/filter/cleanup behavior.
+
+CI now runs a real PostgreSQL-backed HTTP E2E journey after migrations: restaurant registration and menu creation, admin approval, customer cash order, restaurant preparation, driver registration/approval/acceptance, delivery completion, and customer notification/order verification. Run the same test against a migrated disposable database with:
+
+```powershell
+npm run test:e2e
+```
+
+The agreed product roadmap keeps cash on delivery as the only payment method. Phase 10 completed location pricing and admin promotions; Phase 11 completes the first supermarket/catalog domain.
+
 ## Checks
 
 ```powershell
 npm test
+npm run test:e2e
 npm run lint
 npm run typecheck
 npm run build
@@ -247,6 +288,6 @@ npm run prisma:validate
 npx expo-doctor@latest apps/mobile
 ```
 
-The API tests cover phone normalization, signup/OTP protections, duplicate and concurrent signup, login, forgot-password behavior, purpose isolation, single-use reset tokens, and old/new password behavior. Mobile tests cover authentication navigation and phone-prefill transitions.
+The API unit tests cover authentication, role boundaries, restaurant/menu, orders, delivery, admin, realtime, notifications, and production safety. Mobile tests cover authentication/navigation, cart rules, role-registration routes, restaurant management navigation, and authorized order-room subscriptions. The opt-in E2E test exercises the complete four-role HTTP/PostgreSQL journey.
 
 `npm audit --omit=dev --workspace @wasel/api` reports no API production vulnerabilities. The repository-level audit currently reports advisories in Expo SDK 54's CLI/config dependency tree; npm's automatic remedy is a breaking upgrade to Expo 57. That upgrade was not forced because this project intentionally preserves its validated Expo 54/native Android configuration.

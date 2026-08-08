@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   listActiveRestaurantOffers,
   listRestaurants,
+  listSupermarkets,
   type PublicUser,
   type RestaurantOffer,
   type RestaurantSummary
@@ -25,24 +26,30 @@ export function CustomerHomeScreen(props: {
   user: PublicUser;
   notice?: string;
   onBrowseRestaurants: () => void;
+  onBrowseSupermarkets: () => void;
   onOpenRestaurant: (restaurant: Pick<RestaurantSummary, "id" | "name">) => void;
+  onOpenSupermarket: (supermarket: Pick<RestaurantSummary, "id" | "name">) => void;
   onViewOrders: () => void;
   onOpenNotifications: () => void;
+  onOpenAccount: () => void;
   onLogout: () => Promise<void>;
 }) {
   const [restaurants, setRestaurants] = useState<RestaurantSummary[] | null>(null);
+  const [supermarkets, setSupermarkets] = useState<RestaurantSummary[] | null>(null);
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    Promise.all([listActiveRestaurantOffers(), listRestaurants(1, 20)])
-      .then(([activeOffers, restaurantPage]) => {
+    Promise.all([listActiveRestaurantOffers(), listRestaurants(1, 20), listSupermarkets(1, 6)])
+      .then(([activeOffers, restaurantPage, supermarketPage]) => {
         setOffers(activeOffers);
         setRestaurants(restaurantPage.items);
+        setSupermarkets(supermarketPage.items);
       })
       .catch(() => {
         setOffers([]);
         setRestaurants([]);
+        setSupermarkets([]);
       });
   }, []);
 
@@ -86,6 +93,16 @@ export function CustomerHomeScreen(props: {
           <View style={styles.filterButton}><Text style={styles.filterText}>≡</Text></View>
         </Pressable>
 
+        <Pressable onPress={props.onBrowseSupermarkets} style={styles.marketHero}>
+          <View style={styles.marketIcon}><Text style={styles.marketEmoji}>🛒</Text></View>
+          <View style={styles.marketCopy}>
+            <Text style={styles.marketEyebrow}>NEW SERVICE</Text>
+            <Text style={styles.marketTitle}>Online supermarket</Text>
+            <Text style={styles.marketDescription}>Search groceries by department, brand or product.</Text>
+          </View>
+          <Text style={styles.marketArrow}>›</Text>
+        </Pressable>
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Offers</Text>
         </View>
@@ -98,22 +115,55 @@ export function CustomerHomeScreen(props: {
           </View>
         ) : (
           offers.map((offer) => (
-            <Pressable key={offer.id} onPress={() => props.onOpenRestaurant(offer.restaurant)} style={styles.offerCard}>
+            <Pressable
+              key={offer.id}
+              onPress={() => {
+                if (offer.restaurantId && offer.restaurantName) {
+                  const target = { id: offer.restaurantId, name: offer.restaurantName };
+                  offer.restaurantBusinessType === "SUPERMARKET"
+                    ? props.onOpenSupermarket(target)
+                    : props.onOpenRestaurant(target);
+                } else {
+                  props.onBrowseRestaurants();
+                }
+              }}
+              style={styles.offerCard}
+            >
               <View style={styles.offerVisual}>
                 {offer.imageUrl ? (
                   <Image resizeMode="cover" source={{ uri: offer.imageUrl }} style={styles.fullImage} />
-                ) : offer.restaurant.logoUrl ? (
-                  <Image resizeMode="contain" source={{ uri: offer.restaurant.logoUrl }} style={styles.offerLogo} />
                 ) : (
                   <Text style={styles.offerEmoji}>%</Text>
                 )}
               </View>
               <View style={styles.offerCopy}>
-                <Text style={styles.offerRestaurant}>{offer.restaurant.name}</Text>
+                <Text style={styles.offerRestaurant}>{offer.restaurantName ?? "TasawaQ-wide offer"}</Text>
                 <Text style={styles.offerTitle}>{offer.title}</Text>
                 {offer.description ? <Text numberOfLines={2} style={styles.offerDescription}>{offer.description}</Text> : null}
-                {offer.discountPercent !== null ? <Text style={styles.offerDiscount}>{offer.discountPercent}% off</Text> : null}
+                <Text style={styles.offerDiscount}>{offerLabel(offer)}</Text>
                 {offer.endsAt ? <Text style={styles.offerExpiry}>Ends {new Date(offer.endsAt).toLocaleDateString()}</Text> : null}
+              </View>
+            </Pressable>
+          ))
+        )}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Supermarkets</Text>
+          <Pressable onPress={props.onBrowseSupermarkets}><Text style={styles.seeAll}>See all</Text></Pressable>
+        </View>
+        {supermarkets === null ? (
+          <ActivityIndicator color={customerTheme.colors.primary} style={styles.loader} />
+        ) : supermarkets.length === 0 ? (
+          <View style={styles.emptyCard}><Text style={styles.emptyText}>Supermarkets will appear here when they open.</Text></View>
+        ) : (
+          supermarkets.map((store) => (
+            <Pressable key={store.id} onPress={() => props.onOpenSupermarket(store)} style={styles.marketStoreCard}>
+              <View style={styles.marketStoreIcon}><Text style={styles.marketStoreEmoji}>🛍️</Text></View>
+              <View style={styles.restaurantInfo}>
+                <Text numberOfLines={1} style={styles.restaurantName}>{store.name}</Text>
+                {store.description ? <Text numberOfLines={2} style={styles.restaurantMeta}>{store.description}</Text> : null}
+                <Text numberOfLines={1} style={styles.restaurantAddress}>{store.addressLine}</Text>
+                <Text style={styles.restaurantOpen}>Open now · Cash on delivery</Text>
               </View>
             </Pressable>
           ))
@@ -144,6 +194,9 @@ export function CustomerHomeScreen(props: {
         )}
 
         <View style={styles.quickActions}>
+          <Pressable onPress={props.onOpenAccount} style={styles.quickButton}>
+            <Text style={styles.quickIcon}>◎</Text><Text style={styles.quickLabel}>حسابي</Text>
+          </Pressable>
           <Pressable onPress={props.onViewOrders} style={styles.quickButton}>
             <Text style={styles.quickIcon}>▤</Text><Text style={styles.quickLabel}>My orders</Text>
           </Pressable>
@@ -162,6 +215,14 @@ export function CustomerHomeScreen(props: {
 
 function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] || "there";
+}
+
+function offerLabel(offer: RestaurantOffer): string {
+  if (offer.type === "FREE_DELIVERY") return "Free delivery";
+  const percent = `${offer.discountPercent ?? 0}% off`;
+  if (offer.type === "DELIVERY_PERCENTAGE") return `${percent} delivery`;
+  if (offer.type === "PRODUCT_PERCENTAGE") return `${percent}${offer.menuItemName ? ` ${offer.menuItemName}` : " selected item"}`;
+  return `${percent} order`;
 }
 
 const styles = StyleSheet.create({
@@ -184,6 +245,14 @@ const styles = StyleSheet.create({
   searchText: { color: "#9A9F9C", flex: 1, fontSize: 14 },
   filterButton: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 11, height: 36, justifyContent: "center", width: 36 },
   filterText: { color: customerTheme.colors.primary, fontSize: 20, fontWeight: "900", transform: [{ rotate: "90deg" }] },
+  marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, borderRadius: 22, flexDirection: "row", marginTop: 18, minHeight: 112, padding: 16, ...customerTheme.shadow },
+  marketIcon: { alignItems: "center", backgroundColor: "#E2F6EA", borderRadius: 18, height: 70, justifyContent: "center", width: 70 },
+  marketEmoji: { fontSize: 35 },
+  marketCopy: { flex: 1, marginLeft: 14 },
+  marketEyebrow: { color: "#A9D7C7", fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
+  marketTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "900", marginTop: 4 },
+  marketDescription: { color: "#D9E9E3", fontSize: 11, lineHeight: 16, marginTop: 4 },
+  marketArrow: { color: "#FFFFFF", fontSize: 31, marginLeft: 8 },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 14, marginTop: 28 },
   sectionTitle: { color: customerTheme.colors.text, fontSize: 20, fontWeight: "900" },
   seeAll: { color: customerTheme.colors.primary, fontSize: 13, fontWeight: "800" },
@@ -203,6 +272,9 @@ const styles = StyleSheet.create({
   offerDiscount: { color: "#FFCBB8", fontSize: 13, fontWeight: "900", marginTop: 9 },
   offerExpiry: { color: "#C8D9D3", fontSize: 10, marginTop: 4 },
   restaurantCard: { backgroundColor: customerTheme.colors.surface, borderRadius: 20, marginBottom: 15, overflow: "hidden", ...customerTheme.shadow },
+  marketStoreCard: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: 20, flexDirection: "row", marginBottom: 15, overflow: "hidden", ...customerTheme.shadow },
+  marketStoreIcon: { alignItems: "center", alignSelf: "stretch", backgroundColor: "#DDEFE4", justifyContent: "center", width: 105 },
+  marketStoreEmoji: { fontSize: 45 },
   restaurantVisual: { alignItems: "center", height: 135, justifyContent: "center", position: "relative" },
   visualOrange: { backgroundColor: "#FFE0C8" },
   visualGreen: { backgroundColor: "#DDEFE4" },

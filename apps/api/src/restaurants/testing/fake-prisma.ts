@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { RestaurantStatus, UserRole } from "../../generated/prisma/client";
+import { BusinessType, RestaurantStatus, UserRole } from "../../generated/prisma/client";
 
 type UserRecord = {
   id: string;
@@ -19,11 +19,14 @@ type RestaurantRecord = {
   id: string;
   ownerUserId: string;
   name: string;
+  businessType: BusinessType;
   description: string | null;
   phone: string;
   status: RestaurantStatus;
   isOpen: boolean;
   addressLine: string;
+  latitude: number | null;
+  longitude: number | null;
   logoUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -47,6 +50,11 @@ type MenuItemRecord = {
   description: string | null;
   priceMinor: number;
   imageUrl: string | null;
+  sku: string | null;
+  brand: string | null;
+  unitLabel: string;
+  stockQuantity: number | null;
+  isFeatured: boolean;
   isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -91,6 +99,7 @@ export class FakeRestaurantPrisma {
   readonly orders: OrderRecord[] = [];
   readonly notifications: NotificationRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
+  readonly offers: any[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly user = {} as any;
@@ -100,8 +109,10 @@ export class FakeRestaurantPrisma {
   readonly order = {} as any;
   readonly notification = {} as any;
   readonly auditLog = {} as any;
+  readonly offer = {} as any;
 
   constructor() {
+    this.offer.findMany = async () => this.offers;
     this.user.findUnique = async ({ where }: any) =>
       this.users.find((user) => (where.phone ? user.phone === where.phone : user.id === where.id)) ?? null;
     this.user.create = async ({ data }: any) => {
@@ -137,12 +148,14 @@ export class FakeRestaurantPrisma {
       this.restaurants.find(
         (restaurant) =>
           (!where.id || restaurant.id === where.id) && (!where.status || restaurant.status === where.status)
+          && (!where.businessType || restaurant.businessType === where.businessType)
       ) ?? null;
     this.restaurant.findMany = async ({ where, skip = 0, take }: any) => {
       const matches = this.restaurants
         .filter(
           (restaurant) =>
             (!where?.status || restaurant.status === where.status) &&
+            (!where?.businessType || restaurant.businessType === where.businessType) &&
             (where?.isOpen === undefined || restaurant.isOpen === where.isOpen)
         )
         .sort((left, right) => left.name.localeCompare(right.name));
@@ -152,6 +165,7 @@ export class FakeRestaurantPrisma {
       this.restaurants.filter(
         (restaurant) =>
           (!where?.status || restaurant.status === where.status) &&
+          (!where?.businessType || restaurant.businessType === where.businessType) &&
           (where?.isOpen === undefined || restaurant.isOpen === where.isOpen)
       ).length;
     this.restaurant.create = async ({ data }: any) => {
@@ -160,11 +174,14 @@ export class FakeRestaurantPrisma {
         id: data.id ?? randomUUID(),
         ownerUserId: data.ownerUserId,
         name: data.name,
+        businessType: data.businessType ?? BusinessType.RESTAURANT,
         description: data.description ?? null,
         phone: data.phone,
         status: data.status ?? RestaurantStatus.PENDING,
         isOpen: data.isOpen ?? false,
         addressLine: data.addressLine,
+        latitude: data.latitude ?? null,
+        longitude: data.longitude ?? null,
         logoUrl: data.logoUrl ?? null,
         createdAt: now,
         updatedAt: now
@@ -179,6 +196,8 @@ export class FakeRestaurantPrisma {
       if (data.description !== undefined) restaurant.description = data.description;
       if (data.addressLine !== undefined) restaurant.addressLine = data.addressLine;
       if (data.logoUrl !== undefined) restaurant.logoUrl = data.logoUrl;
+      if (data.latitude !== undefined) restaurant.latitude = data.latitude;
+      if (data.longitude !== undefined) restaurant.longitude = data.longitude;
       if (data.isOpen !== undefined) restaurant.isOpen = data.isOpen;
       if (data.status !== undefined) restaurant.status = data.status;
       restaurant.updatedAt = new Date();
@@ -232,6 +251,18 @@ export class FakeRestaurantPrisma {
 
     this.menuItem.findUnique = async ({ where }: any) =>
       this.menuItems.find((item) => item.id === where.id) ?? null;
+    this.menuItem.findFirst = async ({ where }: any) => {
+      const item = this.menuItems.find((candidate) =>
+        (!where?.id || typeof where.id !== "string" || candidate.id === where.id) &&
+        (!where?.restaurantId || candidate.restaurantId === where.restaurantId) &&
+        (!where?.sku || candidate.sku === where.sku) &&
+        (!where?.isAvailable || candidate.isAvailable) &&
+        (!where?.id?.not || candidate.id !== where.id.not)
+      );
+      if (!item) return null;
+      if (where?.OR && item.stockQuantity === 0) return null;
+      return item;
+    };
     this.menuItem.findMany = async ({ where }: any) => {
       let items = this.menuItems.filter((item) => item.restaurantId === where.restaurantId);
       if (where.isAvailable !== undefined) items = items.filter((item) => item.isAvailable === where.isAvailable);
@@ -248,6 +279,11 @@ export class FakeRestaurantPrisma {
         description: data.description ?? null,
         priceMinor: data.priceMinor,
         imageUrl: data.imageUrl ?? null,
+        sku: data.sku ?? null,
+        brand: data.brand ?? null,
+        unitLabel: data.unitLabel ?? "item",
+        stockQuantity: data.stockQuantity ?? null,
+        isFeatured: data.isFeatured ?? false,
         isAvailable: data.isAvailable ?? true,
         createdAt: now,
         updatedAt: now
@@ -263,6 +299,11 @@ export class FakeRestaurantPrisma {
       if (data.description !== undefined) item.description = data.description;
       if (data.priceMinor !== undefined) item.priceMinor = data.priceMinor;
       if (data.imageUrl !== undefined) item.imageUrl = data.imageUrl;
+      if (data.sku !== undefined) item.sku = data.sku;
+      if (data.brand !== undefined) item.brand = data.brand;
+      if (data.unitLabel !== undefined) item.unitLabel = data.unitLabel;
+      if (data.stockQuantity !== undefined) item.stockQuantity = data.stockQuantity;
+      if (data.isFeatured !== undefined) item.isFeatured = data.isFeatured;
       if (data.isAvailable !== undefined) item.isAvailable = data.isAvailable;
       item.updatedAt = new Date();
       return item;
@@ -353,11 +394,14 @@ export class FakeRestaurantPrisma {
       id: randomUUID(),
       ownerUserId: randomUUID(),
       name: "Falafel House",
+      businessType: BusinessType.RESTAURANT,
       description: null,
       phone: "+970591234567",
       status: RestaurantStatus.APPROVED,
       isOpen: true,
       addressLine: "Al-Manara Square, Ramallah",
+      latitude: 31.9038,
+      longitude: 35.2034,
       logoUrl: null,
       createdAt: now,
       updatedAt: now,

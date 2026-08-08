@@ -1,11 +1,14 @@
-import type { RestaurantStatus } from "../generated/prisma/enums";
+import type { BusinessType, RestaurantStatus } from "../generated/prisma/enums";
 
 export type RestaurantPublicView = {
   id: string;
   name: string;
+  businessType: BusinessType;
   description: string | null;
   phone: string;
   addressLine: string;
+  latitude: number | null;
+  longitude: number | null;
   logoUrl: string | null;
   isOpen: boolean;
 };
@@ -20,7 +23,17 @@ export type MenuItemPublicView = {
   name: string;
   description: string | null;
   priceMinor: number;
+  effectivePriceMinor: number;
   imageUrl: string | null;
+  sku: string | null;
+  brand: string | null;
+  unitLabel: string;
+  stockQuantity: number | null;
+  isFeatured: boolean;
+  isVariableWeight: boolean;
+  barcode: string | null;
+  reorderLevel: number | null;
+  offer: { id: string; title: string; discountPercent: number; minimumSubtotalMinor: number } | null;
 };
 
 export type MenuCategoryPublicView = {
@@ -35,17 +48,6 @@ export type PublicMenuView = {
   categories: MenuCategoryPublicView[];
 };
 
-export type RestaurantOfferPublicView = {
-  id: string;
-  title: string;
-  description: string | null;
-  discountPercent: number | null;
-  imageUrl: string | null;
-  startsAt: Date;
-  endsAt: Date | null;
-  restaurant: Pick<RestaurantPublicView, "id" | "name" | "logoUrl">;
-};
-
 export type MenuCategoryOwnerView = {
   id: string;
   name: string;
@@ -53,7 +55,7 @@ export type MenuCategoryOwnerView = {
   isActive: boolean;
 };
 
-export type MenuItemOwnerView = MenuItemPublicView & {
+export type MenuItemOwnerView = Omit<MenuItemPublicView, "effectivePriceMinor" | "offer"> & {
   categoryId: string;
   isAvailable: boolean;
 };
@@ -74,4 +76,18 @@ export type AdminRestaurantView = RestaurantProfileView & {
 
 export type AdminMenuItemView = MenuItemOwnerView & {
   categoryName: string;
+};
+
+export type SupermarketProductView = MenuItemPublicView & {
+  categoryId: string;
+  categoryName: string;
+};
+
+export type SupermarketCatalogView = {
+  supermarket: RestaurantPublicView;
+  departments: { id: string; name: string; sortOrder: number; productCount: number }[];
+  products: SupermarketProductView[];
+  page: number;
+  pageSize: number;
+  total: number;
 };

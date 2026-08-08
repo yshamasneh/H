@@ -1,17 +1,21 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
+import { OffersService } from "../offers/offers.service";
 import { PaginationQueryDto, RestaurantRegisterDto } from "./restaurants.dto";
 import { RestaurantsService } from "./restaurants.service";
 
 @ApiTags("restaurants")
 @Controller("restaurants")
 export class RestaurantsController {
-  constructor(private readonly restaurants: RestaurantsService) {}
+  constructor(
+    private readonly restaurants: RestaurantsService,
+    private readonly offers: OffersService
+  ) {}
 
   @Post("register")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @ApiOperation({ summary: "Submit a restaurant application (creates a RESTAURANT owner account)" })
+  @ApiOperation({ summary: "Submit a restaurant or supermarket application (creates a store owner account)" })
   register(@Body() input: RestaurantRegisterDto) {
     return this.restaurants.register(input);
   }
@@ -25,7 +29,7 @@ export class RestaurantsController {
   @Get("offers/active")
   @ApiOperation({ summary: "List active offers for approved, open restaurants" })
   listOffers() {
-    return this.restaurants.listPublicOffers();
+    return this.offers.listPublicOffers();
   }
 
   @Get(":restaurantId")

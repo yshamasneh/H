@@ -72,27 +72,66 @@ enum DeliveryStatus {
   CANCELLED
 }
 
+enum OfferType {
+  PRODUCT_PERCENTAGE
+  ORDER_PERCENTAGE
+  DELIVERY_PERCENTAGE
+  FREE_DELIVERY
+}
+
+enum BusinessType {
+  RESTAURANT
+  SUPERMARKET
+}
+
+enum FulfillmentAdjustmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum InventoryMovementType {
+  ORDER_RESERVATION
+  ORDER_RESTORE
+  FULFILLMENT_RESERVATION
+  FULFILLMENT_RELEASE
+  MANUAL_ADJUSTMENT
+  PURCHASE_RECEIPT
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  RECEIVED
+  CANCELLED
+}
+
 model User {
-  id                  String               @id @default(uuid()) @db.Uuid
-  fullName            String
-  phone               String               @unique
-  email               String?              @unique
-  passwordHash        String
-  role                UserRole
-  phoneVerifiedAt     DateTime?
-  isActive            Boolean              @default(true)
-  tokenVersion        Int                  @default(0)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  refreshSessions     RefreshSession[]
-  passwordResetTokens PasswordResetToken[]
-  restaurant          Restaurant?
-  orders              Order[]
-  orderStatusChanges  OrderStatusHistory[]
-  driverProfile       DriverProfile?
-  deliveriesAsDriver  Delivery[]
-  auditLogs           AuditLog[]
-  notifications       Notification[]
+  id                    String                  @id @default(uuid()) @db.Uuid
+  fullName              String
+  phone                 String                  @unique
+  email                 String?                 @unique
+  passwordHash          String
+  role                  UserRole
+  phoneVerifiedAt       DateTime?
+  isActive              Boolean                 @default(true)
+  tokenVersion          Int                     @default(0)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  refreshSessions       RefreshSession[]
+  passwordResetTokens   PasswordResetToken[]
+  restaurant            Restaurant?
+  orders                Order[]
+  orderStatusChanges    OrderStatusHistory[]
+  driverProfile         DriverProfile?
+  deliveriesAsDriver    Delivery[]
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  offersCreated         Offer[]                 @relation("OfferCreatedBy")
+  fulfillmentProposals  FulfillmentAdjustment[] @relation("FulfillmentProposedBy")
+  inventoryMovements    InventoryMovement[]     @relation("InventoryMovementActor")
+  purchaseOrdersCreated PurchaseOrder[]         @relation("PurchaseOrderCreatedBy")
+  addresses             Address[]
+  pushTokens            PushToken[]
 
   @@index([role, isActive])
 }
@@ -150,43 +189,87 @@ model PasswordResetToken {
   @@index([expiresAt])
 }
 
-model Restaurant {
-  id          String           @id @default(uuid()) @db.Uuid
-  ownerUserId String           @unique @db.Uuid
-  name        String
-  description String?
-  phone       String
-  status      RestaurantStatus @default(PENDING)
-  isOpen      Boolean          @default(false)
+model Address {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  label       String
   addressLine String
-  logoUrl     String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  owner       User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  categories  MenuCategory[]
-  items       MenuItem[]
-  offers      Offer[]
-  orders      Order[]
+  latitude    Float
+  longitude   Float
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([status, isOpen])
+  @@index([userId, isDefault, createdAt])
+}
+
+model PushToken {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  token            String   @unique
+  platform         String
+  isActive         Boolean  @default(true)
+  lastRegisteredAt DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+}
+
+model Restaurant {
+  id                 String              @id @default(uuid()) @db.Uuid
+  ownerUserId        String              @unique @db.Uuid
+  name               String
+  businessType       BusinessType        @default(RESTAURANT)
+  description        String?
+  phone              String
+  status             RestaurantStatus    @default(PENDING)
+  isOpen             Boolean             @default(false)
+  addressLine        String
+  latitude           Float?
+  longitude          Float?
+  logoUrl            String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  owner              User                @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  categories         MenuCategory[]
+  items              MenuItem[]
+  offers             Offer[]
+  orders             Order[]
+  suppliers          Supplier[]
+  purchaseOrders     PurchaseOrder[]
+  inventoryMovements InventoryMovement[]
+
+  @@index([businessType, status, isOpen])
 }
 
 model Offer {
-  id              String     @id @default(uuid()) @db.Uuid
-  restaurantId    String     @db.Uuid
-  title           String
-  description     String?
-  discountPercent Int?
-  imageUrl        String?
-  startsAt        DateTime   @default(now())
-  endsAt          DateTime?
-  isActive        Boolean    @default(true)
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  id                   String      @id @default(uuid()) @db.Uuid
+  type                 OfferType   @default(ORDER_PERCENTAGE)
+  restaurantId         String?     @db.Uuid
+  menuItemId           String?     @db.Uuid
+  createdByUserId      String?     @db.Uuid
+  title                String
+  description          String?
+  discountPercent      Int?
+  minimumSubtotalMinor Int         @default(0)
+  maxDiscountMinor     Int?
+  imageUrl             String?
+  startsAt             DateTime    @default(now())
+  endsAt               DateTime?
+  isActive             Boolean     @default(true)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  restaurant           Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItem             MenuItem?   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  createdBy            User?       @relation("OfferCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([isActive, startsAt, endsAt])
+  @@index([type, isActive, startsAt, endsAt])
   @@index([restaurantId])
+  @@index([menuItemId])
 }
 
 model MenuCategory {
@@ -204,46 +287,65 @@ model MenuCategory {
 }
 
 model MenuItem {
-  id           String       @id @default(uuid()) @db.Uuid
-  restaurantId String       @db.Uuid
-  categoryId   String       @db.Uuid
-  name         String
-  description  String?
-  priceMinor   Int
-  imageUrl     String?
-  isAvailable  Boolean      @default(true)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  category     MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  orderItems   OrderItem[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  restaurantId           String                  @db.Uuid
+  categoryId             String                  @db.Uuid
+  name                   String
+  description            String?
+  priceMinor             Int
+  imageUrl               String?
+  sku                    String?
+  brand                  String?
+  unitLabel              String                  @default("item")
+  stockQuantity          Int?
+  isFeatured             Boolean                 @default(false)
+  isVariableWeight       Boolean                 @default(false)
+  barcode                String?
+  reorderLevel           Int?
+  isAvailable            Boolean                 @default(true)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  restaurant             Restaurant              @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  category               MenuCategory            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  orderItems             OrderItem[]
+  replacementAdjustments FulfillmentAdjustment[] @relation("ReplacementMenuItem")
+  offers                 Offer[]
+  inventoryMovements     InventoryMovement[]
+  purchaseOrderItems     PurchaseOrderItem[]
 
+  @@unique([restaurantId, sku])
+  @@unique([restaurantId, barcode])
   @@index([restaurantId, isAvailable])
   @@index([categoryId])
+  @@index([restaurantId, isFeatured, isAvailable])
 }
 
 model Order {
-  id                  String               @id @default(uuid()) @db.Uuid
-  customerId          String               @db.Uuid
-  restaurantId        String               @db.Uuid
-  status              OrderStatus          @default(PLACED)
-  paymentMethod       OrderPaymentMethod
-  deliveryLabel       String
-  deliveryAddressLine String
-  deliveryLatitude    Float?
-  deliveryLongitude   Float?
-  subtotalMinor       Int
-  deliveryFeeMinor    Int
-  serviceFeeMinor     Int
-  discountMinor       Int                  @default(0)
-  totalMinor          Int
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  customer            User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  restaurant          Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  items               OrderItem[]
-  statusHistory       OrderStatusHistory[]
-  delivery            Delivery?
+  id                     String               @id @default(uuid()) @db.Uuid
+  customerId             String               @db.Uuid
+  restaurantId           String               @db.Uuid
+  status                 OrderStatus          @default(PLACED)
+  paymentMethod          OrderPaymentMethod
+  deliveryLabel          String
+  deliveryAddressLine    String
+  deliveryLatitude       Float?
+  deliveryLongitude      Float?
+  deliveryDistanceMeters Int?
+  subtotalMinor          Int
+  deliveryFeeMinor       Int
+  serviceFeeMinor        Int
+  discountMinor          Int                  @default(0)
+  promotionSnapshot      Json?
+  customerNote           String?
+  totalMinor             Int
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  customer               User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  restaurant             Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items                  OrderItem[]
+  statusHistory          OrderStatusHistory[]
+  delivery               Delivery?
+  inventoryMovements     InventoryMovement[]
 
   @@index([customerId, createdAt])
   @@index([restaurantId, createdAt])
@@ -264,16 +366,112 @@ model OrderStatusHistory {
 }
 
 model OrderItem {
-  id                 String   @id @default(uuid()) @db.Uuid
-  orderId            String   @db.Uuid
-  menuItemId         String   @db.Uuid
-  nameSnapshot       String
-  priceMinorSnapshot Int
-  quantity           Int
-  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem           MenuItem @relation(fields: [menuItemId], references: [id])
+  id                       String                 @id @default(uuid()) @db.Uuid
+  orderId                  String                 @db.Uuid
+  menuItemId               String                 @db.Uuid
+  nameSnapshot             String
+  priceMinorSnapshot       Int
+  quantity                 Int
+  unitLabelSnapshot        String                 @default("item")
+  allowSubstitution        Boolean                @default(false)
+  isVariableWeightSnapshot Boolean                @default(false)
+  order                    Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem                 MenuItem               @relation(fields: [menuItemId], references: [id])
+  fulfillmentAdjustment    FulfillmentAdjustment?
 
   @@index([orderId])
+}
+
+model FulfillmentAdjustment {
+  id                           String                      @id @default(uuid()) @db.Uuid
+  orderItemId                  String                      @unique @db.Uuid
+  replacementMenuItemId        String?                     @db.Uuid
+  proposedByUserId             String                      @db.Uuid
+  replacementNameSnapshot      String?
+  replacementUnitLabelSnapshot String?
+  actualQuantityMilli          Int
+  unitPriceMinor               Int
+  lineTotalMinor               Int
+  status                       FulfillmentAdjustmentStatus @default(PENDING)
+  note                         String?
+  decidedAt                    DateTime?
+  createdAt                    DateTime                    @default(now())
+  updatedAt                    DateTime                    @updatedAt
+  orderItem                    OrderItem                   @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  replacementMenuItem          MenuItem?                   @relation("ReplacementMenuItem", fields: [replacementMenuItemId], references: [id], onDelete: SetNull)
+  proposedBy                   User                        @relation("FulfillmentProposedBy", fields: [proposedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt])
+}
+
+model InventoryMovement {
+  id            String                @id @default(uuid()) @db.Uuid
+  restaurantId  String                @db.Uuid
+  menuItemId    String                @db.Uuid
+  actorUserId   String?               @db.Uuid
+  orderId       String?               @db.Uuid
+  type          InventoryMovementType
+  quantityDelta Int
+  stockAfter    Int
+  reason        String?
+  createdAt     DateTime              @default(now())
+  restaurant    Restaurant            @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItem      MenuItem              @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  actor         User?                 @relation("InventoryMovementActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  order         Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId, createdAt])
+  @@index([menuItemId, createdAt])
+  @@index([orderId])
+}
+
+model Supplier {
+  id             String          @id @default(uuid()) @db.Uuid
+  restaurantId   String          @db.Uuid
+  name           String
+  phone          String?
+  note           String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  restaurant     Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+
+  @@index([restaurantId, isActive, name])
+}
+
+model PurchaseOrder {
+  id              String              @id @default(uuid()) @db.Uuid
+  restaurantId    String              @db.Uuid
+  supplierId      String              @db.Uuid
+  createdByUserId String              @db.Uuid
+  status          PurchaseOrderStatus @default(DRAFT)
+  reference       String?
+  note            String?
+  totalCostMinor  Int                 @default(0)
+  receivedAt      DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  restaurant      Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  supplier        Supplier            @relation(fields: [supplierId], references: [id])
+  createdBy       User                @relation("PurchaseOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  items           PurchaseOrderItem[]
+
+  @@index([restaurantId, status, createdAt])
+  @@index([supplierId])
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(uuid()) @db.Uuid
+  purchaseOrderId String        @db.Uuid
+  menuItemId      String        @db.Uuid
+  quantity        Int
+  unitCostMinor   Int
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id])
+
+  @@unique([purchaseOrderId, menuItemId])
+  @@index([menuItemId])
 }
 
 model DriverProfile {
@@ -282,6 +480,7 @@ model DriverProfile {
   isOnline      Boolean              @default(false)
   lastLatitude  Float?
   lastLongitude Float?
+  lastLocationAt DateTime?
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
   user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)

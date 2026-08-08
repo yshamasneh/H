@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -17,8 +18,15 @@ import { PhoneDto, strongPasswordPattern } from "../auth/auth.dto";
 
 export const restaurantStatusValues = ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"] as const;
 export type RestaurantStatusValue = (typeof restaurantStatusValues)[number];
+export const businessTypeValues = ["RESTAURANT", "SUPERMARKET"] as const;
+export type BusinessTypeValue = (typeof businessTypeValues)[number];
 
 export class RestaurantRegisterDto extends PhoneDto {
+  @ApiPropertyOptional({ enum: businessTypeValues, default: "RESTAURANT" })
+  @IsOptional()
+  @IsIn(businessTypeValues)
+  businessType?: BusinessTypeValue;
+
   @ApiProperty({ example: "Restaurant Owner" })
   @IsString()
   @MinLength(2)
@@ -81,6 +89,20 @@ export class UpdateRestaurantProfileDto {
   @IsString()
   @MaxLength(2048)
   logoUrl?: string;
+
+  @ApiPropertyOptional({ example: 31.9038 })
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ApiPropertyOptional({ example: 35.2034 })
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
 }
 
 export class SetOpenStatusDto {
@@ -153,6 +175,57 @@ export class CreateMenuItemDto {
   @IsString()
   @MaxLength(2048)
   imageUrl?: string;
+
+  @ApiPropertyOptional({ example: "MILK-1L-001" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  sku?: string;
+
+  @ApiPropertyOptional({ example: "Palestine Dairy" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  brand?: string;
+
+  @ApiPropertyOptional({ example: "1 L bottle", default: "item" })
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(60)
+  unitLabel?: string;
+
+  @ApiPropertyOptional({ example: 40, description: "Null means inventory is not tracked." })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10_000_000)
+  stockQuantity?: number | null;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  isFeatured?: boolean;
+
+  @ApiPropertyOptional({ example: false, description: "Allow the store to record the packed weight/quantity before acceptance." })
+  @IsOptional()
+  @IsBoolean()
+  isVariableWeight?: boolean;
+
+  @ApiPropertyOptional({ example: "6251001234567" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  barcode?: string;
+
+  @ApiPropertyOptional({ example: 10 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10_000_000)
+  reorderLevel?: number;
 }
 
 export class UpdateMenuItemDto {
@@ -186,6 +259,57 @@ export class UpdateMenuItemDto {
   @IsString()
   @MaxLength(2048)
   imageUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  sku?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  brand?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(60)
+  unitLabel?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10_000_000)
+  stockQuantity?: number | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isFeatured?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isVariableWeight?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  barcode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10_000_000)
+  reorderLevel?: number | null;
 }
 
 export class SetItemAvailabilityDto {
@@ -222,6 +346,30 @@ export class AdminRestaurantsQueryDto extends PaginationQueryDto {
   @Type(() => Boolean)
   @IsBoolean()
   isOpen?: boolean;
+
+  @ApiPropertyOptional({ enum: businessTypeValues })
+  @IsOptional()
+  @IsIn(businessTypeValues)
+  businessType?: BusinessTypeValue;
+}
+
+export class SupermarketCatalogQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ example: "milk" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  search?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  featured?: boolean;
 }
 
 export class AdminActionReasonDto {

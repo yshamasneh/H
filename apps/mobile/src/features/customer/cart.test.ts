@@ -6,6 +6,7 @@ import {
   cartItemCount,
   cartSubtotalMinor,
   removeCartItem,
+  setCartItemSubstitution,
   setCartItemQuantity,
   startCart
 } from "./cart";
@@ -62,4 +63,13 @@ test("an empty cart belongs to any restaurant, a non-empty cart only to its own"
   const cart = startCart(restaurant, sandwich);
   assert.equal(cartBelongsToRestaurant(cart, "r1"), true);
   assert.equal(cartBelongsToRestaurant(cart, "r2"), false);
+});
+
+test("a grocery line keeps its unit and substitution preference", () => {
+  const cart = startCart(restaurant, { ...sandwich, unitLabel: "1 kg", allowSubstitution: true });
+  assert.equal(cart.items[0].unitLabel, "1 kg");
+  assert.equal(cart.items[0].allowSubstitution, true);
+
+  const updated = setCartItemSubstitution(cart, sandwich.id, false);
+  assert.equal(updated.items[0].allowSubstitution, false);
 });

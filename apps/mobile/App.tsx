@@ -26,8 +26,13 @@ import {
   SignupScreen
 } from "./src/features/auth/screens";
 import {
+  DriverRegistrationScreen,
+  RestaurantRegistrationScreen
+} from "./src/features/auth/role-registration-screens";
+import {
   addCartItem,
   removeCartItem,
+  setCartItemSubstitution,
   setCartItemQuantity,
   startCart,
   type Cart
@@ -48,21 +53,29 @@ import {
   goToAdminDrivers,
   goToAdminOrderDetail,
   goToAdminOrders,
+  goToAdminOffers,
   goToAdminRestaurantDetail,
   goToAdminRestaurants,
   goToAdminUsers,
+  goToAccount,
   goToCart,
   goToCheckout,
   goToDeliveryDetail,
   goToDriverHome,
+  goToDriverSignup,
   goToLogin,
   goToNotifications,
   goToOrderDetail,
   goToOrderHistory,
+  goToRestaurantManagement,
   goToRestaurantMenu,
   goToRestaurantOrderDetail,
   goToRestaurantOrders,
+  goToRestaurantSignup,
   goToRestaurants,
+  goToSupermarketCatalog,
+  goToSupermarketProduct,
+  goToSupermarkets,
   goToSignup,
   homeForUser,
   initialScreen,
@@ -83,7 +96,15 @@ import { AdminDriversScreen } from "./src/features/admin/drivers-screen";
 import { AdminOrderDetailScreen, AdminOrdersScreen } from "./src/features/admin/orders-screen";
 import { AdminUsersScreen } from "./src/features/admin/users-screen";
 import { AdminAuditLogScreen } from "./src/features/admin/audit-log-screen";
+import { AdminOffersScreen } from "./src/features/admin/offers-screen";
 import { CustomerHomeScreen } from "./src/features/customer/home-screen";
+import { AccountScreen } from "./src/features/customer/account-screen";
+import { RestaurantManagementScreen } from "./src/features/restaurant/management-screen";
+import {
+  SupermarketCatalogScreen,
+  SupermarketListScreen,
+  SupermarketProductScreen
+} from "./src/features/customer/supermarket-screens";
 
 const splashDurationMs = 3000;
 const logo = require("./assets/logo/TasawaQ.png");
@@ -157,7 +178,10 @@ function TasawaQApp() {
     setScreen(goToLogin());
   }
 
-  function handleAddToCart(restaurant: Pick<RestaurantSummary, "id" | "name">, item: MenuItemSummary) {
+  function handleAddToCart(
+    restaurant: Pick<RestaurantSummary, "id" | "name">,
+    item: MenuItemSummary & { allowSubstitution?: boolean }
+  ) {
     if (cart && cart.restaurantId !== restaurant.id) {
       const confirmationMessage = `Your cart has items from ${cart.restaurantName}. Adding an item from ${restaurant.name} will clear it and start a new order.`;
       if (Platform.OS === "web") {
@@ -205,6 +229,10 @@ function TasawaQApp() {
     setCart((current) => (current ? removeCartItem(current, menuItemId) : current));
   }
 
+  function handleToggleCartItemSubstitution(menuItemId: string, allowSubstitution: boolean) {
+    setCart((current) => current ? setCartItemSubstitution(current, menuItemId, allowSubstitution) : current);
+  }
+
   if (isSplashVisible) {
     return (
       <SafeAreaView style={styles.splashScreen}>
@@ -236,7 +264,9 @@ function TasawaQApp() {
         <LoginScreen
           notice={screen.notice}
           onAuthenticated={handleAuthenticated}
+          onDriverSignup={(prefill) => setScreen(goToDriverSignup(prefill))}
           onForgotPassword={(prefill) => setScreen({ name: "forgot-password", prefill })}
+          onRestaurantSignup={(prefill) => setScreen(goToRestaurantSignup(prefill))}
           onSignup={(prefill) => setScreen(goToSignup(prefill))}
           prefill={screen.prefill}
         />
@@ -247,6 +277,22 @@ function TasawaQApp() {
           onForgotPassword={(prefill) => setScreen({ name: "forgot-password", prefill })}
           onLogin={(prefill) => setScreen(goToLogin(prefill))}
           onOtpRequested={(input, result) => setScreen(signupRequestToOtp(input, result))}
+          prefill={screen.prefill}
+        />
+      );
+    case "restaurant-signup":
+      return (
+        <RestaurantRegistrationScreen
+          onBack={(prefill) => setScreen(goToLogin(prefill))}
+          onRegistered={(prefill, notice) => setScreen(goToLogin(prefill, notice))}
+          prefill={screen.prefill}
+        />
+      );
+    case "driver-signup":
+      return (
+        <DriverRegistrationScreen
+          onBack={(prefill) => setScreen(goToLogin(prefill))}
+          onRegistered={(prefill, notice) => setScreen(goToLogin(prefill, notice))}
           prefill={screen.prefill}
         />
       );
@@ -290,9 +336,12 @@ function TasawaQApp() {
           <CustomerHomeScreen
             notice={screen.notice}
             onBrowseRestaurants={() => setScreen(goToRestaurants(screen.user))}
+            onBrowseSupermarkets={() => setScreen(goToSupermarkets(screen.user))}
             onLogout={handleLogout}
+            onOpenAccount={() => setScreen(goToAccount(screen.user))}
             onOpenNotifications={() => setScreen(goToNotifications(screen.user))}
             onOpenRestaurant={(restaurant) => setScreen(goToRestaurantMenu(screen.user, restaurant))}
+            onOpenSupermarket={(supermarket) => setScreen(goToSupermarketCatalog(screen.user, supermarket))}
             onViewOrders={() => setScreen(goToOrderHistory(screen.user))}
             user={screen.user}
           />
@@ -305,10 +354,24 @@ function TasawaQApp() {
           onManageOrders={
             screen.user.role === "RESTAURANT" ? () => setScreen(goToRestaurantOrders(screen.user)) : undefined
           }
+          onManageRestaurant={
+            screen.user.role === "RESTAURANT"
+              ? () => setScreen(goToRestaurantManagement(screen.user))
+              : undefined
+          }
           onOpenDriverDashboard={
             screen.user.role === "DRIVER" ? () => setScreen(goToDriverHome(screen.user)) : undefined
           }
           onOpenNotifications={() => setScreen(goToNotifications(screen.user))}
+          user={screen.user}
+        />
+      );
+    case "account":
+      return (
+        <AccountScreen
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onDeleted={handleLogout}
+          onProfileUpdated={(user) => setScreen(goToAccount(user))}
           user={screen.user}
         />
       );
@@ -332,6 +395,43 @@ function TasawaQApp() {
           restaurantName={screen.restaurantName}
         />
       );
+    case "supermarkets":
+      return (
+        <SupermarketListScreen
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onOpenSupermarket={(supermarket) => setScreen(goToSupermarketCatalog(screen.user, supermarket))}
+        />
+      );
+    case "supermarket-catalog":
+      return (
+        <SupermarketCatalogScreen
+          cart={cart}
+          onAddItem={(item) => handleAddToCart({ id: screen.supermarketId, name: screen.supermarketName }, item)}
+          onBack={() => setScreen(goToSupermarkets(screen.user))}
+          onOpenProduct={(productId) => setScreen(goToSupermarketProduct(
+            screen.user,
+            { id: screen.supermarketId, name: screen.supermarketName },
+            productId
+          ))}
+          onViewCart={() => setScreen(goToCart(screen.user))}
+          supermarketId={screen.supermarketId}
+          supermarketName={screen.supermarketName}
+        />
+      );
+    case "supermarket-product":
+      return (
+        <SupermarketProductScreen
+          cart={cart}
+          onAddItem={(item) => handleAddToCart({ id: screen.supermarketId, name: screen.supermarketName }, item)}
+          onBack={() => setScreen(goToSupermarketCatalog(
+            screen.user,
+            { id: screen.supermarketId, name: screen.supermarketName }
+          ))}
+          onViewCart={() => setScreen(goToCart(screen.user))}
+          productId={screen.productId}
+          supermarketId={screen.supermarketId}
+        />
+      );
     case "cart":
       return (
         <CartScreen
@@ -341,6 +441,7 @@ function TasawaQApp() {
           onDecrement={handleDecrementCartItem}
           onIncrement={handleIncrementCartItem}
           onRemove={handleRemoveCartItem}
+          onToggleSubstitution={handleToggleCartItemSubstitution}
         />
       );
     case "checkout":
@@ -380,6 +481,8 @@ function TasawaQApp() {
           onOpenOrder={(orderId) => setScreen(goToRestaurantOrderDetail(screen.user, orderId))}
         />
       );
+    case "restaurant-management":
+      return <RestaurantManagementScreen onBack={() => setScreen(homeForUser(screen.user))} />;
     case "restaurant-order-detail":
       return (
         <RestaurantOrderDetailScreen
@@ -405,12 +508,15 @@ function TasawaQApp() {
           onDrivers={() => setScreen(goToAdminDrivers(screen.user))}
           onLogout={handleLogout}
           onNotifications={() => setScreen(goToNotifications(screen.user))}
+          onOffers={() => setScreen(goToAdminOffers(screen.user))}
           onOrders={() => setScreen(goToAdminOrders(screen.user))}
           onRestaurants={() => setScreen(goToAdminRestaurants(screen.user))}
           onUsers={() => setScreen(goToAdminUsers(screen.user))}
           user={screen.user}
         />
       );
+    case "admin-offers":
+      return <AdminOffersScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "admin-restaurants":
       return (
         <AdminRestaurantsScreen

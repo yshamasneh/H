@@ -8,16 +8,21 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRealtimeEvent } from "../../core/socket";
+import { useOrderRealtime, useRealtimeEvent } from "../../core/socket";
 import {
   ApiError,
   getRestaurantOrder,
+  listRestaurantMenuItems,
   listRestaurantOrders,
+  proposeOrderItemFulfillment,
   updateOrderStatus,
+  type MenuItemOwner,
   type OrderDetail,
+  type OrderItemView,
   type OrderStatusValue,
   type RestaurantOrderStatusAction
 } from "../../core/api";
@@ -57,6 +62,7 @@ export function RestaurantOrdersScreen(props: RestaurantOrdersScreenProps) {
 
   useRealtimeEvent("order.created", () => void load());
   useRealtimeEvent("order.status.changed", () => void load());
+  useRealtimeEvent("order.fulfillment.changed", () => void load());
 
   async function refresh() {
     setRefreshing(true);
@@ -111,9 +117,11 @@ type RestaurantOrderDetailScreenProps = {
 
 export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenProps) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [menuItems, setMenuItems] = useState<MenuItemOwner[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actingOn, setActingOn] = useState<RestaurantOrderStatusAction | null>(null);
+  const [proposingFor, setProposingFor] = useState<string | null>(null);
 
   async function load() {
     setError(null);
@@ -123,7 +131,12 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
         setError("Your session has expired. Please log in again.");
         return;
       }
-      setOrder(await getRestaurantOrder(accessToken, props.orderId));
+      const [nextOrder, nextMenuItems] = await Promise.all([
+        getRestaurantOrder(accessToken, props.orderId),
+        listRestaurantMenuItems(accessToken)
+      ]);
+      setOrder(nextOrder);
+      setMenuItems(nextMenuItems);
     } catch (requestError) {
       setError(readError(requestError));
     }
@@ -133,10 +146,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
     void load();
   }, [props.orderId]);
 
-  useRealtimeEvent("order.status.changed", (payload: any) => {
-    if (payload?.orderId === props.orderId) void load();
-  });
-  useRealtimeEvent("delivery.status.changed", () => void load());
+  useOrderRealtime(props.orderId, () => void load());
 
   async function performAction(action: RestaurantOrderStatusAction) {
     setActionError(null);
@@ -153,6 +163,26 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
       setActionError(readError(requestError));
     } finally {
       setActingOn(null);
+    }
+  }
+
+  async function proposeFulfillment(
+    orderItemId: string,
+    input: { replacementMenuItemId?: string; actualQuantityMilli?: number; note?: string }
+  ) {
+    setActionError(null);
+    setProposingFor(orderItemId);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setActionError("Your session has expired. Please log in again.");
+        return;
+      }
+      setOrder(await proposeOrderItemFulfillment(accessToken, props.orderId, orderItemId, input));
+    } catch (requestError) {
+      setActionError(readError(requestError));
+    } finally {
+      setProposingFor(null);
     }
   }
 
@@ -176,11 +206,24 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
               <StatusBadge status={order.status} />
             </View>
             {order.items.map((item) => (
-              <View key={item.id} style={styles.summaryRow}>
-                <Text style={styles.summaryRowLabel}>
-                  {item.quantity} x {item.nameSnapshot}
-                </Text>
-                <Text style={styles.summaryRowValue}>{formatPrice(item.lineTotalMinor)}</Text>
+              <View key={item.id} style={styles.orderItemBlock}>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryRowLabel}>
+                    {item.quantity} x {item.nameSnapshot} / {item.unitLabelSnapshot}
+                    {item.allowSubstitution ? " / replacement allowed" : ""}
+                  </Text>
+                  <Text style={styles.summaryRowValue}>{formatPrice(item.lineTotalMinor)}</Text>
+                </View>
+                {item.fulfillmentAdjustment ? <FulfillmentSummary item={item} /> : null}
+                {order.status === "PLACED" && item.fulfillmentAdjustment?.status !== "APPROVED" &&
+                (item.allowSubstitution || item.isVariableWeightSnapshot) ? (
+                  <FulfillmentEditor
+                    busy={proposingFor === item.id}
+                    item={item}
+                    menuItems={menuItems}
+                    onSubmit={(input) => proposeFulfillment(item.id, input)}
+                  />
+                ) : null}
               </View>
             ))}
             <View style={styles.summaryDivider} />
@@ -216,6 +259,98 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
         </ScrollView>
       )}
     </SafeAreaView>
+  );
+}
+
+function FulfillmentSummary(props: { item: OrderItemView }) {
+  const adjustment = props.item.fulfillmentAdjustment!;
+  const proposedName = adjustment.replacementNameSnapshot ?? props.item.nameSnapshot;
+  return (
+    <View style={styles.fulfillmentSummary}>
+      <Text style={styles.fulfillmentTitle}>Fulfillment proposal: {adjustment.status}</Text>
+      <Text style={styles.fulfillmentText}>
+        {proposedName} / {(adjustment.actualQuantityMilli / 1_000).toFixed(3)} {adjustment.replacementUnitLabelSnapshot ?? props.item.unitLabelSnapshot}
+      </Text>
+      <Text style={styles.fulfillmentText}>Proposed line total: {formatPrice(adjustment.lineTotalMinor)}</Text>
+      {adjustment.note ? <Text style={styles.fulfillmentNote}>{adjustment.note}</Text> : null}
+    </View>
+  );
+}
+
+function FulfillmentEditor(props: {
+  item: OrderItemView;
+  menuItems: MenuItemOwner[];
+  busy: boolean;
+  onSubmit: (input: { replacementMenuItemId?: string; actualQuantityMilli?: number; note?: string }) => Promise<void>;
+}) {
+  const [replacementMenuItemId, setReplacementMenuItemId] = useState("");
+  const [packedQuantity, setPackedQuantity] = useState(String(props.item.quantity));
+  const [note, setNote] = useState("");
+  const alternatives = props.menuItems.filter(
+    (candidate) => candidate.id !== props.item.menuItemId && candidate.isAvailable &&
+      (candidate.stockQuantity === null || candidate.stockQuantity > 0)
+  );
+  const replacement = alternatives.find((candidate) => candidate.id === replacementMenuItemId);
+  const supportsVariableQuantity = replacement?.isVariableWeight ?? props.item.isVariableWeightSnapshot;
+  const packedQuantityNumber = Number(packedQuantity.replace(",", "."));
+  const quantityIsValid = Number.isFinite(packedQuantityNumber) &&
+    packedQuantityNumber >= props.item.quantity * 0.5 && packedQuantityNumber <= props.item.quantity * 1.5;
+  const canPropose = Boolean(replacementMenuItemId || props.item.isVariableWeightSnapshot) &&
+    (!supportsVariableQuantity || quantityIsValid);
+
+  return (
+    <View style={styles.fulfillmentEditor}>
+      <Text style={styles.fulfillmentTitle}>
+        {props.item.fulfillmentAdjustment?.status === "REJECTED" ? "Revise fulfillment" : "Need a customer decision?"}
+      </Text>
+      {props.item.allowSubstitution ? (
+        <>
+          <Text style={styles.editorLabel}>Replacement product (optional)</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.replacementPicker}>
+            <Pressable
+              onPress={() => setReplacementMenuItemId("")}
+              style={[styles.replacementChip, !replacementMenuItemId && styles.replacementChipActive]}
+            >
+              <Text style={[styles.replacementChipText, !replacementMenuItemId && styles.replacementChipTextActive]}>Original product</Text>
+            </Pressable>
+            {alternatives.map((candidate) => (
+              <Pressable
+                key={candidate.id}
+                onPress={() => setReplacementMenuItemId(candidate.id)}
+                style={[styles.replacementChip, replacementMenuItemId === candidate.id && styles.replacementChipActive]}
+              >
+                <Text style={[styles.replacementChipText, replacementMenuItemId === candidate.id && styles.replacementChipTextActive]}>
+                  {candidate.name} / {formatPrice(candidate.priceMinor)}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
+      {supportsVariableQuantity ? (
+        <>
+          <Text style={styles.editorLabel}>Actual packed quantity (50%-150% of requested)</Text>
+          <TextInput
+            keyboardType="decimal-pad"
+            onChangeText={setPackedQuantity}
+            style={styles.editorInput}
+            value={packedQuantity}
+          />
+        </>
+      ) : null}
+      <Text style={styles.editorLabel}>Note for the customer (optional)</Text>
+      <TextInput onChangeText={setNote} style={styles.editorInput} value={note} />
+      <ActionButton
+        disabled={!canPropose}
+        label={props.item.fulfillmentAdjustment?.status === "PENDING" ? "Replace pending proposal" : "Send for customer review"}
+        loading={props.busy}
+        onPress={() => void props.onSubmit({
+          replacementMenuItemId: replacementMenuItemId || undefined,
+          actualQuantityMilli: supportsVariableQuantity ? Math.round(packedQuantityNumber * 1_000) : undefined,
+          note: note.trim() || undefined
+        })}
+      />
+    </View>
   );
 }
 
@@ -291,15 +426,16 @@ function ErrorText({ message }: { message: string | null }) {
   return <Text style={styles.inlineErrorText}>{message}</Text>;
 }
 
-function ActionButton(props: { label: string; loading?: boolean; destructive?: boolean; onPress: () => void }) {
+function ActionButton(props: { label: string; loading?: boolean; disabled?: boolean; destructive?: boolean; onPress: () => void }) {
   return (
     <Pressable
-      disabled={props.loading}
+      disabled={props.loading || props.disabled}
       onPress={props.onPress}
       style={({ pressed }) => [
         styles.actionButton,
         props.destructive && styles.actionButtonDestructive,
-        (pressed || props.loading) && styles.buttonPressed
+        (pressed || props.loading) && styles.buttonPressed,
+        props.disabled && styles.buttonDisabled
       ]}
     >
       {props.loading ? (
@@ -370,6 +506,7 @@ const styles = StyleSheet.create({
     padding: 16
   },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  orderItemBlock: { borderBottomColor: "#E2E8F0", borderBottomWidth: 1, paddingBottom: 10, paddingTop: 6 },
   summaryRowLabel: { color: "#475569", flex: 1, fontSize: 14, paddingRight: 8 },
   summaryRowValue: { color: "#0F172A", fontSize: 14, fontWeight: "600" },
   summaryRowLabelBold: { color: "#0F172A", fontSize: 15, fontWeight: "800" },
@@ -391,6 +528,19 @@ const styles = StyleSheet.create({
   actionButtonDestructive: { backgroundColor: "#B91C1C" },
   actionButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
   buttonPressed: { opacity: 0.85 },
+  buttonDisabled: { opacity: 0.45 },
+  fulfillmentSummary: { backgroundColor: "#F8FAFC", borderRadius: 10, marginTop: 6, padding: 10 },
+  fulfillmentEditor: { backgroundColor: "#F0FDFA", borderRadius: 12, marginTop: 10, padding: 12 },
+  fulfillmentTitle: { color: "#0F766E", fontSize: 12, fontWeight: "900", marginBottom: 5 },
+  fulfillmentText: { color: "#334155", fontSize: 11, lineHeight: 17 },
+  fulfillmentNote: { color: "#475569", fontSize: 11, fontStyle: "italic", marginTop: 4 },
+  editorLabel: { color: "#334155", fontSize: 11, fontWeight: "800", marginBottom: 5, marginTop: 7 },
+  editorInput: { backgroundColor: "#FFFFFF", borderColor: "#CCFBF1", borderRadius: 10, borderWidth: 1, color: "#0F172A", marginBottom: 5, minHeight: 42, paddingHorizontal: 11 },
+  replacementPicker: { marginBottom: 4 },
+  replacementChip: { backgroundColor: "#FFFFFF", borderColor: "#CCFBF1", borderRadius: 999, borderWidth: 1, marginRight: 7, paddingHorizontal: 10, paddingVertical: 8 },
+  replacementChipActive: { backgroundColor: "#0F766E", borderColor: "#0F766E" },
+  replacementChipText: { color: "#475569", fontSize: 10, fontWeight: "800" },
+  replacementChipTextActive: { color: "#FFFFFF" },
   footerNote: { color: "#64748B", fontSize: 13, marginTop: 6, textAlign: "center" },
   errorBox: { alignItems: "center" },
   errorText: { color: "#B91C1C", fontSize: 14, lineHeight: 20, textAlign: "center" },

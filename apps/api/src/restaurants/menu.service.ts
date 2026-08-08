@@ -56,6 +56,8 @@ export class MenuService {
 
   async createItem(restaurantId: string, input: CreateMenuItemDto): Promise<MenuItemOwnerView> {
     await this.requireOwnCategory(restaurantId, input.categoryId);
+    await this.assertSkuAvailable(restaurantId, input.sku);
+    await this.assertBarcodeAvailable(restaurantId, input.barcode);
     const item = await this.prisma.menuItem.create({
       data: {
         restaurantId,
@@ -63,7 +65,15 @@ export class MenuService {
         name: input.name.trim(),
         description: input.description?.trim() || null,
         priceMinor: input.priceMinor,
-        imageUrl: input.imageUrl || null
+        imageUrl: input.imageUrl || null,
+        sku: input.sku?.trim() || null,
+        brand: input.brand?.trim() || null,
+        unitLabel: input.unitLabel?.trim() || "item",
+        stockQuantity: input.stockQuantity ?? null,
+        isFeatured: input.isFeatured ?? false,
+        isVariableWeight: input.isVariableWeight ?? false,
+        barcode: input.barcode?.trim() || null,
+        reorderLevel: input.reorderLevel ?? null
       }
     });
     return toItemView(item);
@@ -74,6 +84,8 @@ export class MenuService {
     if (input.categoryId) {
       await this.requireOwnCategory(restaurantId, input.categoryId);
     }
+    await this.assertSkuAvailable(restaurantId, input.sku, item.id);
+    await this.assertBarcodeAvailable(restaurantId, input.barcode, item.id);
     const updated = await this.prisma.menuItem.update({
       where: { id: item.id },
       data: {
@@ -81,7 +93,15 @@ export class MenuService {
         name: input.name?.trim(),
         description: input.description !== undefined ? input.description.trim() || null : undefined,
         priceMinor: input.priceMinor,
-        imageUrl: input.imageUrl !== undefined ? input.imageUrl || null : undefined
+        imageUrl: input.imageUrl !== undefined ? input.imageUrl || null : undefined,
+        sku: input.sku !== undefined ? input.sku.trim() || null : undefined,
+        brand: input.brand !== undefined ? input.brand.trim() || null : undefined,
+        unitLabel: input.unitLabel?.trim(),
+        stockQuantity: input.stockQuantity,
+        isFeatured: input.isFeatured,
+        isVariableWeight: input.isVariableWeight,
+        barcode: input.barcode !== undefined ? input.barcode.trim() || null : undefined,
+        reorderLevel: input.reorderLevel
       }
     });
     return toItemView(updated);
@@ -112,6 +132,28 @@ export class MenuService {
     }
     return item;
   }
+
+  private async assertSkuAvailable(restaurantId: string, sku: string | undefined, excludedItemId?: string): Promise<void> {
+    const normalized = sku?.trim();
+    if (!normalized) return;
+    const existing = await this.prisma.menuItem.findFirst({
+      where: { restaurantId, sku: normalized, id: excludedItemId ? { not: excludedItemId } : undefined }
+    });
+    if (existing) {
+      throw new ApiException(409, "MENU_ITEM_SKU_EXISTS", "This SKU is already used by another product in this store.");
+    }
+  }
+
+  private async assertBarcodeAvailable(restaurantId: string, barcode: string | undefined, excludedItemId?: string): Promise<void> {
+    const normalized = barcode?.trim();
+    if (!normalized) return;
+    const existing = await this.prisma.menuItem.findFirst({
+      where: { restaurantId, barcode: normalized, id: excludedItemId ? { not: excludedItemId } : undefined }
+    });
+    if (existing) {
+      throw new ApiException(409, "MENU_ITEM_BARCODE_EXISTS", "This barcode is already used by another product in this store.");
+    }
+  }
 }
 
 function toCategoryView(category: MenuCategory): MenuCategoryOwnerView {
@@ -126,6 +168,14 @@ function toItemView(item: MenuItem): MenuItemOwnerView {
     description: item.description,
     priceMinor: item.priceMinor,
     imageUrl: item.imageUrl,
+    sku: item.sku,
+    brand: item.brand,
+    unitLabel: item.unitLabel,
+    stockQuantity: item.stockQuantity,
+    isFeatured: item.isFeatured,
+    isVariableWeight: item.isVariableWeight,
+    barcode: item.barcode,
+    reorderLevel: item.reorderLevel,
     isAvailable: item.isAvailable
   };
 }

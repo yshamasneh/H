@@ -4,8 +4,14 @@ import {
   accountNotFoundToSignup,
   authResultToHome,
   forgotRequestToOtp,
+  goToDriverSignup,
+  goToRestaurantManagement,
   goToRestaurantMenu,
+  goToRestaurantSignup,
   goToRestaurants,
+  goToSupermarketCatalog,
+  goToSupermarketProduct,
+  goToSupermarkets,
   goToSignup,
   homeForUser,
   resetOtpToNewPassword,
@@ -67,6 +73,11 @@ test("successful customer authentication navigates to Customer Home", () => {
   assert.equal(screen.name === "home" && screen.user.role, "CUSTOMER");
 });
 
+test("login exposes restaurant and driver registration routes", () => {
+  assert.deepEqual(goToRestaurantSignup(prefill), { name: "restaurant-signup", prefill });
+  assert.deepEqual(goToDriverSignup(prefill), { name: "driver-signup", prefill });
+});
+
 test("successful admin authentication opens the in-app admin dashboard", () => {
   const screen = authResultToHome({
     accessToken: "access",
@@ -97,4 +108,19 @@ test("opening a restaurant navigates to its menu with the current user", () => {
 test("leaving restaurant browsing returns to Home for the same user", () => {
   const screen = homeForUser(customer);
   assert.deepEqual(screen, { name: "home", user: customer });
+});
+
+test("customers can navigate through supermarket catalog and product details", () => {
+  assert.deepEqual(goToSupermarkets(customer), { name: "supermarkets", user: customer });
+  const catalog = goToSupermarketCatalog(customer, { id: "s1", name: "Fresh Market" });
+  assert.equal(catalog.name, "supermarket-catalog");
+  assert.equal(catalog.supermarketId, "s1");
+  const product = goToSupermarketProduct(customer, { id: "s1", name: "Fresh Market" }, "p1");
+  assert.equal(product.name, "supermarket-product");
+  assert.equal(product.productId, "p1");
+});
+
+test("restaurant owners can navigate to profile and menu management", () => {
+  const owner = { id: "owner", fullName: "Owner", phone: "+970591234568", role: "RESTAURANT" as const };
+  assert.deepEqual(goToRestaurantManagement(owner), { name: "restaurant-management", user: owner });
 });

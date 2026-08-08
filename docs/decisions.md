@@ -151,3 +151,43 @@ Structured JSON logging, request correlation, Prometheus text, liveness/readines
 ## 2026-08-06: Phase 8 — Release candidate, not a fictitious store launch
 
 The repository now contains version/build metadata, EAS preview/production profiles, hardened Android release settings, a 1024×1024 icon master, bilingual store copy, policy drafts, and a closed-test/go-live checklist. It does not claim that TestFlight or Google closed testing happened: those actions require operator store accounts, legal identity, signing credentials, real provider endpoints, screenshots from staging, and human sign-off. `0.8.0` intentionally identifies this as the release candidate until those external gates are recorded.
+
+## 2026-08-08: Phase 9 — Finish existing role journeys before marketplace expansion
+
+Phase 9 deliberately uses the already-implemented restaurant/driver registration and restaurant profile/menu endpoints instead of creating parallel client-only flows. Applicants return to Login rather than receiving credentials from a registration response; authentication remains exclusively owned by `/auth/login`, while server approval rules continue to decide when a restaurant is public or a driver can work.
+
+Order events are scoped to `order:{id}` rooms, so displaying a detail screen without emitting `order.subscribe` could never receive the corresponding order/delivery events. The shared client hook now performs that subscription and treats all events as invalidation signals only. No socket payload becomes authoritative application state.
+
+The Phase 9 E2E test is opt-in locally because it owns real rows in the configured database. CI enables it only after replaying migrations against its disposable PostgreSQL service. Its fixed, isolated phone range is deleted before and after the test, and no production database should ever be supplied to this command.
+
+The product owner confirmed cash on delivery as a permanent scope decision, not a temporary gateway placeholder. Future pricing work therefore focuses on authoritative location-based delivery fees. Supermarket/catalog support and product/delivery promotions are separate upcoming domain phases so their data model and funding/stacking rules can be agreed before migration code is written.
+
+## 2026-08-08: Phase 10 — Admin owns promotions and the server owns every total
+
+Restaurants have no offer-write endpoint. An authenticated administrator creates, schedules, pauses, and scopes campaigns, and each mutation receives an `AuditLog` row. This matches the requested operational ownership and prevents restaurants from publishing unfunded discounts.
+
+Promotions do not stack freely: for merchandise, the engine compares the aggregate of each line's best product offer with the best whole-order offer and keeps the larger result; it then combines that with only the best delivery offer. This is predictable for customers, bounds campaign exposure, and still permits the requested “item plus delivery” campaign combination. Orders store the winning offer ids/titles/types/amounts as a JSON snapshot so history remains explainable after campaigns change.
+
+Distance pricing is computed from restaurant and checkout coordinates with Haversine geometry, without introducing an unselected maps vendor. The customer receives a quote before confirmation, but order creation recalculates the same rules inside its transaction. Environment configuration owns the minimum, included radius, per-started-kilometer rate, maximum range, and service fee. Haversine is explicitly an interim straight-line distance, not a road-routing claim.
+
+The app requests foreground location only after an explicit user action. The restaurant pin is saved on the restaurant; the customer destination and computed distance are saved with the order. Background/continuous driver tracking remains out of scope.
+
+## 2026-08-08: Phase 11 — Supermarkets reuse the order pipeline but own a catalog boundary
+
+Restaurants and supermarkets use the same owner role, approval lifecycle, store location, cash order, pricing, promotions, delivery assignment, and notifications. A `BusinessType` discriminator separates public restaurant routes from public supermarket routes, avoiding a second copy of security-sensitive order infrastructure while ensuring grocery stores do not appear in restaurant browsing.
+
+Inventory is optional per product. `stockQuantity = null` means the operator deliberately does not track it; an integer means the API must reserve it atomically during order creation. Cancellation and rejection restore only tracked rows. Selling units, substitution consent, product names, and prices are snapshotted on order items so historical fulfillment instructions remain explainable after catalog edits.
+
+“Allow substitution” is a fulfillment preference, not authority for silent automated repricing. Phase 11 records and displays it to the store, but does not choose a replacement, charge a different total, or modify the placed order. Variable-weight pricing and replacement approval remain deferred until their customer-confirmation and reconciliation rules are specified.
+
+## 2026-08-08: Phase 12 — Fulfillment changes require an explicit customer decision
+
+A store proposal never silently mutates the placed line. Replacement eligibility comes from the line's immutable consent snapshot; the proposed product name, unit, unit price, precise quantity, and line total are snapshotted for review. Every proposal is `PENDING` until the ordering customer approves or rejects it, and `PLACED -> ACCEPTED` is blocked while any proposal remains pending.
+
+Variable quantities use thousandths for pricing but the existing stock counter remains whole selling units. The reservation therefore rounds up conservatively. Extra units are reserved before review, released on rejection, and the final approved reservation is restored on cancellation. Existing promotion discount snapshots remain fixed; the subtotal and cash total change by the approved line difference, preserving the campaign decision shown when the order was placed.
+
+## 2026-08-08: Phase 13 — Inventory history is append-only and receiving is transactional
+
+Current stock stays on `MenuItem` for fast catalog/order checks, while every tracked delta writes an `InventoryMovement` with its resulting balance and source. Manual adjustments require a human reason and audit entry. Conditional updates prevent an adjustment from overwriting a concurrent order reservation.
+
+Purchase orders are intentionally operational rather than accounting documents: draft, received, or cancelled; supplier, reference/note, lines, and unit costs. A guarded draft-to-received transition, all stock increments, movement rows, and the audit record occur in one database transaction. Multi-location bins, invoices, payments, and vendor integrations are not implied by this model.

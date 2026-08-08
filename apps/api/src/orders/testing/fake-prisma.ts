@@ -1,12 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { DeliveryStatus, OrderPaymentMethod, OrderStatus, RestaurantStatus } from "../../generated/prisma/client";
+import {
+  BusinessType,
+  DeliveryStatus,
+  FulfillmentAdjustmentStatus,
+  OrderPaymentMethod,
+  OrderStatus,
+  RestaurantStatus
+} from "../../generated/prisma/client";
 
 type RestaurantRecord = {
   id: string;
   ownerUserId: string;
   name: string;
+  businessType: BusinessType;
   status: RestaurantStatus;
   isOpen: boolean;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 type MenuItemRecord = {
@@ -15,6 +25,9 @@ type MenuItemRecord = {
   name: string;
   priceMinor: number;
   isAvailable: boolean;
+  unitLabel: string;
+  stockQuantity: number | null;
+  isVariableWeight: boolean;
 };
 
 type OrderItemRecord = {
@@ -24,6 +37,26 @@ type OrderItemRecord = {
   nameSnapshot: string;
   priceMinorSnapshot: number;
   quantity: number;
+  unitLabelSnapshot: string;
+  allowSubstitution: boolean;
+  isVariableWeightSnapshot: boolean;
+};
+
+type FulfillmentAdjustmentRecord = {
+  id: string;
+  orderItemId: string;
+  replacementMenuItemId: string | null;
+  proposedByUserId: string;
+  replacementNameSnapshot: string | null;
+  replacementUnitLabelSnapshot: string | null;
+  actualQuantityMilli: number;
+  unitPriceMinor: number;
+  lineTotalMinor: number;
+  status: FulfillmentAdjustmentStatus;
+  note: string | null;
+  decidedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 type OrderRecord = {
@@ -36,10 +69,12 @@ type OrderRecord = {
   deliveryAddressLine: string;
   deliveryLatitude: number | null;
   deliveryLongitude: number | null;
+  deliveryDistanceMeters: number | null;
   subtotalMinor: number;
   deliveryFeeMinor: number;
   serviceFeeMinor: number;
   discountMinor: number;
+  promotionSnapshot: unknown;
   totalMinor: number;
   createdAt: Date;
   updatedAt: Date;
@@ -109,16 +144,23 @@ export class FakeOrdersPrisma {
   readonly deliveries: DeliveryRecord[] = [];
   readonly notifications: NotificationRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
+  readonly offers: any[] = [];
+  readonly fulfillmentAdjustments: FulfillmentAdjustmentRecord[] = [];
+  readonly inventoryMovements: any[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly restaurant = {} as any;
   readonly menuItem = {} as any;
   readonly order = {} as any;
   readonly orderStatusHistory = {} as any;
+  readonly orderItem = {} as any;
   readonly delivery = {} as any;
   readonly driverProfile = {} as any;
   readonly notification = {} as any;
   readonly auditLog = {} as any;
+  readonly offer = {} as any;
+  readonly fulfillmentAdjustment = {} as any;
+  readonly inventoryMovement = {} as any;
 
   constructor() {
     this.restaurant.findUnique = async ({ where }: any) =>
@@ -130,6 +172,48 @@ export class FakeOrdersPrisma {
       const ids: string[] | undefined = where?.id?.in;
       return this.menuItems.filter(
         (item) => (!ids || ids.includes(item.id)) && (!where?.restaurantId || item.restaurantId === where.restaurantId)
+      );
+    };
+    this.menuItem.findUnique = async ({ where }: any) => {
+      const item = this.menuItems.find((candidate) => candidate.id === where.id) ?? null;
+      if (!item) return null;
+      if (where.select) {
+        const selected: Record<string, unknown> = {};
+        for (const key of Object.keys(where.select)) selected[key] = (item as any)[key];
+        return selected;
+      }
+      return item;
+    };
+    this.menuItem.findFirst = async ({ where }: any) =>
+      this.menuItems.find((item) =>
+        (!where?.id || item.id === where.id) &&
+        (!where?.restaurantId || item.restaurantId === where.restaurantId) &&
+        (where?.isAvailable === undefined || item.isAvailable === where.isAvailable)
+      ) ?? null;
+    this.menuItem.updateMany = async ({ where, data }: any) => {
+      const matches = this.menuItems.filter((item) =>
+        (!where?.id || item.id === where.id) &&
+        (where?.stockQuantity?.gte === undefined || (item.stockQuantity ?? -1) >= where.stockQuantity.gte) &&
+        (where?.stockQuantity?.not !== null || item.stockQuantity !== null)
+      );
+      for (const item of matches) {
+        if (data.stockQuantity?.decrement !== undefined && item.stockQuantity !== null) {
+          item.stockQuantity -= data.stockQuantity.decrement;
+        }
+        if (data.stockQuantity?.increment !== undefined && item.stockQuantity !== null) {
+          item.stockQuantity += data.stockQuantity.increment;
+        }
+      }
+      return { count: matches.length };
+    };
+
+    this.offer.findMany = async ({ where }: any) => {
+      const now = new Date();
+      return this.offers.filter((offer) =>
+        (!where?.isActive || offer.isActive) &&
+        (!offer.startsAt || offer.startsAt <= (where?.startsAt?.lte ?? now)) &&
+        (!offer.endsAt || offer.endsAt > now) &&
+        (offer.restaurantId === null || offer.restaurantId === where?.AND?.[0]?.OR?.[1]?.restaurantId)
       );
     };
 
@@ -145,10 +229,12 @@ export class FakeOrdersPrisma {
         deliveryAddressLine: data.deliveryAddressLine,
         deliveryLatitude: data.deliveryLatitude ?? null,
         deliveryLongitude: data.deliveryLongitude ?? null,
+        deliveryDistanceMeters: data.deliveryDistanceMeters ?? null,
         subtotalMinor: data.subtotalMinor,
         deliveryFeeMinor: data.deliveryFeeMinor,
         serviceFeeMinor: data.serviceFeeMinor,
         discountMinor: data.discountMinor ?? 0,
+        promotionSnapshot: data.promotionSnapshot ?? null,
         totalMinor: data.totalMinor,
         createdAt: now,
         updatedAt: now
@@ -163,7 +249,10 @@ export class FakeOrdersPrisma {
           menuItemId: itemData.menuItemId,
           nameSnapshot: itemData.nameSnapshot,
           priceMinorSnapshot: itemData.priceMinorSnapshot,
-          quantity: itemData.quantity
+          quantity: itemData.quantity,
+          unitLabelSnapshot: itemData.unitLabelSnapshot ?? "item",
+          allowSubstitution: itemData.allowSubstitution ?? false,
+          isVariableWeightSnapshot: itemData.isVariableWeightSnapshot ?? false
         });
       }
 
@@ -192,9 +281,19 @@ export class FakeOrdersPrisma {
       );
       for (const order of matches) {
         if (data.status !== undefined) order.status = data.status;
+        if (data.subtotalMinor !== undefined) order.subtotalMinor = data.subtotalMinor;
+        if (data.totalMinor !== undefined) order.totalMinor = data.totalMinor;
         order.updatedAt = new Date();
       }
       return { count: matches.length };
+    };
+    this.order.update = async ({ where, data }: any) => {
+      const order = this.orders.find((candidate) => candidate.id === where.id)!;
+      if (data.status !== undefined) order.status = data.status;
+      if (data.subtotalMinor !== undefined) order.subtotalMinor = data.subtotalMinor;
+      if (data.totalMinor !== undefined) order.totalMinor = data.totalMinor;
+      order.updatedAt = new Date();
+      return this.hydrateOrder(order);
     };
 
     this.orderStatusHistory.create = async ({ data }: any) => {
@@ -213,6 +312,84 @@ export class FakeOrdersPrisma {
 
     this.orderStatusHistory.findMany = async ({ where }: any) =>
       this.orderStatusHistories.filter((entry) => !where?.orderId || entry.orderId === where.orderId);
+
+    this.orderItem.findMany = async ({ where }: any) =>
+      this.orderItems
+        .filter((item) => !where?.orderId || item.orderId === where.orderId)
+        .map((item) => ({
+          ...item,
+          fulfillmentAdjustment: this.fulfillmentAdjustments.find((entry) => entry.orderItemId === item.id) ?? null
+        }));
+    this.orderItem.findUnique = async ({ where }: any) => {
+      const item = this.orderItems.find((candidate) => candidate.id === where.id);
+      if (!item) return null;
+      return {
+        ...item,
+        menuItem: this.menuItems.find((candidate) => candidate.id === item.menuItemId),
+        fulfillmentAdjustment: this.fulfillmentAdjustments.find((entry) => entry.orderItemId === item.id) ?? null
+      };
+    };
+
+    this.fulfillmentAdjustment.count = async ({ where }: any) =>
+      this.fulfillmentAdjustments.filter((entry) => {
+        if (where?.status && entry.status !== where.status) return false;
+        if (where?.orderItem?.orderId) {
+          const orderItem = this.orderItems.find((item) => item.id === entry.orderItemId);
+          if (orderItem?.orderId !== where.orderItem.orderId) return false;
+        }
+        return true;
+      }).length;
+    this.fulfillmentAdjustment.upsert = async ({ where, create, update }: any) => {
+      let entry = this.fulfillmentAdjustments.find((candidate) => candidate.orderItemId === where.orderItemId);
+      if (entry) {
+        Object.assign(entry, update, { updatedAt: new Date() });
+        return entry;
+      }
+      const now = new Date();
+      entry = {
+        id: randomUUID(),
+        orderItemId: create.orderItemId,
+        replacementMenuItemId: create.replacementMenuItemId ?? null,
+        proposedByUserId: create.proposedByUserId,
+        replacementNameSnapshot: create.replacementNameSnapshot ?? null,
+        replacementUnitLabelSnapshot: create.replacementUnitLabelSnapshot ?? null,
+        actualQuantityMilli: create.actualQuantityMilli,
+        unitPriceMinor: create.unitPriceMinor,
+        lineTotalMinor: create.lineTotalMinor,
+        status: create.status ?? FulfillmentAdjustmentStatus.PENDING,
+        note: create.note ?? null,
+        decidedAt: create.decidedAt ?? null,
+        createdAt: now,
+        updatedAt: now
+      };
+      this.fulfillmentAdjustments.push(entry);
+      return entry;
+    };
+    this.fulfillmentAdjustment.findUnique = async ({ where }: any) => {
+      const entry = this.fulfillmentAdjustments.find((candidate) =>
+        where.id ? candidate.id === where.id : candidate.orderItemId === where.orderItemId
+      );
+      if (!entry) return null;
+      const orderItem = this.orderItems.find((item) => item.id === entry.orderItemId)!;
+      return {
+        ...entry,
+        orderItem: {
+          ...orderItem,
+          menuItem: this.menuItems.find((item) => item.id === orderItem.menuItemId)
+        }
+      };
+    };
+    this.fulfillmentAdjustment.update = async ({ where, data }: any) => {
+      const entry = this.fulfillmentAdjustments.find((candidate) => candidate.id === where.id)!;
+      Object.assign(entry, data, { updatedAt: new Date() });
+      return entry;
+    };
+
+    this.inventoryMovement.create = async ({ data }: any) => {
+      const movement = { id: randomUUID(), createdAt: new Date(), ...data };
+      this.inventoryMovements.push(movement);
+      return movement;
+    };
 
     this.delivery.create = async ({ data }: any) => {
       const now = new Date();
@@ -293,7 +470,12 @@ export class FakeOrdersPrisma {
 
   private hydrateOrder(order: OrderRecord) {
     const restaurant = this.restaurants.find((candidate) => candidate.id === order.restaurantId)!;
-    const items = this.orderItems.filter((item) => item.orderId === order.id);
+    const items = this.orderItems
+      .filter((item) => item.orderId === order.id)
+      .map((item) => ({
+        ...item,
+        fulfillmentAdjustment: this.fulfillmentAdjustments.find((entry) => entry.orderItemId === item.id) ?? null
+      }));
     const statusHistory = this.orderStatusHistories.filter((entry) => entry.orderId === order.id);
     const delivery = this.deliveries.find((candidate) => candidate.orderId === order.id) ?? null;
     return { ...order, items, restaurant, statusHistory, delivery };
@@ -318,8 +500,11 @@ export class FakeOrdersPrisma {
       id: randomUUID(),
       ownerUserId: randomUUID(),
       name: "Falafel House",
+      businessType: BusinessType.RESTAURANT,
       status: RestaurantStatus.APPROVED,
       isOpen: true,
+      latitude: 31.9038,
+      longitude: 35.2034,
       ...overrides
     };
     this.restaurants.push(restaurant);
@@ -333,6 +518,9 @@ export class FakeOrdersPrisma {
       name: "Falafel Sandwich",
       priceMinor: 1500,
       isAvailable: true,
+      unitLabel: "item",
+      stockQuantity: null,
+      isVariableWeight: false,
       ...overrides
     };
     this.menuItems.push(item);

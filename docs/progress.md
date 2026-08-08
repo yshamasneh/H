@@ -214,3 +214,79 @@ Remaining before Phase 8 (production hardening):
 - Supply operator-owned DNS/TLS, production database, OTP/error-tracking endpoints and tokens, legal entity/contact/jurisdiction details, store accounts, and production signing credentials.
 - Publish the approved privacy/terms/support pages, capture screenshots from staging, complete Google Play closed testing and iOS TestFlight, run an isolated database restore drill, and record the four-role plus go/no-go sign-offs in `docs/launch-checklist.md`.
 - Online payments, continuous driver location/maps and distance matching, and device push notifications remain separate provider/product phases exactly as the original Phase 8 scope specifies; enabling any of them requires new privacy/security review.
+
+## 2026-08-08: Phase 9 — Integration Completion and Real E2E Coverage
+
+### Repository implementation: Completed
+
+- Added restaurant and driver application screens directly from Login, using the existing role-specific registration endpoints and returning successful applicants to a prefilled Login screen with clear approval-state guidance.
+- Added the in-app Restaurant Workspace: owners can load/update their profile, open or close an approved restaurant, create and activate/hide categories, create/edit menu items, and pause/resume item availability. This closes the prior API-only profile/menu gap without duplicating server business rules in the client.
+- Added typed mobile API contracts for role registration and every existing restaurant-owner profile/menu endpoint.
+- Fixed order-detail realtime integration. Customer and restaurant detail screens now emit `order.subscribe`, receive only authorized order-room events, re-fetch REST state, and remove their listeners on cleanup. Added a focused mobile unit test for room subscription, filtering, delivery refresh, and cleanup.
+- Added an opt-in PostgreSQL-backed HTTP E2E test covering the full four-role lifecycle: restaurant application/menu, admin approval, customer cash order, restaurant preparation, driver application/approval/delivery, final customer order state, and notifications. CI enables it after applying all real migrations; local unit runs skip it unless `RUN_DATABASE_E2E=true` or `npm run test:e2e` is used.
+- Verified locally: lint, typecheck, all production builds, 105 API unit tests, 21 mobile tests, and the real PostgreSQL E2E journey pass. The E2E runner refuses `NODE_ENV=production` and refuses a non-local database unless its name explicitly contains `test`.
+
+### Agreed product direction after Phase 9
+
+- Cash on delivery remains the only payment method; electronic payments are removed from the roadmap.
+- The next product work is location-based delivery pricing with a configured minimum fee, followed by generalized supermarket/catalog pages and a real promotion engine for product and delivery offers.
+
+## 2026-08-08: Phase 10 — Location Pricing and Admin Offers
+
+### Repository implementation: Completed
+
+- Replaced the flat delivery placeholder with a server-authoritative Haversine distance calculation. Defaults are configurable through environment variables: 5.00 ILS minimum including 3 km, 1.50 ILS per additional started kilometer, 25 km maximum range, and 2.00 ILS service fee.
+- Added restaurant delivery-origin coordinates and foreground location selection in the Restaurant Workspace. An approved restaurant cannot open until both coordinates are configured.
+- Checkout now requests foreground location only after the customer taps the location button, calls `POST /orders/quote`, and displays distance, delivery/service fees, applied offers, and the exact cash-due total before placement. `POST /orders` recalculates everything and never trusts the quote or client prices.
+- Added four admin-owned offer types: product percentage, whole-order percentage, delivery percentage, and free delivery. Admin routes support create/list/replace/activate/pause, validate schedule/scope/item ownership, and write audit logs. No restaurant-facing offer mutation exists.
+- Added deterministic stacking: the best merchandise result (best item offers in aggregate versus the best whole-order offer) combines with at most one best delivery offer. Minimum subtotal and maximum-discount caps are enforced by the server, and applied offer snapshots are retained on the order.
+- Public offer cards support restaurant and platform-wide campaigns. Product offers decorate menu items with an effective price and badge; the local cart uses that value only as an estimate.
+- Applied migration `20260808090000_phase10_location_and_admin_offers` successfully to local PostgreSQL. The real HTTP E2E now proves customer denial from admin offer creation, admin offer creation, discounted public menu, quote/order pricing, promotion stacking, and the existing four-role delivery lifecycle.
+- Updated Expo release metadata to `0.10.0`/build 10, added the foreground location permission declaration, and updated privacy/security/store documentation. Continuous/background driver tracking and third-party map providers remain disabled.
+
+### Deferred after Phase 10
+
+- Supermarket/catalog-specific departments, product detail/search/filter pages, inventory/weight substitutions, and store basket behavior remain the next separate product domain.
+- Delivery distance currently uses straight-line coordinates and configurable pricing; road-routing ETA/distance requires a selected maps provider and a separate reliability/privacy review.
+
+## 2026-08-08: Phase 11 — Online Supermarket Catalog
+
+### Repository implementation: Completed
+
+- Added a `BusinessType` boundary so approved/open restaurants and supermarkets share operational infrastructure but remain separate public browsing domains. Existing stores migrate safely as `RESTAURANT`.
+- Added public supermarket endpoints for store listing, paginated catalog browsing, department filtering, featured filtering, and case-insensitive product/brand/SKU search, plus a dedicated product-detail endpoint. Hidden departments, unavailable products, and zero-stock products are not public.
+- Expanded catalog products with optional SKU and brand, a required selling-unit label, optional tracked stock, and a featured flag. Store owners can manage all of these fields in the existing role-aware workspace.
+- Added dedicated customer supermarket list, catalog, and product-detail screens. The home screen previews supermarkets and routes supermarket-scoped admin offers to the correct catalog.
+- Added a per-order-line substitution preference. It is stored as an immutable order snapshot and shown to the store; Phase 11 does not automatically replace or reprice products.
+- Order creation now aggregates requested quantities and atomically reserves tracked inventory. Insufficient stock rejects the complete order; customer/admin cancellation or store rejection restores tracked quantities. Null stock remains an explicit untracked/unlimited mode.
+- Kept cash on delivery as the only payment method and reused Phase 10's location quote, minimum delivery fee, offer engine, and server-authoritative totals for supermarket orders.
+- Added migration `20260808110000_phase11_supermarket_catalog`, idempotent supermarket demo data (`+970590000004`), Expo release `0.11.0`/build 11, unit coverage, and a real PostgreSQL E2E journey that proves catalog search, stock reservation, snapshot persistence, and cancellation restock.
+
+### Deferred after Phase 11
+
+- Automatic substitution selection/approval, variable-weight final-price adjustment, barcode scanning, supplier purchasing, multi-warehouse inventory, and road-routing/ETA integrations require separate product and operational rules.
+
+## 2026-08-08: Phase 12 — Reviewed Grocery Fulfillment
+
+### Repository implementation: Completed
+
+- Added one fulfillment proposal per grocery order line with pending/approved/rejected states, immutable replacement name/unit/price snapshots, precise quantity in thousandths, customer note, decision time, and proposing owner.
+- Supermarket owners can propose a replacement only when the customer allowed substitutions, or enter the packed quantity for a variable-weight original/replacement. Quantities are bounded to 50%-150% of the requested amount.
+- Customers receive an in-app notification and realtime refresh, then approve or reject from Order Details. A store cannot accept an order while any proposal is pending.
+- Approval recalculates the authoritative subtotal and cash-due total. Rejection, revised proposals, customer/admin cancellation, and store rejection reconcile original/replacement inventory safely; variable quantities reserve whole tracked units conservatively with exact pricing retained in thousandths.
+- Added mobile fulfillment controls for store and customer, typed API contracts, a new realtime event, migration `20260808120000_phase12_grocery_fulfillment`, and focused replacement/consent/variable-quantity tests.
+
+## 2026-08-08: Phase 13 — Inventory and Procurement
+
+### Repository implementation: Completed
+
+- Added product barcodes and reorder thresholds, searchable inventory with low/out-of-stock summaries, barcode lookup for typed or hardware-scanner input, and reason-required manual adjustments.
+- Added an immutable inventory movement ledger covering order reserve/restore, fulfillment reserve/release, manual adjustments, and purchase receipts. Owner mutations also create audit records.
+- Added supermarket-scoped suppliers and draft/received/cancelled purchase orders with validated store-owned lines and transactional receiving into stock.
+- Added a dedicated Inventory workspace for stock search, low-stock filtering, barcode lookup, adjustments, supplier creation, purchase creation/receiving/cancellation, and recent movement history.
+- Added migrations `20260808130000_phase13_inventory_procurement` and `20260808131000_phase13_owner_reference_cascades`, seeded barcodes/reorder levels/variable produce plus a demo supplier and purchase, and updated the release to `0.13.0`/build 13.
+- The PostgreSQL HTTP E2E now proves replacement approval, the pending-review acceptance gate, inventory restoration, barcode/low-stock queries, manual adjustment, supplier/purchase receiving, movement coverage, and the existing cash delivery lifecycle.
+
+### Still deferred
+
+- Multi-warehouse/bin inventory, supplier invoicing/accounting, camera-based barcode recognition, external road routing/ETA, and continuous driver maps remain separate provider/operations phases.

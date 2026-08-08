@@ -2,12 +2,29 @@ import { Platform } from "react-native";
 import type { CountryCode } from "./phone";
 
 export type UserRole = "CUSTOMER" | "RESTAURANT" | "DRIVER" | "ADMIN";
+export type BusinessType = "RESTAURANT" | "SUPERMARKET";
 
 export type PublicUser = {
   id: string;
   fullName: string;
   phone: string;
   role: UserRole;
+};
+
+export type MyProfile = PublicUser & {
+  email: string | null;
+  createdAt: string;
+};
+
+export type SavedAddress = {
+  id: string;
+  label: string;
+  addressLine: string;
+  latitude: number;
+  longitude: number;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AuthResult = {
@@ -38,14 +55,44 @@ export type PhoneInput = {
   phoneNumber: string;
 };
 
+export type RestaurantRegistrationInput = PhoneInput & {
+  ownerFullName: string;
+  password: string;
+  confirmPassword: string;
+  restaurantName: string;
+  addressLine: string;
+  description?: string;
+  businessType?: BusinessType;
+};
+
+export type DriverRegistrationInput = PhoneInput & {
+  fullName: string;
+  password: string;
+  confirmPassword: string;
+};
+
+export type RestaurantRegistrationResult = {
+  message: string;
+  restaurantId: string;
+  status: RestaurantStatusValue;
+};
+
+export type DriverRegistrationResult = {
+  message: string;
+  userId: string;
+};
+
 export type VerifyOtpInput = PhoneInput & { code: string };
 
 export type RestaurantSummary = {
   id: string;
   name: string;
+  businessType: BusinessType;
   description: string | null;
   phone: string;
   addressLine: string;
+  latitude: number | null;
+  longitude: number | null;
   logoUrl: string | null;
   isOpen: boolean;
 };
@@ -55,7 +102,17 @@ export type MenuItemSummary = {
   name: string;
   description: string | null;
   priceMinor: number;
+  effectivePriceMinor: number;
   imageUrl: string | null;
+  sku: string | null;
+  brand: string | null;
+  unitLabel: string;
+  stockQuantity: number | null;
+  isFeatured: boolean;
+  isVariableWeight: boolean;
+  barcode: string | null;
+  reorderLevel: number | null;
+  offer: { id: string; title: string; discountPercent: number; minimumSubtotalMinor: number } | null;
 };
 
 export type MenuCategorySummary = {
@@ -70,15 +127,42 @@ export type RestaurantMenu = {
   categories: MenuCategorySummary[];
 };
 
+export const offerTypes = ["PRODUCT_PERCENTAGE", "ORDER_PERCENTAGE", "DELIVERY_PERCENTAGE", "FREE_DELIVERY"] as const;
+export type OfferTypeValue = (typeof offerTypes)[number];
+
 export type RestaurantOffer = {
   id: string;
+  type: OfferTypeValue;
+  restaurantId: string | null;
+  restaurantName: string | null;
+  restaurantBusinessType: BusinessType | null;
+  menuItemId: string | null;
+  menuItemName: string | null;
   title: string;
   description: string | null;
   discountPercent: number | null;
   imageUrl: string | null;
   startsAt: string;
   endsAt: string | null;
-  restaurant: Pick<RestaurantSummary, "id" | "name" | "logoUrl">;
+  minimumSubtotalMinor: number;
+  maxDiscountMinor: number | null;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type AdminOfferInput = {
+  type: OfferTypeValue;
+  restaurantId?: string;
+  menuItemId?: string;
+  title: string;
+  description?: string;
+  discountPercent?: number;
+  minimumSubtotalMinor?: number;
+  maxDiscountMinor?: number;
+  imageUrl?: string;
+  startsAt?: string;
+  endsAt?: string;
+  isActive?: boolean;
 };
 
 export type Page<T> = {
@@ -114,6 +198,24 @@ export type OrderItemView = {
   priceMinorSnapshot: number;
   quantity: number;
   lineTotalMinor: number;
+  unitLabelSnapshot: string;
+  allowSubstitution: boolean;
+  isVariableWeightSnapshot: boolean;
+  fulfillmentAdjustment: FulfillmentAdjustmentView | null;
+};
+
+export type FulfillmentAdjustmentView = {
+  id: string;
+  replacementMenuItemId: string | null;
+  replacementNameSnapshot: string | null;
+  replacementUnitLabelSnapshot: string | null;
+  actualQuantityMilli: number;
+  unitPriceMinor: number;
+  lineTotalMinor: number;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  note: string | null;
+  decidedAt: string | null;
+  updatedAt: string;
 };
 
 export type OrderRestaurantSummary = {
@@ -148,6 +250,9 @@ export type OrderDetail = {
   deliveryAddressLine: string;
   deliveryLatitude: number | null;
   deliveryLongitude: number | null;
+  deliveryDistanceMeters: number | null;
+  customerNote: string | null;
+  appliedPromotions: { offerId: string; title: string; type: OfferTypeValue; discountMinor: number }[];
   items: OrderItemView[];
   subtotalMinor: number;
   deliveryFeeMinor: number;
@@ -157,10 +262,22 @@ export type OrderDetail = {
   createdAt: string;
   statusHistory: OrderStatusHistoryEntry[];
   delivery: DeliveryStatusSummary | null;
+  requiresCustomerReview: boolean;
+};
+
+export type OrderQuote = {
+  subtotalMinor: number;
+  deliveryDistanceMeters: number;
+  deliveryFeeMinor: number;
+  serviceFeeMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  appliedPromotions: OrderDetail["appliedPromotions"];
 };
 
 export type DriverProfileView = {
   userId: string;
+  status: DriverApprovalStatusValue;
   isOnline: boolean;
   lastLatitude: number | null;
   lastLongitude: number | null;
@@ -195,6 +312,7 @@ export type DeliveryView = {
 export type CreateOrderItemInput = {
   menuItemId: string;
   quantity: number;
+  allowSubstitution?: boolean;
 };
 
 export type CreateOrderInput = {
@@ -202,9 +320,10 @@ export type CreateOrderInput = {
   items: CreateOrderItemInput[];
   deliveryLabel: string;
   deliveryAddressLine: string;
-  deliveryLatitude?: number;
-  deliveryLongitude?: number;
+  deliveryLatitude: number;
+  deliveryLongitude: number;
   paymentMethod: OrderPaymentMethod;
+  customerNote?: string;
 };
 
 type ApiErrorPayload = {
@@ -266,6 +385,56 @@ export async function fetchCurrentUser(accessToken: string): Promise<PublicUser>
   return response.user;
 }
 
+export function getMyProfile(accessToken: string): Promise<MyProfile> {
+  return request("/api/v1/users/me", { accessToken });
+}
+
+export function updateMyProfile(
+  accessToken: string,
+  input: { fullName?: string; email?: string | null }
+): Promise<MyProfile> {
+  return request("/api/v1/users/me", { method: "PATCH", body: input, accessToken });
+}
+
+export function deleteMyAccount(accessToken: string): Promise<void> {
+  return request("/api/v1/users/me", { method: "DELETE", accessToken });
+}
+
+export function listMyAddresses(accessToken: string): Promise<SavedAddress[]> {
+  return request("/api/v1/users/me/addresses", { accessToken });
+}
+
+export function createMyAddress(
+  accessToken: string,
+  input: Omit<SavedAddress, "id" | "createdAt" | "updatedAt">
+): Promise<SavedAddress> {
+  return request("/api/v1/users/me/addresses", { method: "POST", body: input, accessToken });
+}
+
+export function updateMyAddress(
+  accessToken: string,
+  addressId: string,
+  input: Partial<Omit<SavedAddress, "id" | "createdAt" | "updatedAt">>
+): Promise<SavedAddress> {
+  return request(`/api/v1/users/me/addresses/${addressId}`, { method: "PATCH", body: input, accessToken });
+}
+
+export function deleteMyAddress(accessToken: string, addressId: string): Promise<void> {
+  return request(`/api/v1/users/me/addresses/${addressId}`, { method: "DELETE", accessToken });
+}
+
+export function registerMyPushToken(
+  accessToken: string,
+  token: string,
+  platform: "android" | "ios" | "web"
+): Promise<{ registered: true }> {
+  return request("/api/v1/users/me/push-tokens", { method: "POST", body: { token, platform }, accessToken });
+}
+
+export function unregisterMyPushToken(accessToken: string, token: string): Promise<void> {
+  return request("/api/v1/users/me/push-tokens", { method: "DELETE", body: { token }, accessToken });
+}
+
 export function requestPasswordResetCode(input: PhoneInput): Promise<OtpRequestResult> {
   return request("/api/v1/auth/password/forgot/request-code", { method: "POST", body: input });
 }
@@ -284,8 +453,57 @@ export function resetPassword(input: {
   return request("/api/v1/auth/password/reset", { method: "POST", body: input });
 }
 
+export function registerRestaurant(input: RestaurantRegistrationInput): Promise<RestaurantRegistrationResult> {
+  return request("/api/v1/restaurants/register", { method: "POST", body: input });
+}
+
+export function registerDriver(input: DriverRegistrationInput): Promise<DriverRegistrationResult> {
+  return request("/api/v1/drivers/register", { method: "POST", body: input });
+}
+
 export function listRestaurants(page = 1, pageSize = 20): Promise<Page<RestaurantSummary>> {
   return request(`/api/v1/restaurants?page=${page}&pageSize=${pageSize}`);
+}
+
+export type SupermarketDepartment = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  productCount: number;
+};
+
+export type SupermarketProduct = MenuItemSummary & {
+  categoryId: string;
+  categoryName: string;
+};
+
+export type SupermarketCatalog = {
+  supermarket: RestaurantSummary;
+  departments: SupermarketDepartment[];
+  products: SupermarketProduct[];
+  page: number;
+  pageSize: number;
+  total: number;
+};
+
+export function listSupermarkets(page = 1, pageSize = 20): Promise<Page<RestaurantSummary>> {
+  return request(`/api/v1/supermarkets?page=${page}&pageSize=${pageSize}`);
+}
+
+export function getSupermarketCatalog(
+  supermarketId: string,
+  params: { page?: number; pageSize?: number; search?: string; categoryId?: string; featured?: boolean } = {}
+): Promise<SupermarketCatalog> {
+  return request(`/api/v1/supermarkets/${supermarketId}/catalog${toQuery(params)}`);
+}
+
+export function getSupermarketProduct(
+  supermarketId: string,
+  productId: string
+): Promise<SupermarketProduct> {
+  return request<{ supermarket: RestaurantSummary; product: SupermarketProduct }>(
+    `/api/v1/supermarkets/${supermarketId}/products/${productId}`
+  ).then((result) => result.product);
 }
 
 export function getRestaurantMenu(restaurantId: string): Promise<RestaurantMenu> {
@@ -298,6 +516,10 @@ export function listActiveRestaurantOffers(): Promise<RestaurantOffer[]> {
 
 export function createOrder(accessToken: string, input: CreateOrderInput): Promise<OrderDetail> {
   return request("/api/v1/orders", { method: "POST", body: input, accessToken });
+}
+
+export function getOrderQuote(accessToken: string, input: CreateOrderInput): Promise<OrderQuote> {
+  return request("/api/v1/orders/quote", { method: "POST", body: input, accessToken });
 }
 
 export function listMyOrders(accessToken: string, page = 1, pageSize = 20): Promise<Page<OrderDetail>> {
@@ -398,6 +620,78 @@ export type AdminRestaurantDetail = AdminRestaurant & {
 
 export type DriverApprovalStatusValue = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
 
+export type RestaurantOwnerProfile = AdminRestaurant;
+
+export type MenuCategoryOwner = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+export type MenuItemOwner = Omit<MenuItemSummary, "effectivePriceMinor" | "offer"> & {
+  categoryId: string;
+  isAvailable: boolean;
+};
+
+export type InventoryItem = {
+  id: string;
+  name: string;
+  sku: string | null;
+  barcode: string | null;
+  stockQuantity: number | null;
+  reorderLevel: number | null;
+  unitLabel: string;
+  isAvailable: boolean;
+  isLowStock: boolean;
+};
+
+export type InventoryPage = Page<InventoryItem> & {
+  summary: {
+    totalProducts: number;
+    trackedProducts: number;
+    lowStockProducts: number;
+    outOfStockProducts: number;
+  };
+};
+
+export type InventoryMovement = {
+  id: string;
+  menuItemId: string;
+  type: "ORDER_RESERVATION" | "ORDER_RESTORE" | "FULFILLMENT_RESERVATION" | "FULFILLMENT_RELEASE" | "MANUAL_ADJUSTMENT" | "PURCHASE_RECEIPT";
+  quantityDelta: number;
+  stockAfter: number;
+  reason: string | null;
+  createdAt: string;
+  menuItem: { name: string; sku: string | null };
+};
+
+export type Supplier = {
+  id: string;
+  name: string;
+  phone: string | null;
+  note: string | null;
+  isActive: boolean;
+};
+
+export type PurchaseOrder = {
+  id: string;
+  status: "DRAFT" | "RECEIVED" | "CANCELLED";
+  reference: string | null;
+  note: string | null;
+  totalCostMinor: number;
+  receivedAt: string | null;
+  createdAt: string;
+  supplier: Supplier;
+  items: {
+    id: string;
+    menuItemId: string;
+    quantity: number;
+    unitCostMinor: number;
+    menuItem: { name: string; sku: string | null };
+  }[];
+};
+
 export type AdminDriver = {
   userId: string;
   fullName: string;
@@ -462,19 +756,248 @@ export function cancelMyOrder(accessToken: string, orderId: string): Promise<Ord
   return request(`/api/v1/orders/${orderId}/cancel`, { method: "POST", accessToken });
 }
 
+export function proposeOrderItemFulfillment(
+  accessToken: string,
+  orderId: string,
+  orderItemId: string,
+  input: { replacementMenuItemId?: string; actualQuantityMilli?: number; note?: string }
+): Promise<OrderDetail> {
+  return request(`/api/v1/restaurant/me/orders/${orderId}/items/${orderItemId}/fulfillment`, {
+    method: "POST",
+    body: input,
+    accessToken
+  });
+}
+
+export function decideOrderFulfillment(
+  accessToken: string,
+  orderId: string,
+  adjustmentId: string,
+  decision: "approve" | "reject"
+): Promise<OrderDetail> {
+  return request(`/api/v1/orders/${orderId}/fulfillments/${adjustmentId}/${decision}`, {
+    method: "POST",
+    accessToken
+  });
+}
+
+export function getRestaurantOwnerProfile(accessToken: string): Promise<RestaurantOwnerProfile> {
+  return request("/api/v1/restaurant/me", { accessToken });
+}
+
+export function updateRestaurantOwnerProfile(
+  accessToken: string,
+  input: { name?: string; description?: string; addressLine?: string; logoUrl?: string; latitude?: number; longitude?: number }
+): Promise<RestaurantOwnerProfile> {
+  return request("/api/v1/restaurant/me", { method: "PATCH", body: input, accessToken });
+}
+
+export function setRestaurantOpenStatus(
+  accessToken: string,
+  isOpen: boolean
+): Promise<RestaurantOwnerProfile> {
+  return request("/api/v1/restaurant/me/open-status", {
+    method: "PATCH",
+    body: { isOpen },
+    accessToken
+  });
+}
+
+export function listRestaurantMenuCategories(accessToken: string): Promise<MenuCategoryOwner[]> {
+  return request("/api/v1/restaurant/me/menu/categories", { accessToken });
+}
+
+export function createRestaurantMenuCategory(
+  accessToken: string,
+  input: { name: string; sortOrder?: number }
+): Promise<MenuCategoryOwner> {
+  return request("/api/v1/restaurant/me/menu/categories", { method: "POST", body: input, accessToken });
+}
+
+export function updateRestaurantMenuCategory(
+  accessToken: string,
+  categoryId: string,
+  input: { name?: string; sortOrder?: number; isActive?: boolean }
+): Promise<MenuCategoryOwner> {
+  return request(`/api/v1/restaurant/me/menu/categories/${categoryId}`, {
+    method: "PATCH",
+    body: input,
+    accessToken
+  });
+}
+
+export function listRestaurantMenuItems(accessToken: string): Promise<MenuItemOwner[]> {
+  return request("/api/v1/restaurant/me/menu/items", { accessToken });
+}
+
+export function createRestaurantMenuItem(
+  accessToken: string,
+  input: {
+    categoryId: string;
+    name: string;
+    description?: string;
+    priceMinor: number;
+    imageUrl?: string;
+    sku?: string;
+    brand?: string;
+    unitLabel?: string;
+    stockQuantity?: number | null;
+    isFeatured?: boolean;
+    isVariableWeight?: boolean;
+    barcode?: string;
+    reorderLevel?: number | null;
+  }
+): Promise<MenuItemOwner> {
+  return request("/api/v1/restaurant/me/menu/items", { method: "POST", body: input, accessToken });
+}
+
+export function updateRestaurantMenuItem(
+  accessToken: string,
+  itemId: string,
+  input: {
+    categoryId?: string;
+    name?: string;
+    description?: string;
+    priceMinor?: number;
+    imageUrl?: string;
+    sku?: string;
+    brand?: string;
+    unitLabel?: string;
+    stockQuantity?: number | null;
+    isFeatured?: boolean;
+    isVariableWeight?: boolean;
+    barcode?: string;
+    reorderLevel?: number | null;
+  }
+): Promise<MenuItemOwner> {
+  return request(`/api/v1/restaurant/me/menu/items/${itemId}`, {
+    method: "PATCH",
+    body: input,
+    accessToken
+  });
+}
+
+export function setRestaurantMenuItemAvailability(
+  accessToken: string,
+  itemId: string,
+  isAvailable: boolean
+): Promise<MenuItemOwner> {
+  return request(`/api/v1/restaurant/me/menu/items/${itemId}/availability`, {
+    method: "PATCH",
+    body: { isAvailable },
+    accessToken
+  });
+}
+
+export function listStoreInventory(
+  accessToken: string,
+  params: { search?: string; lowStock?: boolean; page?: number; pageSize?: number } = {}
+): Promise<InventoryPage> {
+  return request(`/api/v1/restaurant/me/inventory${toQuery(params)}`, { accessToken });
+}
+
+export function lookupStoreInventoryBarcode(accessToken: string, barcode: string): Promise<InventoryItem> {
+  return request(`/api/v1/restaurant/me/inventory/barcode/${encodeURIComponent(barcode)}`, { accessToken });
+}
+
+export function adjustStoreInventory(
+  accessToken: string,
+  itemId: string,
+  quantityDelta: number,
+  reason: string
+): Promise<InventoryItem> {
+  return request(`/api/v1/restaurant/me/inventory/items/${itemId}/adjust`, {
+    method: "POST",
+    body: { quantityDelta, reason },
+    accessToken
+  });
+}
+
+export function listStoreInventoryMovements(
+  accessToken: string,
+  page = 1,
+  pageSize = 50
+): Promise<Page<InventoryMovement>> {
+  return request(`/api/v1/restaurant/me/inventory/movements?page=${page}&pageSize=${pageSize}`, { accessToken });
+}
+
+export function listStoreSuppliers(accessToken: string): Promise<Supplier[]> {
+  return request("/api/v1/restaurant/me/inventory/suppliers", { accessToken });
+}
+
+export function createStoreSupplier(
+  accessToken: string,
+  input: { name: string; phone?: string; note?: string }
+): Promise<Supplier> {
+  return request("/api/v1/restaurant/me/inventory/suppliers", { method: "POST", body: input, accessToken });
+}
+
+export function listStorePurchaseOrders(accessToken: string): Promise<PurchaseOrder[]> {
+  return request("/api/v1/restaurant/me/inventory/purchase-orders", { accessToken });
+}
+
+export function createStorePurchaseOrder(
+  accessToken: string,
+  input: {
+    supplierId: string;
+    reference?: string;
+    note?: string;
+    items: { menuItemId: string; quantity: number; unitCostMinor: number }[];
+  }
+): Promise<PurchaseOrder> {
+  return request("/api/v1/restaurant/me/inventory/purchase-orders", { method: "POST", body: input, accessToken });
+}
+
+export function receiveStorePurchaseOrder(accessToken: string, purchaseOrderId: string): Promise<PurchaseOrder> {
+  return request(`/api/v1/restaurant/me/inventory/purchase-orders/${purchaseOrderId}/receive`, {
+    method: "POST",
+    accessToken
+  });
+}
+
+export function cancelStorePurchaseOrder(accessToken: string, purchaseOrderId: string): Promise<PurchaseOrder> {
+  return request(`/api/v1/restaurant/me/inventory/purchase-orders/${purchaseOrderId}/cancel`, {
+    method: "POST",
+    accessToken
+  });
+}
+
 export function getAdminDashboard(accessToken: string): Promise<AdminDashboard> {
   return request("/api/v1/admin/dashboard", { accessToken });
 }
 
 export function listAdminRestaurants(
   accessToken: string,
-  params: { status?: RestaurantStatusValue; isOpen?: boolean } = {}
+  params: { status?: RestaurantStatusValue; isOpen?: boolean; businessType?: BusinessType } = {}
 ): Promise<Page<AdminRestaurant>> {
   return request(`/api/v1/admin/restaurants${toQuery(params)}`, { accessToken });
 }
 
 export function getAdminRestaurant(accessToken: string, restaurantId: string): Promise<AdminRestaurantDetail> {
   return request(`/api/v1/admin/restaurants/${restaurantId}`, { accessToken });
+}
+
+export function getAdminRestaurantMenu(
+  accessToken: string,
+  restaurantId: string
+): Promise<{ categories: { id: string; name: string; isActive: boolean; items: (MenuItemOwner & { categoryName: string })[] }[] }> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/menu`, { accessToken });
+}
+
+export function listAdminOffers(accessToken: string): Promise<RestaurantOffer[]> {
+  return request("/api/v1/admin/offers", { accessToken });
+}
+
+export function createAdminOffer(accessToken: string, input: AdminOfferInput): Promise<RestaurantOffer> {
+  return request("/api/v1/admin/offers", { method: "POST", body: input, accessToken });
+}
+
+export function updateAdminOffer(
+  accessToken: string,
+  offerId: string,
+  input: AdminOfferInput
+): Promise<RestaurantOffer> {
+  return request(`/api/v1/admin/offers/${offerId}`, { method: "PATCH", body: input, accessToken });
 }
 
 export function approveAdminRestaurant(accessToken: string, restaurantId: string): Promise<AdminRestaurant> {
@@ -572,7 +1095,7 @@ function toQuery(params: Record<string, unknown>): string {
 
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "POST" | "PATCH"; body?: unknown; accessToken?: string } = {}
+  options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; accessToken?: string } = {}
 ): Promise<T> {
   let response: Response;
   try {
@@ -599,6 +1122,7 @@ async function request<T>(
       error.details ?? null
     );
   }
+  if (response.status === 204) return undefined as T;
   if (!payload) {
     throw new ApiError(response.status, "INVALID_API_RESPONSE", "The server returned an invalid response.");
   }

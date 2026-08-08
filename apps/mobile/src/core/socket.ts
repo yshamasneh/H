@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { io, type Socket } from "socket.io-client";
 import { apiBaseUrl } from "./api";
 import { getAccessToken } from "./session";
+import { attachOrderSubscription } from "./order-subscription";
 
 let socket: Socket | null = null;
 let socketToken: string | null = null;
@@ -43,4 +44,23 @@ export function useRealtimeEvent(event: string, handler: (payload: unknown) => v
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event]);
+}
+
+export function useOrderRealtime(orderId: string, onChange: (payload: unknown) => void): void {
+  useEffect(() => {
+    let cleanup: (() => void) | null = null;
+    let cancelled = false;
+
+    connect().then((instance) => {
+      if (cancelled || !instance) return;
+      cleanup = attachOrderSubscription(instance, orderId, onChange);
+    });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+    // The screen owns the refresh callback; resubscription is required only when the order changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId]);
 }

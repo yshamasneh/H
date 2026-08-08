@@ -1,4 +1,10 @@
-import type { DeliveryStatus, OrderPaymentMethod, OrderStatus } from "../generated/prisma/enums";
+import type {
+  DeliveryStatus,
+  FulfillmentAdjustmentStatus,
+  OrderPaymentMethod,
+  OrderStatus
+} from "../generated/prisma/enums";
+import type { AppliedPromotion } from "../offers/offers.types";
 
 export type OrderItemView = {
   id: string;
@@ -6,7 +12,23 @@ export type OrderItemView = {
   nameSnapshot: string;
   priceMinorSnapshot: number;
   quantity: number;
+  unitLabelSnapshot: string;
+  allowSubstitution: boolean;
+  isVariableWeightSnapshot: boolean;
   lineTotalMinor: number;
+  fulfillmentAdjustment: {
+    id: string;
+    replacementMenuItemId: string | null;
+    replacementNameSnapshot: string | null;
+    replacementUnitLabelSnapshot: string | null;
+    actualQuantityMilli: number;
+    unitPriceMinor: number;
+    lineTotalMinor: number;
+    status: FulfillmentAdjustmentStatus;
+    note: string | null;
+    decidedAt: Date | null;
+    updatedAt: Date;
+  } | null;
 };
 
 export type OrderRestaurantSummary = {
@@ -41,6 +63,9 @@ export type OrderDetailView = {
   deliveryAddressLine: string;
   deliveryLatitude: number | null;
   deliveryLongitude: number | null;
+  deliveryDistanceMeters: number | null;
+  customerNote: string | null;
+  appliedPromotions: AppliedPromotion[];
   items: OrderItemView[];
   subtotalMinor: number;
   deliveryFeeMinor: number;
@@ -50,6 +75,17 @@ export type OrderDetailView = {
   createdAt: Date;
   statusHistory: OrderStatusHistoryEntry[];
   delivery: DeliveryStatusSummary | null;
+  requiresCustomerReview: boolean;
+};
+
+export type OrderQuoteView = {
+  subtotalMinor: number;
+  deliveryDistanceMeters: number;
+  deliveryFeeMinor: number;
+  serviceFeeMinor: number;
+  discountMinor: number;
+  totalMinor: number;
+  appliedPromotions: AppliedPromotion[];
 };
 
 export type Page<T> = {

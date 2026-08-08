@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { ApiException } from "../common/api.exception";
-import { RestaurantStatus, UserRole } from "../generated/prisma/client";
+import { BusinessType, RestaurantStatus, UserRole } from "../generated/prisma/client";
 import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
 import { FakeRestaurantPrisma } from "./testing/fake-prisma";
 import { RestaurantsService } from "./restaurants.service";
@@ -38,6 +38,13 @@ test("registering a restaurant creates a RESTAURANT-role user and a PENDING rest
   assert.equal(result.status, RestaurantStatus.PENDING);
 });
 
+test("registering a supermarket preserves the store business type", async () => {
+  const { prisma, service } = createService();
+  await service.register({ ...registerInput, businessType: BusinessType.SUPERMARKET });
+
+  assert.equal(prisma.restaurants[0].businessType, BusinessType.SUPERMARKET);
+});
+
 test("registering with a phone that already has an account is rejected", async () => {
   const { prisma, service } = createService();
   await service.register(registerInput);
@@ -66,6 +73,18 @@ test("public listing only returns approved and open restaurants", async () => {
   assert.equal(page.total, 1);
   assert.equal(page.items.length, 1);
   assert.equal(page.items[0].id, approvedOpen.id);
+});
+
+test("restaurant and supermarket public listings stay separated", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedApprovedOpenRestaurant({ name: "Kitchen" });
+  const supermarket = prisma.seedApprovedOpenRestaurant({ name: "Market", businessType: BusinessType.SUPERMARKET });
+
+  const restaurants = await service.listPublicRestaurants(1, 20);
+  const supermarkets = await service.listPublicSupermarkets(1, 20);
+
+  assert.deepEqual(restaurants.items.map((item) => item.id), [restaurant.id]);
+  assert.deepEqual(supermarkets.items.map((item) => item.id), [supermarket.id]);
 });
 
 test("public restaurant detail and menu are hidden for a non-approved restaurant", async () => {

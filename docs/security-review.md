@@ -32,7 +32,10 @@ Resolved findings:
 - The built-in throttler is process-local. The supplied deployment runs one API replica; horizontal scaling requires a shared Redis-compatible throttler store before adding replicas.
 - The generic OTP and error-tracking webhooks require an operator-owned bridge or vendor adapter. Provider contracts, data-processing terms, geographic routing, and delivery SLAs are deployment decisions.
 - Mobile/web tokens can still be stolen by a compromised device or successful XSS. Native tokens use SecureStore; web tokens use sessionStorage, are cleared when the tab session ends, and must be protected by the supplied CSP and dependency patching.
-- Payment and continuous driver-location processing are not enabled. A new security/privacy review is required before either feature is introduced.
+- Electronic payment and continuous/background driver-location processing are not enabled. Phase 10 adds foreground-only location selection for a restaurant delivery origin and a customer's order destination; coordinates are accepted by validated DTOs, used for server-side pricing, and retained with the operational order. A new security/privacy review is still required before continuous tracking or third-party maps are introduced.
+- Phase 11 supermarket orders retain a selling-unit snapshot and the customer's per-line substitution preference. Inventory values are operational store data; customers only see currently available stock counts, while all inventory mutations remain authenticated owner actions or transactional order side effects. Substitution consent does not authorize an automatic item or price change.
+- Phase 12 replacement and variable-quantity proposals require the ordering customer's explicit approval before totals change or the store accepts the order. Cross-customer/store probes remain generic not-found responses, and proposal decisions are limited to `PLACED` orders.
+- Phase 13 inventory, supplier, purchase, barcode, and movement endpoints are supermarket-owner scoped. Manual changes require reasons, receiving is guarded and transactional, and concurrent stock writes use conditional updates instead of blind replacement.
 - Legal policy text in this repository is an operational product draft, not jurisdiction-specific legal advice. The operator must approve it before store submission.
 
 ## Release gate

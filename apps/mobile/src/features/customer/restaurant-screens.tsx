@@ -220,7 +220,16 @@ function MenuCategorySection(props: { category: MenuCategorySummary; onAddItem: 
           <View style={styles.itemInfo}>
             <Text style={styles.itemName}>{item.name}</Text>
             {item.description ? <Text numberOfLines={2} style={styles.itemDescription}>{item.description}</Text> : null}
-            <Text style={styles.itemPrice}>{formatPrice(item.priceMinor)}</Text>
+            {item.offer ? (
+              <Text style={styles.itemOffer}>
+                {item.offer.title} · {item.offer.discountPercent}% off
+                {item.offer.minimumSubtotalMinor > 0 ? ` over ${formatPrice(item.offer.minimumSubtotalMinor)}` : ""}
+              </Text>
+            ) : null}
+            <View style={styles.itemPriceRow}>
+              {item.offer ? <Text style={styles.itemOriginalPrice}>{formatPrice(item.priceMinor)}</Text> : null}
+              <Text style={styles.itemPrice}>{formatPrice(item.effectivePriceMinor)}</Text>
+            </View>
           </View>
           <View style={styles.itemVisual}>
             {item.imageUrl ? <Image resizeMode="cover" source={{ uri: item.imageUrl }} style={styles.fullImage} /> : <Text style={styles.itemEmoji}>{index % 2 ? "🥗" : "🍛"}</Text>}
@@ -319,7 +328,10 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1, paddingRight: 12 },
   itemName: { color: customerTheme.colors.text, fontSize: 16, fontWeight: "900" },
   itemDescription: { color: customerTheme.colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 5 },
-  itemPrice: { color: customerTheme.colors.secondary, fontSize: 14, fontWeight: "900", marginTop: 10 },
+  itemOffer: { alignSelf: "flex-start", backgroundColor: "#DCFCE7", borderRadius: 999, color: "#166534", fontSize: 10, fontWeight: "900", marginTop: 8, paddingHorizontal: 9, paddingVertical: 5 },
+  itemPriceRow: { alignItems: "center", flexDirection: "row", gap: 8, marginTop: 10 },
+  itemOriginalPrice: { color: customerTheme.colors.textMuted, fontSize: 12, textDecorationLine: "line-through" },
+  itemPrice: { color: customerTheme.colors.secondary, fontSize: 14, fontWeight: "900" },
   itemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: 15, height: 105, justifyContent: "center", overflow: "visible", position: "relative", width: 105 },
   itemEmoji: { fontSize: 48 },
   addButton: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderColor: "#FFFFFF", borderRadius: 18, borderWidth: 3, bottom: -9, height: 38, justifyContent: "center", position: "absolute", right: -6, width: 38 },

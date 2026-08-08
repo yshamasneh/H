@@ -16,12 +16,17 @@ import {
   ApiError,
   cancelMyOrder,
   createOrder,
+  decideOrderFulfillment,
+  getOrderQuote,
   getMyOrder,
+  listMyAddresses,
   listMyOrders,
   orderPaymentMethods,
   type CreateOrderInput,
   type OrderDetail,
-  type OrderPaymentMethod
+  type OrderQuote,
+  type OrderPaymentMethod,
+  type SavedAddress
 } from "../../core/api";
 import {
   cartItemCount,
@@ -29,10 +34,14 @@ import {
   type Cart
 } from "./cart";
 import { getAccessToken } from "../../core/session";
-import { useRealtimeEvent } from "../../core/socket";
+import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
+import { useOrderRealtime } from "../../core/socket";
 import { customerTheme } from "./theme";
+import { LocationMap } from "../../components/location-map";
+import type { MapCoordinate } from "../../components/location-map.types";
 
 const currencyCode = "ILS";
+const defaultMapCoordinate: MapCoordinate = { latitude: 31.9038, longitude: 35.2034 };
 
 type CartScreenProps = {
   cart: Cart | null;
@@ -40,6 +49,7 @@ type CartScreenProps = {
   onIncrement: (menuItemId: string) => void;
   onDecrement: (menuItemId: string) => void;
   onRemove: (menuItemId: string) => void;
+  onToggleSubstitution: (menuItemId: string, allowSubstitution: boolean) => void;
   onCheckout: () => void;
 };
 
@@ -67,8 +77,17 @@ export function CartScreen(props: CartScreenProps) {
                   <View style={styles.cartItemVisual}><Text style={styles.cartItemEmoji}>🍽️</Text></View>
                   <View style={styles.cartRowInfo}>
                     <Text style={styles.cartRowName}>{item.name}</Text>
-                    <Text style={styles.cartRowUnitPrice}>{formatPrice(item.priceMinor)} each</Text>
+                    <Text style={styles.cartRowUnitPrice}>{formatPrice(item.priceMinor)} / {item.unitLabel}</Text>
                     <Text style={styles.cartRowLineTotal}>{formatPrice(item.priceMinor * item.quantity)}</Text>
+                    <Pressable
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: item.allowSubstitution }}
+                      onPress={() => props.onToggleSubstitution(item.menuItemId, !item.allowSubstitution)}
+                    >
+                      <Text style={styles.substitutionText}>
+                        {item.allowSubstitution ? "✓ Similar replacement allowed" : "No replacement if unavailable"}
+                      </Text>
+                    </Pressable>
                   </View>
                   <Pressable
                     accessibilityLabel={`Remove ${item.name} from cart`}
@@ -124,8 +143,109 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   const [deliveryLabel, setDeliveryLabel] = useState("Home");
   const [deliveryAddressLine, setDeliveryAddressLine] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>("CASH");
+  const [customerNote, setCustomerNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [coordinates, setCoordinates] = useState<CurrentCoordinates>(defaultMapCoordinate);
+  const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+
+  useEffect(() => {
+    getAccessToken()
+      .then((accessToken) => accessToken ? listMyAddresses(accessToken) : [])
+      .then((items) => {
+        setSavedAddresses(items);
+        const preferred = items.find((item) => item.isDefault);
+        if (preferred) selectSavedAddress(preferred);
+      })
+      .catch(() => setSavedAddresses([]));
+  }, []);
+
+  function selectSavedAddress(address: SavedAddress) {
+    setDeliveryLabel(address.label);
+    setDeliveryAddressLine(address.addressLine);
+    setCoordinates({ latitude: address.latitude, longitude: address.longitude });
+    setQuote(null);
+  }
+
+  async function chooseCurrentLocation() {
+    setLocating(true);
+    setError(null);
+    try {
+      const nextCoordinates = await getCurrentCoordinates();
+      setCoordinates(nextCoordinates);
+      const address = await reverseGeocode(nextCoordinates);
+      if (address) setDeliveryAddressLine(address);
+      if (!props.cart) throw new Error("Your cart is empty.");
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error("Your session has expired. Please log in again.");
+      setQuote(await getOrderQuote(accessToken, {
+        restaurantId: props.cart.restaurantId,
+        items: props.cart.items.map((line) => ({
+          menuItemId: line.menuItemId,
+          quantity: line.quantity,
+          allowSubstitution: line.allowSubstitution
+        })),
+        deliveryLabel: deliveryLabel.trim() || "Home",
+        deliveryAddressLine: deliveryAddressLine.trim().length >= 3 ? deliveryAddressLine.trim() : "Selected delivery location",
+        deliveryLatitude: nextCoordinates.latitude,
+        deliveryLongitude: nextCoordinates.longitude,
+        paymentMethod
+      }));
+    } catch (requestError) {
+      setQuote(null);
+      setError(readError(requestError));
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  async function chooseMapLocation(nextCoordinates: MapCoordinate) {
+    setCoordinates(nextCoordinates);
+    setQuote(null);
+    try {
+      const address = await reverseGeocode(nextCoordinates);
+      if (address) setDeliveryAddressLine(address);
+    } catch {
+      // The coordinates remain valid if the platform geocoder is temporarily unavailable.
+    }
+  }
+
+  async function calculateQuote() {
+    if (!props.cart) {
+      setError("Your cart is empty.");
+      return;
+    }
+    if (deliveryAddressLine.trim().length < 3) {
+      setError("Please enter your full delivery address.");
+      return;
+    }
+    setLocating(true);
+    setError(null);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error("Your session has expired. Please log in again.");
+      setQuote(await getOrderQuote(accessToken, {
+        restaurantId: props.cart.restaurantId,
+        items: props.cart.items.map((line) => ({
+          menuItemId: line.menuItemId,
+          quantity: line.quantity,
+          allowSubstitution: line.allowSubstitution
+        })),
+        deliveryLabel: deliveryLabel.trim() || "Home",
+        deliveryAddressLine: deliveryAddressLine.trim(),
+        deliveryLatitude: coordinates.latitude,
+        deliveryLongitude: coordinates.longitude,
+        paymentMethod
+      }));
+    } catch (requestError) {
+      setQuote(null);
+      setError(readError(requestError));
+    } finally {
+      setLocating(false);
+    }
+  }
 
   async function submit() {
     setError(null);
@@ -141,6 +261,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       setError("Please enter your full delivery address.");
       return;
     }
+    if (!quote) {
+      setError("Select the delivery pin and calculate the final total before placing the order.");
+      return;
+    }
     setLoading(true);
     try {
       const accessToken = await getAccessToken();
@@ -150,10 +274,17 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       }
       const input: CreateOrderInput = {
         restaurantId: props.cart.restaurantId,
-        items: props.cart.items.map((line) => ({ menuItemId: line.menuItemId, quantity: line.quantity })),
+        items: props.cart.items.map((line) => ({
+          menuItemId: line.menuItemId,
+          quantity: line.quantity,
+          allowSubstitution: line.allowSubstitution
+        })),
         deliveryLabel: deliveryLabel.trim(),
         deliveryAddressLine: deliveryAddressLine.trim(),
-        paymentMethod
+        deliveryLatitude: coordinates.latitude,
+        deliveryLongitude: coordinates.longitude,
+        paymentMethod,
+        customerNote: customerNote.trim() || undefined
       };
       const order = await createOrder(accessToken, input);
       props.onPlaced(order);
@@ -201,6 +332,15 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         ) : null}
 
         <Text style={styles.sectionTitle}>Delivery address</Text>
+        {savedAddresses.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.savedAddressList}>
+            {savedAddresses.map((address) => (
+              <Pressable key={address.id} onPress={() => selectSavedAddress(address)} style={styles.savedAddressChip}>
+                <Text style={styles.savedAddressChipText}>{address.label}{address.isDefault ? " ★" : ""}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
         <Text style={styles.label}>Label</Text>
         <TextInput
           onChangeText={setDeliveryLabel}
@@ -218,6 +358,32 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           style={[styles.input, styles.multilineInput]}
           value={deliveryAddressLine}
         />
+        <Text style={styles.locationNote}>Move the pin or tap the map to select the exact delivery entrance.</Text>
+        <LocationMap coordinate={coordinates} onCoordinateChange={(value) => void chooseMapLocation(value)} />
+        <SecondaryButton
+          label={locating ? "Finding your location..." : "Use my current location"}
+          onPress={() => void chooseCurrentLocation()}
+        />
+        <SecondaryButton label={locating ? "Calculating..." : "Calculate delivery price"} onPress={() => void calculateQuote()} />
+        <Text style={styles.locationNote}>
+          {`Delivery pin selected: ${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`}
+        </Text>
+        {quote ? (
+          <View style={styles.summaryCard}>
+            <Text style={styles.sectionTitle}>Confirmed price</Text>
+            <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>Items</Text><Text style={styles.summaryRowValue}>{formatPrice(quote.subtotalMinor)}</Text></View>
+            <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>Delivery ({(quote.deliveryDistanceMeters / 1000).toFixed(1)} km)</Text><Text style={styles.summaryRowValue}>{formatPrice(quote.deliveryFeeMinor)}</Text></View>
+            <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>Service fee</Text><Text style={styles.summaryRowValue}>{formatPrice(quote.serviceFeeMinor)}</Text></View>
+            {quote.appliedPromotions.map((promotion) => (
+              <View key={promotion.offerId} style={styles.summaryRow}>
+                <Text style={styles.summaryRowLabel}>{promotion.title}</Text>
+                <Text style={styles.promotionText}>-{formatPrice(promotion.discountMinor)}</Text>
+              </View>
+            ))}
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryRow}><Text style={styles.summaryRowLabelBold}>Cash due on delivery</Text><Text style={styles.summaryRowValueBold}>{formatPrice(quote.totalMinor)}</Text></View>
+          </View>
+        ) : null}
 
         <Text style={styles.sectionTitle}>Payment method</Text>
         {orderPaymentMethods.map((method) => (
@@ -232,6 +398,17 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
             </Text>
           </Pressable>
         ))}
+
+        <Text style={styles.sectionTitle}>Order notes</Text>
+        <TextInput
+          maxLength={500}
+          multiline
+          onChangeText={setCustomerNote}
+          placeholder="Building details, preferred substitutions, or delivery instructions"
+          placeholderTextColor="#94A3B8"
+          style={[styles.input, styles.multilineInput]}
+          value={customerNote}
+        />
 
         <ErrorText message={error} />
         <PrimaryButton label="Place Order" loading={loading} onPress={submit} />
@@ -352,6 +529,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [decidingAdjustmentId, setDecidingAdjustmentId] = useState<string | null>(null);
 
   async function load() {
     setError(null);
@@ -371,10 +549,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
     void load();
   }, [props.orderId]);
 
-  useRealtimeEvent("order.status.changed", (payload: any) => {
-    if (payload?.orderId === props.orderId) void load();
-  });
-  useRealtimeEvent("delivery.status.changed", () => void load());
+  useOrderRealtime(props.orderId, () => void load());
 
   async function cancelOrder() {
     setCancelling(true);
@@ -393,6 +568,23 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
     }
   }
 
+  async function decideFulfillment(adjustmentId: string, decision: "approve" | "reject") {
+    setDecidingAdjustmentId(adjustmentId);
+    setError(null);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setError("Your session has expired. Please log in again.");
+        return;
+      }
+      setOrder(await decideOrderFulfillment(accessToken, props.orderId, adjustmentId, decision));
+    } catch (requestError) {
+      setError(readError(requestError));
+    } finally {
+      setDecidingAdjustmentId(null);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
@@ -408,6 +600,14 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
       ) : (
         <ScrollView contentContainerStyle={styles.formContent}>
           <OrderSummaryCard order={order} />
+          {order.items.filter((item) => item.fulfillmentAdjustment?.status === "PENDING").map((item) => (
+            <FulfillmentReviewCard
+              busy={decidingAdjustmentId === item.fulfillmentAdjustment!.id}
+              item={item}
+              key={item.id}
+              onDecision={(decision) => decideFulfillment(item.fulfillmentAdjustment!.id, decision)}
+            />
+          ))}
           {order.delivery ? <DeliveryProgressCard delivery={order.delivery} /> : null}
           <StatusTimeline history={order.statusHistory} />
           {order.status === "PLACED" ? (
@@ -419,6 +619,47 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
   );
 }
 
+function FulfillmentReviewCard(props: {
+  item: OrderDetail["items"][number];
+  busy: boolean;
+  onDecision: (decision: "approve" | "reject") => Promise<void>;
+}) {
+  const adjustment = props.item.fulfillmentAdjustment!;
+  const proposedName = adjustment.replacementNameSnapshot ?? props.item.nameSnapshot;
+  return (
+    <View style={styles.fulfillmentReviewCard}>
+      <Text style={styles.fulfillmentReviewEyebrow}>YOUR DECISION IS NEEDED</Text>
+      <Text style={styles.fulfillmentReviewTitle}>{props.item.nameSnapshot}</Text>
+      {adjustment.replacementNameSnapshot ? (
+        <Text style={styles.fulfillmentReviewText}>Replacement: {adjustment.replacementNameSnapshot}</Text>
+      ) : (
+        <Text style={styles.fulfillmentReviewText}>The packed quantity differs from the requested quantity.</Text>
+      )}
+      <Text style={styles.fulfillmentReviewText}>
+        {proposedName} / {(adjustment.actualQuantityMilli / 1_000).toFixed(3)} {adjustment.replacementUnitLabelSnapshot ?? props.item.unitLabelSnapshot}
+      </Text>
+      <Text style={styles.fulfillmentReviewPrice}>New line total: {formatPrice(adjustment.lineTotalMinor)}</Text>
+      {adjustment.note ? <Text style={styles.fulfillmentReviewNote}>Store note: {adjustment.note}</Text> : null}
+      <View style={styles.fulfillmentReviewActions}>
+        <Pressable
+          disabled={props.busy}
+          onPress={() => void props.onDecision("approve")}
+          style={[styles.fulfillmentApproveButton, props.busy && styles.fulfillmentButtonDisabled]}
+        >
+          <Text style={styles.fulfillmentApproveText}>Approve</Text>
+        </Pressable>
+        <Pressable
+          disabled={props.busy}
+          onPress={() => void props.onDecision("reject")}
+          style={[styles.fulfillmentRejectButton, props.busy && styles.fulfillmentButtonDisabled]}
+        >
+          <Text style={styles.fulfillmentRejectText}>Reject</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function OrderSummaryCard(props: { order: OrderDetail }) {
   const { order } = props;
   return (
@@ -427,14 +668,19 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
         <Text style={styles.sectionTitle}>{formatDate(order.createdAt)}</Text>
         <StatusBadge status={order.status} />
       </View>
-      {order.items.map((item) => (
-        <View key={item.id} style={styles.summaryRow}>
-          <Text style={styles.summaryRowLabel}>
-            {item.quantity} x {item.nameSnapshot}
-          </Text>
-          <Text style={styles.summaryRowValue}>{formatPrice(item.lineTotalMinor)}</Text>
-        </View>
-      ))}
+      {order.items.map((item) => {
+        const approved = item.fulfillmentAdjustment?.status === "APPROVED" ? item.fulfillmentAdjustment : null;
+        return (
+          <View key={item.id} style={styles.summaryRow}>
+            <Text style={styles.summaryRowLabel}>
+              {approved
+                ? `${formatPackedQuantity(approved.actualQuantityMilli)} x ${approved.replacementNameSnapshot ?? item.nameSnapshot} / ${approved.replacementUnitLabelSnapshot ?? item.unitLabelSnapshot} (approved change)`
+                : `${item.quantity} x ${item.nameSnapshot}`}
+            </Text>
+            <Text style={styles.summaryRowValue}>{formatPrice(item.lineTotalMinor)}</Text>
+          </View>
+        );
+      })}
       <View style={styles.summaryDivider} />
       <View style={styles.summaryRow}>
         <Text style={styles.summaryRowLabel}>Subtotal</Text>
@@ -454,6 +700,11 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
           <Text style={styles.summaryRowValue}>-{formatPrice(order.discountMinor)}</Text>
         </View>
       ) : null}
+      {order.appliedPromotions.map((promotion) => (
+        <Text key={promotion.offerId} style={styles.promotionText}>
+          {promotion.title}: -{formatPrice(promotion.discountMinor)}
+        </Text>
+      ))}
       <View style={styles.summaryDivider} />
       <View style={styles.summaryRow}>
         <Text style={styles.summaryRowLabelBold}>Total</Text>
@@ -466,6 +717,15 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
       </Text>
       <Text style={styles.label}>Payment method</Text>
       <Text style={styles.addressText}>{paymentMethodLabel(order.paymentMethod)}</Text>
+      {order.customerNote ? (
+        <>
+          <Text style={styles.label}>Order notes</Text>
+          <Text style={styles.addressText}>{order.customerNote}</Text>
+        </>
+      ) : null}
+      {order.deliveryDistanceMeters !== null ? (
+        <Text style={styles.footerNote}>Calculated route distance: {(order.deliveryDistanceMeters / 1000).toFixed(1)} km</Text>
+      ) : null}
     </View>
   );
 }
@@ -612,6 +872,10 @@ function formatPrice(priceMinor: number): string {
   return `${(priceMinor / 100).toFixed(2)} ${currencyCode}`;
 }
 
+function formatPackedQuantity(quantityMilli: number): string {
+  return (quantityMilli / 1_000).toFixed(3).replace(/\.?0+$/, "");
+}
+
 function formatDate(iso: string): string {
   const date = new Date(iso);
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -693,6 +957,7 @@ const styles = StyleSheet.create({
   cartRowInfo: { flex: 1 },
   cartRowName: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "900" },
   cartRowUnitPrice: { color: customerTheme.colors.textMuted, fontSize: 12, marginTop: 3 },
+  substitutionText: { color: customerTheme.colors.secondary, fontSize: 12, fontWeight: "700", marginTop: 8 },
   quantityStepper: { alignItems: "center", alignSelf: "flex-end", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: 12, flexDirection: "row", gap: 13, marginTop: 12, padding: 4 },
   stepperButton: {
     alignItems: "center",
@@ -738,6 +1003,20 @@ const styles = StyleSheet.create({
   summaryDivider: { backgroundColor: customerTheme.colors.border, height: 1, marginVertical: 10 },
   label: { color: customerTheme.colors.text, fontSize: 12, fontWeight: "900", marginBottom: 7, marginTop: 12 },
   addressText: { color: customerTheme.colors.text, fontSize: 13, lineHeight: 19 },
+  locationNote: { color: customerTheme.colors.textMuted, fontSize: 11, lineHeight: 17, marginBottom: 8, marginTop: 8 },
+  promotionText: { color: customerTheme.colors.success, fontSize: 12, fontWeight: "800", marginBottom: 5 },
+  fulfillmentReviewCard: { backgroundColor: "#FFFBEB", borderColor: "#F59E0B", borderRadius: 20, borderWidth: 1, marginBottom: 18, padding: 18 },
+  fulfillmentReviewEyebrow: { color: "#B45309", fontSize: 10, fontWeight: "900", letterSpacing: 0.8, marginBottom: 7 },
+  fulfillmentReviewTitle: { color: customerTheme.colors.text, fontSize: 17, fontWeight: "900", marginBottom: 8 },
+  fulfillmentReviewText: { color: "#78350F", fontSize: 13, lineHeight: 19 },
+  fulfillmentReviewPrice: { color: "#92400E", fontSize: 14, fontWeight: "900", marginTop: 8 },
+  fulfillmentReviewNote: { color: "#78350F", fontSize: 12, fontStyle: "italic", marginTop: 7 },
+  fulfillmentReviewActions: { flexDirection: "row", gap: 9, marginTop: 14 },
+  fulfillmentApproveButton: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: 12, flex: 1, paddingVertical: 12 },
+  fulfillmentApproveText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  fulfillmentRejectButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: customerTheme.colors.danger, borderRadius: 12, borderWidth: 1, flex: 1, paddingVertical: 12 },
+  fulfillmentRejectText: { color: customerTheme.colors.danger, fontSize: 13, fontWeight: "900" },
+  fulfillmentButtonDisabled: { opacity: 0.45 },
   input: {
     backgroundColor: customerTheme.colors.surface,
     borderColor: customerTheme.colors.border,
@@ -749,6 +1028,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13
   },
+  savedAddressList: { marginBottom: 10 },
+  savedAddressChip: { backgroundColor: customerTheme.colors.primarySoft, borderRadius: 999, marginRight: 8, paddingHorizontal: 14, paddingVertical: 10 },
+  savedAddressChipText: { color: customerTheme.colors.primaryDark, fontSize: 12, fontWeight: "900" },
   multilineInput: { minHeight: 86, textAlignVertical: "top" },
   paymentOption: {
     backgroundColor: customerTheme.colors.surface,

@@ -4,6 +4,7 @@ import { normalizePhoneNumber } from "../auth/phone.util";
 import { writeAuditLog } from "../common/audit-log.util";
 import { ApiException } from "../common/api.exception";
 import {
+  BusinessType,
   NotificationType,
   OrderStatus,
   Prisma,
@@ -15,8 +16,8 @@ import { createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
 import { restaurantModerationTransitions } from "./restaurant.rules";
-import type { AdminRestaurantsQueryDto, RestaurantRegisterDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
-import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantOfferPublicView, RestaurantProfileView, RestaurantPublicView } from "./restaurants.types";
+import type { AdminRestaurantsQueryDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
+import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantProfileView, RestaurantPublicView, SupermarketCatalogView, SupermarketProductView } from "./restaurants.types";
 
 @Injectable()
 export class RestaurantsService {
@@ -61,6 +62,7 @@ export class RestaurantsService {
           data: {
             ownerUserId: owner.id,
             name: restaurantName,
+            businessType: (input.businessType as BusinessType | undefined) ?? BusinessType.RESTAURANT,
             description: input.description?.trim() || null,
             phone,
             addressLine: input.addressLine.trim(),
@@ -73,7 +75,7 @@ export class RestaurantsService {
       this.realtime.emitToAdmins("restaurant.pending.created", { restaurantId: restaurant.id, name: restaurant.name });
 
       return {
-        message: "Your restaurant application was submitted and is awaiting admin approval. Log in with your phone number and password once it is approved.",
+        message: `Your ${input.businessType === BusinessType.SUPERMARKET ? "supermarket" : "restaurant"} application was submitted and is awaiting admin approval. Log in with your phone number and password once it is approved.`,
         restaurantId: restaurant.id,
         status: restaurant.status
       };
@@ -99,13 +101,22 @@ export class RestaurantsService {
 
   async updateOwnProfile(ownerUserId: string, input: UpdateRestaurantProfileDto): Promise<RestaurantProfileView> {
     const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    if ((input.latitude === undefined) !== (input.longitude === undefined)) {
+      throw new ApiException(
+        400,
+        "RESTAURANT_COORDINATES_INCOMPLETE",
+        "Latitude and longitude must be updated together."
+      );
+    }
     const updated = await this.prisma.restaurant.update({
       where: { id: restaurant.id },
       data: {
         name: input.name?.trim(),
         description: input.description !== undefined ? input.description.trim() || null : undefined,
         addressLine: input.addressLine?.trim(),
-        logoUrl: input.logoUrl !== undefined ? input.logoUrl || null : undefined
+        logoUrl: input.logoUrl !== undefined ? input.logoUrl || null : undefined,
+        latitude: input.latitude,
+        longitude: input.longitude
       }
     });
     return toProfileView(updated);
@@ -113,12 +124,22 @@ export class RestaurantsService {
 
   async setOwnOpenStatus(ownerUserId: string, isOpen: boolean): Promise<RestaurantProfileView> {
     const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    if (isOpen && restaurant.status !== RestaurantStatus.APPROVED) {
+      throw new ApiException(409, "RESTAURANT_NOT_APPROVED", "The restaurant must be approved before it can open.");
+    }
+    if (isOpen && (restaurant.latitude === null || restaurant.longitude === null)) {
+      throw new ApiException(
+        409,
+        "RESTAURANT_LOCATION_REQUIRED",
+        "Set the restaurant location before opening for delivery orders."
+      );
+    }
     const updated = await this.prisma.restaurant.update({ where: { id: restaurant.id }, data: { isOpen } });
     return toProfileView(updated);
   }
 
   async listPublicRestaurants(page: number, pageSize: number): Promise<Page<RestaurantPublicView>> {
-    const where = { status: RestaurantStatus.APPROVED, isOpen: true };
+    const where = { businessType: BusinessType.RESTAURANT, status: RestaurantStatus.APPROVED, isOpen: true };
     const [restaurants, total] = await Promise.all([
       this.prisma.restaurant.findMany({
         where,
@@ -132,46 +153,36 @@ export class RestaurantsService {
   }
 
   async getPublicRestaurant(restaurantId: string): Promise<RestaurantPublicView> {
-    const restaurant = await this.requireApprovedRestaurant(restaurantId);
+    const restaurant = await this.requireApprovedRestaurant(restaurantId, BusinessType.RESTAURANT);
     return toPublicView(restaurant);
   }
 
-  async listPublicOffers(): Promise<RestaurantOfferPublicView[]> {
-    const now = new Date();
-    const offers = await this.prisma.offer.findMany({
-      where: {
-        isActive: true,
-        startsAt: { lte: now },
-        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
-        restaurant: { status: RestaurantStatus.APPROVED, isOpen: true }
-      },
-      include: { restaurant: true },
-      orderBy: { createdAt: "desc" }
-    });
-
-    return offers.map((offer) => ({
-      id: offer.id,
-      title: offer.title,
-      description: offer.description,
-      discountPercent: offer.discountPercent,
-      imageUrl: offer.imageUrl,
-      startsAt: offer.startsAt,
-      endsAt: offer.endsAt,
-      restaurant: {
-        id: offer.restaurant.id,
-        name: offer.restaurant.name,
-        logoUrl: offer.restaurant.logoUrl
-      }
-    }));
-  }
-
   async getPublicMenu(restaurantId: string) {
-    const restaurant = await this.requireApprovedRestaurant(restaurantId);
-    const categories = await this.prisma.menuCategory.findMany({
-      where: { restaurantId, isActive: true },
-      orderBy: { sortOrder: "asc" },
-      include: { items: { where: { isAvailable: true }, orderBy: { name: "asc" } } }
-    });
+    const restaurant = await this.requireApprovedRestaurant(restaurantId, BusinessType.RESTAURANT);
+    const now = new Date();
+    const [categories, offers] = await Promise.all([
+      this.prisma.menuCategory.findMany({
+        where: { restaurantId, isActive: true },
+        orderBy: { sortOrder: "asc" },
+        include: { items: { where: { isAvailable: true }, orderBy: { name: "asc" } } }
+      }),
+      this.prisma.offer.findMany({
+        where: {
+          restaurantId,
+          type: "PRODUCT_PERCENTAGE",
+          isActive: true,
+          startsAt: { lte: now },
+          OR: [{ endsAt: null }, { endsAt: { gt: now } }]
+        },
+        orderBy: { discountPercent: "desc" }
+      })
+    ]);
+    const offerByMenuItemId = new Map<string, (typeof offers)[number]>();
+    for (const offer of offers) {
+      if (offer.menuItemId && !offerByMenuItemId.has(offer.menuItemId)) {
+        offerByMenuItemId.set(offer.menuItemId, offer);
+      }
+    }
 
     return {
       restaurant: toPublicView(restaurant),
@@ -179,14 +190,133 @@ export class RestaurantsService {
         id: category.id,
         name: category.name,
         sortOrder: category.sortOrder,
-        items: category.items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          priceMinor: item.priceMinor,
-          imageUrl: item.imageUrl
-        }))
+        items: category.items.map((item) => {
+          return toPublicItemView(item, offerByMenuItemId.get(item.id));
+        })
       }))
+    };
+  }
+
+  async listPublicSupermarkets(page: number, pageSize: number): Promise<Page<RestaurantPublicView>> {
+    const where = { businessType: BusinessType.SUPERMARKET, status: RestaurantStatus.APPROVED, isOpen: true };
+    const [supermarkets, total] = await Promise.all([
+      this.prisma.restaurant.findMany({
+        where,
+        orderBy: { name: "asc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      }),
+      this.prisma.restaurant.count({ where })
+    ]);
+    return { items: supermarkets.map(toPublicView), page, pageSize, total };
+  }
+
+  async getSupermarketCatalog(
+    supermarketId: string,
+    query: SupermarketCatalogQueryDto
+  ): Promise<SupermarketCatalogView> {
+    const supermarket = await this.requireApprovedRestaurant(supermarketId, BusinessType.SUPERMARKET);
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 30;
+    const search = query.search?.trim();
+    const departments = await this.prisma.menuCategory.findMany({
+      where: { restaurantId: supermarketId, isActive: true },
+      orderBy: { sortOrder: "asc" }
+    });
+    const departmentIds = departments.map((department) => department.id);
+    if (query.categoryId && !departmentIds.includes(query.categoryId)) {
+      throw new ApiException(404, "SUPERMARKET_DEPARTMENT_NOT_FOUND", "This supermarket department does not exist.");
+    }
+
+    const where: Prisma.MenuItemWhereInput = {
+      restaurantId: supermarketId,
+      isAvailable: true,
+      categoryId: query.categoryId ?? { in: departmentIds },
+      isFeatured: query.featured,
+      AND: [
+        { OR: [{ stockQuantity: null }, { stockQuantity: { gt: 0 } }] },
+        ...(search
+          ? [{
+              OR: [
+                { name: { contains: search, mode: "insensitive" as const } },
+                { description: { contains: search, mode: "insensitive" as const } },
+                { brand: { contains: search, mode: "insensitive" as const } },
+                { sku: { contains: search, mode: "insensitive" as const } }
+              ]
+            }]
+          : [])
+      ]
+    };
+    const [products, total, allAvailable, offers] = await Promise.all([
+      this.prisma.menuItem.findMany({
+        where,
+        orderBy: [{ isFeatured: "desc" }, { name: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize
+      }),
+      this.prisma.menuItem.count({ where }),
+      this.prisma.menuItem.findMany({
+        where: {
+          restaurantId: supermarketId,
+          isAvailable: true,
+          categoryId: { in: departmentIds },
+          OR: [{ stockQuantity: null }, { stockQuantity: { gt: 0 } }]
+        },
+        select: { categoryId: true }
+      }),
+      this.activeProductOffers(supermarketId)
+    ]);
+    const offerByItem = bestOfferByMenuItem(offers);
+    const departmentName = new Map(departments.map((department) => [department.id, department.name]));
+    const countByDepartment = new Map<string, number>();
+    for (const product of allAvailable) {
+      countByDepartment.set(product.categoryId, (countByDepartment.get(product.categoryId) ?? 0) + 1);
+    }
+    return {
+      supermarket: toPublicView(supermarket),
+      departments: departments.map((department) => ({
+        id: department.id,
+        name: department.name,
+        sortOrder: department.sortOrder,
+        productCount: countByDepartment.get(department.id) ?? 0
+      })),
+      products: products.map((product) => ({
+        ...toPublicItemView(product, offerByItem.get(product.id)),
+        categoryId: product.categoryId,
+        categoryName: departmentName.get(product.categoryId) ?? "Products"
+      })),
+      page,
+      pageSize,
+      total
+    };
+  }
+
+  async getSupermarketProduct(supermarketId: string, productId: string): Promise<{
+    supermarket: RestaurantPublicView;
+    product: SupermarketProductView;
+  }> {
+    const supermarket = await this.requireApprovedRestaurant(supermarketId, BusinessType.SUPERMARKET);
+    const product = await this.prisma.menuItem.findFirst({
+      where: {
+        id: productId,
+        restaurantId: supermarketId,
+        isAvailable: true,
+        OR: [{ stockQuantity: null }, { stockQuantity: { gt: 0 } }],
+        category: { isActive: true }
+      },
+      include: { category: true }
+    });
+    if (!product) {
+      throw new ApiException(404, "SUPERMARKET_PRODUCT_NOT_FOUND", "This product is not available.");
+    }
+    const offer = bestOfferByMenuItem(await this.activeProductOffers(supermarketId)).get(product.id);
+    return {
+      supermarket: toPublicView(supermarket),
+      product: {
+        ...toPublicItemView(product, offer),
+        categoryId: product.categoryId,
+        categoryName: product.category.name
+      }
     };
   }
 
@@ -195,7 +325,8 @@ export class RestaurantsService {
     const pageSize = query.pageSize ?? 20;
     const where: Prisma.RestaurantWhereInput = {
       status: query.status ? (query.status as RestaurantStatus) : undefined,
-      isOpen: query.isOpen
+      isOpen: query.isOpen,
+      businessType: query.businessType ? (query.businessType as BusinessType) : undefined
     };
     const [restaurants, total] = await Promise.all([
       this.prisma.restaurant.findMany({
@@ -251,6 +382,14 @@ export class RestaurantsService {
           description: item.description,
           priceMinor: item.priceMinor,
           imageUrl: item.imageUrl,
+          sku: item.sku,
+          brand: item.brand,
+          unitLabel: item.unitLabel,
+          stockQuantity: item.stockQuantity,
+          isFeatured: item.isFeatured,
+          isVariableWeight: item.isVariableWeight,
+          barcode: item.barcode,
+          reorderLevel: item.reorderLevel,
           isAvailable: item.isAvailable
         }))
       }))
@@ -374,14 +513,28 @@ export class RestaurantsService {
     return toProfileView(updated);
   }
 
-  private async requireApprovedRestaurant(restaurantId: string): Promise<Restaurant> {
+  private async requireApprovedRestaurant(restaurantId: string, businessType?: BusinessType): Promise<Restaurant> {
     const restaurant = await this.prisma.restaurant.findFirst({
-      where: { id: restaurantId, status: RestaurantStatus.APPROVED }
+      where: { id: restaurantId, status: RestaurantStatus.APPROVED, businessType }
     });
     if (!restaurant) {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant is not available.");
     }
     return restaurant;
+  }
+
+  private activeProductOffers(restaurantId: string) {
+    const now = new Date();
+    return this.prisma.offer.findMany({
+      where: {
+        restaurantId,
+        type: "PRODUCT_PERCENTAGE",
+        isActive: true,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }]
+      },
+      orderBy: { discountPercent: "desc" }
+    });
   }
 
   private assertPasswordsMatch(password: string, confirmation: string): void {
@@ -395,11 +548,78 @@ function toPublicView(restaurant: Restaurant): RestaurantPublicView {
   return {
     id: restaurant.id,
     name: restaurant.name,
+    businessType: restaurant.businessType,
     description: restaurant.description,
     phone: restaurant.phone,
     addressLine: restaurant.addressLine,
+    latitude: restaurant.latitude,
+    longitude: restaurant.longitude,
     logoUrl: restaurant.logoUrl,
     isOpen: restaurant.isOpen
+  };
+}
+
+function bestOfferByMenuItem<T extends { menuItemId: string | null }>(offers: T[]): Map<string, T> {
+  const result = new Map<string, T>();
+  for (const offer of offers) {
+    if (offer.menuItemId && !result.has(offer.menuItemId)) result.set(offer.menuItemId, offer);
+  }
+  return result;
+}
+
+function toPublicItemView(
+  item: {
+    id: string;
+    name: string;
+    description: string | null;
+    priceMinor: number;
+    imageUrl: string | null;
+    sku: string | null;
+    brand: string | null;
+    unitLabel: string;
+    stockQuantity: number | null;
+    isFeatured: boolean;
+    isVariableWeight: boolean;
+    barcode: string | null;
+    reorderLevel: number | null;
+  },
+  offer?: {
+    id: string;
+    title: string;
+    discountPercent: number | null;
+    minimumSubtotalMinor: number;
+    maxDiscountMinor: number | null;
+  }
+) {
+  const discountMinor = offer && offer.minimumSubtotalMinor === 0
+    ? Math.min(
+        Math.floor(item.priceMinor * (offer.discountPercent ?? 0) / 100),
+        offer.maxDiscountMinor ?? Number.MAX_SAFE_INTEGER
+      )
+    : 0;
+  return {
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    priceMinor: item.priceMinor,
+    effectivePriceMinor: item.priceMinor - discountMinor,
+    imageUrl: item.imageUrl,
+    sku: item.sku,
+    brand: item.brand,
+    unitLabel: item.unitLabel,
+    stockQuantity: item.stockQuantity,
+    isFeatured: item.isFeatured,
+    isVariableWeight: item.isVariableWeight,
+    barcode: item.barcode,
+    reorderLevel: item.reorderLevel,
+    offer: offer
+      ? {
+          id: offer.id,
+          title: offer.title,
+          discountPercent: offer.discountPercent!,
+          minimumSubtotalMinor: offer.minimumSubtotalMinor
+        }
+      : null
   };
 }
 

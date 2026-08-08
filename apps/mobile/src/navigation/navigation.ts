@@ -6,6 +6,8 @@ export type PhonePrefill = { countryCode: CountryCode; phoneNumber: string };
 export type AppScreen =
   | { name: "login"; prefill?: PhonePrefill; notice?: string }
   | { name: "signup"; prefill?: PhonePrefill }
+  | { name: "restaurant-signup"; prefill?: PhonePrefill }
+  | { name: "driver-signup"; prefill?: PhonePrefill }
   | { name: "forgot-password"; prefill?: PhonePrefill }
   | {
       name: "otp";
@@ -20,17 +22,29 @@ export type AppScreen =
   | { name: "home"; user: PublicUser; notice?: string }
   | { name: "restaurants"; user: PublicUser }
   | { name: "restaurant-menu"; user: PublicUser; restaurantId: string; restaurantName: string }
+  | { name: "supermarkets"; user: PublicUser }
+  | { name: "supermarket-catalog"; user: PublicUser; supermarketId: string; supermarketName: string }
+  | {
+      name: "supermarket-product";
+      user: PublicUser;
+      supermarketId: string;
+      supermarketName: string;
+      productId: string;
+    }
   | { name: "cart"; user: PublicUser }
   | { name: "checkout"; user: PublicUser }
   | { name: "order-confirmation"; user: PublicUser; order: OrderDetail }
   | { name: "order-history"; user: PublicUser }
   | { name: "order-detail"; user: PublicUser; orderId: string }
+  | { name: "account"; user: PublicUser }
   | { name: "restaurant-orders"; user: PublicUser }
+  | { name: "restaurant-management"; user: PublicUser }
   | { name: "restaurant-order-detail"; user: PublicUser; orderId: string }
   | { name: "driver-home"; user: PublicUser }
   | { name: "delivery-detail"; user: PublicUser; deliveryId: string }
   | { name: "notifications"; user: PublicUser }
   | { name: "admin-dashboard"; user: PublicUser }
+  | { name: "admin-offers"; user: PublicUser }
   | { name: "admin-restaurants"; user: PublicUser }
   | { name: "admin-restaurant-detail"; user: PublicUser; restaurantId: string }
   | { name: "admin-orders"; user: PublicUser }
@@ -43,6 +57,16 @@ export const initialScreen: AppScreen = { name: "login" };
 
 export function goToSignup(prefill?: PhonePrefill): Extract<AppScreen, { name: "signup" }> {
   return { name: "signup", prefill };
+}
+
+export function goToRestaurantSignup(
+  prefill?: PhonePrefill
+): Extract<AppScreen, { name: "restaurant-signup" }> {
+  return { name: "restaurant-signup", prefill };
+}
+
+export function goToDriverSignup(prefill?: PhonePrefill): Extract<AppScreen, { name: "driver-signup" }> {
+  return { name: "driver-signup", prefill };
 }
 
 export function goToLogin(prefill?: PhonePrefill, notice?: string): Extract<AppScreen, { name: "login" }> {
@@ -139,6 +163,46 @@ export function goToRestaurantOrders(user: PublicUser): Extract<AppScreen, { nam
   return { name: "restaurant-orders", user };
 }
 
+export function goToAccount(user: PublicUser): Extract<AppScreen, { name: "account" }> {
+  return { name: "account", user };
+}
+
+export function goToSupermarkets(user: PublicUser): Extract<AppScreen, { name: "supermarkets" }> {
+  return { name: "supermarkets", user };
+}
+
+export function goToSupermarketCatalog(
+  user: PublicUser,
+  supermarket: Pick<RestaurantSummary, "id" | "name">
+): Extract<AppScreen, { name: "supermarket-catalog" }> {
+  return {
+    name: "supermarket-catalog",
+    user,
+    supermarketId: supermarket.id,
+    supermarketName: supermarket.name
+  };
+}
+
+export function goToSupermarketProduct(
+  user: PublicUser,
+  supermarket: Pick<RestaurantSummary, "id" | "name">,
+  productId: string
+): Extract<AppScreen, { name: "supermarket-product" }> {
+  return {
+    name: "supermarket-product",
+    user,
+    supermarketId: supermarket.id,
+    supermarketName: supermarket.name,
+    productId
+  };
+}
+
+export function goToRestaurantManagement(
+  user: PublicUser
+): Extract<AppScreen, { name: "restaurant-management" }> {
+  return { name: "restaurant-management", user };
+}
+
 export function goToRestaurantOrderDetail(
   user: PublicUser,
   orderId: string
@@ -163,6 +227,10 @@ export function goToNotifications(user: PublicUser): Extract<AppScreen, { name: 
 
 export function goToAdminDashboard(user: PublicUser): Extract<AppScreen, { name: "admin-dashboard" }> {
   return { name: "admin-dashboard", user };
+}
+
+export function goToAdminOffers(user: PublicUser): Extract<AppScreen, { name: "admin-offers" }> {
+  return { name: "admin-offers", user };
 }
 
 export function goToAdminRestaurants(user: PublicUser): Extract<AppScreen, { name: "admin-restaurants" }> {

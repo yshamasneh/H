@@ -24,6 +24,7 @@ export function AdminDashboardScreen(props: {
   user: PublicUser;
   onLogout: () => Promise<void>;
   onRestaurants: () => void;
+  onOffers: () => void;
   onOrders: () => void;
   onDrivers: () => void;
   onUsers: () => void;
@@ -71,13 +72,14 @@ export function AdminDashboardScreen(props: {
             <Stat label="Orders today" value={String(dashboard.ordersToday)} />
             <Stat label="Revenue today" value={formatMoney(dashboard.revenueTodayMinor)} />
             <Stat label="Active deliveries" value={String(dashboard.activeDeliveries)} />
-            <Stat label="Pending restaurants" value={String(dashboard.pendingRestaurantApprovals)} />
+            <Stat label="Pending stores" value={String(dashboard.pendingRestaurantApprovals)} />
             <Stat label="Online drivers" value={String(dashboard.onlineDriversCount)} />
             <Stat label="New customers" value={String(dashboard.newCustomerSignupsToday)} />
           </View>
 
           <Text style={adminStyles.sectionTitle}>Management</Text>
-          <Card onPress={props.onRestaurants}><CardTitle>Restaurants</CardTitle><Meta>Approvals, suspensions, and restaurant performance</Meta></Card>
+          <Card onPress={props.onRestaurants}><CardTitle>Stores</CardTitle><Meta>Restaurant and supermarket approvals, suspensions, and performance</Meta></Card>
+          <Card onPress={props.onOffers}><CardTitle>Offers</CardTitle><Meta>Publish product, order, delivery, and free-delivery campaigns</Meta></Card>
           <Card onPress={props.onOrders}><CardTitle>Orders</CardTitle><Meta>Search all orders and apply support cancellations</Meta></Card>
           <Card onPress={props.onDrivers}><CardTitle>Drivers</CardTitle><Meta>Approve drivers and manage their operational status</Meta></Card>
           <Card onPress={props.onUsers}><CardTitle>Users</CardTitle><Meta>Search customers and accounts by role</Meta></Card>

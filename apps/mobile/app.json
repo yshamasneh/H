@@ -2,7 +2,7 @@
   "expo": {
     "name": "TasawaQ",
     "slug": "wasel",
-    "version": "0.8.0",
+    "version": "0.13.0",
     "scheme": "tasawaq",
     "icon": "./assets/store/app-icon-1024.png",
     "orientation": "portrait",
@@ -11,14 +11,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.wasel.app",
-      "buildNumber": "8",
+      "buildNumber": "13",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.wasel.app",
-      "versionCode": 8,
+      "versionCode": 13,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -40,7 +40,14 @@
           "imageWidth": 260,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TasawaQ uses your location only when you choose it to calculate delivery availability and pricing."
+        }
+      ],
+      "expo-localization"
     ],
     "updates": {
       "enabled": false

@@ -4,6 +4,8 @@ export type CartItem = {
   name: string;
   priceMinor: number;
   quantity: number;
+  unitLabel: string;
+  allowSubstitution: boolean;
 };
 
 export type Cart = {
@@ -12,14 +14,28 @@ export type Cart = {
   items: CartItem[];
 };
 
-export type CartCandidateItem = { id: string; name: string; priceMinor: number };
+export type CartCandidateItem = {
+  id: string;
+  name: string;
+  priceMinor: number;
+  effectivePriceMinor?: number;
+  unitLabel?: string;
+  allowSubstitution?: boolean;
+};
 export type CartCandidateRestaurant = { id: string; name: string };
 
 export function startCart(restaurant: CartCandidateRestaurant, item: CartCandidateItem): Cart {
   return {
     restaurantId: restaurant.id,
     restaurantName: restaurant.name,
-    items: [{ menuItemId: item.id, name: item.name, priceMinor: item.priceMinor, quantity: 1 }]
+    items: [{
+      menuItemId: item.id,
+      name: item.name,
+      priceMinor: item.effectivePriceMinor ?? item.priceMinor,
+      quantity: 1,
+      unitLabel: item.unitLabel ?? "item",
+      allowSubstitution: item.allowSubstitution ?? false
+    }]
   };
 }
 
@@ -35,7 +51,23 @@ export function addCartItem(cart: Cart, item: CartCandidateItem): Cart {
   }
   return {
     ...cart,
-    items: [...cart.items, { menuItemId: item.id, name: item.name, priceMinor: item.priceMinor, quantity: 1 }]
+    items: [...cart.items, {
+      menuItemId: item.id,
+      name: item.name,
+      priceMinor: item.effectivePriceMinor ?? item.priceMinor,
+      quantity: 1,
+      unitLabel: item.unitLabel ?? "item",
+      allowSubstitution: item.allowSubstitution ?? false
+    }]
+  };
+}
+
+export function setCartItemSubstitution(cart: Cart, menuItemId: string, allowSubstitution: boolean): Cart {
+  return {
+    ...cart,
+    items: cart.items.map((line) =>
+      line.menuItemId === menuItemId ? { ...line, allowSubstitution } : line
+    )
   };
 }
 

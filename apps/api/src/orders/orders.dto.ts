@@ -3,6 +3,7 @@ import { Type } from "class-transformer";
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -29,6 +30,12 @@ export class CreateOrderItemDto {
   @Min(1)
   @Max(50)
   quantity!: number;
+
+  @ApiPropertyOptional({ default: false, description: "Allow a supermarket to replace an unavailable product." })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  allowSubstitution?: boolean;
 }
 
 export class CreateOrderDto {
@@ -55,23 +62,27 @@ export class CreateOrderDto {
   @MaxLength(200)
   deliveryAddressLine!: string;
 
-  @ApiPropertyOptional({ example: 31.9038 })
-  @IsOptional()
+  @ApiProperty({ example: 31.9038 })
   @IsNumber()
   @Min(-90)
   @Max(90)
-  deliveryLatitude?: number;
+  deliveryLatitude!: number;
 
-  @ApiPropertyOptional({ example: 35.2034 })
-  @IsOptional()
+  @ApiProperty({ example: 35.2034 })
   @IsNumber()
   @Min(-180)
   @Max(180)
-  deliveryLongitude?: number;
+  deliveryLongitude!: number;
 
   @ApiProperty({ enum: orderPaymentMethodValues, example: "CASH" })
   @IsIn(orderPaymentMethodValues)
   paymentMethod!: OrderPaymentMethodValue;
+
+  @ApiPropertyOptional({ example: "Please call when you reach the building entrance." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  customerNote?: string;
 }
 
 export const restaurantOrderStatusActionValues = ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "REJECTED"] as const;
@@ -83,6 +94,27 @@ export class UpdateOrderStatusDto {
   status!: RestaurantOrderStatusAction;
 
   @ApiPropertyOptional({ example: "Out of falafel today" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  note?: string;
+}
+
+export class ProposeFulfillmentAdjustmentDto {
+  @ApiPropertyOptional({ description: "Replacement product from the same supermarket." })
+  @IsOptional()
+  @IsUUID()
+  replacementMenuItemId?: string;
+
+  @ApiPropertyOptional({ example: 1850, description: "Actual packed quantity in thousandths of the requested selling unit." })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100_000)
+  actualQuantityMilli?: number;
+
+  @ApiPropertyOptional({ example: "The requested pack was unavailable; this is the closest equivalent." })
   @IsOptional()
   @IsString()
   @MaxLength(300)

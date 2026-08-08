@@ -7,7 +7,10 @@ import { AuthModule } from "./auth/auth.module";
 import { validateEnvironment } from "./config/environment";
 import { DriversModule } from "./drivers/drivers.module";
 import { HealthModule } from "./health/health.module";
+import { InventoryModule } from "./inventory/inventory.module";
+import { UsersModule } from "./users/users.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { OffersModule } from "./offers/offers.module";
 import { ObservabilityModule } from "./observability/observability.module";
 import { OrdersModule } from "./orders/orders.module";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -35,10 +38,13 @@ import { RestaurantsModule } from "./restaurants/restaurants.module";
     RealtimeModule,
     AuthModule,
     HealthModule,
+    InventoryModule,
+    UsersModule,
     RestaurantsModule,
     OrdersModule,
     DriversModule,
     NotificationsModule,
+    OffersModule,
     AdminModule
   ],
   providers: [

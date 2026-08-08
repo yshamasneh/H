@@ -22,6 +22,12 @@ export class OrdersController {
     return this.orders.createOrder(request.user.id, input);
   }
 
+  @Post("quote")
+  @ApiOperation({ summary: "Calculate delivery pricing and active offers without placing an order" })
+  quote(@Body() input: CreateOrderDto) {
+    return this.orders.quoteOrder(input);
+  }
+
   @Get("me")
   @ApiOperation({ summary: "List the authenticated customer's own orders, most recent first" })
   listMine(@Req() request: AuthenticatedRequest, @Query() query: OrdersPaginationQueryDto) {
@@ -38,5 +44,25 @@ export class OrdersController {
   @ApiOperation({ summary: "Cancel one of the authenticated customer's own orders, only while still PLACED" })
   cancel(@Req() request: AuthenticatedRequest, @Param("orderId", new ParseUUIDPipe()) orderId: string) {
     return this.orders.cancelForCustomer(request.user.id, orderId);
+  }
+
+  @Post(":orderId/fulfillments/:adjustmentId/approve")
+  @ApiOperation({ summary: "Approve a pending supermarket replacement or packed quantity" })
+  approveFulfillment(
+    @Req() request: AuthenticatedRequest,
+    @Param("orderId", new ParseUUIDPipe()) orderId: string,
+    @Param("adjustmentId", new ParseUUIDPipe()) adjustmentId: string
+  ) {
+    return this.orders.decideFulfillmentAdjustment(request.user.id, orderId, adjustmentId, "APPROVED");
+  }
+
+  @Post(":orderId/fulfillments/:adjustmentId/reject")
+  @ApiOperation({ summary: "Reject a pending supermarket replacement or packed quantity" })
+  rejectFulfillment(
+    @Req() request: AuthenticatedRequest,
+    @Param("orderId", new ParseUUIDPipe()) orderId: string,
+    @Param("adjustmentId", new ParseUUIDPipe()) adjustmentId: string
+  ) {
+    return this.orders.decideFulfillmentAdjustment(request.user.id, orderId, adjustmentId, "REJECTED");
   }
 }

@@ -66,19 +66,20 @@ export function AdminRestaurantsScreen(props: {
   }, [filter]);
 
   return (
-    <AdminPage onBack={props.onBack} subtitle="Approvals and operational status" title="Restaurants">
+    <AdminPage onBack={props.onBack} subtitle="Approvals and operational status" title="Stores">
       <FilterChips onChange={setFilter} options={filters} value={filter} />
       <ErrorBanner message={error} />
       {restaurants === null ? (
         <LoadingState />
       ) : restaurants.length === 0 ? (
-        <EmptyState message="No restaurants match this filter." />
+        <EmptyState message="No stores match this filter." />
       ) : (
         restaurants.map((restaurant) => (
           <Card key={restaurant.id}>
             <View style={adminStyles.rowBetween}>
               <View style={{ flex: 1 }}>
                 <CardTitle>{restaurant.name}</CardTitle>
+                <Meta>{restaurant.businessType === "SUPERMARKET" ? "Supermarket" : "Restaurant"}</Meta>
                 <Meta>{restaurant.addressLine}</Meta>
               </View>
               <StatusPill status={restaurant.status} />
@@ -126,7 +127,7 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
   }
 
   return (
-    <AdminPage onBack={props.onBack} subtitle="Restaurant account and performance" title={restaurant?.name ?? "Restaurant details"}>
+    <AdminPage onBack={props.onBack} subtitle="Store account and performance" title={restaurant?.name ?? "Store details"}>
       <ErrorBanner message={error} />
       {!restaurant ? (
         error ? null : <LoadingState />
@@ -135,6 +136,7 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
           <Card>
             <View style={adminStyles.rowBetween}>
               <CardTitle>{restaurant.name}</CardTitle>
+              <Meta>{restaurant.businessType === "SUPERMARKET" ? "Supermarket" : "Restaurant"}</Meta>
               <StatusPill status={restaurant.status} />
             </View>
             <KeyValue label="Owner" value={restaurant.ownerFullName} />

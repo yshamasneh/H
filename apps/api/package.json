@@ -10,6 +10,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --require ../../scripts/node-platform-shim.cjs --import tsx --test --test-concurrency=1 src/**/*.test.ts",
+    "test:e2e": "node ../../scripts/run-api-e2e.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name customer_phone_auth",
     "prisma:deploy": "prisma migrate deploy",

@@ -48,6 +48,8 @@ type LoginScreenProps = {
   notice?: string;
   onAuthenticated: (result: AuthResult) => Promise<void>;
   onSignup: (prefill: PhonePrefill) => void;
+  onRestaurantSignup: (prefill: PhonePrefill) => void;
+  onDriverSignup: (prefill: PhonePrefill) => void;
   onForgotPassword: (prefill: PhonePrefill) => void;
 };
 
@@ -94,6 +96,10 @@ export function LoginScreen(props: LoginScreenProps) {
       <ErrorText message={error} />
       <PrimaryButton label="Log in" loading={loading} onPress={submit} />
       <LinkButton label="Create Customer Account" onPress={() => props.onSignup(prefill)} />
+      <View style={styles.inlineActions}>
+        <SecondaryButton label="Register Restaurant or Supermarket" onPress={() => props.onRestaurantSignup(prefill)} />
+        <SecondaryButton label="Register Driver" onPress={() => props.onDriverSignup(prefill)} />
+      </View>
       <LinkButton label="Forgot Password?" onPress={() => props.onForgotPassword(prefill)} />
       <DeveloperApiLabel />
     </AuthLayout>
@@ -391,6 +397,7 @@ export function HomeScreen(props: {
   onBrowseRestaurants?: () => void;
   onViewOrders?: () => void;
   onManageOrders?: () => void;
+  onManageRestaurant?: () => void;
   onOpenDriverDashboard?: () => void;
   onOpenNotifications: () => void;
 }) {
@@ -441,6 +448,9 @@ export function HomeScreen(props: {
       ) : null}
       {props.onViewOrders ? <SecondaryButton label="My Orders" onPress={props.onViewOrders} /> : null}
       {props.onManageOrders ? <PrimaryButton label="Manage Incoming Orders" onPress={props.onManageOrders} /> : null}
+      {props.onManageRestaurant ? (
+        <SecondaryButton label="Store Profile & Catalog" onPress={props.onManageRestaurant} />
+      ) : null}
       {props.onOpenDriverDashboard ? (
         <PrimaryButton label="Delivery Dashboard" onPress={props.onOpenDriverDashboard} />
       ) : null}
