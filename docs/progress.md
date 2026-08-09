@@ -290,3 +290,48 @@ Remaining before Phase 8 (production hardening):
 ### Still deferred
 
 - Multi-warehouse/bin inventory, supplier invoicing/accounting, camera-based barcode recognition, external road routing/ETA, and continuous driver maps remain separate provider/operations phases.
+
+## 2026-08-08: Phase 14 — Customer Experience (address book and device push registration)
+
+This phase's migration and code existed in the pushed branch but were never written up here; this entry closes that documentation gap as part of the 2026-08-09 branch integration below.
+
+### Repository implementation: Completed
+
+- Added a per-user saved-address book (`Address`: label, address line, latitude/longitude, one default) with full CRUD under a new `users` module (`GET/POST /users/me/addresses`, `PATCH/DELETE /users/me/addresses/:id`), plus `GET/PATCH /users/me` and `DELETE /users/me`.
+- Added `PushToken` (device token, platform, active flag, last-registered time) with `POST/DELETE /users/me/push-tokens`, so a device can register/unregister for push delivery. No push provider is wired to send anything yet — this is registration/storage only, matching the standing "device push is out of scope" boundary from Phase 7; sending pushes remains a separate future integration.
+- Added `Order.customerNote` (free-text note from the customer at checkout) and `DriverProfile.lastLocationAt` (timestamp of the driver's most recent location update).
+- Added a mobile `account-screen.tsx` (manage saved addresses, set default, delete account) and `core/push-notifications.ts` (device token registration flow).
+- Migration `20260808140000_phase14_customer_experience` is additive only (two new tables, two nullable columns) — no destructive changes to existing data.
+
+## 2026-08-09: Integrating a teammate's branches (Phases 8 through 14) into the default branch
+
+Three remote branches (`agent/phase-8-production-release`, `agent/phase-14-15-completion`, `agent/mobile-navigation-and-portal`) were fetched, read commit-by-commit (diffs, not just messages), and integrated. Full reasoning, the branch-relationship findings, the phase-numbering reconciliation, and the scope-expansion note are in `docs/decisions.md` — this entry covers what changed mechanically.
+
+### Completed
+
+- Confirmed all three branches form a single straight line with zero divergence from this repository's prior tip (`c0d0be2`, end of Phase 7): `phase-8-production-release` → `phase-14-15-completion` (one more commit on top) → `mobile-navigation-and-portal` (literally the same commit as `phase-14-15-completion`, confirmed by an empty `git diff` in both directions). Integrated via a plain fast-forward merge (`git merge --ff-only`) — no conflicts, because there was nothing to reconcile.
+- Verified the incoming branch independently, in an isolated `git worktree`, before touching the working directory. Found and fixed one real bug: `apps/mobile/tsconfig.json` was missing `"moduleSuffixes": [".native", ".web", ""]`, so plain `tsc` failed to resolve the new platform-split `location-map` component (2 `TS2307` + 2 downstream `TS7006` errors). This is the standard TypeScript ≥4.7 fix for React Native's `.native`/`.web` file-splitting convention.
+- Also fixed a small pre-existing issue from this project's own Phase 7: two unrelated DTOs were both named `AdminActionReasonDto` (in `drivers.dto.ts` and `restaurants.dto.ts`), which NestJS/Swagger warns about at boot. Renamed the restaurant one to `RestaurantAdminActionReasonDto`.
+- Fixed `.github/workflows/ci.yml`'s push trigger, which only listed `main` — a branch that has never existed in this repository — to also include `agent/customer-phone-auth`, the actual default/HEAD branch, so CI will run on a normal push here.
+- Applied all 7 pending Prisma migrations (`public_offers` through `phase14_customer_experience`) to the live local PostgreSQL database via `prisma migrate deploy`; confirmed via `prisma migrate status` ("Database schema is up to date!") and directly via `psql \dt`, which now lists 24 tables including `Offer`, `Address`, `PushToken`, `Supplier`, `PurchaseOrder`, `PurchaseOrderItem`, `InventoryMovement`, and `FulfillmentAdjustment`. Re-ran the idempotent seed script afterward, which added an approved demo supermarket (`+970590000004`, 3 departments, 5 products, a supplier, and a draft purchase order) and an approved demo driver (`+970590000003`) without duplicating or disturbing any existing seeded/test data.
+
+### Verified (after the merge, in the real working directory — not just the throwaway worktree)
+
+- `npm run lint`, `npm run typecheck`: pass clean across all three workspaces (API, admin, mobile).
+- `npm test`: **121/121 API tests pass** (1 additional test skipped by design — the opt-in database E2E test, gated behind `RUN_DATABASE_E2E=true`) and **23/23 mobile tests pass**.
+- `npm run build`: all three workspaces build successfully — API (`prisma generate` + `tsc`), `apps/admin` (`vite build`), and mobile (`expo export --platform all`, which now also produces a **web** bundle in addition to Android/iOS — the mobile app can run in a browser, a capability introduced by this branch).
+- `npx prisma validate`: passes. `npx prisma migrate status` against the live database: "Database schema is up to date!"
+- `npm run test:e2e` (the opt-in, real-Postgres HTTP E2E test): **passes**, run against the live local database after migrations were applied. It exercises the complete four-role order lifecycle plus grocery fulfillment/substitution review, inventory reservation and restock, and supplier purchase-order receiving together in one real session, and its cleanup left all pre-existing data untouched (confirmed by row counts before/after).
+- Manually confirmed the running API correctly serves the new endpoints against the live database: `GET /api/v1/restaurants` and `GET /api/v1/supermarkets` now correctly return separate lists (the demo restaurant only appears under restaurants, the demo supermarket only under supermarkets), matching the new `BusinessType` boundary.
+- Searched the full merged codebase for a "cost price vs. sale price / margin / 3-way profit-split" feature that was asked about during this integration. It does not exist in any of the three branches. The only related concept is Phase 13's supplier-procurement cost tracking (`PurchaseOrderItem.unitCostMinor`), which is unrelated to a customer-facing margin or platform/restaurant/driver profit split.
+
+### Corrected phase status
+
+Phases 0 through 14 are implemented, tested, and documented (Phase 14's write-up was backfilled by this entry, above). There is no Phase 15 anywhere in the codebase, its migrations, or its documentation, despite the `phase-14-15-completion` branch name — see `docs/decisions.md` for the full reconciliation.
+
+### Remaining before further work
+
+- Everything listed as "Still deferred" / "Deferred after Phase N" in each phase section above remains genuinely open (multi-warehouse inventory, road-routing/ETA, camera barcode scanning, automatic substitution selection, external OTP/error-tracking/monitoring vendor selection, and the external, non-code launch gates in Phase 8's own section).
+- The transitive `js-yaml` high-severity advisory via `@nestjs/swagger@11.4.5` (pre-existing since Phase 3, unrelated to this merge) is still open; `npm audit fix --force` would resolve it by bumping `@nestjs/swagger` to `11.4.6`, not yet applied.
+- No production OTP/error-tracking/monitoring vendor has been selected; Phase 8's webhook adapters are ready but unconfigured.
+- The "cost price vs. sale price / margin / 3-way profit-split" feature discussed during this integration has not been implemented anywhere and would need its own design (which party's cost, how the split is computed, where it is displayed) before implementation.

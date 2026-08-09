@@ -5,7 +5,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../common/decorators/roles.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../generated/prisma/client";
-import { AdminActionReasonDto, AdminRestaurantsQueryDto } from "./restaurants.dto";
+import { AdminRestaurantsQueryDto, RestaurantAdminActionReasonDto } from "./restaurants.dto";
 import { RestaurantsService } from "./restaurants.service";
 import { OrdersPaginationQueryDto } from "../orders/orders.dto";
 
@@ -58,7 +58,7 @@ export class AdminRestaurantsController {
   suspend(
     @Req() request: AuthenticatedRequest,
     @Param("restaurantId", new ParseUUIDPipe()) restaurantId: string,
-    @Body() input: AdminActionReasonDto
+    @Body() input: RestaurantAdminActionReasonDto
   ) {
     return this.restaurants.adminSuspend(request.user.id, restaurantId, input.reason);
   }

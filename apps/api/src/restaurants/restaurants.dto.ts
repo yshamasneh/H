@@ -372,7 +372,7 @@ export class SupermarketCatalogQueryDto extends PaginationQueryDto {
   featured?: boolean;
 }
 
-export class AdminActionReasonDto {
+export class RestaurantAdminActionReasonDto {
   @ApiProperty({ example: "Multiple hygiene complaints" })
   @IsString()
   @MinLength(1)
