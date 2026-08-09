@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 type ReasonModalProps = {
   title: string;
@@ -9,13 +10,14 @@ type ReasonModalProps = {
 };
 
 export function ReasonModal(props: ReasonModalProps) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function confirm() {
     if (reason.trim().length === 0) {
-      setError("Please enter a reason.");
+      setError(t("reasonModal.reasonRequired"));
       return;
     }
     setSubmitting(true);
@@ -23,7 +25,7 @@ export function ReasonModal(props: ReasonModalProps) {
     try {
       await props.onConfirm(reason.trim());
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "This action could not be completed.");
+      setError(requestError instanceof Error ? requestError.message : t("common.genericActionError"));
     } finally {
       setSubmitting(false);
     }
@@ -38,16 +40,16 @@ export function ReasonModal(props: ReasonModalProps) {
           autoFocus
           className="text-input"
           onChange={(event) => setReason(event.target.value)}
-          placeholder="Reason"
+          placeholder={t("reasonModal.placeholder")}
           value={reason}
         />
         {error ? <p style={{ color: "var(--danger)", fontSize: 12.5, marginTop: 8 }}>{error}</p> : null}
         <div className="btn-row" style={{ marginTop: 14, justifyContent: "flex-end" }}>
           <button className="btn btn-outline" onClick={props.onCancel} type="button">
-            Cancel
+            {t("common.cancel")}
           </button>
           <button className="btn btn-danger" disabled={submitting} onClick={() => void confirm()} type="button">
-            {submitting ? "Working..." : props.confirmLabel}
+            {submitting ? t("common.working") : props.confirmLabel}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ApiError, listAdminOrders, type OrderDetail } from "../api";
 import { StatusBadge } from "../components/StatusBadge";
@@ -8,6 +9,7 @@ const currencyCode = "ILS";
 const statusOptions = ["", "PLACED", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "DELIVERED", "REJECTED", "CANCELLED"];
 
 export function OrdersPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
   const [status, setStatus] = useState("");
@@ -24,7 +26,7 @@ export function OrdersPage() {
       });
       setOrders(page.items);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "Could not load orders.");
+      setError(requestError instanceof ApiError ? requestError.message : t("orders.loadError"));
     }
   }
 
@@ -40,8 +42,8 @@ export function OrdersPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Orders</h1>
-          <p className="page-subtitle">Every order across every restaurant</p>
+          <h1 className="page-title">{t("orders.title")}</h1>
+          <p className="page-subtitle">{t("orders.subtitle")}</p>
         </div>
       </div>
 
@@ -52,7 +54,7 @@ export function OrdersPage() {
           <select className="select" onChange={(event) => setStatus(event.target.value)} value={status}>
             {statusOptions.map((option) => (
               <option key={option} value={option}>
-                {option || "All statuses"}
+                {option ? t(`status.${option}`) : t("restaurants.allStatuses")}
               </option>
             ))}
           </select>
@@ -61,17 +63,17 @@ export function OrdersPage() {
         </div>
 
         {orders === null ? (
-          <div className="loading-state">Loading...</div>
+          <div className="loading-state">{t("common.loading")}</div>
         ) : orders.length === 0 ? (
-          <div className="empty-state">No orders match this filter.</div>
+          <div className="empty-state">{t("orders.empty")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Restaurant</th>
-                <th>Status</th>
-                <th>Total</th>
+                <th>{t("orders.date")}</th>
+                <th>{t("orders.restaurant")}</th>
+                <th>{t("common.status")}</th>
+                <th>{t("orders.total")}</th>
               </tr>
             </thead>
             <tbody>

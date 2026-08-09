@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
   ApiError,
@@ -16,6 +17,7 @@ import { useRealtimeEvent } from "../socket";
 const statusOptions = ["", "PENDING", "APPROVED", "REJECTED", "SUSPENDED"];
 
 export function RestaurantsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState<RestaurantProfile[] | null>(null);
   const [status, setStatus] = useState("");
@@ -28,7 +30,7 @@ export function RestaurantsPage() {
       const page = await listAdminRestaurants(status ? { status } : {});
       setRestaurants(page.items);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "Could not load restaurants.");
+      setError(requestError instanceof ApiError ? requestError.message : t("restaurants.loadError"));
     }
   }
 
@@ -45,7 +47,7 @@ export function RestaurantsPage() {
       await action();
       await load();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "This action could not be completed.");
+      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
     } finally {
       setBusyId(null);
     }
@@ -55,8 +57,8 @@ export function RestaurantsPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Restaurants</h1>
-          <p className="page-subtitle">Approve applications, and suspend or reactivate live restaurants</p>
+          <h1 className="page-title">{t("restaurants.title")}</h1>
+          <p className="page-subtitle">{t("restaurants.subtitle")}</p>
         </div>
       </div>
 
@@ -67,25 +69,25 @@ export function RestaurantsPage() {
           <select className="select" onChange={(event) => setStatus(event.target.value)} value={status}>
             {statusOptions.map((option) => (
               <option key={option} value={option}>
-                {option || "All statuses"}
+                {option ? t(`status.${option}`) : t("restaurants.allStatuses")}
               </option>
             ))}
           </select>
         </div>
 
         {restaurants === null ? (
-          <div className="loading-state">Loading...</div>
+          <div className="loading-state">{t("common.loading")}</div>
         ) : restaurants.length === 0 ? (
-          <div className="empty-state">No restaurants match this filter.</div>
+          <div className="empty-state">{t("restaurants.empty")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Address</th>
-                <th>Status</th>
-                <th>Open</th>
-                <th>Actions</th>
+                <th>{t("common.name")}</th>
+                <th>{t("restaurants.address")}</th>
+                <th>{t("common.status")}</th>
+                <th>{t("common.open")}</th>
+                <th>{t("common.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -96,7 +98,7 @@ export function RestaurantsPage() {
                   <td>
                     <StatusBadge status={restaurant.status} />
                   </td>
-                  <td>{restaurant.isOpen ? "Open" : "Closed"}</td>
+                  <td>{restaurant.isOpen ? t("common.open") : t("common.closed")}</td>
                   <td>
                     <div className="btn-row">
                       {restaurant.status === "PENDING" ? (
@@ -107,7 +109,7 @@ export function RestaurantsPage() {
                             onClick={() => act(restaurant.id, () => approveRestaurant(restaurant.id))}
                             type="button"
                           >
-                            Approve
+                            {t("common.approve")}
                           </button>
                           <button
                             className="btn btn-danger btn-sm"
@@ -115,7 +117,7 @@ export function RestaurantsPage() {
                             onClick={() => act(restaurant.id, () => rejectRestaurant(restaurant.id))}
                             type="button"
                           >
-                            Reject
+                            {t("common.reject")}
                           </button>
                         </>
                       ) : null}
@@ -126,7 +128,7 @@ export function RestaurantsPage() {
                           onClick={() => setSuspendTarget(restaurant)}
                           type="button"
                         >
-                          Suspend
+                          {t("common.suspend")}
                         </button>
                       ) : null}
                       {restaurant.status === "SUSPENDED" ? (
@@ -136,7 +138,7 @@ export function RestaurantsPage() {
                           onClick={() => act(restaurant.id, () => reactivateRestaurant(restaurant.id))}
                           type="button"
                         >
-                          Reactivate
+                          {t("common.reactivate")}
                         </button>
                       ) : null}
                     </div>
@@ -150,15 +152,15 @@ export function RestaurantsPage() {
 
       {suspendTarget ? (
         <ReasonModal
-          confirmLabel="Suspend restaurant"
-          description={`Suspending "${suspendTarget.name}" will close it to new orders immediately.`}
+          confirmLabel={t("restaurants.suspendConfirm")}
+          description={t("restaurants.suspendDescription", { name: suspendTarget.name })}
           onCancel={() => setSuspendTarget(null)}
           onConfirm={async (reason) => {
             await suspendRestaurant(suspendTarget.id, reason);
             setSuspendTarget(null);
             await load();
           }}
-          title="Suspend restaurant"
+          title={t("restaurants.suspendTitle")}
         />
       ) : null}
     </div>

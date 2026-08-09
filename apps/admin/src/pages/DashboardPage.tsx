@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError, getDashboard, type DashboardOverview } from "../api";
 import { useRealtimeEvent } from "../socket";
 
 const currencyCode = "ILS";
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -12,7 +14,7 @@ export function DashboardPage() {
     try {
       setData(await getDashboard());
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "Could not load the dashboard.");
+      setError(requestError instanceof ApiError ? requestError.message : t("dashboard.loadError"));
     }
   }
 
@@ -30,39 +32,43 @@ export function DashboardPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Live overview - updates automatically as orders and approvals change</p>
+          <h1 className="page-title">{t("dashboard.title")}</h1>
+          <p className="page-subtitle">{t("dashboard.subtitle")}</p>
         </div>
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
 
       {data === null ? (
-        <div className="loading-state">Loading...</div>
+        <div className="loading-state">{t("common.loading")}</div>
       ) : (
         <>
           <div className="stat-grid">
-            <StatCard hint="Placed since midnight" label="Orders today" value={String(data.ordersToday)} />
+            <StatCard hint={t("dashboard.ordersTodayHint")} label={t("dashboard.ordersToday")} value={String(data.ordersToday)} />
             <StatCard
-              hint="Excludes cancelled/rejected orders"
-              label="Revenue today"
+              hint={t("dashboard.revenueTodayHint")}
+              label={t("dashboard.revenueToday")}
               value={formatPrice(data.revenueTodayMinor)}
             />
-            <StatCard hint="Not yet delivered" label="Active deliveries" value={String(data.activeDeliveries)} />
-            <StatCard hint="Awaiting approval" label="Pending restaurants" value={String(data.pendingRestaurantApprovals)} />
-            <StatCard hint="Approved and online" label="Online drivers" value={String(data.onlineDriversCount)} />
-            <StatCard hint="New customers today" label="New signups" value={String(data.newCustomerSignupsToday)} />
+            <StatCard hint={t("dashboard.activeDeliveriesHint")} label={t("dashboard.activeDeliveries")} value={String(data.activeDeliveries)} />
+            <StatCard hint={t("dashboard.pendingRestaurantsHint")} label={t("dashboard.pendingRestaurants")} value={String(data.pendingRestaurantApprovals)} />
+            <StatCard hint={t("dashboard.onlineDriversHint")} label={t("dashboard.onlineDrivers")} value={String(data.onlineDriversCount)} />
+            <StatCard hint={t("dashboard.newSignupsHint")} label={t("dashboard.newSignups")} value={String(data.newCustomerSignupsToday)} />
           </div>
 
           <div className="card">
-            <h2 className="card-title">Recent activity</h2>
+            <h2 className="card-title">{t("dashboard.recentActivity")}</h2>
             {data.activityFeed.length === 0 ? (
-              <div className="empty-state">No order activity yet.</div>
+              <div className="empty-state">{t("dashboard.noActivity")}</div>
             ) : (
               data.activityFeed.map((entry) => (
                 <div className="activity-item" key={entry.id}>
                   <span>
-                    <strong>{entry.restaurantName}</strong> - order moved to {entry.toStatus.replace(/_/g, " ")}
+                    <strong>{entry.restaurantName}</strong>
+                    {" - "}
+                    {t("dashboard.activityLine", {
+                      status: t(`status.${entry.toStatus}`, entry.toStatus.replace(/_/g, " "))
+                    })}
                   </span>
                   <span className="activity-meta">{formatDate(entry.createdAt)}</span>
                 </div>

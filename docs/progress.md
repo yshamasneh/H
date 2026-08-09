@@ -335,3 +335,24 @@ Phases 0 through 14 are implemented, tested, and documented (Phase 14's write-up
 - The transitive `js-yaml` high-severity advisory via `@nestjs/swagger@11.4.5` (pre-existing since Phase 3, unrelated to this merge) is still open; `npm audit fix --force` would resolve it by bumping `@nestjs/swagger` to `11.4.6`, not yet applied.
 - No production OTP/error-tracking/monitoring vendor has been selected; Phase 8's webhook adapters are ready but unconfigured.
 - The "cost price vs. sale price / margin / 3-way profit-split" feature discussed during this integration has not been implemented anywhere and would need its own design (which party's cost, how the split is computed, where it is displayed) before implementation.
+
+## 2026-08-09: Admin dashboard — Arabic-default RTL i18n
+
+`apps/admin` had zero i18n infrastructure before this entry (confirmed by grep — no hits for `i18n`, `useTranslation`, `dir=`, etc.). It now defaults to Arabic with a full RTL layout, with English as a switchable option persisted in `localStorage`. Full reasoning, including the corrected finding that `apps/mobile` has **no** i18n either (contrary to the premise that admin should "match" it), is in `docs/decisions.md`.
+
+### Completed
+
+- Added `i18next` + `react-i18next`; created `apps/admin/src/i18n/` with `ar.json`/`en.json` translation resources (namespaced per page: `common`, `status`, `role`, `layout`, `login`, `dashboard`, `restaurants`, `restaurantDetail`, `orders`, `orderDetail`, `drivers`, `users`, `auditLog`, `reasonModal`).
+- All 9 pages (`LoginPage`, `DashboardPage`, `RestaurantsPage`, `RestaurantDetailPage`, `OrdersPage`, `OrderDetailPage`, `DriversPage`, `UsersPage`, `AuditLogPage`), all 3 shared components (`Layout`, `ReasonModal`, `StatusBadge`), `auth.tsx`'s error messages, and `App.tsx`'s loading state now use `t()` — every static UI string is translated to natural Arabic, with English as the alternate.
+- `document.documentElement.dir`/`lang` are set synchronously before React renders (no LTR flash on load), default to `ar`/`rtl`, and update live when the sidebar language switcher is used. Choice persists in `localStorage` across reloads.
+- Fixed the only 3 physical-direction CSS declarations in `styles.css` (`text-align: left`, `border-left`/`margin-left`/`left` on the audit-log timeline) to logical properties (`text-align: start`, `border-inline-start`, `margin-inline-start`, `inset-inline-start`) so RTL mirrors without duplicate override rules.
+
+### Verified
+
+- `tsc --noEmit` (typecheck) passes clean.
+- Started the real dev server and visually verified in Chrome, logged in as the seeded admin account: login screen, dashboard, restaurants/orders/drivers/users/audit-log tables, and the suspend-restaurant reason modal all render correctly mirrored in Arabic (sidebar and sign-out on the right, table columns re-ordered, modal button order swapped to RTL convention). Toggled to English and confirmed the layout re-mirrors to LTR instantly; reloaded and confirmed the language choice persisted.
+
+### Remaining before further work
+
+- **`apps/mobile` has no i18n at all** — no library, no translation files, no `I18nManager`/RTL usage, no language switcher. Every mobile screen (customer, admin, restaurant, supermarket, driver) is hardcoded English. This was assumed already done; it is not, and needs the same treatment as this admin work (plus the added complexity that React Native's `I18nManager.forceRTL` requires an app reload to take effect on native builds, unlike the instant `dir` attribute flip available on the web).
+- Backend-originated strings (API error messages surfaced verbatim via `ApiError.message`, e.g. validation errors) are not translated — they are a separate concern in `apps/api`, out of scope for a frontend i18n pass.

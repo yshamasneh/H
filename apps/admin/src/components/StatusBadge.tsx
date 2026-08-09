@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 const palette: Record<string, string> = {
   PENDING: "badge-warn",
   PENDING_ASSIGNMENT: "badge-warn",
@@ -20,6 +22,7 @@ const palette: Record<string, string> = {
 };
 
 export function StatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
   const className = palette[status] ?? "badge-neutral";
-  return <span className={`badge ${className}`}>{status.replace(/_/g, " ")}</span>;
+  return <span className={`badge ${className}`}>{t(`status.${status}`, status.replace(/_/g, " "))}</span>;
 }

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError, listAuditLog, type AuditLogEntry } from "../api";
 
 export function AuditLogPage() {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<AuditLogEntry[] | null>(null);
   const [action, setAction] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -12,7 +14,7 @@ export function AuditLogPage() {
         const page = await listAuditLog({ action: action || undefined });
         setEntries(page.items);
       } catch (requestError) {
-        setError(requestError instanceof ApiError ? requestError.message : "Could not load the audit log.");
+        setError(requestError instanceof ApiError ? requestError.message : t("auditLog.loadError"));
       }
     }
     void load();
@@ -22,8 +24,8 @@ export function AuditLogPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Audit Log</h1>
-          <p className="page-subtitle">Every admin action, who performed it, and why</p>
+          <h1 className="page-title">{t("auditLog.title")}</h1>
+          <p className="page-subtitle">{t("auditLog.subtitle")}</p>
         </div>
       </div>
 
@@ -34,24 +36,24 @@ export function AuditLogPage() {
           <input
             className="text-input"
             onChange={(event) => setAction(event.target.value)}
-            placeholder="Filter by action, e.g. RESTAURANT_SUSPENDED"
+            placeholder={t("auditLog.filterPlaceholder")}
             value={action}
           />
         </div>
 
         {entries === null ? (
-          <div className="loading-state">Loading...</div>
+          <div className="loading-state">{t("common.loading")}</div>
         ) : entries.length === 0 ? (
-          <div className="empty-state">No matching audit log entries.</div>
+          <div className="empty-state">{t("auditLog.empty")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>When</th>
-                <th>Admin</th>
-                <th>Action</th>
-                <th>Entity</th>
-                <th>Reason</th>
+                <th>{t("auditLog.when")}</th>
+                <th>{t("auditLog.admin")}</th>
+                <th>{t("auditLog.action")}</th>
+                <th>{t("auditLog.entity")}</th>
+                <th>{t("auditLog.reason")}</th>
               </tr>
             </thead>
             <tbody>
@@ -63,7 +65,7 @@ export function AuditLogPage() {
                   <td>
                     {entry.entityType} ({entry.entityId.slice(0, 8)})
                   </td>
-                  <td>{entry.reason ?? "-"}</td>
+                  <td>{entry.reason ?? t("common.dash")}</td>
                 </tr>
               ))}
             </tbody>

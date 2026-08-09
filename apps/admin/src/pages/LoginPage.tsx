@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const { signIn, error } = useAuth();
   const [countryCode, setCountryCode] = useState("+970");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -21,13 +23,13 @@ export function LoginPage() {
   return (
     <div className="login-screen">
       <form className="login-card" onSubmit={submit}>
-        <h1 className="login-title">TasawaQ Ops</h1>
-        <p className="login-subtitle">Sign in with an administrator account</p>
+        <h1 className="login-title">{t("login.title")}</h1>
+        <p className="login-subtitle">{t("login.subtitle")}</p>
 
         {error ? <div className="error-banner">{error}</div> : null}
 
         <label className="field-label" htmlFor="phone">
-          Phone number
+          {t("login.phoneLabel")}
         </label>
         <div className="field-row">
           <select className="select" onChange={(event) => setCountryCode(event.target.value)} value={countryCode}>
@@ -44,7 +46,7 @@ export function LoginPage() {
         </div>
 
         <label className="field-label" htmlFor="password">
-          Password
+          {t("login.passwordLabel")}
         </label>
         <input
           className="text-input full-width"
@@ -55,7 +57,7 @@ export function LoginPage() {
         />
 
         <button className="btn btn-primary full-width" disabled={submitting} style={{ marginTop: 20 }} type="submit">
-          {submitting ? "Signing in..." : "Sign in"}
+          {submitting ? t("login.signingIn") : t("login.signIn")}
         </button>
       </form>
     </div>

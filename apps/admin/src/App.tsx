@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
@@ -12,10 +13,11 @@ import { RestaurantsPage } from "./pages/RestaurantsPage";
 import { UsersPage } from "./pages/UsersPage";
 
 export default function App() {
+  const { t } = useTranslation();
   const { user, isBooting } = useAuth();
 
   if (isBooting) {
-    return <div className="loading-state" style={{ paddingTop: 40 }}>Loading...</div>;
+    return <div className="loading-state" style={{ paddingTop: 40 }}>{t("common.loading")}</div>;
   }
 
   if (!user) {

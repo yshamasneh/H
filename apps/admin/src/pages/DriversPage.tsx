@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError, approveDriver, listAdminDrivers, reactivateDriver, rejectDriver, suspendDriver, type AdminDriverView } from "../api";
 import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
 
 export function DriversPage() {
+  const { t } = useTranslation();
   const [drivers, setDrivers] = useState<AdminDriverView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -13,7 +15,7 @@ export function DriversPage() {
     try {
       setDrivers(await listAdminDrivers());
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "Could not load drivers.");
+      setError(requestError instanceof ApiError ? requestError.message : t("drivers.loadError"));
     }
   }
 
@@ -27,7 +29,7 @@ export function DriversPage() {
       await action();
       await load();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "This action could not be completed.");
+      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
     } finally {
       setBusyId(null);
     }
@@ -37,8 +39,8 @@ export function DriversPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Drivers</h1>
-          <p className="page-subtitle">Approve applications and manage online drivers</p>
+          <h1 className="page-title">{t("drivers.title")}</h1>
+          <p className="page-subtitle">{t("drivers.subtitle")}</p>
         </div>
       </div>
 
@@ -46,19 +48,19 @@ export function DriversPage() {
 
       <div className="card">
         {drivers === null ? (
-          <div className="loading-state">Loading...</div>
+          <div className="loading-state">{t("common.loading")}</div>
         ) : drivers.length === 0 ? (
-          <div className="empty-state">No drivers yet.</div>
+          <div className="empty-state">{t("drivers.empty")}</div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Status</th>
-                <th>Online</th>
-                <th>Completed deliveries</th>
-                <th>Actions</th>
+                <th>{t("common.name")}</th>
+                <th>{t("common.phone")}</th>
+                <th>{t("common.status")}</th>
+                <th>{t("drivers.online")}</th>
+                <th>{t("drivers.completedDeliveries")}</th>
+                <th>{t("common.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -83,7 +85,7 @@ export function DriversPage() {
                             onClick={() => act(driver.userId, () => approveDriver(driver.userId))}
                             type="button"
                           >
-                            Approve
+                            {t("common.approve")}
                           </button>
                           <button
                             className="btn btn-danger btn-sm"
@@ -91,7 +93,7 @@ export function DriversPage() {
                             onClick={() => setModal({ driver, kind: "reject" })}
                             type="button"
                           >
-                            Reject
+                            {t("common.reject")}
                           </button>
                         </>
                       ) : null}
@@ -102,7 +104,7 @@ export function DriversPage() {
                           onClick={() => setModal({ driver, kind: "suspend" })}
                           type="button"
                         >
-                          Suspend
+                          {t("common.suspend")}
                         </button>
                       ) : null}
                       {driver.status === "SUSPENDED" ? (
@@ -112,7 +114,7 @@ export function DriversPage() {
                           onClick={() => act(driver.userId, () => reactivateDriver(driver.userId))}
                           type="button"
                         >
-                          Reactivate
+                          {t("common.reactivate")}
                         </button>
                       ) : null}
                     </div>
@@ -126,8 +128,12 @@ export function DriversPage() {
 
       {modal ? (
         <ReasonModal
-          confirmLabel={modal.kind === "reject" ? "Reject driver" : "Suspend driver"}
-          description={`This will ${modal.kind} ${modal.driver.fullName}'s driver account.`}
+          confirmLabel={modal.kind === "reject" ? t("drivers.rejectTitle") : t("drivers.suspendTitle")}
+          description={
+            modal.kind === "reject"
+              ? t("drivers.rejectDescription", { name: modal.driver.fullName })
+              : t("drivers.suspendDescription", { name: modal.driver.fullName })
+          }
           onCancel={() => setModal(null)}
           onConfirm={async (reason) => {
             if (modal.kind === "reject") await rejectDriver(modal.driver.userId, reason);
@@ -135,7 +141,7 @@ export function DriversPage() {
             setModal(null);
             await load();
           }}
-          title={modal.kind === "reject" ? "Reject driver" : "Suspend driver"}
+          title={modal.kind === "reject" ? t("drivers.rejectTitle") : t("drivers.suspendTitle")}
         />
       ) : null}
     </div>

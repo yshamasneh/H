@@ -1,17 +1,22 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth";
+import { setLanguage, supportedLanguages, type SupportedLanguage } from "../i18n";
 
 const navItems = [
-  { to: "/", label: "Dashboard", icon: "▦", end: true },
-  { to: "/restaurants", label: "Restaurants", icon: "♨" },
-  { to: "/orders", label: "Orders", icon: "≡" },
-  { to: "/drivers", label: "Drivers", icon: "✈" },
-  { to: "/users", label: "Users", icon: "●" },
-  { to: "/audit-log", label: "Audit Log", icon: "☷" }
+  { to: "/", labelKey: "layout.nav.dashboard", icon: "▦", end: true },
+  { to: "/restaurants", labelKey: "layout.nav.restaurants", icon: "♨" },
+  { to: "/orders", labelKey: "layout.nav.orders", icon: "≡" },
+  { to: "/drivers", labelKey: "layout.nav.drivers", icon: "✈" },
+  { to: "/users", labelKey: "layout.nav.users", icon: "●" },
+  { to: "/audit-log", labelKey: "layout.nav.auditLog", icon: "☷" }
 ];
 
+const languageLabels: Record<SupportedLanguage, string> = { ar: "العربية", en: "English" };
+
 export function Layout({ children }: { children: ReactNode }) {
+  const { t, i18n } = useTranslation();
   const { user, signOut } = useAuth();
 
   return (
@@ -20,8 +25,8 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="sidebar-brand">
           <div className="sidebar-brand-mark">TQ</div>
           <div className="sidebar-brand-text">
-            <span className="sidebar-brand-title">TasawaQ Ops</span>
-            <span className="sidebar-brand-subtitle">Operations Console</span>
+            <span className="sidebar-brand-title">{t("layout.brandTitle")}</span>
+            <span className="sidebar-brand-subtitle">{t("layout.brandSubtitle")}</span>
           </div>
         </div>
         {navItems.map((item) => (
@@ -32,15 +37,27 @@ export function Layout({ children }: { children: ReactNode }) {
             to={item.to}
           >
             <span className="nav-link-icon">{item.icon}</span>
-            {item.label}
+            {t(item.labelKey)}
           </NavLink>
         ))}
+        <div className="language-switch" role="group" aria-label={t("layout.language")}>
+          {supportedLanguages.map((language) => (
+            <button
+              className={`language-switch-option${i18n.language === language ? " active" : ""}`}
+              key={language}
+              onClick={() => setLanguage(language)}
+              type="button"
+            >
+              {languageLabels[language]}
+            </button>
+          ))}
+        </div>
         <div className="sidebar-footer">
-          Signed in as
+          {t("layout.signedInAs")}
           <br />
           <strong style={{ color: "#e7ecf7" }}>{user?.fullName}</strong>
           <button className="sign-out-button" onClick={() => void signOut()} type="button">
-            Sign out
+            {t("layout.signOut")}
           </button>
         </div>
       </aside>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError, fetchCurrentUser, getAccessToken, login as apiLogin, logout as apiLogout, setAccessToken, type PublicUser } from "./api";
 
 type AuthState = {
@@ -12,6 +13,7 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const [user, setUser] = useState<PublicUser | null>(null);
   const [isBooting, setIsBooting] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser = await fetchCurrentUser();
         if (currentUser.role !== "ADMIN") {
           setAccessToken(null);
-          setError("This account is not an administrator.");
+          setError(t("login.errorNotAdminRestore"));
         } else {
           setUser(currentUser);
         }
@@ -45,13 +47,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await apiLogin({ countryCode, phoneNumber, password });
       if (result.user.role !== "ADMIN") {
-        setError("This account does not have administrator access.");
+        setError(t("login.errorNotAdminSignIn"));
         return;
       }
       setAccessToken(result.accessToken);
       setUser(result.user);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : "Could not sign in. Please try again.");
+      setError(requestError instanceof ApiError ? requestError.message : t("login.errorGeneric"));
     }
   }
 
