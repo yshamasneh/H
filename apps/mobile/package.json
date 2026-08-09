@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
-    "tsx": "^4.23.5",
+    "tsx": "^4.23.9",
     "typescript": "^5.7.2"
   },
   "expo": {
