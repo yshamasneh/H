@@ -76,6 +76,8 @@ type OrderRecord = {
   discountMinor: number;
   promotionSnapshot: unknown;
   totalMinor: number;
+  acceptedByUserId: string | null;
+  acceptedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -236,6 +238,8 @@ export class FakeOrdersPrisma {
         discountMinor: data.discountMinor ?? 0,
         promotionSnapshot: data.promotionSnapshot ?? null,
         totalMinor: data.totalMinor,
+        acceptedByUserId: data.acceptedByUserId ?? null,
+        acceptedAt: data.acceptedAt ?? null,
         createdAt: now,
         updatedAt: now
       };
@@ -283,6 +287,8 @@ export class FakeOrdersPrisma {
         if (data.status !== undefined) order.status = data.status;
         if (data.subtotalMinor !== undefined) order.subtotalMinor = data.subtotalMinor;
         if (data.totalMinor !== undefined) order.totalMinor = data.totalMinor;
+        if (data.acceptedByUserId !== undefined) order.acceptedByUserId = data.acceptedByUserId;
+        if (data.acceptedAt !== undefined) order.acceptedAt = data.acceptedAt;
         order.updatedAt = new Date();
       }
       return { count: matches.length };

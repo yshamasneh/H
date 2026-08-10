@@ -15,7 +15,8 @@
     "suspend": "Suspend",
     "reactivate": "Reactivate",
     "genericActionError": "This action could not be completed.",
-    "dash": "-"
+    "dash": "-",
+    "unknown": "Unknown"
   },
   "status": {
     "PENDING": "Pending",
@@ -120,7 +121,8 @@
     "date": "Date",
     "restaurant": "Restaurant",
     "total": "Total",
-    "empty": "No orders match this filter."
+    "empty": "No orders match this filter.",
+    "acceptedBy": "Accepted by"
   },
   "orderDetail": {
     "items": "Items",
@@ -139,7 +141,10 @@
     "statusHistory": "Status history",
     "cancelTitle": "Cancel order",
     "cancelDescription": "This will immediately cancel the order and notify the customer and restaurant.",
-    "loadError": "Could not load this order."
+    "loadError": "Could not load this order.",
+    "acceptedBy": "Accepted by",
+    "acceptedByValue": "{{name}} — {{at}}",
+    "notAcceptedYet": "Not accepted yet"
   },
   "drivers": {
     "title": "Drivers",

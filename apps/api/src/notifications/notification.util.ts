@@ -1,5 +1,5 @@
 import type { NotificationType, Prisma } from "../generated/prisma/client";
-import type { RealtimeGateway } from "../realtime/realtime.gateway";
+import type { RealtimeEmitter } from "../realtime/deferred-emitter";
 
 export type CreateNotificationInput = {
   userId: string;
@@ -13,10 +13,13 @@ export type CreateNotificationInput = {
  * Every domain module (orders, restaurants, drivers) calls this instead of importing a
  * NotificationsService, matching the codebase's existing pattern of touching shared Prisma
  * models directly rather than importing another domain's service class.
+ *
+ * Callers inside a transaction pass a DeferredEmitter rather than the gateway itself, so the
+ * socket event fires only after the transaction commits.
  */
 export async function createNotification(
   tx: Prisma.TransactionClient,
-  gateway: RealtimeGateway,
+  gateway: Pick<RealtimeEmitter, "emitToUser">,
   input: CreateNotificationInput
 ): Promise<void> {
   const notification = await tx.notification.create({

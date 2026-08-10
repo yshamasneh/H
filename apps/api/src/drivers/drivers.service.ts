@@ -18,6 +18,7 @@ import {
 } from "../generated/prisma/client";
 import { createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
+import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
 import { allowedDeliveryTransitions, deliveryStatusTransitions } from "./delivery.rules";
 import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
@@ -128,6 +129,7 @@ export class DriversService {
       throw new ApiException(409, "DRIVER_OFFLINE", "You must be online to accept a delivery.");
     }
 
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.delivery.findUnique({ where: { id: deliveryId } });
       if (!existing) {
@@ -146,17 +148,18 @@ export class DriversService {
       }
       const order = await tx.order.findUnique({ where: { id: existing.orderId } });
       if (order) {
-        await createNotification(tx, this.realtime, {
+        await createNotification(tx, emitter, {
           userId: order.customerId,
           type: NotificationType.DELIVERY_ASSIGNED,
           title: "A driver is on the way",
           body: "A driver has been assigned to pick up your order.",
           relatedEntityId: order.id
         });
-        this.realtime.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: DeliveryStatus.ASSIGNED });
+        emitter.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: DeliveryStatus.ASSIGNED });
       }
       return tx.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
     });
+    emitter.flush();
 
     return toDeliveryView(updated!);
   }
@@ -168,6 +171,7 @@ export class DriversService {
   ): Promise<DeliveryView> {
     const targetStatus = deliveryStatusTransitions[action];
 
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.delivery.findUnique({ where: { id: deliveryId } });
       if (!existing || existing.driverId !== driverUserId) {
@@ -199,21 +203,22 @@ export class DriversService {
             }
           });
         }
-        await createNotification(tx, this.realtime, {
+        await createNotification(tx, emitter, {
           userId: order.customerId,
           type: NotificationType.DELIVERY_STATUS_CHANGED,
           title: deliveryStatusNotificationTitle(targetStatus),
           body: deliveryStatusNotificationBody(targetStatus),
           relatedEntityId: order.id
         });
-        this.realtime.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: targetStatus });
+        emitter.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: targetStatus });
         if (targetStatus === DeliveryStatus.DELIVERED) {
-          this.realtime.emitToOrder(order.id, "order.status.changed", { orderId: order.id, status: OrderStatus.DELIVERED });
+          emitter.emitToOrder(order.id, "order.status.changed", { orderId: order.id, status: OrderStatus.DELIVERED });
         }
       }
 
       return tx.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
     });
+    emitter.flush();
 
     return toDeliveryView(updated!);
   }
@@ -272,6 +277,7 @@ export class DriversService {
     auditAction: string,
     reason: string | undefined
   ): Promise<AdminDriverView> {
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const profile = await tx.driverProfile.findUnique({ where: { userId: driverUserId }, include: { user: true } });
       if (!profile) {
@@ -306,7 +312,7 @@ export class DriversService {
           : targetStatus === DriverApprovalStatus.REJECTED
             ? NotificationType.DRIVER_REJECTED
             : NotificationType.DRIVER_SUSPENDED;
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: driverUserId,
         type: notificationType,
         title: driverStatusNotificationTitle(targetStatus),
@@ -316,6 +322,7 @@ export class DriversService {
 
       return next;
     });
+    emitter.flush();
 
     return toAdminView(updated, 0, null);
   }

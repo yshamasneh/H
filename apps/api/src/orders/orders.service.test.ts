@@ -583,6 +583,104 @@ test("adminGetOrder returns any order regardless of ownership", async () => {
   assert.equal(view.id, order.id);
 });
 
+test("accepting an order records who accepted it and when, in the same atomic write", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  assert.equal(order.acceptedByUserId, null);
+  assert.equal(order.acceptedAt, null);
+
+  const accepted = await service.updateStatusForRestaurantOwner(
+    restaurant.ownerUserId,
+    order.id,
+    "ACCEPTED",
+    undefined
+  );
+
+  assert.equal(accepted.acceptedByUserId, restaurant.ownerUserId);
+  assert.ok(accepted.acceptedAt instanceof Date);
+  // The stored row carries the attribution, not just the returned view.
+  assert.equal(prisma.orders[0].acceptedByUserId, restaurant.ownerUserId);
+});
+
+test("rejecting an order leaves the acceptance attribution empty", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const rejected = await service.updateStatusForRestaurantOwner(
+    restaurant.ownerUserId,
+    order.id,
+    "REJECTED",
+    "Out of stock"
+  );
+
+  assert.equal(rejected.acceptedByUserId, null);
+  assert.equal(rejected.acceptedAt, null);
+});
+
+test("advancing an accepted order preserves the original acceptance attribution", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  const accepted = await service.updateStatusForRestaurantOwner(
+    restaurant.ownerUserId,
+    order.id,
+    "ACCEPTED",
+    undefined
+  );
+
+  const preparing = await service.updateStatusForRestaurantOwner(
+    restaurant.ownerUserId,
+    order.id,
+    "PREPARING",
+    undefined
+  );
+
+  assert.equal(preparing.acceptedByUserId, restaurant.ownerUserId);
+  assert.deepEqual(preparing.acceptedAt, accepted.acceptedAt);
+});
+
+test("a second acceptance of the same order loses the race and cannot overwrite the first", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  const accepted = await service.updateStatusForRestaurantOwner(
+    restaurant.ownerUserId,
+    order.id,
+    "ACCEPTED",
+    undefined
+  );
+
+  await assert.rejects(
+    service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined),
+    hasCode("ORDER_INVALID_TRANSITION")
+  );
+  assert.deepEqual(prisma.orders[0].acceptedAt, accepted.acceptedAt);
+});
+
+test("customer-facing order views never expose the name of the staff member who accepted", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+
+  const customerView = await service.getForCustomer(customerId, order.id);
+  assert.equal("acceptedByFullName" in customerView, false);
+  // The timestamp is fine to share with the customer; the staff member's name is not.
+  assert.ok(customerView.acceptedAt instanceof Date);
+
+  const businessView = await service.getForRestaurantOwner(restaurant.ownerUserId, order.id);
+  assert.equal("acceptedByFullName" in businessView, true);
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

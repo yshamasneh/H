@@ -14,6 +14,7 @@ import {
 } from "../generated/prisma/client";
 import { createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
+import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
 import { restaurantModerationTransitions } from "./restaurant.rules";
 import type { AdminRestaurantsQueryDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
@@ -433,6 +434,7 @@ export class RestaurantsService {
     status: RestaurantStatus,
     auditAction: string
   ): Promise<RestaurantProfileView> {
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const restaurant = await tx.restaurant.findUnique({ where: { id: restaurantId } });
       if (!restaurant) {
@@ -453,7 +455,7 @@ export class RestaurantsService {
         entityId: restaurantId,
         metadata: { fromStatus: restaurant.status, toStatus: status }
       });
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: restaurant.ownerUserId,
         type: status === RestaurantStatus.APPROVED ? NotificationType.RESTAURANT_APPROVED : NotificationType.RESTAURANT_REJECTED,
         title: status === RestaurantStatus.APPROVED ? "Your restaurant was approved" : "Your restaurant application was rejected",
@@ -465,6 +467,7 @@ export class RestaurantsService {
       });
       return next;
     });
+    emitter.flush();
     return toProfileView(updated);
   }
 
@@ -476,6 +479,7 @@ export class RestaurantsService {
     auditAction: string,
     reason: string | undefined
   ): Promise<RestaurantProfileView> {
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const restaurant = await tx.restaurant.findUnique({ where: { id: restaurantId } });
       if (!restaurant) {
@@ -501,7 +505,7 @@ export class RestaurantsService {
         reason: reason ?? null,
         metadata: { fromStatus: restaurant.status, toStatus: targetStatus }
       });
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: restaurant.ownerUserId,
         type: targetStatus === RestaurantStatus.SUSPENDED ? NotificationType.RESTAURANT_SUSPENDED : NotificationType.RESTAURANT_APPROVED,
         title: targetStatus === RestaurantStatus.SUSPENDED ? "Your restaurant has been suspended" : "Your restaurant has been reactivated",
@@ -510,6 +514,7 @@ export class RestaurantsService {
       });
       return next;
     });
+    emitter.flush();
     return toProfileView(updated);
   }
 

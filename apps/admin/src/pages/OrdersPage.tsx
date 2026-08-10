@@ -73,6 +73,7 @@ export function OrdersPage() {
                 <th>{t("orders.date")}</th>
                 <th>{t("orders.restaurant")}</th>
                 <th>{t("common.status")}</th>
+                <th>{t("orders.acceptedBy")}</th>
                 <th>{t("orders.total")}</th>
               </tr>
             </thead>
@@ -84,6 +85,7 @@ export function OrdersPage() {
                   <td>
                     <StatusBadge status={order.status} />
                   </td>
+                  <td>{order.acceptedByFullName ?? (order.acceptedAt ? t("common.unknown") : t("common.dash"))}</td>
                   <td>{formatPrice(order.totalMinor)}</td>
                 </tr>
               ))}

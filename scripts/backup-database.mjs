@@ -3,11 +3,13 @@ import { createReadStream } from "node:fs";
 import { mkdir, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { argumentValue, databaseConnection, run } from "./database-command.mjs";
+import { argumentValue, databaseConnection, loadEnvironmentFile, postgresRunner } from "./database-command.mjs";
 
+loadEnvironmentFile();
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error("DATABASE_URL is required.");
+if (!databaseUrl) throw new Error("DATABASE_URL is required. Set it in .env at the repository root or in the environment.");
 const connection = databaseConnection(databaseUrl);
+const runner = await postgresRunner("pg_dump");
 const outputDirectory = path.resolve(argumentValue("output-dir") ?? process.env.BACKUP_DIRECTORY ?? "backups");
 const retentionDays = positiveInteger(process.env.BACKUP_RETENTION_DAYS ?? "14", "BACKUP_RETENTION_DAYS");
 const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -15,10 +17,21 @@ const finalPath = path.join(outputDirectory, `tasawaq-${timestamp}.dump`);
 const partialPath = `${finalPath}.partial`;
 
 await mkdir(outputDirectory, { recursive: true });
-await run(
-  process.platform === "win32" ? "pg_dump.exe" : "pg_dump",
-  [...connection.args, "--format=custom", "--compress=9", "--no-owner", "--no-privileges", "--file", partialPath],
-  connection.environment
+console.log(`Using ${runner.describe}.`);
+await runner.withFile("output", partialPath, (dumpPath) =>
+  runner.exec(
+    "pg_dump",
+    [
+      ...runner.connectionArgs(connection),
+      "--format=custom",
+      "--compress=9",
+      "--no-owner",
+      "--no-privileges",
+      "--file",
+      dumpPath
+    ],
+    connection.environment
+  )
 );
 await rename(partialPath, finalPath);
 const checksum = await sha256(finalPath);

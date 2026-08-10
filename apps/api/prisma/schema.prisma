@@ -121,6 +121,7 @@ model User {
   passwordResetTokens   PasswordResetToken[]
   restaurant            Restaurant?
   orders                Order[]
+  ordersAccepted        Order[]                 @relation("OrderAcceptedBy")
   orderStatusChanges    OrderStatusHistory[]
   driverProfile         DriverProfile?
   deliveriesAsDriver    Delivery[]
@@ -338,10 +339,13 @@ model Order {
   promotionSnapshot      Json?
   customerNote           String?
   totalMinor             Int
+  acceptedByUserId       String?              @db.Uuid
+  acceptedAt             DateTime?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
   customer               User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
   restaurant             Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  acceptedBy             User?                @relation("OrderAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
   items                  OrderItem[]
   statusHistory          OrderStatusHistory[]
   delivery               Delivery?
@@ -349,6 +353,8 @@ model Order {
 
   @@index([customerId, createdAt])
   @@index([restaurantId, createdAt])
+  @@index([restaurantId, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderStatusHistory {
@@ -363,6 +369,7 @@ model OrderStatusHistory {
   changedBy       User         @relation(fields: [changedByUserId], references: [id])
 
   @@index([orderId, createdAt])
+  @@index([changedByUserId, createdAt])
 }
 
 model OrderItem {

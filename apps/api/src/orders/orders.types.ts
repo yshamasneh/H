@@ -72,6 +72,13 @@ export type OrderDetailView = {
   serviceFeeMinor: number;
   discountMinor: number;
   totalMinor: number;
+  acceptedByUserId: string | null;
+  acceptedAt: Date | null;
+  /**
+   * Only populated for business and admin views. Customer-facing responses omit it so a staff
+   * member's name is never exposed to the person who placed the order.
+   */
+  acceptedByFullName?: string | null;
   createdAt: Date;
   statusHistory: OrderStatusHistoryEntry[];
   delivery: DeliveryStatusSummary | null;

@@ -86,6 +86,17 @@ export function OrderDetailPage() {
                 {t("orderDetail.deliveryAddressLine", { label: order.deliveryLabel, address: order.deliveryAddressLine })}
               </span>
             </div>
+            <div className="kv-row">
+              <span className="kv-label">{t("orderDetail.acceptedBy")}</span>
+              <span className="kv-value">
+                {order.acceptedAt
+                  ? t("orderDetail.acceptedByValue", {
+                      name: order.acceptedByFullName ?? t("common.unknown"),
+                      at: formatDate(order.acceptedAt)
+                    })
+                  : t("orderDetail.notAcceptedYet")}
+              </span>
+            </div>
           </div>
 
           {order.delivery ? (

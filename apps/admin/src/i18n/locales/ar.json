@@ -15,7 +15,8 @@
     "suspend": "إيقاف",
     "reactivate": "إعادة تفعيل",
     "genericActionError": "تعذّر إتمام هذا الإجراء.",
-    "dash": "-"
+    "dash": "-",
+    "unknown": "غير معروف"
   },
   "status": {
     "PENDING": "قيد الانتظار",
@@ -120,7 +121,8 @@
     "date": "التاريخ",
     "restaurant": "المطعم",
     "total": "الإجمالي",
-    "empty": "لا توجد طلبات مطابقة لهذا الفلتر."
+    "empty": "لا توجد طلبات مطابقة لهذا الفلتر.",
+    "acceptedBy": "قبِلها"
   },
   "orderDetail": {
     "items": "العناصر",
@@ -139,7 +141,10 @@
     "statusHistory": "سجل الحالة",
     "cancelTitle": "إلغاء الطلب",
     "cancelDescription": "سيؤدي هذا إلى إلغاء الطلب فورًا وإخطار الزبون والمطعم.",
-    "loadError": "تعذّر تحميل هذا الطلب."
+    "loadError": "تعذّر تحميل هذا الطلب.",
+    "acceptedBy": "قبِل الطلب",
+    "acceptedByValue": "{{name}} — {{at}}",
+    "notAcceptedYet": "لم يُقبل بعد"
   },
   "drivers": {
     "title": "السائقون",

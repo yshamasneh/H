@@ -18,6 +18,7 @@ import { createNotification } from "../notifications/notification.util";
 import { calculatePromotionDiscounts } from "../offers/offers.service";
 import type { AppliedPromotion } from "../offers/offers.types";
 import { PrismaService } from "../prisma/prisma.service";
+import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
 import {
   allowedOrderTransitions,
@@ -37,9 +38,13 @@ import { calculateOrderFees, defaultDeliveryPricing, type DeliveryPricingConfig 
 const orderInclude = {
   items: { include: { fulfillmentAdjustment: true } },
   restaurant: true,
+  acceptedBy: { select: { id: true, fullName: true } },
   statusHistory: { orderBy: { createdAt: "asc" as const } },
   delivery: true
 } as const;
+
+/** Business and admin callers see who accepted an order; customers deliberately do not. */
+const withActorNames = { includeActorNames: true } as const;
 
 type OrderWithRelations = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 
@@ -52,6 +57,7 @@ export class OrdersService {
   ) {}
 
   async createOrder(customerId: string, input: CreateOrderDto): Promise<OrderDetailView> {
+    const emitter = new DeferredEmitter(this.realtime);
     const order = await this.prisma.$transaction(async (tx) => {
       const quote = await this.calculateOrderQuote(tx, input);
       const { restaurant, itemsData } = quote;
@@ -98,7 +104,7 @@ export class OrdersService {
           changedByUserId: customerId
         }
       });
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: restaurant.ownerUserId,
         type: NotificationType.ORDER_PLACED,
         title: "New order received",
@@ -107,6 +113,7 @@ export class OrdersService {
       });
       return { ...created, statusHistory: await tx.orderStatusHistory.findMany({ where: { orderId: created.id } }) };
     });
+    emitter.flush();
 
     this.realtime.emitToRestaurant(order.restaurantId, "order.created", { orderId: order.id });
     this.realtime.emitToAdmins("order.created", { orderId: order.id, restaurantId: order.restaurantId, totalMinor: order.totalMinor });
@@ -139,7 +146,7 @@ export class OrdersService {
       }),
       this.prisma.order.count({ where })
     ]);
-    return { items: orders.map(toOrderDetailView), page, pageSize, total };
+    return { items: orders.map((order) => toOrderDetailView(order)), page, pageSize, total };
   }
 
   async getForCustomer(customerId: string, orderId: string): Promise<OrderDetailView> {
@@ -163,7 +170,12 @@ export class OrdersService {
       }),
       this.prisma.order.count({ where })
     ]);
-    return { items: orders.map(toOrderDetailView), page, pageSize, total };
+    return {
+      items: orders.map((order) => toOrderDetailView(order, withActorNames)),
+      page,
+      pageSize,
+      total
+    };
   }
 
   async getForRestaurantOwner(ownerUserId: string, orderId: string): Promise<OrderDetailView> {
@@ -172,7 +184,7 @@ export class OrdersService {
     if (!order || order.restaurantId !== restaurant.id) {
       throw orderNotFound();
     }
-    return toOrderDetailView(order);
+    return toOrderDetailView(order, withActorNames);
   }
 
   async proposeFulfillmentAdjustment(
@@ -186,6 +198,7 @@ export class OrdersService {
       throw new ApiException(404, "SUPERMARKET_NOT_FOUND", "Fulfillment adjustments are available only for supermarket orders.");
     }
 
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order || order.restaurantId !== restaurant.id) throw orderNotFound();
@@ -314,7 +327,7 @@ export class OrdersService {
           decidedAt: null
         }
       });
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: order.customerId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: "Your supermarket needs a product decision",
@@ -325,9 +338,10 @@ export class OrdersService {
       });
       return tx.order.findUnique({ where: { id: order.id }, include: orderInclude });
     });
+    emitter.flush();
 
     this.realtime.emitToOrder(orderId, "order.fulfillment.changed", { orderId });
-    return toOrderDetailView(updated!);
+    return toOrderDetailView(updated!, withActorNames);
   }
 
   async decideFulfillmentAdjustment(
@@ -336,6 +350,7 @@ export class OrdersService {
     adjustmentId: string,
     decision: "APPROVED" | "REJECTED"
   ): Promise<OrderDetailView> {
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId }, include: { restaurant: true } });
       if (!order || order.customerId !== customerId) throw orderNotFound();
@@ -409,7 +424,7 @@ export class OrdersService {
         });
       }
 
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: order.restaurant.ownerUserId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: decision === "APPROVED" ? "Fulfillment change approved" : "Fulfillment change rejected",
@@ -420,6 +435,7 @@ export class OrdersService {
       });
       return tx.order.findUnique({ where: { id: order.id }, include: orderInclude });
     });
+    emitter.flush();
 
     this.realtime.emitToOrder(orderId, "order.fulfillment.changed", { orderId });
     return toOrderDetailView(updated!);
@@ -434,6 +450,7 @@ export class OrdersService {
     const restaurant = await this.requireOwnRestaurant(ownerUserId);
     const targetStatus = restaurantStatusTransitions[action];
 
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.order.findUnique({ where: { id: orderId } });
       if (!existing || existing.restaurantId !== restaurant.id) {
@@ -455,9 +472,16 @@ export class OrdersService {
         }
       }
 
+      // Compare-and-swap on the current status: exactly one concurrent caller can win, and the
+      // winner is recorded in the same atomic write that decides the winner.
       const changed = await tx.order.updateMany({
         where: { id: orderId, status: existing.status },
-        data: { status: targetStatus }
+        data: {
+          status: targetStatus,
+          ...(targetStatus === OrderStatus.ACCEPTED
+            ? { acceptedByUserId: ownerUserId, acceptedAt: new Date() }
+            : {})
+        }
       });
       if (changed.count !== 1) {
         throw invalidTransition(existing.status, targetStatus);
@@ -477,7 +501,7 @@ export class OrdersService {
       if (targetStatus === OrderStatus.REJECTED) {
         await this.restoreTrackedInventory(tx, orderId);
       }
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: existing.customerId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: orderStatusNotificationTitle(targetStatus),
@@ -486,14 +510,16 @@ export class OrdersService {
       });
       return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
     });
+    emitter.flush();
 
     this.realtime.emitToOrder(orderId, "order.status.changed", { orderId, status: targetStatus });
     this.realtime.emitToAdmins("order.status.changed", { orderId, status: targetStatus });
 
-    return toOrderDetailView(updated!);
+    return toOrderDetailView(updated!, withActorNames);
   }
 
   async cancelForCustomer(customerId: string, orderId: string): Promise<OrderDetailView> {
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.order.findUnique({ where: { id: orderId }, include: { restaurant: true } });
       if (!existing || existing.customerId !== customerId) {
@@ -524,7 +550,7 @@ export class OrdersService {
           note: "Cancelled by customer"
         }
       });
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: existing.restaurant.ownerUserId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: "Order cancelled by customer",
@@ -533,6 +559,7 @@ export class OrdersService {
       });
       return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
     });
+    emitter.flush();
 
     this.realtime.emitToOrder(orderId, "order.status.changed", { orderId, status: OrderStatus.CANCELLED });
     this.realtime.emitToAdmins("order.status.changed", { orderId, status: OrderStatus.CANCELLED });
@@ -541,6 +568,7 @@ export class OrdersService {
   }
 
   async adminCancelOrder(adminUserId: string, orderId: string, reason: string): Promise<OrderDetailView> {
+    const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.order.findUnique({ where: { id: orderId }, include: { restaurant: true } });
       if (!existing) {
@@ -575,14 +603,14 @@ export class OrdersService {
         reason,
         metadata: { fromStatus: existing.status }
       });
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: existing.customerId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: "Your order was cancelled",
         body: `An administrator cancelled this order. Reason: ${reason}`,
         relatedEntityId: orderId
       });
-      await createNotification(tx, this.realtime, {
+      await createNotification(tx, emitter, {
         userId: existing.restaurant.ownerUserId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: "An order was cancelled by an administrator",
@@ -591,11 +619,12 @@ export class OrdersService {
       });
       return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
     });
+    emitter.flush();
 
     this.realtime.emitToOrder(orderId, "order.status.changed", { orderId, status: OrderStatus.CANCELLED });
     this.realtime.emitToAdmins("order.status.changed", { orderId, status: OrderStatus.CANCELLED });
 
-    return toOrderDetailView(updated!);
+    return toOrderDetailView(updated!, withActorNames);
   }
 
   async adminListOrders(filter: AdminOrdersFilterDto, page: number, pageSize: number): Promise<Page<OrderDetailView>> {
@@ -618,7 +647,12 @@ export class OrdersService {
       }),
       this.prisma.order.count({ where })
     ]);
-    return { items: orders.map(toOrderDetailView), page, pageSize, total };
+    return {
+      items: orders.map((order) => toOrderDetailView(order, withActorNames)),
+      page,
+      pageSize,
+      total
+    };
   }
 
   async adminGetOrder(orderId: string): Promise<OrderDetailView> {
@@ -626,7 +660,7 @@ export class OrdersService {
     if (!order) {
       throw orderNotFound();
     }
-    return toOrderDetailView(order);
+    return toOrderDetailView(order, withActorNames);
   }
 
   private async requireOwnRestaurant(ownerUserId: string): Promise<Restaurant> {
@@ -909,10 +943,16 @@ function orderStatusNotificationBody(status: OrderStatus, note: string | undefin
   return trimmedNote || orderStatusNotificationTitle(status);
 }
 
-function toOrderDetailView(order: OrderWithRelations): OrderDetailView {
+function toOrderDetailView(
+  order: OrderWithRelations,
+  options: { includeActorNames?: boolean } = {}
+): OrderDetailView {
   return {
     id: order.id,
     status: order.status,
+    acceptedByUserId: order.acceptedByUserId,
+    acceptedAt: order.acceptedAt,
+    ...(options.includeActorNames ? { acceptedByFullName: order.acceptedBy?.fullName ?? null } : {}),
     paymentMethod: order.paymentMethod,
     restaurant: { id: order.restaurant.id, name: order.restaurant.name },
     deliveryLabel: order.deliveryLabel,

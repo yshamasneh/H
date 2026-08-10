@@ -73,6 +73,9 @@ export type OrderDetail = {
   serviceFeeMinor: number;
   discountMinor: number;
   totalMinor: number;
+  acceptedByUserId: string | null;
+  acceptedAt: string | null;
+  acceptedByFullName?: string | null;
   createdAt: string;
   statusHistory: OrderStatusHistoryEntry[];
   delivery: { id: string; status: DeliveryStatus; assignedAt: string | null; pickedUpAt: string | null; onTheWayAt: string | null; deliveredAt: string | null } | null;
