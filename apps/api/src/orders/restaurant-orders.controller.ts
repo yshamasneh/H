@@ -2,7 +2,9 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, U
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequirePermission } from "../common/decorators/require-permission.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../generated/prisma/client";
 import { OrdersPaginationQueryDto, ProposeFulfillmentAdjustmentDto, UpdateOrderStatusDto } from "./orders.dto";
@@ -11,8 +13,9 @@ import { OrdersService } from "./orders.service";
 @ApiTags("restaurant-portal")
 @ApiBearerAuth()
 @Controller("restaurant/me/orders")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles(UserRole.RESTAURANT)
+@RequirePermission("VIEW_ORDERS")
 export class RestaurantOrdersController {
   constructor(private readonly orders: OrdersService) {}
 
@@ -29,6 +32,7 @@ export class RestaurantOrdersController {
   }
 
   @Post(":orderId/items/:orderItemId/fulfillment")
+  @RequirePermission("MANAGE_ORDERS")
   @ApiOperation({ summary: "Propose a supermarket replacement or packed variable quantity for customer review" })
   proposeFulfillment(
     @Req() request: AuthenticatedRequest,
@@ -40,6 +44,7 @@ export class RestaurantOrdersController {
   }
 
   @Patch(":orderId/status")
+  @RequirePermission("MANAGE_ORDERS")
   @ApiOperation({ summary: "Accept, reject, or advance the status of an order belonging to the authenticated restaurant" })
   updateStatus(
     @Req() request: AuthenticatedRequest,

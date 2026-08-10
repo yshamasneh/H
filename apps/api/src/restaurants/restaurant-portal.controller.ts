@@ -2,7 +2,9 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuard
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequirePermission } from "../common/decorators/require-permission.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../generated/prisma/client";
 import { MenuService } from "./menu.service";
@@ -20,7 +22,7 @@ import { RestaurantsService } from "./restaurants.service";
 @ApiTags("restaurant-portal")
 @ApiBearerAuth()
 @Controller("restaurant")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles(UserRole.RESTAURANT)
 export class RestaurantPortalController {
   constructor(
@@ -35,12 +37,14 @@ export class RestaurantPortalController {
   }
 
   @Patch("me")
+  @RequirePermission("MANAGE_BUSINESS_SETTINGS")
   @ApiOperation({ summary: "Update the authenticated owner's restaurant profile" })
   updateProfile(@Req() request: AuthenticatedRequest, @Body() input: UpdateRestaurantProfileDto) {
     return this.restaurants.updateOwnProfile(request.user.id, input);
   }
 
   @Patch("me/open-status")
+  @RequirePermission("MANAGE_BUSINESS_SETTINGS")
   @ApiOperation({ summary: "Toggle whether the restaurant is currently accepting orders" })
   setOpenStatus(@Req() request: AuthenticatedRequest, @Body() input: SetOpenStatusDto) {
     return this.restaurants.setOwnOpenStatus(request.user.id, input.isOpen);
@@ -54,6 +58,7 @@ export class RestaurantPortalController {
   }
 
   @Post("me/menu/categories")
+  @RequirePermission("MANAGE_MENU")
   @ApiOperation({ summary: "Create a menu category" })
   async createCategory(@Req() request: AuthenticatedRequest, @Body() input: CreateMenuCategoryDto) {
     const restaurant = await this.restaurants.requireOwnRestaurant(request.user.id);
@@ -61,6 +66,7 @@ export class RestaurantPortalController {
   }
 
   @Patch("me/menu/categories/:categoryId")
+  @RequirePermission("MANAGE_MENU")
   @ApiOperation({ summary: "Update a menu category owned by the authenticated restaurant" })
   async updateCategory(
     @Req() request: AuthenticatedRequest,
@@ -79,6 +85,7 @@ export class RestaurantPortalController {
   }
 
   @Post("me/menu/items")
+  @RequirePermission("MANAGE_PRODUCTS", "MANAGE_PRICES")
   @ApiOperation({ summary: "Create a menu item" })
   async createItem(@Req() request: AuthenticatedRequest, @Body() input: CreateMenuItemDto) {
     const restaurant = await this.restaurants.requireOwnRestaurant(request.user.id);
@@ -86,6 +93,7 @@ export class RestaurantPortalController {
   }
 
   @Patch("me/menu/items/:itemId")
+  @RequirePermission("MANAGE_PRODUCTS")
   @ApiOperation({ summary: "Update a menu item owned by the authenticated restaurant" })
   async updateItem(
     @Req() request: AuthenticatedRequest,
@@ -97,6 +105,7 @@ export class RestaurantPortalController {
   }
 
   @Patch("me/menu/items/:itemId/availability")
+  @RequirePermission("MANAGE_PRODUCTS")
   @ApiOperation({ summary: "Toggle a menu item's availability" })
   async setItemAvailability(
     @Req() request: AuthenticatedRequest,

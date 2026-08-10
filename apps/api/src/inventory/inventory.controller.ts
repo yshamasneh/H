@@ -2,7 +2,9 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuard
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequirePermission } from "../common/decorators/require-permission.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../generated/prisma/client";
 import {
@@ -17,8 +19,9 @@ import { InventoryService } from "./inventory.service";
 @ApiTags("supermarket-inventory")
 @ApiBearerAuth()
 @Controller("restaurant/me/inventory")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles(UserRole.RESTAURANT)
+@RequirePermission("MANAGE_INVENTORY")
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
 

@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { writeAuditLog } from "../common/audit-log.util";
+import { grantBusinessMembership } from "../common/authorization/business-membership.util";
 import { ApiException } from "../common/api.exception";
 import {
   BusinessType,
@@ -59,7 +60,7 @@ export class RestaurantsService {
             isActive: true
           }
         });
-        return transaction.restaurant.create({
+        const created = await transaction.restaurant.create({
           data: {
             ownerUserId: owner.id,
             name: restaurantName,
@@ -71,6 +72,10 @@ export class RestaurantsService {
             isOpen: false
           }
         });
+        // The owner needs a membership as well as the ownerUserId link, otherwise they hold no
+        // permissions inside the business they just created.
+        await grantBusinessMembership(transaction, { businessId: created.id, userId: owner.id });
+        return created;
       });
 
       this.realtime.emitToAdmins("restaurant.pending.created", { restaurantId: restaurant.id, name: restaurant.name });

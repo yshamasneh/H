@@ -3,7 +3,9 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../common/decorators/roles.decorator";
+import { RequirePermission } from "../common/decorators/require-permission.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { UserRole } from "../generated/prisma/client";
 import { AdminActionReasonDto } from "./drivers.dto";
 import { DriversService } from "./drivers.service";
@@ -11,8 +13,9 @@ import { DriversService } from "./drivers.service";
 @ApiTags("admin")
 @ApiBearerAuth()
 @Controller("admin/drivers")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles(UserRole.ADMIN)
+@RequirePermission("MANAGE_DRIVERS")
 export class AdminDriversController {
   constructor(private readonly drivers: DriversService) {}
 

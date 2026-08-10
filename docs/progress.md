@@ -380,3 +380,32 @@ Foundations for the admin/order-management phase, plus two owner decisions on bu
 - The new indexes cannot be shown in use yet — with six orders PostgreSQL sequential-scans regardless of index, so an `EXPLAIN` here would be misleading.
 - The compare-and-swap failure path still raises `ORDER_INVALID_TRANSITION` rather than a distinct already-handled code. That distinction lands with the multi-staff live-orders work, where a lost race first becomes reachable and the UI needs to tell the two cases apart.
 - `status.PREPARING_SUPERMARKET` ("قيد التجهيز" / "Picking") was added to the admin locales but is not wired up yet; it is consumed when per-vertical order labelling lands. The restaurant label was already the correct "قيد التحضير".
+
+## 2026-08-10: Phase 15.1 — Roles and permissions core
+
+The permission model, its backend enforcement, and the membership table that finally allows a business to have more than one person. No UI, and no change to what anyone could already do.
+
+### Completed
+
+- **`Role`, `BusinessMember`, and `User.platformRoleId`.** Permissions are a `String[]` on the role rather than a join table: at this scale a join buys nothing and costs a query on every request, while still supporting arbitrary permission sets. `Restaurant.ownerUserId` is retained as the legal/billing owner; access now flows through membership rows.
+- **Permission catalogue in code** (`common/authorization/permissions.ts`) — 11 platform, 10 business, 1 shared — so every `@RequirePermission` call site is compile-time checked while the database stays free-form.
+- **Three seeded system roles**: `SUPER_ADMIN`, `BUSINESS_ADMIN`, `BUSINESS_STAFF`. `SUPER_ADMIN` holds every permission *implicitly* rather than by enumeration, so a permission added to the catalogue later can never accidentally exclude the platform owner.
+- **`PermissionsGuard` + `@RequirePermission`**, applied to every platform-administration controller and to the business portal, orders, and inventory controllers. Business-scoped permissions are checked against the business the request resolves to — a grant in business A never satisfies a request naming business B.
+- **`SystemRolesService`** reconciles the seeded roles with the catalogue on startup. Deliberately conservative: it creates missing roles and keeps `SUPER_ADMIN`'s stored list complete, but never rewrites the business roles' permissions, so granting a role a new capability stays a deliberate decision and a future roles editor will not have its changes reverted on restart.
+- **Migration backfill**: the existing administrator was mapped to `SUPER_ADMIN` and every existing business owner was given a `BUSINESS_ADMIN` membership, so nothing anyone could do before became forbidden.
+- **Business registration now grants membership** (`grantBusinessMembership`). Without this a newly registered business had no members at all and its own owner was locked out of the portal — see below.
+
+### Verified
+
+- `npm run typecheck` clean; API 167 tests (166 pass, 1 skipped, 0 fail), mobile 23 pass; `npm run test:e2e` passes; `npm run build` succeeds. 32 of the new tests cover authorization: permission resolution, per-business isolation, and a route-level matrix asserting each route is bound to the permission that protects it.
+- Verified against a running server with real HTTP calls. A `BUSINESS_STAFF` account attempting a price change is refused with `403 FORBIDDEN_PERMISSION` and `requiredPermission: MANAGE_PRODUCTS`, while the same call as the owner succeeds — the §14 requirement that the API, not a hidden button, is what protects the operation.
+
+### Caught during verification
+
+- **The end-to-end suite failed first, and it was right to.** Registering a business through the public API created the `Restaurant` and its owner `User` but no `BusinessMember`, so the owner held no permissions inside the business they had just created and `PATCH /restaurant/me` returned 403. The migration backfill only covered businesses that already existed. Fixed in the registration transaction and covered by two unit tests so the fast suite catches it rather than only the e2e, which is skipped unless `RUN_DATABASE_E2E=true`.
+- A stale API server from a previous day was holding port 3000, so several `node dist/main.js` restarts failed with `EADDRINUSE` and silently kept serving old code. Early manual results were therefore meaningless; verification was redone on a separate port. Worth remembering: check that a restart actually bound before trusting what a local server tells you.
+
+### Remaining before further work
+
+- **`BUSINESS_STAFF` accounts can be refused correctly but cannot yet be served.** Business resolution still runs through `requireOwnRestaurant(ownerUserId)`, so a member who is not the owner gets `404 RESTAURANT_NOT_FOUND` even for routes their role permits. Switching that lookup to membership resolution is the next phase; until then the role exists in the model but is not usable.
+- Field-level price protection is not implemented: `MANAGE_PRODUCTS` currently guards the whole menu-item update, so a role with `MANAGE_PRODUCTS` but not `MANAGE_PRICES` could still change `priceMinor` through it. Item *creation* requires both. Separating the two needs a service-level check on the changed fields.

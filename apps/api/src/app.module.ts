@@ -4,6 +4,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
+import { AuthorizationModule } from "./common/authorization/authorization.module";
 import { validateEnvironment } from "./config/environment";
 import { DriversModule } from "./drivers/drivers.module";
 import { HealthModule } from "./health/health.module";
@@ -34,6 +35,7 @@ import { RestaurantsModule } from "./restaurants/restaurants.module";
       ]
     }),
     PrismaModule,
+    AuthorizationModule,
     ObservabilityModule,
     RealtimeModule,
     AuthModule,

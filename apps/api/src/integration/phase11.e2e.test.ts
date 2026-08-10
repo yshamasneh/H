@@ -50,9 +50,14 @@ test(
 
     await cleanupTestActors(prisma);
     const passwordHash = await hashPassword(password);
+    // This actor is inserted straight into the database rather than created through the API, so it
+    // needs the platform role that administrator creation assigns.
+    const superAdminRole = await prisma.role.findUnique({ where: { key: "SUPER_ADMIN" } });
+    assert.ok(superAdminRole, "System roles must be migrated before running the E2E suite.");
     await prisma.user.createMany({
       data: [
         {
+          platformRoleId: superAdminRole.id,
           fullName: "Phase 11 Admin",
           phone: phones.admin,
           passwordHash,

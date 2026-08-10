@@ -16,6 +16,12 @@ enum UserRole {
   ADMIN
 }
 
+/// Whether a role grants platform-wide permissions or permissions inside one business.
+enum RoleScope {
+  PLATFORM
+  BUSINESS
+}
+
 enum OtpPurpose {
   CUSTOMER_SIGNUP
   PASSWORD_RESET
@@ -112,6 +118,7 @@ model User {
   email                 String?                 @unique
   passwordHash          String
   role                  UserRole
+  platformRoleId        String?                 @db.Uuid
   phoneVerifiedAt       DateTime?
   isActive              Boolean                 @default(true)
   tokenVersion          Int                     @default(0)
@@ -133,8 +140,53 @@ model User {
   purchaseOrdersCreated PurchaseOrder[]         @relation("PurchaseOrderCreatedBy")
   addresses             Address[]
   pushTokens            PushToken[]
+  platformRole          Role?                   @relation("UserPlatformRole", fields: [platformRoleId], references: [id], onDelete: SetNull)
+  businessMemberships   BusinessMember[]        @relation("BusinessMemberUser")
+  businessInvitesSent   BusinessMember[]        @relation("BusinessMemberInvitedBy")
 
   @@index([role, isActive])
+  @@index([platformRoleId])
+}
+
+/// A named set of permissions. Permissions are stored as plain strings so a new capability or a
+/// new role is a data change, never a migration. `isSystem` roles are seeded and must not be
+/// deleted; SUPER_ADMIN additionally holds every permission implicitly rather than by enumeration,
+/// so permissions added later are automatically included.
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  key             String           @unique
+  name            String
+  scope           RoleScope
+  permissions     String[]
+  isSystem        Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  platformUsers   User[]           @relation("UserPlatformRole")
+  businessMembers BusinessMember[]
+
+  @@index([scope])
+}
+
+/// Links a user to one business with a business-scoped role. This is what allows a business to
+/// have more than one person: `Restaurant.ownerUserId` remains the single legal/billing owner,
+/// while access is granted through membership rows.
+model BusinessMember {
+  id              String     @id @default(uuid()) @db.Uuid
+  businessId      String     @db.Uuid
+  userId          String     @db.Uuid
+  roleId          String     @db.Uuid
+  isActive        Boolean    @default(true)
+  invitedByUserId String?    @db.Uuid
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  business        Restaurant @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user            User       @relation("BusinessMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  role            Role       @relation(fields: [roleId], references: [id])
+  invitedBy       User?      @relation("BusinessMemberInvitedBy", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, userId])
+  @@index([userId, isActive])
+  @@index([businessId, isActive])
 }
 
 model RefreshSession {
@@ -242,6 +294,7 @@ model Restaurant {
   suppliers          Supplier[]
   purchaseOrders     PurchaseOrder[]
   inventoryMovements InventoryMovement[]
+  members            BusinessMember[]
 
   @@index([businessType, status, isOpen])
 }

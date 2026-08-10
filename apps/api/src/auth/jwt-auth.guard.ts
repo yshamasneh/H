@@ -2,11 +2,18 @@ import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import type { Request } from "express";
+import type { AuthorizationContext } from "../common/authorization/authorization.service";
 import { ApiException } from "../common/api.exception";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthenticatedUser, JwtPayload } from "./auth.types";
 
-export type AuthenticatedRequest = Request & { user: AuthenticatedUser };
+export type AuthenticatedRequest = Request & {
+  user: AuthenticatedUser;
+  /** Set by PermissionsGuard once it has resolved the caller's roles and permissions. */
+  authorization?: AuthorizationContext;
+  /** The business this request acts on, resolved before permissions are checked. */
+  businessId?: string;
+};
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {

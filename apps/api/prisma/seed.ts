@@ -438,6 +438,47 @@ async function main(): Promise<void> {
     update: {}
   });
   console.log("Seeded approved supermarket +970590000004: 3 departments, 5 products, supplier and draft purchase");
+
+  await seedRolesAndMemberships();
+}
+
+/**
+ * The roles migration seeds the system roles and backfills existing businesses, but a freshly
+ * reset database is seeded *after* migrating, so the users and businesses created above still need
+ * their role assignments. Keeping this here means `prisma migrate reset` produces a working
+ * environment rather than an admin who cannot open their own dashboard.
+ */
+async function seedRolesAndMemberships(): Promise<void> {
+  const [superAdminRole, businessAdminRole] = await Promise.all([
+    prisma.role.findUnique({ where: { key: "SUPER_ADMIN" } }),
+    prisma.role.findUnique({ where: { key: "BUSINESS_ADMIN" } })
+  ]);
+  if (!superAdminRole || !businessAdminRole) {
+    throw new Error("System roles are missing. Run `npm run prisma:deploy` before seeding.");
+  }
+
+  const promotedAdmins = await prisma.user.updateMany({
+    where: { role: UserRole.ADMIN, platformRoleId: null },
+    data: { platformRoleId: superAdminRole.id }
+  });
+
+  const businesses = await prisma.restaurant.findMany({ select: { id: true, ownerUserId: true } });
+  for (const business of businesses) {
+    await prisma.businessMember.upsert({
+      where: { businessId_userId: { businessId: business.id, userId: business.ownerUserId } },
+      create: {
+        businessId: business.id,
+        userId: business.ownerUserId,
+        roleId: businessAdminRole.id,
+        isActive: true
+      },
+      update: { isActive: true }
+    });
+  }
+  console.log(
+    `Seeded authorization: ${promotedAdmins.count} admin(s) given SUPER_ADMIN, ` +
+      `${businesses.length} owner(s) given BUSINESS_ADMIN membership`
+  );
 }
 
 main()

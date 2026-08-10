@@ -3,7 +3,9 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../common/decorators/roles.decorator";
+import { RequirePermission } from "../common/decorators/require-permission.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { UserRole } from "../generated/prisma/client";
 import { AdminRestaurantsQueryDto, RestaurantAdminActionReasonDto } from "./restaurants.dto";
 import { RestaurantsService } from "./restaurants.service";
@@ -12,8 +14,9 @@ import { OrdersPaginationQueryDto } from "../orders/orders.dto";
 @ApiTags("admin")
 @ApiBearerAuth()
 @Controller("admin/restaurants")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles(UserRole.ADMIN)
+@RequirePermission("MANAGE_BUSINESSES")
 export class AdminRestaurantsController {
   constructor(private readonly restaurants: RestaurantsService) {}
 

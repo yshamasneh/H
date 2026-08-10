@@ -100,6 +100,13 @@ export class FakeRestaurantPrisma {
   readonly notifications: NotificationRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
   readonly offers: any[] = [];
+  /** System roles, seeded by migration in a real database. */
+  readonly roles: { id: string; key: string }[] = [
+    { id: randomUUID(), key: "SUPER_ADMIN" },
+    { id: randomUUID(), key: "BUSINESS_ADMIN" },
+    { id: randomUUID(), key: "BUSINESS_STAFF" }
+  ];
+  readonly businessMembers: { businessId: string; userId: string; roleId: string; isActive: boolean }[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly user = {} as any;
@@ -110,9 +117,31 @@ export class FakeRestaurantPrisma {
   readonly notification = {} as any;
   readonly auditLog = {} as any;
   readonly offer = {} as any;
+  readonly role = {} as any;
+  readonly businessMember = {} as any;
 
   constructor() {
     this.offer.findMany = async () => this.offers;
+    this.role.findUnique = async ({ where }: any) =>
+      this.roles.find((role) => (where.key ? role.key === where.key : role.id === where.id)) ?? null;
+    this.businessMember.upsert = async ({ where, create, update }: any) => {
+      const key = where.businessId_userId;
+      const existing = this.businessMembers.find(
+        (member) => member.businessId === key.businessId && member.userId === key.userId
+      );
+      if (existing) {
+        Object.assign(existing, update);
+        return existing;
+      }
+      const member = {
+        businessId: create.businessId,
+        userId: create.userId,
+        roleId: create.roleId,
+        isActive: create.isActive ?? true
+      };
+      this.businessMembers.push(member);
+      return member;
+    };
     this.user.findUnique = async ({ where }: any) =>
       this.users.find((user) => (where.phone ? user.phone === where.phone : user.id === where.id)) ?? null;
     this.user.create = async ({ data }: any) => {

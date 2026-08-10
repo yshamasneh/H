@@ -45,6 +45,30 @@ test("registering a supermarket preserves the store business type", async () => 
   assert.equal(prisma.restaurants[0].businessType, BusinessType.SUPERMARKET);
 });
 
+test("registering a business makes its owner a BUSINESS_ADMIN member of it", async () => {
+  const { prisma, service } = createService();
+  await service.register(registerInput);
+
+  // Without this the business exists but its owner holds no permissions inside it, and the portal
+  // rejects them from their own store.
+  const businessAdminRoleId = prisma.roles.find((role) => role.key === "BUSINESS_ADMIN")!.id;
+  assert.equal(prisma.businessMembers.length, 1);
+  assert.deepEqual(prisma.businessMembers[0], {
+    businessId: prisma.restaurants[0].id,
+    userId: prisma.users[0].id,
+    roleId: businessAdminRoleId,
+    isActive: true
+  });
+});
+
+test("registering a supermarket also grants its owner a membership", async () => {
+  const { prisma, service } = createService();
+  await service.register({ ...registerInput, businessType: BusinessType.SUPERMARKET });
+
+  assert.equal(prisma.businessMembers.length, 1);
+  assert.equal(prisma.businessMembers[0].businessId, prisma.restaurants[0].id);
+});
+
 test("registering with a phone that already has an account is rejected", async () => {
   const { prisma, service } = createService();
   await service.register(registerInput);

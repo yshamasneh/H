@@ -2,7 +2,9 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, UseGuard
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { RequirePermission } from "../common/decorators/require-permission.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
+import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../generated/prisma/client";
 import { AdminOrdersFilterDto, CancelOrderReasonDto } from "./orders.dto";
@@ -11,8 +13,9 @@ import { OrdersService } from "./orders.service";
 @ApiTags("admin")
 @ApiBearerAuth()
 @Controller("admin/orders")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles(UserRole.ADMIN)
+@RequirePermission("VIEW_ALL_ORDERS")
 export class AdminOrdersController {
   constructor(private readonly orders: OrdersService) {}
 
@@ -29,6 +32,7 @@ export class AdminOrdersController {
   }
 
   @Post(":orderId/cancel")
+  @RequirePermission("MANAGE_ALL_ORDERS")
   @ApiOperation({ summary: "Cancel a stuck order as an administrator, with a required reason" })
   cancel(
     @Req() request: AuthenticatedRequest,
