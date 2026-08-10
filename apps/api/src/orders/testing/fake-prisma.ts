@@ -149,6 +149,7 @@ export class FakeOrdersPrisma {
   readonly offers: any[] = [];
   readonly fulfillmentAdjustments: FulfillmentAdjustmentRecord[] = [];
   readonly inventoryMovements: any[] = [];
+  readonly businessMembers: { businessId: string; userId: string; isActive: boolean }[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly restaurant = {} as any;
@@ -163,8 +164,19 @@ export class FakeOrdersPrisma {
   readonly offer = {} as any;
   readonly fulfillmentAdjustment = {} as any;
   readonly inventoryMovement = {} as any;
+  readonly businessMember = {} as any;
 
   constructor() {
+    // Business access is resolved through membership, so seeding a business implies a membership
+    // for its owner exactly as the real migration backfill and registration flow do.
+    this.businessMember.findMany = async ({ where }: any) =>
+      this.businessMembers.filter(
+        (member) =>
+          (where?.userId === undefined || member.userId === where.userId) &&
+          (where?.businessId === undefined || member.businessId === where.businessId) &&
+          (where?.isActive === undefined || member.isActive === where.isActive)
+      );
+
     this.restaurant.findUnique = async ({ where }: any) =>
       this.restaurants.find((restaurant) =>
         where.id ? restaurant.id === where.id : restaurant.ownerUserId === where.ownerUserId
@@ -514,7 +526,14 @@ export class FakeOrdersPrisma {
       ...overrides
     };
     this.restaurants.push(restaurant);
+    this.businessMembers.push({ businessId: restaurant.id, userId: restaurant.ownerUserId, isActive: true });
     return restaurant;
+  }
+
+  /** Adds a second person to a business, the way the staff endpoints do. */
+  seedBusinessMember(businessId: string, userId: string = randomUUID()): { businessId: string; userId: string } {
+    this.businessMembers.push({ businessId, userId, isActive: true });
+    return { businessId, userId };
   }
 
   seedMenuItem(restaurantId: string, overrides: Partial<MenuItemRecord> = {}): MenuItemRecord {

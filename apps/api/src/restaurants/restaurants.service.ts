@@ -3,6 +3,7 @@ import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { writeAuditLog } from "../common/audit-log.util";
 import { grantBusinessMembership } from "../common/authorization/business-membership.util";
+import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
 import {
   BusinessType,
@@ -13,7 +14,7 @@ import {
   UserRole,
   type Restaurant
 } from "../generated/prisma/client";
-import { createNotification } from "../notifications/notification.util";
+import { createBusinessNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
@@ -93,8 +94,10 @@ export class RestaurantsService {
     }
   }
 
-  async requireOwnRestaurant(ownerUserId: string): Promise<Restaurant> {
-    const restaurant = await this.prisma.restaurant.findUnique({ where: { ownerUserId } });
+  /** Resolves the caller's business from their membership, so staff accounts work, not just owners. */
+  async requireOwnRestaurant(memberUserId: string): Promise<Restaurant> {
+    const businessId = await resolveMemberBusinessId(this.prisma, memberUserId);
+    const restaurant = await this.prisma.restaurant.findUnique({ where: { id: businessId } });
     if (!restaurant) {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "No restaurant is linked to this account.");
     }
@@ -460,8 +463,8 @@ export class RestaurantsService {
         entityId: restaurantId,
         metadata: { fromStatus: restaurant.status, toStatus: status }
       });
-      await createNotification(tx, emitter, {
-        userId: restaurant.ownerUserId,
+      await createBusinessNotification(tx, emitter, {
+        businessId: restaurant.id,
         type: status === RestaurantStatus.APPROVED ? NotificationType.RESTAURANT_APPROVED : NotificationType.RESTAURANT_REJECTED,
         title: status === RestaurantStatus.APPROVED ? "Your restaurant was approved" : "Your restaurant application was rejected",
         body:
@@ -510,8 +513,8 @@ export class RestaurantsService {
         reason: reason ?? null,
         metadata: { fromStatus: restaurant.status, toStatus: targetStatus }
       });
-      await createNotification(tx, emitter, {
-        userId: restaurant.ownerUserId,
+      await createBusinessNotification(tx, emitter, {
+        businessId: restaurant.id,
         type: targetStatus === RestaurantStatus.SUSPENDED ? NotificationType.RESTAURANT_SUSPENDED : NotificationType.RESTAURANT_APPROVED,
         title: targetStatus === RestaurantStatus.SUSPENDED ? "Your restaurant has been suspended" : "Your restaurant has been reactivated",
         body: reason ? `Reason: ${reason}` : "Your restaurant can accept orders again.",

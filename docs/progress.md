@@ -409,3 +409,31 @@ The permission model, its backend enforcement, and the membership table that fin
 
 - **`BUSINESS_STAFF` accounts can be refused correctly but cannot yet be served.** Business resolution still runs through `requireOwnRestaurant(ownerUserId)`, so a member who is not the owner gets `404 RESTAURANT_NOT_FOUND` even for routes their role permits. Switching that lookup to membership resolution is the next phase; until then the role exists in the model but is not usable.
 - Field-level price protection is not implemented: `MANAGE_PRODUCTS` currently guards the whole menu-item update, so a role with `MANAGE_PRODUCTS` but not `MANAGE_PRICES` could still change `priceMinor` through it. Item *creation* requires both. Separating the two needs a service-level check on the changed fields.
+
+## 2026-08-10: Phase 15.2 — Membership-based business access and staff management
+
+Makes the `BUSINESS_STAFF` role actually usable. 15.1 could refuse a staff member correctly but could not serve one, because business access was still looked up by `Restaurant.ownerUserId` and a staff account is never the owner.
+
+### Completed
+
+- **Business resolution now runs through membership** (`resolveMemberBusinessId`), replacing the `findUnique({ where: { ownerUserId } })` lookup in the restaurants, orders, and inventory services. `ownerUserId` is untouched and remains the owner of record. Method signatures were deliberately left alone: the services still take the acting user and resolve the business internally, which keeps the change small and keeps actor attribution working.
+- **A caller with several active memberships is refused, not resolved to an arbitrary business** (`409 BUSINESS_CONTEXT_REQUIRED`). Silently picking one would be exactly the ambiguity that leaks data between tenants. Until a business selector exists, a person can hold access to only one business at a time.
+- **Socket rooms are joined from memberships**, and `order.subscribe` authorization checks membership rather than ownership, so the WebSocket enforces the same tenancy rule as HTTP.
+- **Business-scoped notifications** (`createBusinessNotification` + `Notification.businessId`): a new order, a fulfilment decision, and both cancellation paths now notify every active member, so the alert reaches whoever is on shift. One row per member keeps read state per person — one staff member marking a notification read must not hide it from everyone else.
+- **Staff management** under `/restaurant/me/staff` (list, add, update role or suspend, remove), gated by `MANAGE_BUSINESS_STAFF`. Removal deactivates the membership rather than deleting it, so audit entries and accepted orders keep pointing at a resolvable person. The owner of record cannot be modified from inside the business, and nobody can change their own access. Only business-scoped roles are assignable from here, so `SUPER_ADMIN` can never be granted from a business screen.
+- **`AuditLog.businessId`** landed earlier than planned because the staff endpoints write business-scoped audit entries. This is the column that lets a business be shown its own history.
+- **Operational toggles moved to `MANAGE_ORDERS`**: closing the store and marking an item sold out are shift-level decisions. A role that can accept orders must be able to stop the flow without waiting for the owner — the alternative is orders arriving while the only person who can stop them is unreachable.
+- **The `MANAGE_PRODUCTS` price leak is closed.** A role could previously change `priceMinor` through the product update without holding `MANAGE_PRICES`. The check lives in `MenuService.updateItem`, where the stored item is already loaded, so it compares against the current value: only a real change is refused, and a full edit form that always sends the price still works.
+
+### Verified
+
+- `npm run typecheck` clean; API 175 tests (174 pass, 1 skipped, 0 fail), mobile 23 pass; `npm run test:e2e` passes; `npm run build` succeeds.
+- Verified over real HTTP on a separate port. A `BUSINESS_STAFF` account created through the new endpoint can read the business profile and order queue (both `404` before this phase), close the store, and mark an item sold out, while price changes, business settings, staff management, and inventory all return `403`.
+- The price protection was verified with a custom role holding `MANAGE_PRODUCTS` and `MANAGE_MENU` but not `MANAGE_PRICES`: renaming the product succeeded, resending the unchanged price succeeded, changing the price returned `403 FORBIDDEN_PERMISSION` naming `MANAGE_PRICES`, and the stored price was unchanged afterwards.
+- All verification actors, the custom role, and their audit rows were removed afterwards; user, membership, role, order and audit counts match their pre-verification values.
+
+### Remaining before further work
+
+- Business context is resolved twice per permissioned request: once by `PermissionsGuard` and once inside the service. Harmless at this volume, but it collapses into a single resolution when a `BusinessScopeGuard` sets the business on the request and services take it as a parameter.
+- Staff onboarding creates the account with a password the business admin sets and passes on, because the platform has no email or SMS delivery. Moving an existing account between businesses is refused with `PHONE_ALREADY_REGISTERED` rather than reassigned.
+- There is still no admin or business UI for any of this; staff management is API-only.

@@ -1,6 +1,7 @@
 import { Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { writeAuditLog } from "../common/audit-log.util";
+import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
 import {
   BusinessType,
@@ -14,7 +15,7 @@ import {
   type Restaurant
 } from "../generated/prisma/client";
 import { writeInventoryMovement } from "../inventory/inventory.util";
-import { createNotification } from "../notifications/notification.util";
+import { createBusinessNotification, createNotification } from "../notifications/notification.util";
 import { calculatePromotionDiscounts } from "../offers/offers.service";
 import type { AppliedPromotion } from "../offers/offers.types";
 import { PrismaService } from "../prisma/prisma.service";
@@ -104,8 +105,8 @@ export class OrdersService {
           changedByUserId: customerId
         }
       });
-      await createNotification(tx, emitter, {
-        userId: restaurant.ownerUserId,
+      await createBusinessNotification(tx, emitter, {
+        businessId: restaurant.id,
         type: NotificationType.ORDER_PLACED,
         title: "New order received",
         body: `A new order for ${formatPrice(created.totalMinor)} is waiting for your response.`,
@@ -424,8 +425,8 @@ export class OrdersService {
         });
       }
 
-      await createNotification(tx, emitter, {
-        userId: order.restaurant.ownerUserId,
+      await createBusinessNotification(tx, emitter, {
+        businessId: order.restaurantId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: decision === "APPROVED" ? "Fulfillment change approved" : "Fulfillment change rejected",
         body: decision === "APPROVED"
@@ -550,8 +551,8 @@ export class OrdersService {
           note: "Cancelled by customer"
         }
       });
-      await createNotification(tx, emitter, {
-        userId: existing.restaurant.ownerUserId,
+      await createBusinessNotification(tx, emitter, {
+        businessId: existing.restaurantId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: "Order cancelled by customer",
         body: "The customer cancelled this order before it was accepted.",
@@ -610,8 +611,8 @@ export class OrdersService {
         body: `An administrator cancelled this order. Reason: ${reason}`,
         relatedEntityId: orderId
       });
-      await createNotification(tx, emitter, {
-        userId: existing.restaurant.ownerUserId,
+      await createBusinessNotification(tx, emitter, {
+        businessId: existing.restaurantId,
         type: NotificationType.ORDER_STATUS_CHANGED,
         title: "An order was cancelled by an administrator",
         body: `Reason: ${reason}`,
@@ -663,8 +664,10 @@ export class OrdersService {
     return toOrderDetailView(order, withActorNames);
   }
 
-  private async requireOwnRestaurant(ownerUserId: string): Promise<Restaurant> {
-    const restaurant = await this.prisma.restaurant.findUnique({ where: { ownerUserId } });
+  /** Resolves the caller's business from their membership, so staff accounts work, not just owners. */
+  private async requireOwnRestaurant(memberUserId: string): Promise<Restaurant> {
+    const businessId = await resolveMemberBusinessId(this.prisma, memberUserId);
+    const restaurant = await this.prisma.restaurant.findUnique({ where: { id: businessId } });
     if (!restaurant) {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "No restaurant is linked to this account.");
     }

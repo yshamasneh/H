@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { writeAuditLog } from "../common/audit-log.util";
+import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
 import {
   BusinessType,
@@ -250,8 +251,10 @@ export class InventoryService {
     });
   }
 
-  private async requireSupermarket(ownerUserId: string) {
-    const restaurant = await this.prisma.restaurant.findUnique({ where: { ownerUserId } });
+  /** Resolves the caller's business from their membership, so staff accounts work, not just owners. */
+  private async requireSupermarket(memberUserId: string) {
+    const businessId = await resolveMemberBusinessId(this.prisma, memberUserId);
+    const restaurant = await this.prisma.restaurant.findUnique({ where: { id: businessId } });
     if (!restaurant || restaurant.businessType !== BusinessType.SUPERMARKET) {
       throw new ApiException(404, "SUPERMARKET_NOT_FOUND", "Inventory operations are available only to supermarket owners.");
     }

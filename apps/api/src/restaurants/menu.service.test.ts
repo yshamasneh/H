@@ -25,7 +25,7 @@ test("a restaurant owner can create and update their own category and item", asy
     priceMinor: 1500
   });
 
-  const updatedItem = await menu.updateItem(restaurantA, item.id, { priceMinor: 1800 });
+  const updatedItem = await menu.updateItem(restaurantA, item.id, { priceMinor: 1800 }, { canManagePrices: true });
   assert.equal(updatedItem.priceMinor, 1800);
 
   const updatedCategory = await menu.updateCategory(restaurantA, category.id, { name: "Wraps" });
@@ -48,7 +48,7 @@ test("restaurant A cannot update restaurant B's menu item", async () => {
   const itemB = await menu.createItem("restaurant-b", { categoryId: categoryB.id, name: "Baklava", priceMinor: 900 });
 
   await assert.rejects(
-    menu.updateItem("restaurant-a", itemB.id, { priceMinor: 1 }),
+    menu.updateItem("restaurant-a", itemB.id, { priceMinor: 1 }, { canManagePrices: true }),
     hasCode("MENU_ITEM_NOT_FOUND")
   );
   await assert.rejects(
@@ -74,7 +74,7 @@ test("restaurant A cannot move its own item into restaurant B's category", async
   const categoryB = await menu.createCategory("restaurant-b", { name: "Desserts" });
 
   await assert.rejects(
-    menu.updateItem("restaurant-a", itemA.id, { categoryId: categoryB.id }),
+    menu.updateItem("restaurant-a", itemA.id, { categoryId: categoryB.id }, { canManagePrices: true }),
     hasCode("MENU_CATEGORY_NOT_FOUND")
   );
 });
@@ -109,6 +109,63 @@ test("public menu only includes active categories and available items", async ()
   assert.equal(publicMenu.categories[0].id, visibleCategory.id);
   assert.equal(publicMenu.categories[0].items.length, 1);
   assert.equal(publicMenu.categories[0].items[0].id, availableItem.id);
+});
+
+test("a role without MANAGE_PRICES cannot change a price through the product update", async () => {
+  const { menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Mains" });
+  const item = await menu.createItem("restaurant-a", {
+    categoryId: category.id,
+    name: "Shawarma",
+    priceMinor: 2000
+  });
+
+  // MANAGE_PRODUCTS alone must not be a back door to the price field.
+  await assert.rejects(
+    menu.updateItem("restaurant-a", item.id, { priceMinor: 1 }, { canManagePrices: false }),
+    hasCode("FORBIDDEN_PERMISSION")
+  );
+
+  const unchanged = await menu.listItems("restaurant-a");
+  assert.equal(unchanged.find((entry) => entry.id === item.id)?.priceMinor, 2000);
+});
+
+test("a role without MANAGE_PRICES can still edit everything except the price", async () => {
+  const { menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Mains" });
+  const item = await menu.createItem("restaurant-a", {
+    categoryId: category.id,
+    name: "Shawarma",
+    priceMinor: 2000
+  });
+
+  const updated = await menu.updateItem(
+    "restaurant-a",
+    item.id,
+    { name: "Chicken Shawarma", description: "With garlic sauce" },
+    { canManagePrices: false }
+  );
+  assert.equal(updated.name, "Chicken Shawarma");
+  assert.equal(updated.priceMinor, 2000);
+});
+
+test("resending the same price is not treated as a price change", async () => {
+  const { menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Mains" });
+  const item = await menu.createItem("restaurant-a", {
+    categoryId: category.id,
+    name: "Shawarma",
+    priceMinor: 2000
+  });
+
+  // A full edit form may always send every field; only an actual change needs the permission.
+  const updated = await menu.updateItem(
+    "restaurant-a",
+    item.id,
+    { name: "Shawarma Plate", priceMinor: 2000 },
+    { canManagePrices: false }
+  );
+  assert.equal(updated.name, "Shawarma Plate");
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

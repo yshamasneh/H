@@ -91,3 +91,14 @@ export type SupermarketCatalogView = {
   pageSize: number;
   total: number;
 };
+
+export type BusinessStaffView = {
+  userId: string;
+  fullName: string;
+  phone: string;
+  roleKey: string;
+  isActive: boolean;
+  /** The owner of record, whose access cannot be removed from inside the business. */
+  isOwner: boolean;
+  createdAt: Date;
+};

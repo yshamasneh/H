@@ -124,6 +124,13 @@ export class FakeRestaurantPrisma {
     this.offer.findMany = async () => this.offers;
     this.role.findUnique = async ({ where }: any) =>
       this.roles.find((role) => (where.key ? role.key === where.key : role.id === where.id)) ?? null;
+    this.businessMember.findMany = async ({ where }: any) =>
+      this.businessMembers.filter(
+        (member) =>
+          (where?.userId === undefined || member.userId === where.userId) &&
+          (where?.businessId === undefined || member.businessId === where.businessId) &&
+          (where?.isActive === undefined || member.isActive === where.isActive)
+      );
     this.businessMember.upsert = async ({ where, create, update }: any) => {
       const key = where.businessId_userId;
       const existing = this.businessMembers.find(
@@ -437,6 +444,14 @@ export class FakeRestaurantPrisma {
       ...overrides
     };
     this.restaurants.push(restaurant);
+    // Registration and the migration backfill both give the owner a membership, so a seeded
+    // business has one too — otherwise business-wide notifications would reach nobody.
+    this.businessMembers.push({
+      businessId: restaurant.id,
+      userId: restaurant.ownerUserId,
+      roleId: this.roles.find((role) => role.key === "BUSINESS_ADMIN")!.id,
+      isActive: true
+    });
     return restaurant;
   }
 }

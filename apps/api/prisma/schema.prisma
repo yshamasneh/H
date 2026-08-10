@@ -295,6 +295,7 @@ model Restaurant {
   purchaseOrders     PurchaseOrder[]
   inventoryMovements InventoryMovement[]
   members            BusinessMember[]
+  notifications      Notification[]
 
   @@index([businessType, status, isOpen])
 }
@@ -568,6 +569,9 @@ model Delivery {
 model AuditLog {
   id           String   @id @default(uuid()) @db.Uuid
   actorUserId  String   @db.Uuid
+  /// Set when the action happened inside a business, so a business can be shown its own history
+  /// without the platform-wide log. `entityId` identifies the thing acted on, not the tenant.
+  businessId   String?  @db.Uuid
   action       String
   entityType   String
   entityId     String
@@ -578,11 +582,15 @@ model AuditLog {
 
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId])
+  @@index([businessId, createdAt])
 }
 
 model Notification {
   id              String           @id @default(uuid()) @db.Uuid
   userId          String           @db.Uuid
+  /// Set when the notification concerns a business, so it can be shown to every member of that
+  /// business rather than only whoever the row was addressed to.
+  businessId      String?          @db.Uuid
   type            NotificationType
   title           String
   body            String
@@ -590,6 +598,8 @@ model Notification {
   isRead          Boolean          @default(false)
   createdAt       DateTime         @default(now())
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business        Restaurant?      @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead, createdAt])
+  @@index([businessId, isRead, createdAt])
 }

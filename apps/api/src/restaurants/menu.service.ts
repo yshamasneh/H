@@ -79,8 +79,24 @@ export class MenuService {
     return toItemView(item);
   }
 
-  async updateItem(restaurantId: string, itemId: string, input: UpdateMenuItemDto): Promise<MenuItemOwnerView> {
+  async updateItem(
+    restaurantId: string,
+    itemId: string,
+    input: UpdateMenuItemDto,
+    capabilities: { canManagePrices: boolean }
+  ): Promise<MenuItemOwnerView> {
     const item = await this.requireOwnItem(restaurantId, itemId);
+    // MANAGE_PRODUCTS lets someone edit a product; changing what it costs is a separate
+    // permission. Compared against the stored value so resending an unchanged price is not
+    // treated as a price change — a full edit form may always include the field.
+    if (input.priceMinor !== undefined && input.priceMinor !== item.priceMinor && !capabilities.canManagePrices) {
+      throw new ApiException(
+        403,
+        "FORBIDDEN_PERMISSION",
+        "Your account does not have permission to change prices.",
+        { requiredPermission: "MANAGE_PRICES" }
+      );
+    }
     if (input.categoryId) {
       await this.requireOwnCategory(restaurantId, input.categoryId);
     }

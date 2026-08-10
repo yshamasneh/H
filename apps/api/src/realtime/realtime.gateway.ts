@@ -53,8 +53,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       await client.join("admins");
     }
     if (user.role === UserRole.RESTAURANT) {
-      const restaurant = await this.prisma.restaurant.findUnique({ where: { ownerUserId: user.id } });
-      if (restaurant) await client.join(`restaurant:${restaurant.id}`);
+      // Joined from memberships rather than ownership, so every staff account on a business
+      // receives its live order events, not only the owner.
+      for (const businessId of await this.businessIdsForMember(user.id)) {
+        await client.join(`restaurant:${businessId}`);
+      }
     }
   }
 
@@ -73,17 +76,29 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const order = await this.prisma.order.findUnique({ where: { id: data.orderId } });
     if (!order) return;
 
-    const restaurant =
-      user.role === UserRole.RESTAURANT ? await this.prisma.restaurant.findUnique({ where: { ownerUserId: user.id } }) : null;
+    const memberBusinessIds =
+      user.role === UserRole.RESTAURANT ? await this.businessIdsForMember(user.id) : [];
     const allowed =
       user.role === UserRole.ADMIN ||
       (user.role === UserRole.CUSTOMER && order.customerId === user.id) ||
-      (user.role === UserRole.RESTAURANT && restaurant?.id === order.restaurantId) ||
+      (user.role === UserRole.RESTAURANT && memberBusinessIds.includes(order.restaurantId)) ||
       (user.role === UserRole.DRIVER && (await this.driverOwnsOrder(user.id, order.id)));
 
     if (allowed) {
       await client.join(`order:${data.orderId}`);
     }
+  }
+
+  /**
+   * The socket layer has to enforce the same tenancy rule as HTTP; a permission model checked only
+   * on REST would leak through the WebSocket.
+   */
+  private async businessIdsForMember(userId: string): Promise<string[]> {
+    const memberships = await this.prisma.businessMember.findMany({
+      where: { userId, isActive: true },
+      select: { businessId: true }
+    });
+    return memberships.map((membership) => membership.businessId);
   }
 
   private async driverOwnsOrder(driverId: string, orderId: string): Promise<boolean> {

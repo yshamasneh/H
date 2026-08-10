@@ -7,6 +7,11 @@ export type CreateNotificationInput = {
   title: string;
   body: string;
   relatedEntityId?: string | null;
+  businessId?: string | null;
+};
+
+export type CreateBusinessNotificationInput = Omit<CreateNotificationInput, "userId"> & {
+  businessId: string;
 };
 
 /**
@@ -25,6 +30,7 @@ export async function createNotification(
   const notification = await tx.notification.create({
     data: {
       userId: input.userId,
+      businessId: input.businessId ?? null,
       type: input.type,
       title: input.title,
       body: input.body,
@@ -40,4 +46,24 @@ export async function createNotification(
     isRead: notification.isRead,
     createdAt: notification.createdAt
   });
+}
+
+/**
+ * Notifies every active member of a business, so a new order reaches whoever is actually on shift
+ * rather than only the owner of record. One row per member keeps read state per person: one staff
+ * member marking an order notification read must not hide it from everyone else.
+ */
+export async function createBusinessNotification(
+  tx: Prisma.TransactionClient,
+  gateway: Pick<RealtimeEmitter, "emitToUser">,
+  input: CreateBusinessNotificationInput
+): Promise<void> {
+  const members = await tx.businessMember.findMany({
+    where: { businessId: input.businessId, isActive: true },
+    select: { userId: true }
+  });
+
+  for (const member of members) {
+    await createNotification(tx, gateway, { ...input, userId: member.userId });
+  }
 }

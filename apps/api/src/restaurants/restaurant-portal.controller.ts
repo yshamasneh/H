@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuard
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { requestHoldsPermission } from "../common/authorization/request-permission.util";
 import { RequirePermission } from "../common/decorators/require-permission.decorator";
 import { Roles } from "../common/decorators/roles.decorator";
 import { PermissionsGuard } from "../common/guards/permissions.guard";
@@ -44,7 +45,7 @@ export class RestaurantPortalController {
   }
 
   @Patch("me/open-status")
-  @RequirePermission("MANAGE_BUSINESS_SETTINGS")
+  @RequirePermission("MANAGE_ORDERS")
   @ApiOperation({ summary: "Toggle whether the restaurant is currently accepting orders" })
   setOpenStatus(@Req() request: AuthenticatedRequest, @Body() input: SetOpenStatusDto) {
     return this.restaurants.setOwnOpenStatus(request.user.id, input.isOpen);
@@ -101,11 +102,13 @@ export class RestaurantPortalController {
     @Body() input: UpdateMenuItemDto
   ) {
     const restaurant = await this.restaurants.requireOwnRestaurant(request.user.id);
-    return this.menu.updateItem(restaurant.id, itemId, input);
+    return this.menu.updateItem(restaurant.id, itemId, input, {
+      canManagePrices: requestHoldsPermission(request, "MANAGE_PRICES")
+    });
   }
 
   @Patch("me/menu/items/:itemId/availability")
-  @RequirePermission("MANAGE_PRODUCTS")
+  @RequirePermission("MANAGE_ORDERS")
   @ApiOperation({ summary: "Toggle a menu item's availability" })
   async setItemAvailability(
     @Req() request: AuthenticatedRequest,

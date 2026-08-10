@@ -583,6 +583,83 @@ test("adminGetOrder returns any order regardless of ownership", async () => {
   assert.equal(view.id, order.id);
 });
 
+test("a staff member who is not the owner can work their business's orders", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  const staff = prisma.seedBusinessMember(restaurant.id);
+
+  // Before membership resolution this returned RESTAURANT_NOT_FOUND, because access was looked up
+  // by Restaurant.ownerUserId and a staff account is never the owner.
+  const listed = await service.listForRestaurantOwner(staff.userId, 1, 20);
+  assert.equal(listed.total, 1);
+
+  const accepted = await service.updateStatusForRestaurantOwner(staff.userId, order.id, "ACCEPTED", undefined);
+  assert.equal(accepted.status, "ACCEPTED");
+  // Attribution records the person who actually acted, not the owner of record.
+  assert.equal(accepted.acceptedByUserId, staff.userId);
+});
+
+test("a staff member of one business still cannot reach another business's order", async () => {
+  const { prisma, service } = createService();
+  const restaurantA = prisma.seedRestaurant();
+  const restaurantB = prisma.seedRestaurant({ name: "Other" });
+  const itemB = prisma.seedMenuItem(restaurantB.id);
+  const orderB = await service.createOrder(randomUUID(), baseInput(restaurantB.id, itemB.id) as never);
+  const staffA = prisma.seedBusinessMember(restaurantA.id);
+
+  await assert.rejects(
+    service.getForRestaurantOwner(staffA.userId, orderB.id),
+    hasCode("ORDER_NOT_FOUND")
+  );
+  await assert.rejects(
+    service.updateStatusForRestaurantOwner(staffA.userId, orderB.id, "ACCEPTED", undefined),
+    hasCode("ORDER_NOT_FOUND")
+  );
+});
+
+test("a user with no membership cannot reach any business's orders", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  await assert.rejects(
+    service.listForRestaurantOwner(randomUUID(), 1, 20),
+    hasCode("RESTAURANT_NOT_FOUND")
+  );
+});
+
+test("a user belonging to two businesses must say which one, rather than getting an arbitrary pick", async () => {
+  const { prisma, service } = createService();
+  const restaurantA = prisma.seedRestaurant();
+  const restaurantB = prisma.seedRestaurant({ name: "Other" });
+  const shared = prisma.seedBusinessMember(restaurantA.id);
+  prisma.seedBusinessMember(restaurantB.id, shared.userId);
+
+  // Silently choosing one business would be exactly the ambiguity that leaks data between tenants.
+  await assert.rejects(
+    service.listForRestaurantOwner(shared.userId, 1, 20),
+    hasCode("BUSINESS_CONTEXT_REQUIRED")
+  );
+});
+
+test("a new order notifies every active member of the business, not only the owner", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const staff = prisma.seedBusinessMember(restaurant.id);
+
+  await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const notified = prisma.notifications
+    .filter((entry) => entry.type === "ORDER_PLACED")
+    .map((entry) => entry.userId)
+    .sort();
+  assert.deepEqual(notified, [restaurant.ownerUserId, staff.userId].sort());
+});
+
 test("accepting an order records who accepted it and when, in the same atomic write", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();

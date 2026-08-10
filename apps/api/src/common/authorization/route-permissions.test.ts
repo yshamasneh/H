@@ -70,12 +70,14 @@ test("business catalogue writes require the matching permission and reads stay o
 
   const expected: [string, Permission[]][] = [
     ["updateProfile", ["MANAGE_BUSINESS_SETTINGS"]],
-    ["setOpenStatus", ["MANAGE_BUSINESS_SETTINGS"]],
+    // Closing the store and marking an item sold out are shift-level operational acts: whoever
+    // can accept orders must be able to stop the flow without waiting for the owner.
+    ["setOpenStatus", ["MANAGE_ORDERS"]],
+    ["setItemAvailability", ["MANAGE_ORDERS"]],
     ["createCategory", ["MANAGE_MENU"]],
     ["updateCategory", ["MANAGE_MENU"]],
     ["createItem", ["MANAGE_PRODUCTS", "MANAGE_PRICES"]],
-    ["updateItem", ["MANAGE_PRODUCTS"]],
-    ["setItemAvailability", ["MANAGE_PRODUCTS"]]
+    ["updateItem", ["MANAGE_PRODUCTS"]]
   ];
   for (const [method, permissions] of expected) {
     assert.deepEqual(methodPermissions(RestaurantPortalController, method), permissions, method);
