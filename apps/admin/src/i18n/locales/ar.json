@@ -26,6 +26,7 @@
     "ASSIGNED": "تم التعيين",
     "ACCEPTED": "تم القبول",
     "PREPARING": "قيد التحضير",
+    "PREPARING_SUPERMARKET": "قيد التجهيز",
     "PICKED_UP": "تم الاستلام",
     "ON_THE_WAY": "في الطريق",
     "READY_FOR_PICKUP": "جاهز للاستلام",

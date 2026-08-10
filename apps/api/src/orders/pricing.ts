@@ -17,7 +17,9 @@ export type OrderFees = {
 const earthRadiusMeters = 6_371_000;
 
 export const defaultDeliveryPricing: DeliveryPricingConfig = {
-  minimumFeeMinor: 500,
+  // 10.00 ILS covers the intended driver economics: at the minimum distance the driver's 70%
+  // share is 7.00 and the remaining 3.00 splits one shekel each three ways.
+  minimumFeeMinor: 1_000,
   includedDistanceMeters: 3_000,
   ratePerKilometerMinor: 150,
   maximumDistanceMeters: 25_000,

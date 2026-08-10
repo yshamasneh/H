@@ -171,7 +171,8 @@ test(
       .set("Authorization", `Bearer ${customerToken}`)
       .send(orderInput)
       .expect(201);
-    assert.equal(quoteResponse.body.discountMinor, 1500);
+    // 1000 from the 20% product offer plus the whole 1000 delivery fee waived by FREE_DELIVERY.
+    assert.equal(quoteResponse.body.discountMinor, 2000);
     assert.equal(quoteResponse.body.totalMinor, 4200);
 
     const orderResponse = await http
@@ -182,7 +183,7 @@ test(
     const orderId = orderResponse.body.id as string;
     assert.equal(orderResponse.body.subtotalMinor, 5000);
     assert.ok(orderResponse.body.deliveryDistanceMeters > 0);
-    assert.equal(orderResponse.body.discountMinor, 1500);
+    assert.equal(orderResponse.body.discountMinor, 2000);
     assert.equal(orderResponse.body.totalMinor, 4200);
     assert.deepEqual(
       orderResponse.body.appliedPromotions.map((promotion: { type: string }) => promotion.type).sort(),

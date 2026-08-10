@@ -26,6 +26,7 @@
     "ASSIGNED": "Assigned",
     "ACCEPTED": "Accepted",
     "PREPARING": "Preparing",
+    "PREPARING_SUPERMARKET": "Picking",
     "PICKED_UP": "Picked up",
     "ON_THE_WAY": "On the way",
     "READY_FOR_PICKUP": "Ready for pickup",

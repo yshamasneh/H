@@ -356,3 +356,27 @@ Phases 0 through 14 are implemented, tested, and documented (Phase 14's write-up
 
 - **`apps/mobile` has no i18n at all** — no library, no translation files, no `I18nManager`/RTL usage, no language switcher. Every mobile screen (customer, admin, restaurant, supermarket, driver) is hardcoded English. This was assumed already done; it is not, and needs the same treatment as this admin work (plus the added complexity that React Native's `I18nManager.forceRTL` requires an app reload to take effect on native builds, unlike the instant `dir` attribute flip available on the web).
 - Backend-originated strings (API error messages surfaced verbatim via `ApiError.message`, e.g. validation errors) are not translated — they are a separate concern in `apps/api`, out of scope for a frontend i18n pass.
+
+## 2026-08-10: Phase 15.0 — Order acceptance attribution, backup script, and the delivery minimum fee
+
+Foundations for the admin/order-management phase, plus two owner decisions on business values. Everything here is additive: no endpoint changed meaning and no existing functionality was removed.
+
+### Completed
+
+- **Backup and restore scripts now work on a machine without the PostgreSQL client tools.** `npm run db:backup` previously failed twice over: it never loaded `.env` (so `DATABASE_URL` was undefined) and it shelled out to a host `pg_dump` that is not installed — the database runs in the docker-compose `db` service. `scripts/database-command.mjs` now loads the repository `.env` (real environment variables still take precedence) and resolves the client tools in three steps: an explicit `PG_DOCKER_CONTAINER`/`--container=`, then a local install, then a single running postgres container. The container path transfers the dump with `docker cp` and connects on the container's internal port rather than the published one. Restore shares the resolver and keeps its checksum verification, separate `RESTORE_DATABASE_URL`, and `--confirm-restore` guards.
+- **`Order.acceptedByUserId` and `Order.acceptedAt`**, written inside the existing compare-and-swap so the winner of a contended acceptance is recorded by the same atomic write that decides it. Backfilled from `OrderStatusHistory`, which already recorded who moved an order into `ACCEPTED`. Surfaced in the admin order list and detail; business and admin views include the actor's name, customer-facing views deliberately do not.
+- **Three indexes** for the queries the new-orders queue and cross-business monitor will run: `Order(restaurantId, status, createdAt)`, `Order(status, createdAt)`, `OrderStatusHistory(changedByUserId, createdAt)`.
+- **`DeferredEmitter`** buffers realtime emits and flushes them only after the surrounding transaction commits. Emitting from inside `$transaction` meant a rollback could leave clients re-fetching a row that never existed. Applied across the orders, drivers, and restaurants services; the drivers service had the same problem with `emitToOrder`.
+- **`DELIVERY_MIN_FEE_MINOR` raised from 500 to 1000 (5.00 → 10.00 ILS).** This supersedes the 5.00 default recorded in the Phase 10 entry above. The owner's revenue model is a 10.00 fee with the driver keeping 7.00 — exactly a 70% share — and the remaining 3.00 splitting one shekel each between the delivery-operations partner and the two platform owners. The 5.00 default was inherited, not chosen: at 70% it paid a driver 3.50 for a 15–20 minute round trip (~12 ILS/hour before fuel), which would not retain drivers. At 10.00 it is ~21 ILS/hour. Only the minimum changed; the per-kilometre rate, included distance, maximum range, and service fee are untouched.
+
+### Verified
+
+- `npm run typecheck` clean across all three workspaces; API 133 tests (132 pass, 1 skipped, 0 fail), mobile 23 pass; `npm run build` succeeds. `npm run test:e2e` also passes against the local database, which is what actually verifies the fee change end to end — `FREE_DELIVERY` scales with the fee, so the Phase 11 lifecycle's `discountMinor` moves from 1500 to 2000 while `totalMinor` stays 4200.
+- The atomicity guarantee was checked against real PostgreSQL, not only the in-memory fake: 8 concurrent acceptance attempts on one order produced exactly one `UPDATE 1` and seven `UPDATE 0`. The test order was restored to its original state afterwards.
+- `npm run db:backup` verified on the default path, with an explicit `--container=` override, and with a clear failure on a bad container name; `npm run db:restore -- --verify-only` validates checksum and archive on a real dump.
+
+### Notes for the next phase
+
+- The new indexes cannot be shown in use yet — with six orders PostgreSQL sequential-scans regardless of index, so an `EXPLAIN` here would be misleading.
+- The compare-and-swap failure path still raises `ORDER_INVALID_TRANSITION` rather than a distinct already-handled code. That distinction lands with the multi-staff live-orders work, where a lost race first becomes reachable and the UI needs to tell the two cases apart.
+- `status.PREPARING_SUPERMARKET` ("قيد التجهيز" / "Picking") was added to the admin locales but is not wired up yet; it is consumed when per-vertical order labelling lands. The restaurant label was already the correct "قيد التحضير".
