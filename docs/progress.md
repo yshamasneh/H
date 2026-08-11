@@ -513,3 +513,27 @@ Turns the platform shell from a read-and-approve tool into one that can actually
 ### Notes
 
 - A build failure caught a field that a guard clause had silently skipped adding, after a typecheck chain had short-circuited without printing its failure. Worth remembering that `cmd && echo OK` prints nothing on failure, which reads too much like success.
+
+## 2026-08-11: B1 — JOVO design tokens and typography
+
+The token layer and the type system everything downstream will consume. No screen was redesigned; the visible change comes entirely from tokens replacing hardcoded values.
+
+### Completed
+
+- **Self-hosted Cairo and Inter.** Six woff2 subsets (232 KB total) served from `apps/admin/public/fonts`, declared with `@font-face` directly in `styles.css`. Cairo carries Arabic, Inter carries Latin, and each face declares a `unicode-range` — so the browser picks per character and a mixed "JOVO / جوفو" string sets correctly with no markup. No CDN request, no npm dependency, no third-party at runtime. OFL notice included.
+- **Complete token layer**: brand, warm-biased neutrals, five semantic families, an 8-step type scale, a 4px spacing scale, four radii, three elevations, and motion tokens. **Zero hardcoded colours and zero hardcoded font sizes remain outside the token block**, down from 15 colours and 13 sizes.
+- **Arabic typographic metrics as first-class**, applied through a `[dir="rtl"]` token override rather than a duplicated scale: leading 1.85 against Latin's 1.55, tracking forced to zero because Arabic letters join and tracking breaks them, a +1px optical bump because Arabic has no cap height, and `text-transform` disabled because Arabic has no letter case.
+- **Status colours reorganised into five families**, only one of which is orange. `PLACED` is the attention state; everything in flight is blue. `DELIVERY_FAILED` and `FAILED` were missing from the palette entirely and rendered as neutral grey — a failed delivery looked exactly like a driver being off shift. Both now read as errors.
+- **The new-order ticket is the only orange object on the queue board**, so "is there anything new" is answered by colour before any text is read. The reference moved to display weight, and the elapsed time escalates to red past three minutes.
+- `prefers-reduced-motion` honoured globally.
+
+### Verified
+
+- `npm run typecheck` clean; API 202 tests (201 pass, 1 skipped, 0 fail), mobile 23 pass; `npm run build` succeeds.
+- Verified in a real browser in **both languages**. Arabic renders in Cairo with correct RTL mirroring; English renders in Inter with the sidebar on the left and the queue columns reading left to right. Font files confirmed served with HTTP 200.
+- Before and after captured: the same login screen previously rendered Arabic in Tahoma on a dark navy gradient, and now renders in Cairo on a light surface with the JOVO orange action.
+
+### Notes
+
+- The login screen and sidebar changed surface colour as a direct consequence of tokenisation — the dark gradients were hardcoded values with no equivalent in a light-only system. The remaining shell work (sidebar structure and density) is B3.
+- Three inline `style` objects carrying colour or font size were replaced with classes. The remaining inline styles are layout nudges only and are cleaned up in B4.

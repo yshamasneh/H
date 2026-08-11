@@ -93,7 +93,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="sidebar-footer">
           {t("layout.signedInAs")}
           <br />
-          <strong style={{ color: "#e7ecf7" }}>{user?.fullName}</strong>
+          <strong className="sidebar-user">{user?.fullName}</strong>
           {access?.roleKey ? <br /> : null}
           {access?.roleKey ? t(`role.${access.roleKey}`, access.roleKey) : null}
           <button className="sign-out-button" onClick={() => void signOut()} type="button">

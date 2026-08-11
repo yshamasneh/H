@@ -135,9 +135,10 @@ function QueueColumn({
         orders.map((order) => {
           const ageMs = Date.now() - new Date(order.createdAt).getTime();
           const isLate = escalateMs !== undefined && ageMs > escalateMs;
+          const isNew = order.status === "PLACED";
           return (
             <button
-              className={`order-ticket${isLate ? " late" : ""}`}
+              className={`order-ticket${isNew ? " is-new" : ""}${isLate ? " late" : ""}`}
               key={order.id}
               onClick={() => onOpen(order)}
               type="button"
@@ -148,10 +149,10 @@ function QueueColumn({
               </div>
               <div className="order-ticket-body">
                 <span>{t("liveOrders.itemCount", { count: countItems(order) })}</span>
-                <span>{formatPrice(order.totalMinor)}</span>
+                <span className="order-ticket-total">{formatPrice(order.totalMinor)}</span>
               </div>
               <div className="order-ticket-foot">
-                <span>{t("liveOrders.elapsed", { minutes: Math.floor(ageMs / 60_000) })}</span>
+                <span className="order-ticket-age">{t("liveOrders.elapsed", { minutes: Math.floor(ageMs / 60_000) })}</span>
                 {order.requiresCustomerReview ? <span>{t("liveOrders.awaitingCustomer")}</span> : null}
                 {order.acceptedByFullName ? (
                   <span>{t("liveOrders.acceptedBy", { name: order.acceptedByFullName })}</span>

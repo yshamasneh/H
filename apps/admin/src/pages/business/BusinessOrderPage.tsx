@@ -211,7 +211,7 @@ export function BusinessOrderPage() {
               <div className="timeline-status">{t(`status.${entry.toStatus}`, entry.toStatus.replace(/_/g, " "))}</div>
               <div className="timeline-date">{formatDate(entry.createdAt)}</div>
               {entry.note ? (
-                <div style={{ fontSize: 12.5, color: "var(--ink-500)", marginTop: 2 }}>{entry.note}</div>
+                <div className="timeline-note">{entry.note}</div>
               ) : null}
             </div>
           ))}

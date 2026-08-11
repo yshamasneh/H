@@ -69,7 +69,7 @@ export function RestaurantDetailPage() {
         </div>
         <div className="stat-card">
           <div className="stat-label">{t("restaurantDetail.currently")}</div>
-          <div className="stat-value" style={{ fontSize: 18 }}>
+          <div className="stat-value stat-value-sm">
             {restaurant.isOpen ? t("common.open") : t("common.closed")}
           </div>
         </div>

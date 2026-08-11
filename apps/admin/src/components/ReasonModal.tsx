@@ -43,8 +43,8 @@ export function ReasonModal(props: ReasonModalProps) {
           placeholder={t("reasonModal.placeholder")}
           value={reason}
         />
-        {error ? <p style={{ color: "var(--danger)", fontSize: 12.5, marginTop: 8 }}>{error}</p> : null}
-        <div className="btn-row" style={{ marginTop: 14, justifyContent: "flex-end" }}>
+        {error ? <p className="reason-modal-error">{error}</p> : null}
+        <div className="btn-row reason-modal-actions" >
           <button className="btn btn-outline" onClick={props.onCancel} type="button">
             {t("common.cancel")}
           </button>
