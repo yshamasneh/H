@@ -21,6 +21,7 @@ import type { AppliedPromotion } from "../offers/offers.types";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import { terminalDeliveryStatuses } from "../drivers/delivery.rules";
 import {
   allowedOrderTransitions,
   cancellableByAdminStatuses,
@@ -78,8 +79,9 @@ export class OrdersService {
           deliveryDistanceMeters: quote.deliveryDistanceMeters,
           subtotalMinor: quote.subtotalMinor,
           deliveryFeeMinor: quote.deliveryFeeMinor,
-          serviceFeeMinor: quote.serviceFeeMinor,
           discountMinor: quote.discountMinor,
+          merchandiseDiscountMinor: quote.merchandiseDiscountMinor,
+          deliveryDiscountMinor: quote.deliveryDiscountMinor,
           promotionSnapshot: quote.appliedPromotions as unknown as Prisma.InputJsonValue,
           totalMinor: quote.totalMinor,
           items: { create: itemsData }
@@ -128,8 +130,9 @@ export class OrdersService {
       subtotalMinor: quote.subtotalMinor,
       deliveryDistanceMeters: quote.deliveryDistanceMeters,
       deliveryFeeMinor: quote.deliveryFeeMinor,
-      serviceFeeMinor: quote.serviceFeeMinor,
       discountMinor: quote.discountMinor,
+      merchandiseDiscountMinor: quote.merchandiseDiscountMinor,
+      deliveryDiscountMinor: quote.deliveryDiscountMinor,
       totalMinor: quote.totalMinor,
       appliedPromotions: quote.appliedPromotions
     };
@@ -416,7 +419,7 @@ export class OrdersService {
           where: { id: order.id },
           data: {
             subtotalMinor,
-            totalMinor: Math.max(0, subtotalMinor + order.deliveryFeeMinor + order.serviceFeeMinor - order.discountMinor)
+            totalMinor: Math.max(0, subtotalMinor + order.deliveryFeeMinor - order.discountMinor)
           }
         });
         await tx.fulfillmentAdjustment.update({
@@ -587,6 +590,12 @@ export class OrdersService {
         throw new ApiException(409, "ORDER_NOT_CANCELLABLE", "This order can no longer be cancelled.");
       }
       await this.restoreTrackedInventory(tx, orderId);
+      // Close the courier task in the same transaction. Leaving it open let a driver walk a
+      // cancelled order through to DELIVERED, which resurrected the order.
+      await tx.delivery.updateMany({
+        where: { orderId, status: { notIn: terminalDeliveryStatuses } },
+        data: { status: DeliveryStatus.CANCELLED, cancelledAt: new Date() }
+      });
       await tx.orderStatusHistory.create({
         data: {
           orderId,
@@ -782,7 +791,9 @@ export class OrdersService {
       subtotalMinor,
       ...fees,
       discountMinor: promotion.discountMinor,
-      totalMinor: subtotalMinor + fees.deliveryFeeMinor + fees.serviceFeeMinor - promotion.discountMinor,
+      merchandiseDiscountMinor: promotion.merchandiseDiscountMinor,
+      deliveryDiscountMinor: promotion.deliveryDiscountMinor,
+      totalMinor: subtotalMinor + fees.deliveryFeeMinor - promotion.discountMinor,
       appliedPromotions: promotion.appliedPromotions
     };
   }
@@ -897,8 +908,7 @@ export class OrdersService {
       ratePerKilometerMinor:
         this.config?.get<number>("DELIVERY_RATE_PER_KM_MINOR") ?? defaultDeliveryPricing.ratePerKilometerMinor,
       maximumDistanceMeters:
-        this.config?.get<number>("DELIVERY_MAX_DISTANCE_METERS") ?? defaultDeliveryPricing.maximumDistanceMeters,
-      serviceFeeMinor: this.config?.get<number>("SERVICE_FEE_MINOR") ?? defaultDeliveryPricing.serviceFeeMinor
+        this.config?.get<number>("DELIVERY_MAX_DISTANCE_METERS") ?? defaultDeliveryPricing.maximumDistanceMeters
     };
   }
 }
@@ -983,7 +993,12 @@ function toOrderDetailView(
           assignedAt: order.delivery.assignedAt,
           pickedUpAt: order.delivery.pickedUpAt,
           onTheWayAt: order.delivery.onTheWayAt,
-          deliveredAt: order.delivery.deliveredAt
+          deliveredAt: order.delivery.deliveredAt,
+          failedAt: order.delivery.failedAt,
+          failureReason: order.delivery.failureReason,
+          faultParty: order.delivery.faultParty,
+          failureNote: order.delivery.failureNote,
+          cancelledAt: order.delivery.cancelledAt
         }
       : null,
     items: order.items.map((item) => {
@@ -1017,8 +1032,9 @@ function toOrderDetailView(
     }),
     subtotalMinor: order.subtotalMinor,
     deliveryFeeMinor: order.deliveryFeeMinor,
-    serviceFeeMinor: order.serviceFeeMinor,
     discountMinor: order.discountMinor,
+    merchandiseDiscountMinor: order.merchandiseDiscountMinor,
+    deliveryDiscountMinor: order.deliveryDiscountMinor,
     totalMinor: order.totalMinor,
     createdAt: order.createdAt,
     requiresCustomerReview: order.items.some(
@@ -1029,12 +1045,28 @@ function toOrderDetailView(
 
 function parsePromotionSnapshot(value: Prisma.JsonValue | null): AppliedPromotion[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is AppliedPromotion => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+  const promotions: AppliedPromotion[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const promotion = item as Record<string, unknown>;
-    return typeof promotion.offerId === "string" &&
-      typeof promotion.title === "string" &&
-      typeof promotion.type === "string" &&
-      typeof promotion.discountMinor === "number";
-  });
+    if (
+      typeof promotion.offerId !== "string" ||
+      typeof promotion.title !== "string" ||
+      typeof promotion.type !== "string" ||
+      typeof promotion.discountMinor !== "number"
+    ) {
+      continue;
+    }
+    promotions.push({
+      offerId: promotion.offerId,
+      title: promotion.title,
+      type: promotion.type as AppliedPromotion["type"],
+      discountMinor: promotion.discountMinor,
+      // Snapshots written before scope was recorded are reported as UNKNOWN rather than guessed at,
+      // because attributing a discount to the wrong party is a financial error, not a cosmetic one.
+      scope: promotion.scope === "BUSINESS" || promotion.scope === "PLATFORM" ? promotion.scope : "UNKNOWN",
+      businessId: typeof promotion.businessId === "string" ? promotion.businessId : null
+    });
+  }
+  return promotions;
 }

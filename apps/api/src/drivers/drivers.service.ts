@@ -4,6 +4,7 @@ import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { ApiException } from "../common/api.exception";
 import {
+  DeliveryFailureReason,
   DeliveryStatus,
   DriverApprovalStatus,
   NotificationType,
@@ -16,11 +17,16 @@ import {
   type Restaurant,
   type User
 } from "../generated/prisma/client";
-import { createNotification } from "../notifications/notification.util";
+import { createBusinessNotification, createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
-import { allowedDeliveryTransitions, deliveryStatusTransitions } from "./delivery.rules";
+import {
+  allowedDeliveryTransitions,
+  defaultFaultParty,
+  deliveryStatusTransitions,
+  orderStatusesAllowingDeliveryProgress
+} from "./delivery.rules";
 import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
 import type { AdminDriverView, DeliveryView, DriverProfileView, Page } from "./drivers.types";
 
@@ -135,6 +141,16 @@ export class DriversService {
       if (!existing) {
         throw deliveryNotFound();
       }
+      // Refuse a delivery whose order is no longer awaiting handover, so a cancelled order cannot
+      // be picked up and walked to completion.
+      const claimedOrder = await tx.order.findUnique({ where: { id: existing.orderId } });
+      if (!claimedOrder || !orderStatusesAllowingDeliveryProgress.includes(claimedOrder.status)) {
+        throw new ApiException(
+          409,
+          "DELIVERY_ORDER_NOT_ACTIVE",
+          "This order is no longer awaiting delivery."
+        );
+      }
       const claimed = await tx.delivery.updateMany({
         where: { id: deliveryId, status: DeliveryStatus.PENDING_ASSIGNMENT, driverId: null },
         data: { status: DeliveryStatus.ASSIGNED, driverId: driverUserId, assignedAt: new Date() }
@@ -167,9 +183,17 @@ export class DriversService {
   async updateDeliveryStatus(
     driverUserId: string,
     deliveryId: string,
-    action: DriverDeliveryStatusAction
+    action: DriverDeliveryStatusAction,
+    failure?: { failureReason?: DeliveryFailureReason; failureNote?: string }
   ): Promise<DeliveryView> {
     const targetStatus = deliveryStatusTransitions[action];
+    if (targetStatus === DeliveryStatus.FAILED && !failure?.failureReason) {
+      throw new ApiException(
+        400,
+        "DELIVERY_FAILURE_REASON_REQUIRED",
+        "Choose why the delivery could not be completed."
+      );
+    }
 
     const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -181,39 +205,87 @@ export class DriversService {
         throw invalidDeliveryTransition(existing.status, targetStatus);
       }
 
+      // The order, not just the delivery, decides whether a courier task is still live. Without
+      // this check a cancelled order's delivery stays actionable and the driver can complete it.
+      const order = await tx.order.findUnique({ where: { id: existing.orderId } });
+      if (!order || !orderStatusesAllowingDeliveryProgress.includes(order.status)) {
+        throw new ApiException(
+          409,
+          "DELIVERY_ORDER_NOT_ACTIVE",
+          "This order is no longer awaiting delivery."
+        );
+      }
+
+      const now = new Date();
       const timestampField = deliveryTimestampField(targetStatus);
+      const failureData =
+        targetStatus === DeliveryStatus.FAILED
+          ? {
+              failureReason: failure!.failureReason,
+              faultParty: defaultFaultParty[failure!.failureReason!],
+              failureNote: failure?.failureNote?.trim() || null
+            }
+          : {};
       const changed = await tx.delivery.updateMany({
         where: { id: deliveryId, status: existing.status },
-        data: { status: targetStatus, ...(timestampField ? { [timestampField]: new Date() } : {}) }
+        data: {
+          status: targetStatus,
+          ...(timestampField ? { [timestampField]: now } : {}),
+          ...failureData
+        }
       });
       if (changed.count !== 1) {
         throw invalidDeliveryTransition(existing.status, targetStatus);
       }
 
-      const order = await tx.order.findUnique({ where: { id: existing.orderId } });
-      if (order) {
-        if (targetStatus === DeliveryStatus.DELIVERED && order.status !== OrderStatus.DELIVERED) {
-          await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.DELIVERED } });
-          await tx.orderStatusHistory.create({
-            data: {
-              orderId: order.id,
-              fromStatus: order.status,
-              toStatus: OrderStatus.DELIVERED,
-              changedByUserId: driverUserId
-            }
-          });
+      const finalOrderStatus = orderStatusForDelivery(targetStatus);
+      if (finalOrderStatus) {
+        // Guarded on the order's current status so this cannot overwrite a concurrent transition.
+        const advanced = await tx.order.updateMany({
+          where: { id: order.id, status: order.status },
+          data: { status: finalOrderStatus }
+        });
+        if (advanced.count !== 1) {
+          throw new ApiException(
+            409,
+            "DELIVERY_ORDER_NOT_ACTIVE",
+            "This order is no longer awaiting delivery."
+          );
         }
-        await createNotification(tx, emitter, {
-          userId: order.customerId,
-          type: NotificationType.DELIVERY_STATUS_CHANGED,
-          title: deliveryStatusNotificationTitle(targetStatus),
-          body: deliveryStatusNotificationBody(targetStatus),
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: order.id,
+            fromStatus: order.status,
+            toStatus: finalOrderStatus,
+            changedByUserId: driverUserId,
+            note:
+              targetStatus === DeliveryStatus.FAILED
+                ? `Delivery failed: ${failure!.failureReason}`
+                : null
+          }
+        });
+      }
+      await createNotification(tx, emitter, {
+        userId: order.customerId,
+        type: NotificationType.DELIVERY_STATUS_CHANGED,
+        title: deliveryStatusNotificationTitle(targetStatus),
+        body: deliveryStatusNotificationBody(targetStatus),
+        relatedEntityId: order.id
+      });
+      if (targetStatus === DeliveryStatus.FAILED) {
+        // The business needs to know immediately: the goods left and were not handed over.
+        await createBusinessNotification(tx, emitter, {
+          businessId: order.restaurantId,
+          type: NotificationType.ORDER_STATUS_CHANGED,
+          title: "A delivery could not be completed",
+          body: `The driver reported: ${failure!.failureReason}.`,
           relatedEntityId: order.id
         });
-        emitter.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: targetStatus });
-        if (targetStatus === DeliveryStatus.DELIVERED) {
-          emitter.emitToOrder(order.id, "order.status.changed", { orderId: order.id, status: OrderStatus.DELIVERED });
-        }
+      }
+      emitter.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: targetStatus });
+      if (finalOrderStatus) {
+        emitter.emitToOrder(order.id, "order.status.changed", { orderId: order.id, status: finalOrderStatus });
+        emitter.emitToAdmins("order.status.changed", { orderId: order.id, status: finalOrderStatus });
       }
 
       return tx.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
@@ -342,7 +414,9 @@ export class DriversService {
   }
 }
 
-function deliveryTimestampField(status: DeliveryStatus): "pickedUpAt" | "onTheWayAt" | "deliveredAt" | null {
+function deliveryTimestampField(
+  status: DeliveryStatus
+): "pickedUpAt" | "onTheWayAt" | "deliveredAt" | "failedAt" | "cancelledAt" | null {
   switch (status) {
     case DeliveryStatus.PICKED_UP:
       return "pickedUpAt";
@@ -350,9 +424,20 @@ function deliveryTimestampField(status: DeliveryStatus): "pickedUpAt" | "onTheWa
       return "onTheWayAt";
     case DeliveryStatus.DELIVERED:
       return "deliveredAt";
+    case DeliveryStatus.FAILED:
+      return "failedAt";
+    case DeliveryStatus.CANCELLED:
+      return "cancelledAt";
     default:
       return null;
   }
+}
+
+/** The order status a delivery outcome drives, or null when the order is unaffected. */
+function orderStatusForDelivery(status: DeliveryStatus): OrderStatus | null {
+  if (status === DeliveryStatus.DELIVERED) return OrderStatus.DELIVERED;
+  if (status === DeliveryStatus.FAILED) return OrderStatus.DELIVERY_FAILED;
+  return null;
 }
 
 function deliveryStatusNotificationTitle(status: DeliveryStatus): string {
@@ -363,6 +448,8 @@ function deliveryStatusNotificationTitle(status: DeliveryStatus): string {
       return "Your order is on the way";
     case DeliveryStatus.DELIVERED:
       return "Your order has been delivered";
+    case DeliveryStatus.FAILED:
+      return "Your order could not be delivered";
     default:
       return "Delivery update";
   }
@@ -376,6 +463,8 @@ function deliveryStatusNotificationBody(status: DeliveryStatus): string {
       return "The driver is on the way to your delivery address.";
     case DeliveryStatus.DELIVERED:
       return "Enjoy your meal! Your order has been marked delivered.";
+    case DeliveryStatus.FAILED:
+      return "The driver could not complete this delivery. Please contact support if you need help.";
     default:
       return "Your delivery status has changed.";
   }

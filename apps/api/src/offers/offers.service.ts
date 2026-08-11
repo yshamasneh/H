@@ -186,7 +186,16 @@ function cappedDiscount(amountMinor: number, offer: Offer): number {
 }
 
 function toApplied(offer: Offer, discountMinor: number): AppliedPromotion {
-  return { offerId: offer.id, title: offer.title, type: offer.type, discountMinor };
+  return {
+    offerId: offer.id,
+    title: offer.title,
+    type: offer.type,
+    discountMinor,
+    // An offer tied to a business is funded by that business; a platform-wide offer is the
+    // platform's own marketing.
+    scope: offer.restaurantId ? "BUSINESS" : "PLATFORM",
+    businessId: offer.restaurantId ?? null
+  };
 }
 
 function toOfferView(offer: OfferWithRelations): OfferView {

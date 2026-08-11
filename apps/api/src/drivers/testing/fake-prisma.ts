@@ -59,6 +59,11 @@ type DeliveryRecord = {
   pickedUpAt: Date | null;
   onTheWayAt: Date | null;
   deliveredAt: Date | null;
+  failedAt: Date | null;
+  failureReason: string | null;
+  faultParty: string | null;
+  failureNote: string | null;
+  cancelledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -100,6 +105,7 @@ export class FakeDriversPrisma {
   readonly orders: OrderRecord[] = [];
   readonly orderStatusHistories: OrderStatusHistoryRecord[] = [];
   readonly deliveries: DeliveryRecord[] = [];
+  readonly businessMembers: { businessId: string; userId: string; isActive: boolean }[] = [];
   readonly notifications: NotificationRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
@@ -107,6 +113,7 @@ export class FakeDriversPrisma {
   readonly user = {} as any;
   readonly driverProfile = {} as any;
   readonly order = {} as any;
+  readonly businessMember = {} as any;
   readonly orderStatusHistory = {} as any;
   readonly delivery = {} as any;
   readonly notification = {} as any;
@@ -174,7 +181,24 @@ export class FakeDriversPrisma {
       return include?.user ? { ...profile, user: this.users.find((user) => user.id === profile.userId)! } : profile;
     };
 
+    this.businessMember.findMany = async ({ where }: any) =>
+      this.businessMembers.filter(
+        (member) =>
+          (where?.userId === undefined || member.userId === where.userId) &&
+          (where?.businessId === undefined || member.businessId === where.businessId) &&
+          (where?.isActive === undefined || member.isActive === where.isActive)
+      );
+
     this.order.findUnique = async ({ where }: any) => this.orders.find((order) => order.id === where.id) ?? null;
+    this.order.updateMany = async ({ where, data }: any) => {
+      const matches = this.orders.filter(
+        (order) => order.id === where.id && (!where.status || order.status === where.status)
+      );
+      for (const order of matches) {
+        if (data.status !== undefined) order.status = data.status;
+      }
+      return { count: matches.length };
+    };
     this.order.update = async ({ where, data }: any) => {
       const order = this.orders.find((candidate) => candidate.id === where.id);
       if (!order) throw new Error("missing order");
@@ -299,6 +323,8 @@ export class FakeDriversPrisma {
       ...overrides
     };
     this.restaurants.push(restaurant);
+    // A seeded business has an owner membership, as registration and the migration backfill do.
+    this.businessMembers.push({ businessId: restaurant.id, userId: randomUUID(), isActive: true });
     return restaurant;
   }
 
@@ -329,6 +355,11 @@ export class FakeDriversPrisma {
       pickedUpAt: null,
       onTheWayAt: null,
       deliveredAt: null,
+      failedAt: null,
+      failureReason: null,
+      faultParty: null,
+      failureNote: null,
+      cancelledAt: null,
       createdAt: now,
       updatedAt: now,
       ...overrides

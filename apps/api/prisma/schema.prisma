@@ -67,6 +67,9 @@ enum OrderStatus {
   DELIVERED
   REJECTED
   CANCELLED
+  /// Dispatched but never handed over. Distinct from CANCELLED because money still moves: the
+  /// business is paid for goods that left the premises and the driver is paid for the attempt.
+  DELIVERY_FAILED
 }
 
 enum DeliveryStatus {
@@ -76,6 +79,27 @@ enum DeliveryStatus {
   ON_THE_WAY
   DELIVERED
   CANCELLED
+  FAILED
+}
+
+/// Why a dispatched delivery could not be completed. Recorded as fact; the liability policy that
+/// reads it is deliberately not built yet.
+enum DeliveryFailureReason {
+  CUSTOMER_REFUSED
+  CUSTOMER_UNREACHABLE
+  WRONG_ADDRESS
+  BUSINESS_ERROR
+  DRIVER_ISSUE
+  OTHER
+}
+
+/// Who the failure is attributed to. Stored rather than derived at read time, so a later change to
+/// the attribution defaults cannot rewrite past deliveries.
+enum DeliveryFaultParty {
+  CUSTOMER
+  BUSINESS
+  DRIVER
+  UNDETERMINED
 }
 
 enum OfferType {
@@ -388,8 +412,14 @@ model Order {
   deliveryDistanceMeters Int?
   subtotalMinor          Int
   deliveryFeeMinor       Int
-  serviceFeeMinor        Int
+  /// Retained for orders placed before the service fee was removed from the business model, so
+  /// what those customers actually paid is never rewritten. Always 0 for new orders.
+  serviceFeeMinor        Int                  @default(0)
   discountMinor          Int                  @default(0)
+  /// The discount split, persisted because the commission base is item subtotal after merchandise
+  /// discounts only — a delivery-fee promotion must never reduce it. `discountMinor` stays the total.
+  merchandiseDiscountMinor Int                @default(0)
+  deliveryDiscountMinor    Int                @default(0)
   promotionSnapshot      Json?
   customerNote           String?
   totalMinor             Int
@@ -397,8 +427,10 @@ model Order {
   acceptedAt             DateTime?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
-  customer               User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  restaurant             Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  /// Restrict, not Cascade: an order is a financial record of what someone paid, and deleting a
+  /// person or a business must never erase it. Account closure anonymises the user instead.
+  customer               User                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  restaurant             Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
   acceptedBy             User?                @relation("OrderAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
   items                  OrderItem[]
   statusHistory          OrderStatusHistory[]
@@ -550,20 +582,26 @@ model DriverProfile {
 }
 
 model Delivery {
-  id          String         @id @default(uuid()) @db.Uuid
-  orderId     String         @unique @db.Uuid
-  driverId    String?        @db.Uuid
-  status      DeliveryStatus @default(PENDING_ASSIGNMENT)
-  assignedAt  DateTime?
-  pickedUpAt  DateTime?
-  onTheWayAt  DateTime?
-  deliveredAt DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  order       Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  driver      User?          @relation(fields: [driverId], references: [id])
+  id            String                 @id @default(uuid()) @db.Uuid
+  orderId       String                 @unique @db.Uuid
+  driverId      String?                @db.Uuid
+  status        DeliveryStatus          @default(PENDING_ASSIGNMENT)
+  assignedAt    DateTime?
+  pickedUpAt    DateTime?
+  onTheWayAt    DateTime?
+  deliveredAt   DateTime?
+  failedAt      DateTime?
+  failureReason DeliveryFailureReason?
+  faultParty    DeliveryFaultParty?
+  failureNote   String?
+  cancelledAt   DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  order         Order                   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driver        User?                   @relation(fields: [driverId], references: [id])
 
   @@index([status, driverId])
+  @@index([failureReason, failedAt])
 }
 
 model AuditLog {

@@ -6,7 +6,17 @@ import { StatusBadge } from "../components/StatusBadge";
 import { useRealtimeEvent } from "../socket";
 
 const currencyCode = "ILS";
-const statusOptions = ["", "PLACED", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "DELIVERED", "REJECTED", "CANCELLED"];
+const statusOptions = [
+  "",
+  "PLACED",
+  "ACCEPTED",
+  "PREPARING",
+  "READY_FOR_PICKUP",
+  "DELIVERED",
+  "DELIVERY_FAILED",
+  "REJECTED",
+  "CANCELLED"
+];
 
 export function OrdersPage() {
   const { t } = useTranslation();

@@ -41,12 +41,18 @@ export class DriverPortalController {
   }
 
   @Patch("me/deliveries/:deliveryId/status")
-  @ApiOperation({ summary: "Advance a delivery the driver was assigned through pickup, on-the-way, and delivered" })
+  @ApiOperation({
+    summary:
+      "Advance a delivery through pickup, on-the-way, and delivered, or report it as failed with a reason"
+  })
   updateStatus(
     @Req() request: AuthenticatedRequest,
     @Param("deliveryId", new ParseUUIDPipe()) deliveryId: string,
     @Body() input: UpdateDeliveryStatusDto
   ) {
-    return this.drivers.updateDeliveryStatus(request.user.id, deliveryId, input.status);
+    return this.drivers.updateDeliveryStatus(request.user.id, deliveryId, input.status, {
+      failureReason: input.failureReason,
+      failureNote: input.failureNote
+    });
   }
 }

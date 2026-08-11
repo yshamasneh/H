@@ -20,11 +20,21 @@ export type OfferView = {
   createdAt: Date;
 };
 
+/** Who funded an offer. Business-scoped offers are absorbed by the business, platform-scoped ones
+ *  by the platform, so the snapshot has to carry the scope rather than making the accounting layer
+ *  re-read an Offer row that may have changed since. */
+/** `UNKNOWN` is only ever produced when reading a snapshot written before scope was recorded. It is
+ *  never written, and the accounting layer must treat it as un-attributable rather than guess. */
+export type OfferScope = "PLATFORM" | "BUSINESS" | "UNKNOWN";
+
 export type AppliedPromotion = {
   offerId: string;
   title: string;
   type: OfferType;
   discountMinor: number;
+  scope: OfferScope;
+  /** The business that funded it, when the scope is BUSINESS. */
+  businessId: string | null;
 };
 
 export type PromotionCalculation = {

@@ -48,8 +48,23 @@ export type AdminMenuView = {
   }[];
 };
 
-export type OrderStatus = "PLACED" | "ACCEPTED" | "PREPARING" | "READY_FOR_PICKUP" | "DELIVERED" | "REJECTED" | "CANCELLED";
-export type DeliveryStatus = "PENDING_ASSIGNMENT" | "ASSIGNED" | "PICKED_UP" | "ON_THE_WAY" | "DELIVERED" | "CANCELLED";
+export type OrderStatus =
+  | "PLACED"
+  | "ACCEPTED"
+  | "PREPARING"
+  | "READY_FOR_PICKUP"
+  | "DELIVERED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "DELIVERY_FAILED";
+export type DeliveryStatus =
+  | "PENDING_ASSIGNMENT"
+  | "ASSIGNED"
+  | "PICKED_UP"
+  | "ON_THE_WAY"
+  | "DELIVERED"
+  | "CANCELLED"
+  | "FAILED";
 
 export type OrderStatusHistoryEntry = {
   id: string;
@@ -70,7 +85,6 @@ export type OrderDetail = {
   items: { id: string; nameSnapshot: string; quantity: number; lineTotalMinor: number }[];
   subtotalMinor: number;
   deliveryFeeMinor: number;
-  serviceFeeMinor: number;
   discountMinor: number;
   totalMinor: number;
   acceptedByUserId: string | null;

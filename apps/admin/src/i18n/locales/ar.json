@@ -37,7 +37,9 @@
     "SUSPENDED": "موقوف",
     "CANCELLED": "ملغى",
     "OFFLINE": "غير متصل",
-    "INACTIVE": "غير نشط"
+    "INACTIVE": "غير نشط",
+    "DELIVERY_FAILED": "فشل التوصيل",
+    "FAILED": "فشل"
   },
   "role": {
     "CUSTOMER": "زبون",
@@ -130,7 +132,6 @@
     "lineItem": "{{quantity}} × {{name}}",
     "subtotal": "المجموع الفرعي",
     "deliveryFee": "رسوم التوصيل",
-    "serviceFee": "رسوم الخدمة",
     "total": "الإجمالي",
     "deliveryAddress": "عنوان التوصيل",
     "deliveryAddressLine": "{{label}} - {{address}}",

@@ -73,10 +73,6 @@ export function OrderDetailPage() {
               <span className="kv-value">{formatPrice(order.deliveryFeeMinor)}</span>
             </div>
             <div className="kv-row">
-              <span className="kv-label">{t("orderDetail.serviceFee")}</span>
-              <span className="kv-value">{formatPrice(order.serviceFeeMinor)}</span>
-            </div>
-            <div className="kv-row">
               <span className="kv-label">{t("orderDetail.total")}</span>
               <span className="kv-value">{formatPrice(order.totalMinor)}</span>
             </div>

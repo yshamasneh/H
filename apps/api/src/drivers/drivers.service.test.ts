@@ -278,6 +278,124 @@ test("adminListDrivers reports completed-delivery counts and the current active 
   assert.equal(view.activeDeliveryId, activeDelivery.id);
 });
 
+test("a driver cannot advance a delivery whose order has been cancelled", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id);
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+  await service.acceptDelivery(driver.userId, delivery.id);
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "PICKED_UP");
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "ON_THE_WAY");
+
+  // An administrator cancels the order while the driver is en route with the goods.
+  prisma.orders[0].status = OrderStatus.CANCELLED;
+
+  // The delivery's own transition table would happily allow ON_THE_WAY -> DELIVERED; only the
+  // order-status guard stops it, which is exactly the resurrection this test exists for.
+  await assert.rejects(
+    service.updateDeliveryStatus(driver.userId, delivery.id, "DELIVERED"),
+    hasCode("DELIVERY_ORDER_NOT_ACTIVE")
+  );
+  assert.equal(prisma.orders[0].status, OrderStatus.CANCELLED);
+  assert.equal(prisma.deliveries[0].status, "ON_THE_WAY");
+});
+
+test("a driver cannot claim a delivery whose order is no longer awaiting handover", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id, { status: OrderStatus.CANCELLED });
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+
+  await assert.rejects(
+    service.acceptDelivery(driver.userId, delivery.id),
+    hasCode("DELIVERY_ORDER_NOT_ACTIVE")
+  );
+  assert.equal(prisma.deliveries[0].driverId, null);
+});
+
+test("reporting a failed delivery records the reason, the fault, and moves the order to DELIVERY_FAILED", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id);
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+  await service.acceptDelivery(driver.userId, delivery.id);
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "PICKED_UP");
+
+  const failed = await service.updateDeliveryStatus(driver.userId, delivery.id, "FAILED", {
+    failureReason: "CUSTOMER_UNREACHABLE",
+    failureNote: "Phoned three times from the door."
+  });
+
+  assert.equal(failed.status, "FAILED");
+  const stored = prisma.deliveries[0];
+  assert.equal(stored.failureReason, "CUSTOMER_UNREACHABLE");
+  assert.equal(stored.faultParty, "CUSTOMER");
+  assert.equal(stored.failureNote, "Phoned three times from the door.");
+  assert.ok(stored.failedAt);
+  // Distinct from CANCELLED, because money still moves on a failed delivery.
+  assert.equal(prisma.orders[0].status, OrderStatus.DELIVERY_FAILED);
+});
+
+test("a failed delivery is refused without a reason", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id);
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+  await service.acceptDelivery(driver.userId, delivery.id);
+
+  await assert.rejects(
+    service.updateDeliveryStatus(driver.userId, delivery.id, "FAILED"),
+    hasCode("DELIVERY_FAILURE_REASON_REQUIRED")
+  );
+  assert.equal(prisma.deliveries[0].status, "ASSIGNED");
+  assert.equal(prisma.orders[0].status, OrderStatus.READY_FOR_PICKUP);
+});
+
+test("driver-related failures are left UNDETERMINED so nobody is charged without review", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id);
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+  await service.acceptDelivery(driver.userId, delivery.id);
+
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "FAILED", { failureReason: "DRIVER_ISSUE" });
+
+  assert.equal(prisma.deliveries[0].faultParty, "UNDETERMINED");
+});
+
+test("a business error attributes the failure to the business", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id);
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+  await service.acceptDelivery(driver.userId, delivery.id);
+
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "FAILED", { failureReason: "BUSINESS_ERROR" });
+
+  assert.equal(prisma.deliveries[0].faultParty, "BUSINESS");
+});
+
+test("a terminal delivery cannot be moved again", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id);
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+  await service.acceptDelivery(driver.userId, delivery.id);
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "FAILED", { failureReason: "CUSTOMER_REFUSED" });
+
+  await assert.rejects(
+    service.updateDeliveryStatus(driver.userId, delivery.id, "DELIVERED"),
+    hasCode("DELIVERY_INVALID_TRANSITION")
+  );
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

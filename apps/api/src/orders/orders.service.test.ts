@@ -141,7 +141,7 @@ test("order totals match server-computed subtotal, fees, and total", async () =>
   assert.equal(order.discountMinor, 0);
   assert.equal(
     order.totalMinor,
-    order.subtotalMinor + order.deliveryFeeMinor + order.serviceFeeMinor - order.discountMinor
+    order.subtotalMinor + order.deliveryFeeMinor - order.discountMinor
   );
 });
 
@@ -581,6 +581,77 @@ test("adminGetOrder returns any order regardless of ownership", async () => {
 
   const view = await service.adminGetOrder(order.id);
   assert.equal(view.id, order.id);
+});
+
+test("an admin cancellation closes the courier task so no driver can complete it", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "PREPARING", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+  assert.equal(prisma.deliveries.length, 1);
+
+  await service.adminCancelOrder(randomUUID(), order.id, "Customer changed their mind");
+
+  // Leaving the delivery open let a driver walk a cancelled order through to DELIVERED.
+  assert.equal(prisma.deliveries[0].status, "CANCELLED");
+  assert.ok(prisma.deliveries[0].cancelledAt);
+});
+
+test("the discount split is persisted so the commission base excludes delivery discounts", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 2500 });
+  prisma.seedOffer({ type: "FREE_DELIVERY", restaurantId: null });
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  const stored = prisma.orders[0];
+
+  assert.equal(stored.deliveryDiscountMinor, stored.deliveryFeeMinor);
+  assert.equal(stored.merchandiseDiscountMinor, 0);
+  // The split must always reconcile to the stored total; a DB CHECK enforces the same thing.
+  assert.equal(stored.merchandiseDiscountMinor + stored.deliveryDiscountMinor, stored.discountMinor);
+  assert.equal(order.deliveryDiscountMinor, stored.deliveryFeeMinor);
+});
+
+test("an applied promotion records whether the business or the platform funded it", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 2500 });
+  prisma.seedOffer({ type: "ORDER_PERCENTAGE", discountPercent: 10, restaurantId: restaurant.id });
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const promotion = order.appliedPromotions[0];
+  assert.ok(promotion);
+  // Absorption is keyed to scope, so the snapshot has to carry it rather than re-reading the offer.
+  assert.equal(promotion.scope, "BUSINESS");
+  assert.equal(promotion.businessId, restaurant.id);
+});
+
+test("a platform-wide promotion is recorded as platform-funded", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 2500 });
+  prisma.seedOffer({ type: "ORDER_PERCENTAGE", discountPercent: 10, restaurantId: null });
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  assert.equal(order.appliedPromotions[0]?.scope, "PLATFORM");
+  assert.equal(order.appliedPromotions[0]?.businessId, null);
+});
+
+test("no order total includes a service fee", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 2000 });
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  assert.equal(order.totalMinor, order.subtotalMinor + order.deliveryFeeMinor - order.discountMinor);
+  assert.equal("serviceFeeMinor" in order, false);
 });
 
 test("a staff member who is not the owner can work their business's orders", async () => {

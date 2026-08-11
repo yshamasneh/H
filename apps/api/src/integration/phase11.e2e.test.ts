@@ -178,7 +178,7 @@ test(
       .expect(201);
     // 1000 from the 20% product offer plus the whole 1000 delivery fee waived by FREE_DELIVERY.
     assert.equal(quoteResponse.body.discountMinor, 2000);
-    assert.equal(quoteResponse.body.totalMinor, 4200);
+    assert.equal(quoteResponse.body.totalMinor, 4000);
 
     const orderResponse = await http
       .post("/api/v1/orders")
@@ -189,7 +189,7 @@ test(
     assert.equal(orderResponse.body.subtotalMinor, 5000);
     assert.ok(orderResponse.body.deliveryDistanceMeters > 0);
     assert.equal(orderResponse.body.discountMinor, 2000);
-    assert.equal(orderResponse.body.totalMinor, 4200);
+    assert.equal(orderResponse.body.totalMinor, 4000);
     assert.deepEqual(
       orderResponse.body.appliedPromotions.map((promotion: { type: string }) => promotion.type).sort(),
       ["FREE_DELIVERY", "PRODUCT_PERCENTAGE"]

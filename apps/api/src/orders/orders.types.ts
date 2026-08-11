@@ -1,4 +1,6 @@
 import type {
+  DeliveryFailureReason,
+  DeliveryFaultParty,
   DeliveryStatus,
   FulfillmentAdjustmentStatus,
   OrderPaymentMethod,
@@ -52,6 +54,11 @@ export type DeliveryStatusSummary = {
   pickedUpAt: Date | null;
   onTheWayAt: Date | null;
   deliveredAt: Date | null;
+  failedAt: Date | null;
+  failureReason: DeliveryFailureReason | null;
+  faultParty: DeliveryFaultParty | null;
+  failureNote: string | null;
+  cancelledAt: Date | null;
 };
 
 export type OrderDetailView = {
@@ -69,8 +76,9 @@ export type OrderDetailView = {
   items: OrderItemView[];
   subtotalMinor: number;
   deliveryFeeMinor: number;
-  serviceFeeMinor: number;
   discountMinor: number;
+  merchandiseDiscountMinor: number;
+  deliveryDiscountMinor: number;
   totalMinor: number;
   acceptedByUserId: string | null;
   acceptedAt: Date | null;
@@ -89,8 +97,9 @@ export type OrderQuoteView = {
   subtotalMinor: number;
   deliveryDistanceMeters: number;
   deliveryFeeMinor: number;
-  serviceFeeMinor: number;
   discountMinor: number;
+  merchandiseDiscountMinor: number;
+  deliveryDiscountMinor: number;
   totalMinor: number;
   appliedPromotions: AppliedPromotion[];
 };

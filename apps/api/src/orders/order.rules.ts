@@ -19,8 +19,10 @@ export const allowedOrderTransitions: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PLACED]: [OrderStatus.ACCEPTED, OrderStatus.REJECTED, OrderStatus.CANCELLED],
   [OrderStatus.ACCEPTED]: [OrderStatus.PREPARING],
   [OrderStatus.PREPARING]: [OrderStatus.READY_FOR_PICKUP],
-  [OrderStatus.READY_FOR_PICKUP]: [OrderStatus.DELIVERED],
+  // DELIVERY_FAILED is reached only by the driver reporting a failure, never by a business action.
+  [OrderStatus.READY_FOR_PICKUP]: [OrderStatus.DELIVERED, OrderStatus.DELIVERY_FAILED],
   [OrderStatus.DELIVERED]: [],
   [OrderStatus.REJECTED]: [],
-  [OrderStatus.CANCELLED]: []
+  [OrderStatus.CANCELLED]: [],
+  [OrderStatus.DELIVERY_FAILED]: []
 };

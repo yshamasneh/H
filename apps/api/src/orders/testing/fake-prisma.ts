@@ -74,6 +74,8 @@ type OrderRecord = {
   deliveryFeeMinor: number;
   serviceFeeMinor: number;
   discountMinor: number;
+  merchandiseDiscountMinor: number;
+  deliveryDiscountMinor: number;
   promotionSnapshot: unknown;
   totalMinor: number;
   acceptedByUserId: string | null;
@@ -101,6 +103,8 @@ type DeliveryRecord = {
   pickedUpAt: Date | null;
   onTheWayAt: Date | null;
   deliveredAt: Date | null;
+  failedAt: Date | null;
+  cancelledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -246,8 +250,11 @@ export class FakeOrdersPrisma {
         deliveryDistanceMeters: data.deliveryDistanceMeters ?? null,
         subtotalMinor: data.subtotalMinor,
         deliveryFeeMinor: data.deliveryFeeMinor,
-        serviceFeeMinor: data.serviceFeeMinor,
+        // Retained on the model for pre-removal orders; new orders never set it.
+        serviceFeeMinor: data.serviceFeeMinor ?? 0,
         discountMinor: data.discountMinor ?? 0,
+        merchandiseDiscountMinor: data.merchandiseDiscountMinor ?? 0,
+        deliveryDiscountMinor: data.deliveryDiscountMinor ?? 0,
         promotionSnapshot: data.promotionSnapshot ?? null,
         totalMinor: data.totalMinor,
         acceptedByUserId: data.acceptedByUserId ?? null,
@@ -420,6 +427,8 @@ export class FakeOrdersPrisma {
         pickedUpAt: data.pickedUpAt ?? null,
         onTheWayAt: data.onTheWayAt ?? null,
         deliveredAt: data.deliveredAt ?? null,
+        failedAt: data.failedAt ?? null,
+        cancelledAt: data.cancelledAt ?? null,
         createdAt: now,
         updatedAt: now
       };
@@ -442,8 +451,11 @@ export class FakeOrdersPrisma {
     this.delivery.updateMany = async ({ where, data }: any) => {
       const matches = this.deliveries.filter(
         (delivery) =>
-          delivery.id === where.id &&
-          (!where.status || delivery.status === where.status) &&
+          (where.id === undefined || delivery.id === where.id) &&
+          (where.orderId === undefined || delivery.orderId === where.orderId) &&
+          (where.status?.notIn
+            ? !where.status.notIn.includes(delivery.status)
+            : !where.status || delivery.status === where.status) &&
           (where.driverId !== null || delivery.driverId === null)
       );
       for (const delivery of matches) {
@@ -528,6 +540,26 @@ export class FakeOrdersPrisma {
     this.restaurants.push(restaurant);
     this.businessMembers.push({ businessId: restaurant.id, userId: restaurant.ownerUserId, isActive: true });
     return restaurant;
+  }
+
+  /** A live offer. `restaurantId: null` is a platform-funded offer; a value is business-funded. */
+  seedOffer(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    const offer = {
+      id: randomUUID(),
+      type: "ORDER_PERCENTAGE",
+      restaurantId: null,
+      menuItemId: null,
+      title: "Test offer",
+      discountPercent: 10,
+      minimumSubtotalMinor: 0,
+      maxDiscountMinor: null,
+      isActive: true,
+      startsAt: new Date(Date.now() - 1_000),
+      endsAt: null,
+      ...overrides
+    };
+    this.offers.push(offer);
+    return offer;
   }
 
   /** Adds a second person to a business, the way the staff endpoints do. */

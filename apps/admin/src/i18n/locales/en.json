@@ -37,7 +37,9 @@
     "SUSPENDED": "Suspended",
     "CANCELLED": "Cancelled",
     "OFFLINE": "Offline",
-    "INACTIVE": "Inactive"
+    "INACTIVE": "Inactive",
+    "DELIVERY_FAILED": "Delivery failed",
+    "FAILED": "Failed"
   },
   "role": {
     "CUSTOMER": "Customer",
@@ -130,7 +132,6 @@
     "lineItem": "{{quantity}} x {{name}}",
     "subtotal": "Subtotal",
     "deliveryFee": "Delivery fee",
-    "serviceFee": "Service fee",
     "total": "Total",
     "deliveryAddress": "Delivery address",
     "deliveryAddressLine": "{{label}} - {{address}}",

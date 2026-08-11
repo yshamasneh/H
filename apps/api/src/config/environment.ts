@@ -78,7 +78,6 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     "DELIVERY_MAX_DISTANCE_METERS",
     25_000
   );
-  environment.SERVICE_FEE_MINOR = readPositiveInteger(environment, "SERVICE_FEE_MINOR", 200);
   environment.JWT_ACCESS_EXPIRATION_SECONDS = readPositiveInteger(environment, "JWT_ACCESS_EXPIRATION_SECONDS", 900);
   environment.JWT_REFRESH_EXPIRATION_DAYS = readPositiveInteger(environment, "JWT_REFRESH_EXPIRATION_DAYS", 30);
   environment.OTP_EXPIRATION_MINUTES = readPositiveInteger(environment, "OTP_EXPIRATION_MINUTES", 5);

@@ -437,3 +437,27 @@ Makes the `BUSINESS_STAFF` role actually usable. 15.1 could refuse a staff membe
 - Business context is resolved twice per permissioned request: once by `PermissionsGuard` and once inside the service. Harmless at this volume, but it collapses into a single resolution when a `BusinessScopeGuard` sets the business on the request and services take it as a parameter.
 - Staff onboarding creates the account with a password the business admin sets and passes on, because the platform has no email or SMS delivery. Moving an existing account between businesses is refused with `PHONE_ALREADY_REGISTERED` rather than reassigned.
 - There is still no admin or business UI for any of this; staff management is API-only.
+
+## 2026-08-11: Phase 15.6a — Integrity fixes before the accounting layer
+
+Four defects and one business-model correction, all of which had to land before any order can produce a financial record. No accounting models were added.
+
+### Completed
+
+- **A cancelled order can no longer be resurrected.** `adminCancelOrder` now closes the courier task in the same transaction, and a driver's transitions are validated against the *order's* status, not only the delivery's. Previously an administrator could cancel a `READY_FOR_PICKUP` order whose delivery was already assigned, and the driver could still walk it to `DELIVERED` — the final step set the order status unconditionally. Under a live ledger that meant cash collected against an order with no financial record to explain it. Claiming a delivery is also refused when its order is no longer awaiting handover.
+- **A failed-delivery state exists.** `DeliveryStatus.FAILED` and `OrderStatus.DELIVERY_FAILED`, with `failureReason`, `faultParty`, `failureNote` and `failedAt` on the delivery. Kept deliberately mechanical: the reason is recorded and a simple static map assigns a default fault, with driver-related reasons resolving to `UNDETERMINED` so nothing is attributed to a driver without a human looking. There is no per-reason liability routing yet — the state and the reason exist so the policy can be decided later without a rebuild. `DELIVERY_FAILED` is distinct from `CANCELLED` because money moves on a failed delivery and none moves on a cancellation.
+- **The commission base is computable.** `Order.merchandiseDiscountMinor` and `Order.deliveryDiscountMinor` are now persisted; `PromotionCalculation` already produced the split and `Order` was collapsing it. `discountMinor` remains the total, and a CHECK constraint keeps the three reconciled. `AppliedPromotion` gained `scope` and `businessId`, so a record answers whether a business-scoped or platform-scoped offer applied without re-reading an `Offer` row that may have changed. Snapshots written before this are read back as `scope: "UNKNOWN"` rather than guessed at.
+- **The service fee is gone.** Removed from pricing, the environment schema, both env examples, all quote and order totals, and the admin and mobile interfaces. Customers now pay the delivery fee only. `Order.serviceFeeMinor` is *retained* with a `0` default rather than dropped, because six existing orders genuinely charged 2.00 and rewriting what those customers paid would contradict the immutability principle the rest of this design rests on. It is no longer written, no longer returned by the API, and no longer displayed.
+- **Financial foreign keys are `RESTRICT`.** `Order.customerId` and `Order.restaurantId` no longer cascade, so deleting a person or a business can never erase order history. Worth correcting an earlier finding of mine: `deleteMyAccount` was *already* anonymising rather than deleting — the cascade was the real exposure, not the deletion path.
+
+### Verified
+
+- `npm run typecheck` clean; API 187 tests (186 pass, 1 skipped, 0 fail), mobile 23 pass; `npm run test:e2e` passes; `npm run build` succeeds. Twelve new tests cover the resurrection guard, the failure state and its fault defaults, the discount split, offer scope, and the absence of a service fee.
+- Both CHECK constraints were confirmed to reject bad data directly in PostgreSQL: a discount split that does not reconcile, and a `FAILED` delivery with no reason. `Order_customerId_fkey` and `Order_restaurantId_fkey` confirmed as `r` (restrict).
+- Verified live over HTTP. A customer quote returns `subtotal + delivery − discount` with no `serviceFeeMinor` field at all. A driver reporting `FAILED` without a reason gets 400; with a reason the order becomes `DELIVERY_FAILED`, the delivery records reason, fault, note and timestamp. And the resurrection case end to end: with the driver `ON_THE_WAY`, an administrator cancelled the order, the delivery was closed automatically, and the driver's `DELIVERED` attempt returned 409 with the order still `CANCELLED`.
+
+### Notes
+
+- A failed delivery deliberately does **not** restore stock. The goods left the premises, and the business is paid for them under the agreed policy, so returning them to inventory would overstate stock.
+- Two verification orders were created in the development database and left in place, one `DELIVERY_FAILED` and one `CANCELLED`. They are genuine records and their stock effects are explained by the `InventoryMovement` ledger; deleting them would have left inventory inconsistent.
+- The mobile app's service-fee removal is in the working tree but deliberately not committed here, because those files also carry unrelated in-progress i18n work that is not mine to commit.

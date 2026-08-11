@@ -5,13 +5,12 @@ export type DeliveryPricingConfig = {
   includedDistanceMeters: number;
   ratePerKilometerMinor: number;
   maximumDistanceMeters: number;
-  serviceFeeMinor: number;
 };
 
+/** Customers pay a delivery fee and nothing else. There is deliberately no service fee. */
 export type OrderFees = {
   deliveryDistanceMeters: number;
   deliveryFeeMinor: number;
-  serviceFeeMinor: number;
 };
 
 const earthRadiusMeters = 6_371_000;
@@ -22,8 +21,7 @@ export const defaultDeliveryPricing: DeliveryPricingConfig = {
   minimumFeeMinor: 1_000,
   includedDistanceMeters: 3_000,
   ratePerKilometerMinor: 150,
-  maximumDistanceMeters: 25_000,
-  serviceFeeMinor: 200
+  maximumDistanceMeters: 25_000
 };
 
 export function calculateDistanceMeters(origin: Coordinates, destination: Coordinates): number {
@@ -47,8 +45,7 @@ export function calculateOrderFees(
   const additionalKilometers = Math.ceil(additionalMeters / 1_000);
   return {
     deliveryDistanceMeters,
-    deliveryFeeMinor: config.minimumFeeMinor + additionalKilometers * config.ratePerKilometerMinor,
-    serviceFeeMinor: config.serviceFeeMinor
+    deliveryFeeMinor: config.minimumFeeMinor + additionalKilometers * config.ratePerKilometerMinor
   };
 }
 
