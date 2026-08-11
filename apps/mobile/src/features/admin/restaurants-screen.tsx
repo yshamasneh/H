@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { View } from "react-native";
+import i18n from "../../i18n";
 import {
   approveAdminRestaurant,
   getAdminRestaurant,
@@ -34,21 +36,20 @@ import {
 
 type RestaurantFilter = "ALL" | RestaurantStatusValue;
 
-const filters: { label: string; value: RestaurantFilter }[] = [
-  { label: "All", value: "ALL" },
-  { label: "Pending", value: "PENDING" },
-  { label: "Approved", value: "APPROVED" },
-  { label: "Suspended", value: "SUSPENDED" },
-  { label: "Rejected", value: "REJECTED" }
-];
+const filterValues: RestaurantFilter[] = ["ALL", "PENDING", "APPROVED", "SUSPENDED", "REJECTED"];
 
 export function AdminRestaurantsScreen(props: {
   onBack: () => void;
   onOpenRestaurant: (restaurantId: string) => void;
 }) {
+  const { t } = useTranslation(["admin", "common"]);
   const [restaurants, setRestaurants] = useState<AdminRestaurant[] | null>(null);
   const [filter, setFilter] = useState<RestaurantFilter>("ALL");
   const [error, setError] = useState<string | null>(null);
+  const filters = filterValues.map((value) => ({
+    value,
+    label: value === "ALL" ? t("restaurants.filterAll") : t(`common:status.${value}`)
+  }));
 
   async function load() {
     try {
@@ -66,27 +67,27 @@ export function AdminRestaurantsScreen(props: {
   }, [filter]);
 
   return (
-    <AdminPage onBack={props.onBack} subtitle="Approvals and operational status" title="Stores">
+    <AdminPage onBack={props.onBack} subtitle={t("restaurants.subtitle")} title={t("restaurants.title")}>
       <FilterChips onChange={setFilter} options={filters} value={filter} />
       <ErrorBanner message={error} />
       {restaurants === null ? (
         <LoadingState />
       ) : restaurants.length === 0 ? (
-        <EmptyState message="No stores match this filter." />
+        <EmptyState message={t("restaurants.empty")} />
       ) : (
         restaurants.map((restaurant) => (
           <Card key={restaurant.id}>
             <View style={adminStyles.rowBetween}>
               <View style={{ flex: 1 }}>
                 <CardTitle>{restaurant.name}</CardTitle>
-                <Meta>{restaurant.businessType === "SUPERMARKET" ? "Supermarket" : "Restaurant"}</Meta>
+                <Meta>{restaurant.businessType === "SUPERMARKET" ? t("restaurants.businessTypeSupermarket") : t("restaurants.businessTypeRestaurant")}</Meta>
                 <Meta>{restaurant.addressLine}</Meta>
               </View>
               <StatusPill status={restaurant.status} />
             </View>
-            <KeyValue label="Open" value={restaurant.isOpen ? "Yes" : "No"} />
-            <KeyValue label="Phone" value={restaurant.phone} />
-            <ActionButton label="View details" onPress={() => props.onOpenRestaurant(restaurant.id)} variant="secondary" />
+            <KeyValue label={t("restaurants.openLabel")} value={restaurant.isOpen ? t("common:yes") : t("common:no")} />
+            <KeyValue label={t("restaurants.phoneLabel")} value={restaurant.phone} />
+            <ActionButton label={t("restaurants.viewDetails")} onPress={() => props.onOpenRestaurant(restaurant.id)} variant="secondary" />
           </Card>
         ))
       )}
@@ -95,6 +96,7 @@ export function AdminRestaurantsScreen(props: {
 }
 
 export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBack: () => void }) {
+  const { t } = useTranslation(["admin", "common"]);
   const [restaurant, setRestaurant] = useState<AdminRestaurantDetail | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -127,7 +129,7 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
   }
 
   return (
-    <AdminPage onBack={props.onBack} subtitle="Store account and performance" title={restaurant?.name ?? "Store details"}>
+    <AdminPage onBack={props.onBack} subtitle={t("restaurantDetail.subtitle")} title={restaurant?.name ?? t("restaurantDetail.notFoundTitle")}>
       <ErrorBanner message={error} />
       {!restaurant ? (
         error ? null : <LoadingState />
@@ -136,24 +138,24 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
           <Card>
             <View style={adminStyles.rowBetween}>
               <CardTitle>{restaurant.name}</CardTitle>
-              <Meta>{restaurant.businessType === "SUPERMARKET" ? "Supermarket" : "Restaurant"}</Meta>
+              <Meta>{restaurant.businessType === "SUPERMARKET" ? t("restaurants.businessTypeSupermarket") : t("restaurants.businessTypeRestaurant")}</Meta>
               <StatusPill status={restaurant.status} />
             </View>
-            <KeyValue label="Owner" value={restaurant.ownerFullName} />
-            <KeyValue label="Owner phone" value={restaurant.ownerPhone} />
-            <KeyValue label="Address" value={restaurant.addressLine} />
-            <KeyValue label="Open" value={restaurant.isOpen ? "Yes" : "No"} />
-            <KeyValue label="Orders" value={String(restaurant.totalOrdersCount)} />
-            <KeyValue label="Revenue" value={formatMoney(restaurant.revenueMinor)} />
-            <KeyValue label="Created" value={formatDate(restaurant.createdAt)} />
+            <KeyValue label={t("restaurantDetail.ownerLabel")} value={restaurant.ownerFullName} />
+            <KeyValue label={t("restaurantDetail.ownerPhoneLabel")} value={restaurant.ownerPhone} />
+            <KeyValue label={t("restaurantDetail.addressLabel")} value={restaurant.addressLine} />
+            <KeyValue label={t("restaurants.openLabel")} value={restaurant.isOpen ? t("common:yes") : t("common:no")} />
+            <KeyValue label={t("restaurantDetail.ordersLabel")} value={String(restaurant.totalOrdersCount)} />
+            <KeyValue label={t("restaurantDetail.revenueLabel")} value={formatMoney(restaurant.revenueMinor)} />
+            <KeyValue label={t("restaurantDetail.createdLabel")} value={formatDate(restaurant.createdAt)} />
           </Card>
 
           {restaurant.status === "APPROVED" ? (
             <View style={adminStyles.reasonBox}>
-              <Input multiline onChangeText={setReason} placeholder="Required suspension reason" value={reason} />
+              <Input multiline onChangeText={setReason} placeholder={t("restaurantDetail.suspendReasonPlaceholder")} value={reason} />
               <ActionButton
                 disabled={!reason.trim()}
-                label="Suspend restaurant"
+                label={t("restaurantDetail.suspendButton")}
                 loading={busy}
                 onPress={() => void act((token) => suspendAdminRestaurant(token, restaurant.id, reason.trim()))}
                 variant="danger"
@@ -164,12 +166,12 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
           <ActionRow>
             {restaurant.status === "PENDING" ? (
               <>
-                <ActionButton label="Approve" loading={busy} onPress={() => void act((token) => approveAdminRestaurant(token, restaurant.id))} />
-                <ActionButton label="Reject" loading={busy} onPress={() => void act((token) => rejectAdminRestaurant(token, restaurant.id))} variant="danger" />
+                <ActionButton label={t("common:approve")} loading={busy} onPress={() => void act((token) => approveAdminRestaurant(token, restaurant.id))} />
+                <ActionButton label={t("common:reject")} loading={busy} onPress={() => void act((token) => rejectAdminRestaurant(token, restaurant.id))} variant="danger" />
               </>
             ) : null}
             {restaurant.status === "SUSPENDED" ? (
-              <ActionButton label="Reactivate" loading={busy} onPress={() => void act((token) => reactivateAdminRestaurant(token, restaurant.id))} />
+              <ActionButton label={t("common:reactivate")} loading={busy} onPress={() => void act((token) => reactivateAdminRestaurant(token, restaurant.id))} />
             ) : null}
           </ActionRow>
         </>
@@ -180,6 +182,6 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
 
 async function requireToken(): Promise<string> {
   const token = await getAccessToken();
-  if (!token) throw new Error("Your session has expired. Please log in again.");
+  if (!token) throw new Error(i18n.t("common:sessionExpired"));
   return token;
 }

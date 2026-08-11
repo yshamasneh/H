@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import i18n from "../i18n";
 import type { CountryCode } from "./phone";
 
 export type UserRole = "CUSTOMER" | "RESTAURANT" | "DRIVER" | "ADMIN";
@@ -256,7 +257,6 @@ export type OrderDetail = {
   items: OrderItemView[];
   subtotalMinor: number;
   deliveryFeeMinor: number;
-  serviceFeeMinor: number;
   discountMinor: number;
   totalMinor: number;
   createdAt: string;
@@ -269,7 +269,6 @@ export type OrderQuote = {
   subtotalMinor: number;
   deliveryDistanceMeters: number;
   deliveryFeeMinor: number;
-  serviceFeeMinor: number;
   discountMinor: number;
   totalMinor: number;
   appliedPromotions: OrderDetail["appliedPromotions"];
@@ -1109,7 +1108,7 @@ async function request<T>(
       body: options.body ? JSON.stringify(options.body) : undefined
     });
   } catch {
-    throw new ApiError(0, "NETWORK_ERROR", "Cannot connect to the TasawaQ server. Please try again.");
+    throw new ApiError(0, "NETWORK_ERROR", i18n.t("common:networkError"));
   }
 
   const payload = (await response.json().catch(() => null)) as T | ApiErrorPayload | null;
@@ -1118,13 +1117,13 @@ async function request<T>(
     throw new ApiError(
       response.status,
       error.code ?? "API_ERROR",
-      error.message ?? "The request could not be completed.",
+      error.message ?? i18n.t("common:requestFailed"),
       error.details ?? null
     );
   }
   if (response.status === 204) return undefined as T;
   if (!payload) {
-    throw new ApiError(response.status, "INVALID_API_RESPONSE", "The server returned an invalid response.");
+    throw new ApiError(response.status, "INVALID_API_RESPONSE", i18n.t("common:invalidResponse"));
   }
   return payload as T;
 }

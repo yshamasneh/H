@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
@@ -10,6 +11,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import i18n from "../../i18n";
 
 export function AdminPage(props: {
   title: string;
@@ -17,13 +19,14 @@ export function AdminPage(props: {
   onBack?: () => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation(["common"]);
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor="#0F172A" barStyle="light-content" />
       <View style={styles.header}>
         {props.onBack ? (
           <Pressable onPress={props.onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back</Text>
+            <Text style={styles.backButtonText}>{t("back")}</Text>
           </Pressable>
         ) : (
           <View style={styles.brandMark}>
@@ -71,10 +74,11 @@ export function KeyValue(props: { label: string; value: string }) {
 }
 
 export function StatusPill({ status }: { status: string }) {
+  const { t } = useTranslation(["common"]);
   const palette = statusPalette(status);
   return (
     <View style={[styles.pill, { backgroundColor: palette.background }]}>
-      <Text style={[styles.pillText, { color: palette.text }]}>{status.replace(/_/g, " ")}</Text>
+      <Text style={[styles.pillText, { color: palette.text }]}>{t(`status.${status}`, status.replace(/_/g, " "))}</Text>
     </View>
   );
 }
@@ -177,7 +181,7 @@ export function formatDate(value: string): string {
 }
 
 export function readAdminError(error: unknown): string {
-  return error instanceof Error ? error.message : "The action could not be completed.";
+  return error instanceof Error ? error.message : i18n.t("common:genericError");
 }
 
 function statusPalette(status: string): { background: string; text: string } {
@@ -219,7 +223,7 @@ const styles = StyleSheet.create({
   meta: { color: "#64748B", fontSize: 13, lineHeight: 19, marginTop: 5 },
   keyValue: { borderBottomColor: "#F1F5F9", borderBottomWidth: 1, flexDirection: "row", gap: 10, justifyContent: "space-between", paddingVertical: 9 },
   key: { color: "#64748B", flex: 1, fontSize: 13 },
-  value: { color: "#0F172A", flex: 1, fontSize: 13, fontWeight: "700", textAlign: "right" },
+  value: { color: "#0F172A", flex: 1, fontSize: 13, fontWeight: "700", textAlign: "auto" },
   pill: { alignSelf: "flex-start", borderRadius: 999, marginTop: 8, paddingHorizontal: 10, paddingVertical: 5 },
   pillText: { fontSize: 11, fontWeight: "900" },
   actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
@@ -233,7 +237,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: "#FFFFFF", borderColor: "#CBD5E1", borderRadius: 10, borderWidth: 1, color: "#0F172A", fontSize: 14, paddingHorizontal: 13, paddingVertical: 11 },
   multilineInput: { minHeight: 78, textAlignVertical: "top" },
   chips: { flexGrow: 0 },
-  chip: { backgroundColor: "#E2E8F0", borderRadius: 999, marginRight: 8, paddingHorizontal: 13, paddingVertical: 8 },
+  chip: { backgroundColor: "#E2E8F0", borderRadius: 999, marginEnd: 8, paddingHorizontal: 13, paddingVertical: 8 },
   chipSelected: { backgroundColor: "#0F766E" },
   chipText: { color: "#475569", fontSize: 12, fontWeight: "700" },
   chipTextSelected: { color: "#FFFFFF" },

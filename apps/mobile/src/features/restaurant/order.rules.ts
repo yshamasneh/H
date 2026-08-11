@@ -2,14 +2,14 @@ import type { OrderStatusValue, RestaurantOrderStatusAction } from "../../core/a
 
 export const nextRestaurantActionsByStatus: Record<
   OrderStatusValue,
-  { action: RestaurantOrderStatusAction; label: string }[]
+  { action: RestaurantOrderStatusAction; labelKey: string }[]
 > = {
   PLACED: [
-    { action: "ACCEPTED", label: "Accept Order" },
-    { action: "REJECTED", label: "Reject Order" }
+    { action: "ACCEPTED", labelKey: "orders.acceptOrder" },
+    { action: "REJECTED", labelKey: "orders.rejectOrder" }
   ],
-  ACCEPTED: [{ action: "PREPARING", label: "Start Preparing" }],
-  PREPARING: [{ action: "READY_FOR_PICKUP", label: "Mark Ready for Pickup" }],
+  ACCEPTED: [{ action: "PREPARING", labelKey: "orders.startPreparing" }],
+  PREPARING: [{ action: "READY_FOR_PICKUP", labelKey: "orders.markReadyForPickup" }],
   READY_FOR_PICKUP: [],
   DELIVERED: [],
   REJECTED: [],

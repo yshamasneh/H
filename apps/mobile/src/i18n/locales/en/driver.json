@@ -1,0 +1,34 @@
+{
+  "home": {
+    "dashboardTitle": "Delivery Dashboard",
+    "dashboardSubtitle": "Toggle online to see deliveries",
+    "onlineStatus": "You are online",
+    "offlineStatus": "You are offline",
+    "yourActiveDeliveries": "Your active deliveries",
+    "noActiveDeliveries": "You have no active deliveries.",
+    "deliverToLabel": "Deliver to: {{address}}",
+    "availableDeliveries": "Available deliveries",
+    "goOnlineToSee": "Go online to see and accept deliveries.",
+    "noDeliveriesWaiting": "No deliveries are waiting for a driver right now.",
+    "pickupLabel": "Pickup: {{address}}",
+    "acceptDeliveryButton": "Accept Delivery",
+    "markPickedUp": "Mark Picked Up",
+    "startDelivery": "Start Delivery",
+    "markDelivered": "Mark Delivered"
+  },
+  "detail": {
+    "detailsTitle": "Delivery Details",
+    "defaultSubtitle": "Delivery",
+    "notFoundError": "This delivery could not be found.",
+    "statusLabel": "Status",
+    "pickupFromLabel": "Pickup from",
+    "addressLine": "{{name}} - {{address}}",
+    "deliverToLabel": "Deliver to",
+    "deliverAddressLine": "{{label}} - {{address}}",
+    "orderTotalLabel": "Order total",
+    "totalWithPayment": "{{amount}} ({{method}})",
+    "deliveryComplete": "This delivery is complete.",
+    "tryAgain": "Try Again",
+    "cashOnDelivery": "Cash on Delivery"
+  }
+}

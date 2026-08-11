@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import i18n from "../../i18n";
 import {
   createAdminOffer,
   getAdminRestaurantMenu,
@@ -33,14 +35,21 @@ import {
   readAdminError
 } from "./ui";
 
-const typeOptions = [
-  { label: "Product %", value: "PRODUCT_PERCENTAGE" },
-  { label: "Order %", value: "ORDER_PERCENTAGE" },
-  { label: "Delivery %", value: "DELIVERY_PERCENTAGE" },
-  { label: "Free delivery", value: "FREE_DELIVERY" }
-] satisfies { label: string; value: OfferTypeValue }[];
+const typeValues: OfferTypeValue[] = ["PRODUCT_PERCENTAGE", "ORDER_PERCENTAGE", "DELIVERY_PERCENTAGE", "FREE_DELIVERY"];
 
 export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation(["admin", "common"]);
+  const typeOptions = typeValues.map((value) => ({
+    value,
+    label: t(
+      {
+        PRODUCT_PERCENTAGE: "offers.typeProductPercent",
+        ORDER_PERCENTAGE: "offers.typeOrderPercent",
+        DELIVERY_PERCENTAGE: "offers.typeDeliveryPercent",
+        FREE_DELIVERY: "offers.typeFreeDelivery"
+      }[value]
+    )
+  }));
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
   const [restaurants, setRestaurants] = useState<AdminRestaurant[]>([]);
   const [menuItems, setMenuItems] = useState<(MenuItemOwner & { categoryName: string })[]>([]);
@@ -99,15 +108,15 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
 
   async function create() {
     if (!title.trim()) {
-      setError("Enter an offer title.");
+      setError(t("offers.enterTitleError"));
       return;
     }
     if (requiresRestaurant && !restaurantId) {
-      setError("Select a restaurant for this offer.");
+      setError(t("offers.selectRestaurantError"));
       return;
     }
     if (type === "PRODUCT_PERCENTAGE" && !menuItemId) {
-      setError("Select the product receiving the offer.");
+      setError(t("offers.selectProductError"));
       return;
     }
 
@@ -133,7 +142,7 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
       setDescription("");
       setImageUrl("");
       setEndsAt("");
-      setNotice("Offer published. Eligible orders will receive it automatically.");
+      setNotice(t("offers.publishSuccess"));
       await load();
     } catch (requestError) {
       setError(readAdminError(requestError));
@@ -148,7 +157,7 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
     setNotice(null);
     try {
       await updateAdminOffer(await requireToken(), offer.id, offerToInput(offer, !offer.isActive));
-      setNotice(offer.isActive ? "Offer paused." : "Offer activated.");
+      setNotice(offer.isActive ? t("offers.pausedSuccess") : t("offers.activatedSuccess"));
       await load();
     } catch (requestError) {
       setError(readAdminError(requestError));
@@ -158,20 +167,20 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <AdminPage onBack={onBack} subtitle="Create and control product, order, and delivery promotions" title="Offers">
+    <AdminPage onBack={onBack} subtitle={t("offers.subtitle")} title={t("offers.title")}>
       <ErrorBanner message={error} />
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
       <Card>
-        <CardTitle>New offer</CardTitle>
-        <Meta>The server applies the best eligible product/order offer plus the best delivery offer.</Meta>
-        <Text style={styles.label}>Offer type</Text>
+        <CardTitle>{t("offers.newOfferTitle")}</CardTitle>
+        <Meta>{t("offers.newOfferMeta")}</Meta>
+        <Text style={styles.label}>{t("offers.offerTypeLabel")}</Text>
         <FilterChips onChange={setType} options={typeOptions} value={type} />
 
-        <Text style={styles.label}>Store scope</Text>
+        <Text style={styles.label}>{t("offers.storeScopeLabel")}</Text>
         {!requiresRestaurant ? (
           <Pressable onPress={() => setRestaurantId(null)} style={[styles.choice, restaurantId === null && styles.choiceSelected]}>
-            <Text style={[styles.choiceText, restaurantId === null && styles.choiceTextSelected]}>All stores</Text>
+            <Text style={[styles.choiceText, restaurantId === null && styles.choiceTextSelected]}>{t("offers.allStores")}</Text>
           </Pressable>
         ) : null}
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -181,15 +190,21 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
               onPress={() => setRestaurantId(restaurant.id)}
               style={[styles.choice, restaurantId === restaurant.id && styles.choiceSelected]}
             >
-              <Text style={[styles.choiceText, restaurantId === restaurant.id && styles.choiceTextSelected]}>{restaurant.name} · {restaurant.businessType === "SUPERMARKET" ? "Market" : "Restaurant"}</Text>
+              <Text style={[styles.choiceText, restaurantId === restaurant.id && styles.choiceTextSelected]}>
+                {restaurant.name} · {restaurant.businessType === "SUPERMARKET" ? t("offers.marketLabel") : t("offers.restaurantLabel")}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>
-        {selectedRestaurant ? <Meta>Selected: {selectedRestaurant.name}</Meta> : <Meta>Global delivery promotion</Meta>}
+        {selectedRestaurant ? (
+          <Meta>{t("offers.selectedLabel", { name: selectedRestaurant.name })}</Meta>
+        ) : (
+          <Meta>{t("offers.globalDeliveryPromo")}</Meta>
+        )}
 
         {type === "PRODUCT_PERCENTAGE" ? (
           <>
-            <Text style={styles.label}>Product</Text>
+            <Text style={styles.label}>{t("offers.productLabel")}</Text>
             <View style={styles.choiceWrap}>
               {menuItems.map((item) => (
                 <Pressable
@@ -206,46 +221,46 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
           </>
         ) : null}
 
-        <Text style={styles.label}>Customer-facing title</Text>
-        <Input onChangeText={setTitle} placeholder="Weekend special" value={title} />
-        <Input multiline onChangeText={setDescription} placeholder="Description (optional)" value={description} />
+        <Text style={styles.label}>{t("offers.customerFacingTitleLabel")}</Text>
+        <Input onChangeText={setTitle} placeholder={t("offers.titlePlaceholder")} value={title} />
+        <Input multiline onChangeText={setDescription} placeholder={t("offers.descriptionPlaceholder")} value={description} />
         {type !== "FREE_DELIVERY" ? (
-          <Input onChangeText={setDiscountPercent} placeholder="Discount percent, e.g. 20" value={discountPercent} />
+          <Input onChangeText={setDiscountPercent} placeholder={t("offers.discountPercentPlaceholder")} value={discountPercent} />
         ) : null}
-        <Input onChangeText={setMinimumSubtotal} placeholder="Minimum subtotal in ILS, e.g. 50" value={minimumSubtotal} />
+        <Input onChangeText={setMinimumSubtotal} placeholder={t("offers.minimumSubtotalPlaceholder")} value={minimumSubtotal} />
         {type !== "FREE_DELIVERY" ? (
-          <Input onChangeText={setMaxDiscount} placeholder="Maximum discount in ILS (optional)" value={maxDiscount} />
+          <Input onChangeText={setMaxDiscount} placeholder={t("offers.maxDiscountPlaceholder")} value={maxDiscount} />
         ) : null}
-        <Input onChangeText={setImageUrl} placeholder="Campaign image URL (optional)" value={imageUrl} />
-        <Input onChangeText={setStartsAt} placeholder="Start ISO date (blank = now)" value={startsAt} />
-        <Input onChangeText={setEndsAt} placeholder="End ISO date (optional)" value={endsAt} />
-        <ActionButton disabled={busy} label="Publish offer" loading={busy} onPress={() => void create()} />
+        <Input onChangeText={setImageUrl} placeholder={t("offers.imageUrlPlaceholder")} value={imageUrl} />
+        <Input onChangeText={setStartsAt} placeholder={t("offers.startDatePlaceholder")} value={startsAt} />
+        <Input onChangeText={setEndsAt} placeholder={t("offers.endDatePlaceholder")} value={endsAt} />
+        <ActionButton disabled={busy} label={t("offers.publishButton")} loading={busy} onPress={() => void create()} />
       </Card>
 
-      <Text style={styles.heading}>All offers</Text>
+      <Text style={styles.heading}>{t("offers.allOffersTitle")}</Text>
       {offers === null ? (
         <LoadingState />
       ) : offers.length === 0 ? (
-        <EmptyState message="No offers have been created." />
+        <EmptyState message={t("offers.empty")} />
       ) : (
         offers.map((offer) => (
           <Card key={offer.id}>
             <View style={styles.row}>
               <View style={styles.copy}>
                 <CardTitle>{offer.title}</CardTitle>
-                <Meta>{offer.restaurantName ?? "All stores"}{offer.menuItemName ? ` · ${offer.menuItemName}` : ""}</Meta>
+                <Meta>{offer.restaurantName ?? t("offers.allStores")}{offer.menuItemName ? ` · ${offer.menuItemName}` : ""}</Meta>
               </View>
               <StatusPill status={offer.isActive ? "ACTIVE" : "INACTIVE"} />
             </View>
-            <KeyValue label="Type" value={offer.type.replace(/_/g, " ")} />
-            <KeyValue label="Discount" value={offer.type === "FREE_DELIVERY" ? "100% delivery" : `${offer.discountPercent}%`} />
-            <KeyValue label="Minimum" value={formatMoney(offer.minimumSubtotalMinor)} />
-            <KeyValue label="Starts" value={formatDate(offer.startsAt)} />
-            {offer.endsAt ? <KeyValue label="Ends" value={formatDate(offer.endsAt)} /> : null}
+            <KeyValue label={t("offers.typeLabel")} value={offer.type.replace(/_/g, " ")} />
+            <KeyValue label={t("offers.discountLabel")} value={offer.type === "FREE_DELIVERY" ? t("offers.freeDeliveryDiscountValue") : `${offer.discountPercent}%`} />
+            <KeyValue label={t("offers.minimumLabel")} value={formatMoney(offer.minimumSubtotalMinor)} />
+            <KeyValue label={t("offers.startsLabel")} value={formatDate(offer.startsAt)} />
+            {offer.endsAt ? <KeyValue label={t("offers.endsLabel")} value={formatDate(offer.endsAt)} /> : null}
             <ActionRow>
               <ActionButton
                 disabled={busy}
-                label={offer.isActive ? "Pause" : "Activate"}
+                label={offer.isActive ? t("offers.pauseButton") : t("offers.activateButton")}
                 onPress={() => void toggle(offer)}
                 variant={offer.isActive ? "danger" : "primary"}
               />
@@ -287,13 +302,13 @@ function parseMoney(value: string): number | undefined {
 
 async function requireToken(): Promise<string> {
   const token = await getAccessToken();
-  if (!token) throw new Error("Your session has expired. Please log in again.");
+  if (!token) throw new Error(i18n.t("common:sessionExpired"));
   return token;
 }
 
 const styles = StyleSheet.create({
   copy: { flex: 1 },
-  choice: { backgroundColor: "#E2E8F0", borderRadius: 999, marginRight: 8, marginTop: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  choice: { backgroundColor: "#E2E8F0", borderRadius: 999, marginEnd: 8, marginTop: 8, paddingHorizontal: 12, paddingVertical: 8 },
   choiceSelected: { backgroundColor: "#0F766E" },
   choiceText: { color: "#475569", fontSize: 12, fontWeight: "700" },
   choiceTextSelected: { color: "#FFFFFF" },

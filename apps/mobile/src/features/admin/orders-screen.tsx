@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { View } from "react-native";
+import i18n from "../../i18n";
 import {
   cancelAdminOrder,
   getAdminOrder,
@@ -31,19 +33,17 @@ import {
 
 type OrderFilter = "ALL" | OrderStatusValue;
 
-const filters: { label: string; value: OrderFilter }[] = [
-  { label: "All", value: "ALL" },
-  { label: "Placed", value: "PLACED" },
-  { label: "Preparing", value: "PREPARING" },
-  { label: "Ready", value: "READY_FOR_PICKUP" },
-  { label: "Delivered", value: "DELIVERED" },
-  { label: "Cancelled", value: "CANCELLED" }
-];
+const filterValues: OrderFilter[] = ["ALL", "PLACED", "PREPARING", "READY_FOR_PICKUP", "DELIVERED", "CANCELLED"];
 
 export function AdminOrdersScreen(props: { onBack: () => void; onOpenOrder: (orderId: string) => void }) {
+  const { t } = useTranslation(["admin", "common"]);
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
   const [filter, setFilter] = useState<OrderFilter>("ALL");
   const [error, setError] = useState<string | null>(null);
+  const filters = filterValues.map((value) => ({
+    value,
+    label: value === "ALL" ? t("orders.filterAll") : t(`common:status.${value}`)
+  }));
 
   async function load() {
     try {
@@ -63,13 +63,13 @@ export function AdminOrdersScreen(props: { onBack: () => void; onOpenOrder: (ord
   useRealtimeEvent("order.status.changed", () => void load());
 
   return (
-    <AdminPage onBack={props.onBack} subtitle="All customer orders" title="Orders">
+    <AdminPage onBack={props.onBack} subtitle={t("orders.subtitle")} title={t("orders.title")}>
       <FilterChips onChange={setFilter} options={filters} value={filter} />
       <ErrorBanner message={error} />
       {orders === null ? (
         <LoadingState />
       ) : orders.length === 0 ? (
-        <EmptyState message="No orders match this filter." />
+        <EmptyState message={t("orders.empty")} />
       ) : (
         orders.map((order) => (
           <Card key={order.id}>
@@ -80,9 +80,9 @@ export function AdminOrdersScreen(props: { onBack: () => void; onOpenOrder: (ord
               </View>
               <StatusPill status={order.status} />
             </View>
-            <KeyValue label="Total" value={formatMoney(order.totalMinor)} />
-            <KeyValue label="Delivery" value={order.deliveryAddressLine} />
-            <ActionButton label="View order" onPress={() => props.onOpenOrder(order.id)} variant="secondary" />
+            <KeyValue label={t("orders.totalLabel")} value={formatMoney(order.totalMinor)} />
+            <KeyValue label={t("orders.deliveryLabel")} value={order.deliveryAddressLine} />
+            <ActionButton label={t("orders.viewOrderButton")} onPress={() => props.onOpenOrder(order.id)} variant="secondary" />
           </Card>
         ))
       )}
@@ -91,6 +91,7 @@ export function AdminOrdersScreen(props: { onBack: () => void; onOpenOrder: (ord
 }
 
 export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => void }) {
+  const { t } = useTranslation(["admin", "common"]);
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -128,7 +129,7 @@ export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => v
   }
 
   return (
-    <AdminPage onBack={props.onBack} subtitle={order ? formatDate(order.createdAt) : undefined} title={order?.restaurant.name ?? "Order details"}>
+    <AdminPage onBack={props.onBack} subtitle={order ? formatDate(order.createdAt) : undefined} title={order?.restaurant.name ?? t("orderDetail.notFoundTitle")}>
       <ErrorBanner message={error} />
       {!order ? (
         error ? null : <LoadingState />
@@ -136,25 +137,24 @@ export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => v
         <>
           <Card>
             <View style={adminStyles.rowBetween}>
-              <CardTitle>Order #{order.id.slice(0, 8)}</CardTitle>
+              <CardTitle>{t("orderDetail.orderNumberLabel", { id: order.id.slice(0, 8) })}</CardTitle>
               <StatusPill status={order.status} />
             </View>
             {order.items.map((item) => (
               <KeyValue key={item.id} label={`${item.quantity} × ${item.nameSnapshot}`} value={formatMoney(item.lineTotalMinor)} />
             ))}
-            <KeyValue label="Subtotal" value={formatMoney(order.subtotalMinor)} />
-            <KeyValue label="Delivery fee" value={formatMoney(order.deliveryFeeMinor)} />
-            <KeyValue label="Service fee" value={formatMoney(order.serviceFeeMinor)} />
-            <KeyValue label="Total" value={formatMoney(order.totalMinor)} />
-            <KeyValue label="Payment" value={order.paymentMethod} />
-            <KeyValue label="Address" value={order.deliveryAddressLine} />
+            <KeyValue label={t("orderDetail.subtotalLabel")} value={formatMoney(order.subtotalMinor)} />
+            <KeyValue label={t("orderDetail.deliveryFeeLabel")} value={formatMoney(order.deliveryFeeMinor)} />
+            <KeyValue label={t("orderDetail.totalLabel")} value={formatMoney(order.totalMinor)} />
+            <KeyValue label={t("orderDetail.paymentLabel")} value={order.paymentMethod} />
+            <KeyValue label={t("orderDetail.addressLabel")} value={order.deliveryAddressLine} />
           </Card>
 
           <Card>
-            <CardTitle>Status history</CardTitle>
+            <CardTitle>{t("orderDetail.statusHistoryTitle")}</CardTitle>
             {order.statusHistory.map((entry) => (
               <View key={entry.id}>
-                <KeyValue label={formatDate(entry.createdAt)} value={entry.toStatus.replace(/_/g, " ")} />
+                <KeyValue label={formatDate(entry.createdAt)} value={t(`common:status.${entry.toStatus}`, entry.toStatus.replace(/_/g, " "))} />
                 {entry.note ? <Meta>{entry.note}</Meta> : null}
               </View>
             ))}
@@ -162,8 +162,8 @@ export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => v
 
           {cancellableAdminOrderStatuses.includes(order.status) ? (
             <View style={adminStyles.reasonBox}>
-              <Input multiline onChangeText={setReason} placeholder="Required cancellation reason" value={reason} />
-              <ActionButton disabled={!reason.trim()} label="Cancel order" loading={busy} onPress={() => void cancel()} variant="danger" />
+              <Input multiline onChangeText={setReason} placeholder={t("orderDetail.cancelReasonPlaceholder")} value={reason} />
+              <ActionButton disabled={!reason.trim()} label={t("orderDetail.cancelButton")} loading={busy} onPress={() => void cancel()} variant="danger" />
             </View>
           ) : null}
         </>
@@ -174,6 +174,6 @@ export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => v
 
 async function requireToken(): Promise<string> {
   const token = await getAccessToken();
-  if (!token) throw new Error("Your session has expired. Please log in again.");
+  if (!token) throw new Error(i18n.t("common:sessionExpired"));
   return token;
 }

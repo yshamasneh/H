@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { View } from "react-native";
+import i18n from "../../i18n";
 import {
   approveAdminDriver,
   listAdminDrivers,
@@ -28,6 +30,7 @@ import {
 } from "./ui";
 
 export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation(["admin", "common"]);
   const [drivers, setDrivers] = useState<AdminDriver[] | null>(null);
   const [reasonAction, setReasonAction] = useState<{ userId: string; kind: "reject" | "suspend" } | null>(null);
   const [reason, setReason] = useState("");
@@ -62,12 +65,12 @@ export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <AdminPage onBack={onBack} subtitle="Approvals and delivery availability" title="Drivers">
+    <AdminPage onBack={onBack} subtitle={t("drivers.subtitle")} title={t("drivers.title")}>
       <ErrorBanner message={error} />
       {drivers === null ? (
         <LoadingState />
       ) : drivers.length === 0 ? (
-        <EmptyState message="No driver accounts yet." />
+        <EmptyState message={t("drivers.empty")} />
       ) : (
         drivers.map((driver) => {
           const selected = reasonAction?.userId === driver.userId ? reasonAction : null;
@@ -80,21 +83,21 @@ export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
                 </View>
                 <StatusPill status={driver.status} />
               </View>
-              <KeyValue label="Online" value={driver.isOnline ? "Yes" : "No"} />
-              <KeyValue label="Completed deliveries" value={String(driver.completedDeliveriesCount)} />
-              <KeyValue label="Created" value={formatDate(driver.createdAt)} />
+              <KeyValue label={t("drivers.onlineLabel")} value={driver.isOnline ? t("common:yes") : t("common:no")} />
+              <KeyValue label={t("drivers.completedDeliveriesLabel")} value={String(driver.completedDeliveriesCount)} />
+              <KeyValue label={t("drivers.createdLabel")} value={formatDate(driver.createdAt)} />
 
               {selected ? (
                 <View style={adminStyles.reasonBox}>
                   <Input
                     multiline
                     onChangeText={setReason}
-                    placeholder={`Required ${selected.kind} reason`}
+                    placeholder={t(selected.kind === "reject" ? "drivers.reasonPlaceholderReject" : "drivers.reasonPlaceholderSuspend")}
                     value={reason}
                   />
                   <ActionButton
                     disabled={!reason.trim()}
-                    label={`Confirm ${selected.kind}`}
+                    label={t(selected.kind === "reject" ? "drivers.confirmRejectButton" : "drivers.confirmSuspendButton")}
                     loading={busyId === driver.userId}
                     onPress={() =>
                       void act(driver.userId, (token) =>
@@ -111,17 +114,17 @@ export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
               <ActionRow>
                 {driver.status === "PENDING" ? (
                   <>
-                    <ActionButton label="Approve" loading={busyId === driver.userId} onPress={() => void act(driver.userId, (token) => approveAdminDriver(token, driver.userId))} />
-                    <ActionButton label="Reject" onPress={() => setReasonAction({ userId: driver.userId, kind: "reject" })} variant="danger" />
+                    <ActionButton label={t("common:approve")} loading={busyId === driver.userId} onPress={() => void act(driver.userId, (token) => approveAdminDriver(token, driver.userId))} />
+                    <ActionButton label={t("common:reject")} onPress={() => setReasonAction({ userId: driver.userId, kind: "reject" })} variant="danger" />
                   </>
                 ) : null}
                 {driver.status === "APPROVED" ? (
-                  <ActionButton label="Suspend" onPress={() => setReasonAction({ userId: driver.userId, kind: "suspend" })} variant="danger" />
+                  <ActionButton label={t("common:suspend")} onPress={() => setReasonAction({ userId: driver.userId, kind: "suspend" })} variant="danger" />
                 ) : null}
                 {driver.status === "SUSPENDED" ? (
-                  <ActionButton label="Reactivate" loading={busyId === driver.userId} onPress={() => void act(driver.userId, (token) => reactivateAdminDriver(token, driver.userId))} />
+                  <ActionButton label={t("common:reactivate")} loading={busyId === driver.userId} onPress={() => void act(driver.userId, (token) => reactivateAdminDriver(token, driver.userId))} />
                 ) : null}
-                {selected ? <ActionButton label="Close" onPress={() => setReasonAction(null)} variant="secondary" /> : null}
+                {selected ? <ActionButton label={t("common:close")} onPress={() => setReasonAction(null)} variant="secondary" /> : null}
               </ActionRow>
             </Card>
           );
@@ -133,6 +136,6 @@ export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
 
 async function requireToken(): Promise<string> {
   const token = await getAccessToken();
-  if (!token) throw new Error("Your session has expired. Please log in again.");
+  if (!token) throw new Error(i18n.t("common:sessionExpired"));
   return token;
 }

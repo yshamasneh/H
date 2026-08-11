@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   FlatList,
@@ -37,6 +38,7 @@ import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
 import { customerTheme } from "./theme";
+import i18n from "../../i18n";
 import { LocationMap } from "../../components/location-map";
 import type { MapCoordinate } from "../../components/location-map.types";
 
@@ -54,16 +56,17 @@ type CartScreenProps = {
 };
 
 export function CartScreen(props: CartScreenProps) {
+  const { t } = useTranslation(["cart"]);
   const isEmpty = !props.cart || props.cart.items.length === 0;
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? "Your cart is empty"} title="Your Cart" />
+      <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? t("cart.emptySubtitle")} title={t("cart.title")} />
       {isEmpty ? (
         <View style={styles.centered}>
           <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>🛒</Text></View>
-          <Text style={styles.emptyTitle}>Your basket is waiting</Text>
-          <Text style={styles.emptyText}>Add items from a restaurant menu to start an order.</Text>
+          <Text style={styles.emptyTitle}>{t("cart.emptyTitle")}</Text>
+          <Text style={styles.emptyText}>{t("cart.emptyText")}</Text>
         </View>
       ) : (
         <>
@@ -77,7 +80,7 @@ export function CartScreen(props: CartScreenProps) {
                   <View style={styles.cartItemVisual}><Text style={styles.cartItemEmoji}>🍽️</Text></View>
                   <View style={styles.cartRowInfo}>
                     <Text style={styles.cartRowName}>{item.name}</Text>
-                    <Text style={styles.cartRowUnitPrice}>{formatPrice(item.priceMinor)} / {item.unitLabel}</Text>
+                    <Text style={styles.cartRowUnitPrice}>{t("cart.unitPriceLabel", { price: formatPrice(item.priceMinor), unit: item.unitLabel })}</Text>
                     <Text style={styles.cartRowLineTotal}>{formatPrice(item.priceMinor * item.quantity)}</Text>
                     <Pressable
                       accessibilityRole="checkbox"
@@ -85,12 +88,12 @@ export function CartScreen(props: CartScreenProps) {
                       onPress={() => props.onToggleSubstitution(item.menuItemId, !item.allowSubstitution)}
                     >
                       <Text style={styles.substitutionText}>
-                        {item.allowSubstitution ? "✓ Similar replacement allowed" : "No replacement if unavailable"}
+                        {item.allowSubstitution ? t("cart.substitutionAllowed") : t("cart.substitutionNotAllowed")}
                       </Text>
                     </Pressable>
                   </View>
                   <Pressable
-                    accessibilityLabel={`Remove ${item.name} from cart`}
+                    accessibilityLabel={t("cart.removeItemAccessibility", { name: item.name })}
                     onPress={() => props.onRemove(item.menuItemId)}
                     style={styles.removeButton}
                   >
@@ -99,7 +102,7 @@ export function CartScreen(props: CartScreenProps) {
                 </View>
                 <View style={styles.quantityStepper}>
                   <Pressable
-                    accessibilityLabel={`Decrease quantity of ${item.name}`}
+                    accessibilityLabel={t("cart.decreaseQuantityAccessibility", { name: item.name })}
                     onPress={() => props.onDecrement(item.menuItemId)}
                     style={styles.stepperButton}
                   >
@@ -107,7 +110,7 @@ export function CartScreen(props: CartScreenProps) {
                   </Pressable>
                   <Text style={styles.stepperValue}>{item.quantity}</Text>
                   <Pressable
-                    accessibilityLabel={`Increase quantity of ${item.name}`}
+                    accessibilityLabel={t("cart.increaseQuantityAccessibility", { name: item.name })}
                     onPress={() => props.onIncrement(item.menuItemId)}
                     style={styles.stepperButton}
                   >
@@ -119,13 +122,11 @@ export function CartScreen(props: CartScreenProps) {
           />
           <View style={styles.footer}>
             <View style={styles.footerRow}>
-              <Text style={styles.footerLabel}>Estimated subtotal</Text>
+              <Text style={styles.footerLabel}>{t("cart.estimatedSubtotal")}</Text>
               <Text style={styles.footerValue}>{formatPrice(cartSubtotalMinor(props.cart!))}</Text>
             </View>
-            <Text style={styles.footerNote}>
-              Delivery and service fees are calculated at checkout. This subtotal is an estimate only.
-            </Text>
-            <PrimaryButton label="Proceed to Checkout" onPress={props.onCheckout} />
+            <Text style={styles.footerNote}>{t("cart.feesNote")}</Text>
+            <PrimaryButton label={t("cart.proceedToCheckout")} onPress={props.onCheckout} />
           </View>
         </>
       )}
@@ -140,7 +141,8 @@ type CheckoutScreenProps = {
 };
 
 export function CheckoutScreen(props: CheckoutScreenProps) {
-  const [deliveryLabel, setDeliveryLabel] = useState("Home");
+  const { t } = useTranslation(["cart", "common"]);
+  const [deliveryLabel, setDeliveryLabel] = useState(() => t("checkout.labelPlaceholder"));
   const [deliveryAddressLine, setDeliveryAddressLine] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>("CASH");
   const [customerNote, setCustomerNote] = useState("");
@@ -177,9 +179,9 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       setCoordinates(nextCoordinates);
       const address = await reverseGeocode(nextCoordinates);
       if (address) setDeliveryAddressLine(address);
-      if (!props.cart) throw new Error("Your cart is empty.");
+      if (!props.cart) throw new Error(t("checkout.emptyCartError"));
       const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error("Your session has expired. Please log in again.");
+      if (!accessToken) throw new Error(t("common:sessionExpired"));
       setQuote(await getOrderQuote(accessToken, {
         restaurantId: props.cart.restaurantId,
         items: props.cart.items.map((line) => ({
@@ -187,8 +189,8 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           quantity: line.quantity,
           allowSubstitution: line.allowSubstitution
         })),
-        deliveryLabel: deliveryLabel.trim() || "Home",
-        deliveryAddressLine: deliveryAddressLine.trim().length >= 3 ? deliveryAddressLine.trim() : "Selected delivery location",
+        deliveryLabel: deliveryLabel.trim() || t("checkout.labelPlaceholder"),
+        deliveryAddressLine: deliveryAddressLine.trim().length >= 3 ? deliveryAddressLine.trim() : t("checkout.selectedDeliveryLocationFallback"),
         deliveryLatitude: nextCoordinates.latitude,
         deliveryLongitude: nextCoordinates.longitude,
         paymentMethod
@@ -214,18 +216,18 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
 
   async function calculateQuote() {
     if (!props.cart) {
-      setError("Your cart is empty.");
+      setError(t("checkout.emptyCartError"));
       return;
     }
     if (deliveryAddressLine.trim().length < 3) {
-      setError("Please enter your full delivery address.");
+      setError(t("checkout.addressRequiredError"));
       return;
     }
     setLocating(true);
     setError(null);
     try {
       const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error("Your session has expired. Please log in again.");
+      if (!accessToken) throw new Error(t("common:sessionExpired"));
       setQuote(await getOrderQuote(accessToken, {
         restaurantId: props.cart.restaurantId,
         items: props.cart.items.map((line) => ({
@@ -233,7 +235,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           quantity: line.quantity,
           allowSubstitution: line.allowSubstitution
         })),
-        deliveryLabel: deliveryLabel.trim() || "Home",
+        deliveryLabel: deliveryLabel.trim() || t("checkout.labelPlaceholder"),
         deliveryAddressLine: deliveryAddressLine.trim(),
         deliveryLatitude: coordinates.latitude,
         deliveryLongitude: coordinates.longitude,
@@ -250,26 +252,26 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   async function submit() {
     setError(null);
     if (!props.cart || props.cart.items.length === 0) {
-      setError("Your cart is empty.");
+      setError(t("checkout.emptyCartError"));
       return;
     }
     if (deliveryLabel.trim().length < 1) {
-      setError("Please enter a label for this address, like Home or Work.");
+      setError(t("checkout.labelRequiredError"));
       return;
     }
     if (deliveryAddressLine.trim().length < 3) {
-      setError("Please enter your full delivery address.");
+      setError(t("checkout.addressRequiredError"));
       return;
     }
     if (!quote) {
-      setError("Select the delivery pin and calculate the final total before placing the order.");
+      setError(t("checkout.quoteRequiredError"));
       return;
     }
     setLoading(true);
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       const input: CreateOrderInput = {
@@ -298,7 +300,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? "Checkout"} title="Checkout" />
+      <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? t("checkout.title")} title={t("checkout.title")} />
       <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
         <View style={styles.checkoutSteps}>
           <View style={styles.stepComplete}><Text style={styles.stepCompleteText}>✓</Text></View>
@@ -307,31 +309,32 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           <View style={styles.stepLineMuted} />
           <View style={styles.stepMuted}><Text style={styles.stepMutedText}>3</Text></View>
         </View>
-        <View style={styles.stepLabels}><Text style={styles.stepLabel}>Basket</Text><Text style={styles.stepLabel}>Details</Text><Text style={styles.stepLabel}>Done</Text></View>
+        <View style={styles.stepLabels}>
+          <Text style={styles.stepLabel}>{t("checkout.stepBasket")}</Text>
+          <Text style={styles.stepLabel}>{t("checkout.stepDetails")}</Text>
+          <Text style={styles.stepLabel}>{t("checkout.stepDone")}</Text>
+        </View>
         {props.cart ? (
           <View style={styles.summaryCard}>
-            <Text style={styles.sectionTitle}>Order summary (estimate)</Text>
+            <Text style={styles.sectionTitle}>{t("checkout.orderSummaryEstimate")}</Text>
             {props.cart.items.map((item) => (
               <View key={item.menuItemId} style={styles.summaryRow}>
                 <Text style={styles.summaryRowLabel}>
-                  {item.quantity} x {item.name}
+                  {t("checkout.quantityTimesName", { quantity: item.quantity, name: item.name })}
                 </Text>
                 <Text style={styles.summaryRowValue}>{formatPrice(item.priceMinor * item.quantity)}</Text>
               </View>
             ))}
             <View style={styles.summaryDivider} />
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryRowLabelBold}>Estimated subtotal</Text>
+              <Text style={styles.summaryRowLabelBold}>{t("cart.estimatedSubtotal")}</Text>
               <Text style={styles.summaryRowValueBold}>{formatPrice(cartSubtotalMinor(props.cart))}</Text>
             </View>
-            <Text style={styles.footerNote}>
-              The final total, including delivery and service fees, is confirmed by the server after you place
-              the order.
-            </Text>
+            <Text style={styles.footerNote}>{t("checkout.finalTotalNote")}</Text>
           </View>
         ) : null}
 
-        <Text style={styles.sectionTitle}>Delivery address</Text>
+        <Text style={styles.sectionTitle}>{t("checkout.deliveryAddressTitle")}</Text>
         {savedAddresses.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.savedAddressList}>
             {savedAddresses.map((address) => (
@@ -341,39 +344,41 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
             ))}
           </ScrollView>
         ) : null}
-        <Text style={styles.label}>Label</Text>
+        <Text style={styles.label}>{t("checkout.labelField")}</Text>
         <TextInput
           onChangeText={setDeliveryLabel}
-          placeholder="Home"
+          placeholder={t("checkout.labelPlaceholder")}
           placeholderTextColor="#94A3B8"
           style={styles.input}
           value={deliveryLabel}
         />
-        <Text style={styles.label}>Full address</Text>
+        <Text style={styles.label}>{t("checkout.fullAddressField")}</Text>
         <TextInput
           multiline
           onChangeText={setDeliveryAddressLine}
-          placeholder="Street, building, city"
+          placeholder={t("checkout.addressPlaceholder")}
           placeholderTextColor="#94A3B8"
           style={[styles.input, styles.multilineInput]}
           value={deliveryAddressLine}
         />
-        <Text style={styles.locationNote}>Move the pin or tap the map to select the exact delivery entrance.</Text>
+        <Text style={styles.locationNote}>{t("checkout.locationNoteMove")}</Text>
         <LocationMap coordinate={coordinates} onCoordinateChange={(value) => void chooseMapLocation(value)} />
         <SecondaryButton
-          label={locating ? "Finding your location..." : "Use my current location"}
+          label={locating ? t("checkout.findingLocation") : t("checkout.useCurrentLocation")}
           onPress={() => void chooseCurrentLocation()}
         />
-        <SecondaryButton label={locating ? "Calculating..." : "Calculate delivery price"} onPress={() => void calculateQuote()} />
+        <SecondaryButton label={locating ? t("checkout.calculating") : t("checkout.calculateDeliveryPrice")} onPress={() => void calculateQuote()} />
         <Text style={styles.locationNote}>
-          {`Delivery pin selected: ${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`}
+          {t("checkout.pinSelectedNote", { lat: coordinates.latitude.toFixed(5), lng: coordinates.longitude.toFixed(5) })}
         </Text>
         {quote ? (
           <View style={styles.summaryCard}>
-            <Text style={styles.sectionTitle}>Confirmed price</Text>
-            <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>Items</Text><Text style={styles.summaryRowValue}>{formatPrice(quote.subtotalMinor)}</Text></View>
-            <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>Delivery ({(quote.deliveryDistanceMeters / 1000).toFixed(1)} km)</Text><Text style={styles.summaryRowValue}>{formatPrice(quote.deliveryFeeMinor)}</Text></View>
-            <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>Service fee</Text><Text style={styles.summaryRowValue}>{formatPrice(quote.serviceFeeMinor)}</Text></View>
+            <Text style={styles.sectionTitle}>{t("checkout.confirmedPriceTitle")}</Text>
+            <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>{t("checkout.itemsLabel")}</Text><Text style={styles.summaryRowValue}>{formatPrice(quote.subtotalMinor)}</Text></View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryRowLabel}>{t("checkout.deliveryWithDistance", { km: (quote.deliveryDistanceMeters / 1000).toFixed(1) })}</Text>
+              <Text style={styles.summaryRowValue}>{formatPrice(quote.deliveryFeeMinor)}</Text>
+            </View>
             {quote.appliedPromotions.map((promotion) => (
               <View key={promotion.offerId} style={styles.summaryRow}>
                 <Text style={styles.summaryRowLabel}>{promotion.title}</Text>
@@ -381,11 +386,11 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
               </View>
             ))}
             <View style={styles.summaryDivider} />
-            <View style={styles.summaryRow}><Text style={styles.summaryRowLabelBold}>Cash due on delivery</Text><Text style={styles.summaryRowValueBold}>{formatPrice(quote.totalMinor)}</Text></View>
+            <View style={styles.summaryRow}><Text style={styles.summaryRowLabelBold}>{t("checkout.cashDueOnDelivery")}</Text><Text style={styles.summaryRowValueBold}>{formatPrice(quote.totalMinor)}</Text></View>
           </View>
         ) : null}
 
-        <Text style={styles.sectionTitle}>Payment method</Text>
+        <Text style={styles.sectionTitle}>{t("checkout.paymentMethodTitle")}</Text>
         {orderPaymentMethods.map((method) => (
           <Pressable
             accessibilityRole="button"
@@ -394,24 +399,24 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
             style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionSelected]}
           >
             <Text style={[styles.paymentOptionText, paymentMethod === method && styles.paymentOptionTextSelected]}>
-              {paymentMethodLabel(method)}
+              {paymentMethodLabel(method, t)}
             </Text>
           </Pressable>
         ))}
 
-        <Text style={styles.sectionTitle}>Order notes</Text>
+        <Text style={styles.sectionTitle}>{t("checkout.orderNotesTitle")}</Text>
         <TextInput
           maxLength={500}
           multiline
           onChangeText={setCustomerNote}
-          placeholder="Building details, preferred substitutions, or delivery instructions"
+          placeholder={t("checkout.notesPlaceholder")}
           placeholderTextColor="#94A3B8"
           style={[styles.input, styles.multilineInput]}
           value={customerNote}
         />
 
         <ErrorText message={error} />
-        <PrimaryButton label="Place Order" loading={loading} onPress={submit} />
+        <PrimaryButton label={t("checkout.placeOrder")} loading={loading} onPress={submit} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -424,21 +429,20 @@ type OrderConfirmationScreenProps = {
 };
 
 export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
+  const { t } = useTranslation(["cart"]);
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
-      <Header onBack={props.onDone} subtitle={props.order.restaurant.name} title="Order Placed" />
+      <Header onBack={props.onDone} subtitle={props.order.restaurant.name} title={t("confirmation.title")} />
       <ScrollView contentContainerStyle={styles.formContent}>
         <View style={styles.successBanner}>
           <View style={styles.successIcon}><Text style={styles.successIconText}>✓</Text></View>
-          <Text style={styles.successTitle}>Your order is confirmed!</Text>
-          <Text style={styles.successBannerText}>
-            The restaurant has received your order. We’ll keep you updated at every step.
-          </Text>
+          <Text style={styles.successTitle}>{t("confirmation.confirmedTitle")}</Text>
+          <Text style={styles.successBannerText}>{t("confirmation.confirmedText")}</Text>
         </View>
         <OrderSummaryCard order={props.order} />
-        <PrimaryButton label="View My Orders" onPress={props.onViewOrders} />
-        <SecondaryButton label="Back to Home" onPress={props.onDone} />
+        <PrimaryButton label={t("confirmation.viewMyOrders")} onPress={props.onViewOrders} />
+        <SecondaryButton label={t("confirmation.backToHome")} onPress={props.onDone} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -450,6 +454,7 @@ type OrderHistoryScreenProps = {
 };
 
 export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
+  const { t } = useTranslation(["cart", "common"]);
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -459,7 +464,7 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       const page = await listMyOrders(accessToken, 1, 20);
@@ -482,7 +487,7 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle="Most recent first" title="My Orders" />
+      <Header onBack={props.onBack} subtitle={t("history.subtitle")} title={t("history.title")} />
       {orders === null ? (
         <View style={styles.centered}>
           {error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color={customerTheme.colors.primary} size="large" />}
@@ -490,8 +495,8 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
       ) : orders.length === 0 ? (
         <View style={styles.centered}>
           <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>🧾</Text></View>
-          <Text style={styles.emptyTitle}>No orders yet</Text>
-          <Text style={styles.emptyText}>You have not placed any orders yet.</Text>
+          <Text style={styles.emptyTitle}>{t("history.emptyTitle")}</Text>
+          <Text style={styles.emptyText}>{t("history.emptyText")}</Text>
         </View>
       ) : (
         <FlatList
@@ -526,6 +531,7 @@ type OrderDetailScreenProps = {
 };
 
 export function OrderDetailScreen(props: OrderDetailScreenProps) {
+  const { t } = useTranslation(["cart", "common"]);
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -536,7 +542,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       setOrder(await getMyOrder(accessToken, props.orderId));
@@ -557,7 +563,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       setOrder(await cancelMyOrder(accessToken, props.orderId));
@@ -574,7 +580,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       setOrder(await decideOrderFulfillment(accessToken, props.orderId, adjustmentId, decision));
@@ -588,7 +594,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle={order?.restaurant.name ?? "Order"} title="Order Details" />
+      <Header onBack={props.onBack} subtitle={order?.restaurant.name ?? t("detail.defaultSubtitle")} title={t("detail.title")} />
       {error ? (
         <View style={styles.centered}>
           <ErrorState message={error} onRetry={load} />
@@ -611,7 +617,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
           {order.delivery ? <DeliveryProgressCard delivery={order.delivery} /> : null}
           <StatusTimeline history={order.statusHistory} />
           {order.status === "PLACED" ? (
-            <PrimaryButton destructive label="Cancel Order" loading={cancelling} onPress={cancelOrder} />
+            <PrimaryButton destructive label={t("detail.cancelOrder")} loading={cancelling} onPress={cancelOrder} />
           ) : null}
         </ScrollView>
       )}
@@ -624,36 +630,41 @@ function FulfillmentReviewCard(props: {
   busy: boolean;
   onDecision: (decision: "approve" | "reject") => Promise<void>;
 }) {
+  const { t } = useTranslation(["cart", "common"]);
   const adjustment = props.item.fulfillmentAdjustment!;
   const proposedName = adjustment.replacementNameSnapshot ?? props.item.nameSnapshot;
   return (
     <View style={styles.fulfillmentReviewCard}>
-      <Text style={styles.fulfillmentReviewEyebrow}>YOUR DECISION IS NEEDED</Text>
+      <Text style={styles.fulfillmentReviewEyebrow}>{t("detail.yourDecisionNeeded")}</Text>
       <Text style={styles.fulfillmentReviewTitle}>{props.item.nameSnapshot}</Text>
       {adjustment.replacementNameSnapshot ? (
-        <Text style={styles.fulfillmentReviewText}>Replacement: {adjustment.replacementNameSnapshot}</Text>
+        <Text style={styles.fulfillmentReviewText}>{t("detail.replacementLabel", { name: adjustment.replacementNameSnapshot })}</Text>
       ) : (
-        <Text style={styles.fulfillmentReviewText}>The packed quantity differs from the requested quantity.</Text>
+        <Text style={styles.fulfillmentReviewText}>{t("detail.quantityDiffers")}</Text>
       )}
       <Text style={styles.fulfillmentReviewText}>
-        {proposedName} / {(adjustment.actualQuantityMilli / 1_000).toFixed(3)} {adjustment.replacementUnitLabelSnapshot ?? props.item.unitLabelSnapshot}
+        {t("detail.proposedItemLine", {
+          name: proposedName,
+          quantity: (adjustment.actualQuantityMilli / 1_000).toFixed(3),
+          unit: adjustment.replacementUnitLabelSnapshot ?? props.item.unitLabelSnapshot
+        })}
       </Text>
-      <Text style={styles.fulfillmentReviewPrice}>New line total: {formatPrice(adjustment.lineTotalMinor)}</Text>
-      {adjustment.note ? <Text style={styles.fulfillmentReviewNote}>Store note: {adjustment.note}</Text> : null}
+      <Text style={styles.fulfillmentReviewPrice}>{t("detail.newLineTotal", { amount: formatPrice(adjustment.lineTotalMinor) })}</Text>
+      {adjustment.note ? <Text style={styles.fulfillmentReviewNote}>{t("detail.storeNote", { note: adjustment.note })}</Text> : null}
       <View style={styles.fulfillmentReviewActions}>
         <Pressable
           disabled={props.busy}
           onPress={() => void props.onDecision("approve")}
           style={[styles.fulfillmentApproveButton, props.busy && styles.fulfillmentButtonDisabled]}
         >
-          <Text style={styles.fulfillmentApproveText}>Approve</Text>
+          <Text style={styles.fulfillmentApproveText}>{t("common:approve")}</Text>
         </Pressable>
         <Pressable
           disabled={props.busy}
           onPress={() => void props.onDecision("reject")}
           style={[styles.fulfillmentRejectButton, props.busy && styles.fulfillmentButtonDisabled]}
         >
-          <Text style={styles.fulfillmentRejectText}>Reject</Text>
+          <Text style={styles.fulfillmentRejectText}>{t("common:reject")}</Text>
         </Pressable>
       </View>
     </View>
@@ -661,6 +672,7 @@ function FulfillmentReviewCard(props: {
 }
 
 function OrderSummaryCard(props: { order: OrderDetail }) {
+  const { t } = useTranslation(["cart"]);
   const { order } = props;
   return (
     <View style={styles.summaryCard}>
@@ -674,8 +686,11 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
           <View key={item.id} style={styles.summaryRow}>
             <Text style={styles.summaryRowLabel}>
               {approved
-                ? `${formatPackedQuantity(approved.actualQuantityMilli)} x ${approved.replacementNameSnapshot ?? item.nameSnapshot} / ${approved.replacementUnitLabelSnapshot ?? item.unitLabelSnapshot} (approved change)`
-                : `${item.quantity} x ${item.nameSnapshot}`}
+                ? t("checkout.quantityTimesName", {
+                    quantity: formatPackedQuantity(approved.actualQuantityMilli),
+                    name: `${approved.replacementNameSnapshot ?? item.nameSnapshot} / ${approved.replacementUnitLabelSnapshot ?? item.unitLabelSnapshot}`
+                  }) + t("detail.approvedChangeSuffix")
+                : t("checkout.quantityTimesName", { quantity: item.quantity, name: item.nameSnapshot })}
             </Text>
             <Text style={styles.summaryRowValue}>{formatPrice(item.lineTotalMinor)}</Text>
           </View>
@@ -683,20 +698,18 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
       })}
       <View style={styles.summaryDivider} />
       <View style={styles.summaryRow}>
-        <Text style={styles.summaryRowLabel}>Subtotal</Text>
+        <Text style={styles.summaryRowLabel}>{t("detail.subtotalLabel")}</Text>
         <Text style={styles.summaryRowValue}>{formatPrice(order.subtotalMinor)}</Text>
       </View>
       <View style={styles.summaryRow}>
-        <Text style={styles.summaryRowLabel}>Delivery fee</Text>
+        <Text style={styles.summaryRowLabel}>{t("detail.deliveryFeeLabel")}</Text>
         <Text style={styles.summaryRowValue}>{formatPrice(order.deliveryFeeMinor)}</Text>
       </View>
       <View style={styles.summaryRow}>
-        <Text style={styles.summaryRowLabel}>Service fee</Text>
-        <Text style={styles.summaryRowValue}>{formatPrice(order.serviceFeeMinor)}</Text>
       </View>
       {order.discountMinor > 0 ? (
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryRowLabel}>Discount</Text>
+          <Text style={styles.summaryRowLabel}>{t("detail.discountLabel")}</Text>
           <Text style={styles.summaryRowValue}>-{formatPrice(order.discountMinor)}</Text>
         </View>
       ) : null}
@@ -707,34 +720,35 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
       ))}
       <View style={styles.summaryDivider} />
       <View style={styles.summaryRow}>
-        <Text style={styles.summaryRowLabelBold}>Total</Text>
+        <Text style={styles.summaryRowLabelBold}>{t("detail.totalLabel")}</Text>
         <Text style={styles.summaryRowValueBold}>{formatPrice(order.totalMinor)}</Text>
       </View>
       <View style={styles.summaryDivider} />
-      <Text style={styles.label}>Delivery address</Text>
+      <Text style={styles.label}>{t("detail.deliveryAddressLabel")}</Text>
       <Text style={styles.addressText}>
-        {order.deliveryLabel} - {order.deliveryAddressLine}
+        {t("detail.addressLine", { label: order.deliveryLabel, address: order.deliveryAddressLine })}
       </Text>
-      <Text style={styles.label}>Payment method</Text>
-      <Text style={styles.addressText}>{paymentMethodLabel(order.paymentMethod)}</Text>
+      <Text style={styles.label}>{t("detail.paymentMethodLabel")}</Text>
+      <Text style={styles.addressText}>{paymentMethodLabel(order.paymentMethod, t)}</Text>
       {order.customerNote ? (
         <>
-          <Text style={styles.label}>Order notes</Text>
+          <Text style={styles.label}>{t("detail.orderNotesLabel")}</Text>
           <Text style={styles.addressText}>{order.customerNote}</Text>
         </>
       ) : null}
       {order.deliveryDistanceMeters !== null ? (
-        <Text style={styles.footerNote}>Calculated route distance: {(order.deliveryDistanceMeters / 1000).toFixed(1)} km</Text>
+        <Text style={styles.footerNote}>{t("detail.routeDistance", { km: (order.deliveryDistanceMeters / 1000).toFixed(1) })}</Text>
       ) : null}
     </View>
   );
 }
 
 function StatusBadge(props: { status: OrderDetail["status"] }) {
+  const { t } = useTranslation(["common"]);
   const palette = statusPalette(props.status);
   return (
     <View style={[styles.statusBadge, { backgroundColor: palette.background }]}>
-      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{props.status.replace(/_/g, " ")}</Text>
+      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{t(`status.${props.status}`, props.status.replace(/_/g, " "))}</Text>
     </View>
   );
 }
@@ -757,10 +771,11 @@ function statusPalette(status: OrderDetail["status"]): { background: string; tex
 }
 
 function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
+  const { t } = useTranslation(["cart", "common"]);
   if (props.history.length === 0) return null;
   return (
     <View style={styles.summaryCard}>
-      <Text style={styles.sectionTitle}>Status history</Text>
+      <Text style={styles.sectionTitle}>{t("detail.statusHistoryTitle")}</Text>
       {props.history.map((entry, index) => (
         <View key={entry.id} style={styles.timelineRow}>
           <View style={styles.timelineMarker}>
@@ -768,7 +783,7 @@ function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
             {index < props.history.length - 1 ? <View style={styles.timelineLine} /> : null}
           </View>
           <View style={styles.timelineCopy}>
-            <Text style={styles.timelineStatus}>{entry.toStatus.replace(/_/g, " ")}</Text>
+            <Text style={styles.timelineStatus}>{t(`common:status.${entry.toStatus}`, entry.toStatus.replace(/_/g, " "))}</Text>
             <Text style={styles.timelineDate}>{formatDate(entry.createdAt)}</Text>
           </View>
         </View>
@@ -778,22 +793,23 @@ function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
 }
 
 function DeliveryProgressCard(props: { delivery: NonNullable<OrderDetail["delivery"]> }) {
+  const { t } = useTranslation(["cart", "common"]);
   const { delivery } = props;
   return (
     <View style={styles.summaryCard}>
       <View style={styles.deliveryHeading}>
         <View style={styles.deliveryIcon}><Text style={styles.deliveryIconText}>⌖</Text></View>
-        <View><Text style={styles.sectionTitle}>Delivery progress</Text><Text style={styles.footerNote}>Live updates from your driver</Text></View>
+        <View><Text style={styles.sectionTitle}>{t("detail.deliveryProgress")}</Text><Text style={styles.footerNote}>{t("detail.liveUpdates")}</Text></View>
       </View>
-      <Text style={styles.addressText}>{delivery.status.replace(/_/g, " ")}</Text>
+      <Text style={styles.addressText}>{t(`common:status.${delivery.status}`, delivery.status.replace(/_/g, " "))}</Text>
       {delivery.pickedUpAt ? (
-        <Text style={styles.footerNote}>Picked up: {formatDate(delivery.pickedUpAt)}</Text>
+        <Text style={styles.footerNote}>{t("detail.pickedUpAt", { date: formatDate(delivery.pickedUpAt) })}</Text>
       ) : null}
       {delivery.onTheWayAt ? (
-        <Text style={styles.footerNote}>On the way: {formatDate(delivery.onTheWayAt)}</Text>
+        <Text style={styles.footerNote}>{t("detail.onTheWayAt", { date: formatDate(delivery.onTheWayAt) })}</Text>
       ) : null}
       {delivery.deliveredAt ? (
-        <Text style={styles.footerNote}>Delivered: {formatDate(delivery.deliveredAt)}</Text>
+        <Text style={styles.footerNote}>{t("detail.deliveredAt", { date: formatDate(delivery.deliveredAt) })}</Text>
       ) : null}
     </View>
   );
@@ -815,12 +831,13 @@ function Header(props: { title: string; subtitle: string; onBack: () => void }) 
 }
 
 function ErrorState(props: { message: string; onRetry?: () => void }) {
+  const { t } = useTranslation(["cart"]);
   return (
     <View style={styles.errorBox}>
       <Text style={styles.errorText}>{props.message}</Text>
       {props.onRetry ? (
         <Pressable onPress={props.onRetry} style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>Try Again</Text>
+          <Text style={styles.retryButtonText}>{t("detail.tryAgain")}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -856,16 +873,16 @@ function SecondaryButton(props: { label: string; onPress: () => void }) {
   );
 }
 
-export function paymentMethodLabel(method: OrderPaymentMethod): string {
+export function paymentMethodLabel(method: OrderPaymentMethod, t: (key: string) => string = i18n.t.bind(i18n)): string {
   switch (method) {
     case "CASH":
-      return "Cash on Delivery";
+      return t("cart:checkout.cashOnDelivery");
   }
 }
 
 export function cartSummaryLabel(cart: Cart): string {
   const count = cartItemCount(cart);
-  return `View Cart (${count}) - ${formatPrice(cartSubtotalMinor(cart))}`;
+  return i18n.t("cart:cartSummaryLabel", { count, price: formatPrice(cartSubtotalMinor(cart)) });
 }
 
 function formatPrice(priceMinor: number): string {
@@ -886,7 +903,7 @@ function readError(error: unknown): string {
   if (error instanceof ApiError || error instanceof Error) {
     return error.message;
   }
-  return "The request could not be completed. Please try again.";
+  return i18n.t("common:requestFailed");
 }
 
 const styles = StyleSheet.create({
@@ -933,7 +950,7 @@ const styles = StyleSheet.create({
   statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   statusBadgeText: { fontSize: 10, fontWeight: "900" },
   timelineRow: { flexDirection: "row", minHeight: 58 },
-  timelineMarker: { alignItems: "center", marginRight: 12, width: 16 },
+  timelineMarker: { alignItems: "center", marginEnd: 12, width: 16 },
   timelineDot: { backgroundColor: customerTheme.colors.primary, borderColor: customerTheme.colors.primarySoft, borderRadius: 8, borderWidth: 4, height: 16, width: 16 },
   timelineLine: { backgroundColor: customerTheme.colors.primarySoft, flex: 1, width: 3 },
   timelineCopy: { flex: 1, paddingBottom: 13 },
@@ -952,7 +969,7 @@ const styles = StyleSheet.create({
     ...customerTheme.shadow
   },
   cartItemTop: { alignItems: "center", flexDirection: "row" },
-  cartItemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: 15, height: 72, justifyContent: "center", marginRight: 13, width: 72 },
+  cartItemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: 15, height: 72, justifyContent: "center", marginEnd: 13, width: 72 },
   cartItemEmoji: { fontSize: 34 },
   cartRowInfo: { flex: 1 },
   cartRowName: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "900" },
@@ -996,7 +1013,7 @@ const styles = StyleSheet.create({
     ...customerTheme.shadow
   },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  summaryRowLabel: { color: customerTheme.colors.textMuted, flex: 1, fontSize: 13, paddingRight: 8 },
+  summaryRowLabel: { color: customerTheme.colors.textMuted, flex: 1, fontSize: 13, paddingEnd: 8 },
   summaryRowValue: { color: customerTheme.colors.text, fontSize: 13, fontWeight: "700" },
   summaryRowLabelBold: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "900" },
   summaryRowValueBold: { color: customerTheme.colors.primary, fontSize: 17, fontWeight: "900" },
@@ -1029,7 +1046,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13
   },
   savedAddressList: { marginBottom: 10 },
-  savedAddressChip: { backgroundColor: customerTheme.colors.primarySoft, borderRadius: 999, marginRight: 8, paddingHorizontal: 14, paddingVertical: 10 },
+  savedAddressChip: { backgroundColor: customerTheme.colors.primarySoft, borderRadius: 999, marginEnd: 8, paddingHorizontal: 14, paddingVertical: 10 },
   savedAddressChipText: { color: customerTheme.colors.primaryDark, fontSize: 12, fontWeight: "900" },
   multilineInput: { minHeight: 86, textAlignVertical: "top" },
   paymentOption: {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   FlatList,
@@ -24,6 +25,8 @@ import {
   type DriverDeliveryStatusAction
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import i18n from "../../i18n";
+import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { activeDeliveryStatuses, nextDriverActionByStatus } from "./delivery.rules";
 
 const currencyCode = "ILS";
@@ -34,6 +37,7 @@ type DriverHomeScreenProps = {
 };
 
 export function DriverHomeScreen(props: DriverHomeScreenProps) {
+  const { t } = useTranslation(["driver", "common"]);
   const [isOnline, setIsOnline] = useState(false);
   const [togglingOnline, setTogglingOnline] = useState(false);
   const [available, setAvailable] = useState<DeliveryView[] | null>(null);
@@ -47,7 +51,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       const [availableDeliveries, ownDeliveries] = await Promise.all([
@@ -77,7 +81,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       const profile = await setDriverOnlineStatus(accessToken, next);
@@ -96,7 +100,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       await acceptDelivery(accessToken, delivery.id);
@@ -112,9 +116,9 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle="Toggle online to see deliveries" title="Delivery Dashboard" />
+      <Header onBack={props.onBack} subtitle={t("home.dashboardSubtitle")} title={t("home.dashboardTitle")} />
       <View style={styles.onlineRow}>
-        <Text style={styles.onlineLabel}>{isOnline ? "You are online" : "You are offline"}</Text>
+        <Text style={styles.onlineLabel}>{isOnline ? t("home.onlineStatus") : t("home.offlineStatus")}</Text>
         {togglingOnline ? (
           <ActivityIndicator color="#0F766E" />
         ) : (
@@ -132,9 +136,9 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
           </View>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>Your active deliveries</Text>
+            <Text style={styles.sectionTitle}>{t("home.yourActiveDeliveries")}</Text>
             {mine.length === 0 ? (
-              <Text style={styles.emptyText}>You have no active deliveries.</Text>
+              <Text style={styles.emptyText}>{t("home.noActiveDeliveries")}</Text>
             ) : (
               mine.map((delivery) => (
                 <Pressable
@@ -147,31 +151,32 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
                     <Text style={styles.cardTitle}>{delivery.restaurant.name}</Text>
                     <StatusBadge status={delivery.status} />
                   </View>
-                  <Text style={styles.cardSubtitle}>Deliver to: {delivery.order.deliveryAddressLine}</Text>
+                  <Text style={styles.cardSubtitle}>{t("home.deliverToLabel", { address: delivery.order.deliveryAddressLine })}</Text>
                 </Pressable>
               ))
             )}
 
-            <Text style={styles.sectionTitle}>Available deliveries</Text>
+            <Text style={styles.sectionTitle}>{t("home.availableDeliveries")}</Text>
             {!isOnline ? (
-              <Text style={styles.emptyText}>Go online to see and accept deliveries.</Text>
+              <Text style={styles.emptyText}>{t("home.goOnlineToSee")}</Text>
             ) : available.length === 0 ? (
-              <Text style={styles.emptyText}>No deliveries are waiting for a driver right now.</Text>
+              <Text style={styles.emptyText}>{t("home.noDeliveriesWaiting")}</Text>
             ) : (
               available.map((delivery) => (
                 <View key={delivery.id} style={styles.card}>
                   <Text style={styles.cardTitle}>{delivery.restaurant.name}</Text>
-                  <Text style={styles.cardSubtitle}>Pickup: {delivery.restaurant.addressLine}</Text>
-                  <Text style={styles.cardSubtitle}>Deliver to: {delivery.order.deliveryAddressLine}</Text>
+                  <Text style={styles.cardSubtitle}>{t("home.pickupLabel", { address: delivery.restaurant.addressLine })}</Text>
+                  <Text style={styles.cardSubtitle}>{t("home.deliverToLabel", { address: delivery.order.deliveryAddressLine })}</Text>
                   <Text style={styles.cardTotal}>{formatPrice(delivery.order.totalMinor)}</Text>
                   <ActionButton
-                    label="Accept Delivery"
+                    label={t("home.acceptDeliveryButton")}
                     loading={acceptingId === delivery.id}
                     onPress={() => accept(delivery)}
                   />
                 </View>
               ))
             )}
+            <LanguageSwitcher />
           </>
         )}
       </ScrollView>
@@ -185,6 +190,7 @@ type DeliveryDetailScreenProps = {
 };
 
 export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
+  const { t } = useTranslation(["driver", "common"]);
   const [delivery, setDelivery] = useState<DeliveryView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -195,13 +201,13 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       const page = await listMyDeliveries(accessToken, 1, 50);
       const found = page.items.find((item) => item.id === props.deliveryId) ?? null;
       if (!found) {
-        setError("This delivery could not be found.");
+        setError(t("detail.notFoundError"));
         return;
       }
       setDelivery(found);
@@ -223,7 +229,7 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setActionError("Your session has expired. Please log in again.");
+        setActionError(t("common:sessionExpired"));
         return;
       }
       const updated = await updateDeliveryStatus(accessToken, delivery.id, next.action);
@@ -238,7 +244,7 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle={delivery?.restaurant.name ?? "Delivery"} title="Delivery Details" />
+      <Header onBack={props.onBack} subtitle={delivery?.restaurant.name ?? t("detail.defaultSubtitle")} title={t("detail.detailsTitle")} />
       {error ? (
         <View style={styles.centered}>
           <ErrorState message={error} onRetry={load} />
@@ -251,31 +257,31 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
         <ScrollView contentContainerStyle={styles.formContent}>
           <View style={styles.summaryCard}>
             <View style={styles.orderRowHeader}>
-              <Text style={styles.sectionTitle}>Status</Text>
+              <Text style={styles.sectionTitle}>{t("detail.statusLabel")}</Text>
               <StatusBadge status={delivery.status} />
             </View>
-            <Text style={styles.label}>Pickup from</Text>
+            <Text style={styles.label}>{t("detail.pickupFromLabel")}</Text>
             <Text style={styles.addressText}>
-              {delivery.restaurant.name} - {delivery.restaurant.addressLine}
+              {t("detail.addressLine", { name: delivery.restaurant.name, address: delivery.restaurant.addressLine })}
             </Text>
-            <Text style={styles.label}>Deliver to</Text>
+            <Text style={styles.label}>{t("detail.deliverToLabel")}</Text>
             <Text style={styles.addressText}>
-              {delivery.order.deliveryLabel} - {delivery.order.deliveryAddressLine}
+              {t("detail.deliverAddressLine", { label: delivery.order.deliveryLabel, address: delivery.order.deliveryAddressLine })}
             </Text>
-            <Text style={styles.label}>Order total</Text>
+            <Text style={styles.label}>{t("detail.orderTotalLabel")}</Text>
             <Text style={styles.addressText}>
-              {formatPrice(delivery.order.totalMinor)} ({paymentMethodLabel(delivery.order.paymentMethod)})
+              {t("detail.totalWithPayment", { amount: formatPrice(delivery.order.totalMinor), method: paymentMethodLabel(delivery.order.paymentMethod, t) })}
             </Text>
           </View>
 
           {nextDriverActionByStatus[delivery.status] ? (
             <ActionButton
-              label={nextDriverActionByStatus[delivery.status]!.label}
+              label={t(nextDriverActionByStatus[delivery.status]!.labelKey)}
               loading={acting}
               onPress={advance}
             />
           ) : (
-            <Text style={styles.footerNote}>This delivery is complete.</Text>
+            <Text style={styles.footerNote}>{t("detail.deliveryComplete")}</Text>
           )}
           <ErrorText message={actionError} />
         </ScrollView>
@@ -285,10 +291,11 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
 }
 
 export function StatusBadge(props: { status: DeliveryStatusValue }) {
+  const { t } = useTranslation(["common"]);
   const palette = statusPalette(props.status);
   return (
     <View style={[styles.statusBadge, { backgroundColor: palette.background }]}>
-      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{props.status.replace(/_/g, " ")}</Text>
+      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{t(`status.${props.status}`, props.status.replace(/_/g, " "))}</Text>
     </View>
   );
 }
@@ -309,10 +316,11 @@ function statusPalette(status: DeliveryStatusValue): { background: string; text:
 }
 
 function Header(props: { title: string; subtitle: string; onBack: () => void }) {
+  const { t } = useTranslation(["common"]);
   return (
     <View style={styles.header}>
       <Pressable accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
-        <Text style={styles.backButtonText}>Back</Text>
+        <Text style={styles.backButtonText}>{t("back")}</Text>
       </Pressable>
       <Text style={styles.headerTitle}>{props.title}</Text>
       <Text style={styles.headerSubtitle}>{props.subtitle}</Text>
@@ -321,12 +329,13 @@ function Header(props: { title: string; subtitle: string; onBack: () => void }) 
 }
 
 function ErrorState(props: { message: string; onRetry?: () => void }) {
+  const { t } = useTranslation(["driver"]);
   return (
     <View style={styles.errorBox}>
       <Text style={styles.errorText}>{props.message}</Text>
       {props.onRetry ? (
         <Pressable onPress={props.onRetry} style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>Try Again</Text>
+          <Text style={styles.retryButtonText}>{t("detail.tryAgain")}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -354,10 +363,10 @@ function ActionButton(props: { label: string; loading?: boolean; onPress: () => 
   );
 }
 
-function paymentMethodLabel(method: string): string {
+function paymentMethodLabel(method: string, t: (key: string) => string): string {
   switch (method) {
     case "CASH":
-      return "Cash on Delivery";
+      return t("detail.cashOnDelivery");
     default:
       return method;
   }
@@ -371,7 +380,7 @@ function readError(error: unknown): string {
   if (error instanceof ApiError || error instanceof Error) {
     return error.message;
   }
-  return "The request could not be completed. Please try again.";
+  return i18n.t("common:requestFailed");
 }
 
 const styles = StyleSheet.create({

@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Image,
@@ -39,6 +40,8 @@ import {
 } from "../../core/phone";
 import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
+import i18n from "../../i18n";
+import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { strongPasswordPattern } from "./auth.rules";
 
 const logo = require("../../../assets/logo/TasawaQ.png");
@@ -54,6 +57,7 @@ type LoginScreenProps = {
 };
 
 export function LoginScreen(props: LoginScreenProps) {
+  const { t } = useTranslation(["auth", "common"]);
   const [countryCode, setCountryCode] = useState<CountryCode>(props.prefill?.countryCode ?? "+970");
   const [phoneNumber, setPhoneNumber] = useState(props.prefill?.phoneNumber ?? "0590000000");
   const [password, setPassword] = useState("");
@@ -70,7 +74,7 @@ export function LoginScreen(props: LoginScreenProps) {
       return;
     }
     if (!password) {
-      setError("Please enter your password.");
+      setError(t("validation.passwordRequired"));
       return;
     }
     setLoading(true);
@@ -84,7 +88,7 @@ export function LoginScreen(props: LoginScreenProps) {
   }
 
   return (
-    <AuthLayout title="Welcome back" subtitle="Log in with your mobile number">
+    <AuthLayout title={t("login.title")} subtitle={t("login.subtitle")}>
       {props.notice ? <Notice text={props.notice} /> : null}
       <PhoneFields
         countryCode={countryCode}
@@ -92,15 +96,15 @@ export function LoginScreen(props: LoginScreenProps) {
         onCountryCodeChange={setCountryCode}
         onPhoneNumberChange={setPhoneNumber}
       />
-      <FormField label="Password" value={password} onChangeText={setPassword} secureTextEntry />
+      <FormField label={t("fields.password")} value={password} onChangeText={setPassword} secureTextEntry />
       <ErrorText message={error} />
-      <PrimaryButton label="Log in" loading={loading} onPress={submit} />
-      <LinkButton label="Create Customer Account" onPress={() => props.onSignup(prefill)} />
+      <PrimaryButton label={t("login.submit")} loading={loading} onPress={submit} />
+      <LinkButton label={t("login.createAccount")} onPress={() => props.onSignup(prefill)} />
       <View style={styles.inlineActions}>
-        <SecondaryButton label="Register Restaurant or Supermarket" onPress={() => props.onRestaurantSignup(prefill)} />
-        <SecondaryButton label="Register Driver" onPress={() => props.onDriverSignup(prefill)} />
+        <SecondaryButton label={t("login.registerRestaurant")} onPress={() => props.onRestaurantSignup(prefill)} />
+        <SecondaryButton label={t("login.registerDriver")} onPress={() => props.onDriverSignup(prefill)} />
       </View>
-      <LinkButton label="Forgot Password?" onPress={() => props.onForgotPassword(prefill)} />
+      <LinkButton label={t("login.forgotPassword")} onPress={() => props.onForgotPassword(prefill)} />
       <DeveloperApiLabel />
     </AuthLayout>
   );
@@ -114,6 +118,7 @@ type SignupScreenProps = {
 };
 
 export function SignupScreen(props: SignupScreenProps) {
+  const { t } = useTranslation(["auth", "common"]);
   const [fullName, setFullName] = useState("");
   const [countryCode, setCountryCode] = useState<CountryCode>(props.prefill?.countryCode ?? "+970");
   const [phoneNumber, setPhoneNumber] = useState(props.prefill?.phoneNumber ?? "");
@@ -128,7 +133,7 @@ export function SignupScreen(props: SignupScreenProps) {
     setError(null);
     setPhoneExists(false);
     if (fullName.trim().length < 2) {
-      setError("Please enter your full name.");
+      setError(t("validation.fullNameRequired"));
       return;
     }
     try {
@@ -138,11 +143,11 @@ export function SignupScreen(props: SignupScreenProps) {
       return;
     }
     if (!strongPasswordPattern.test(password)) {
-      setError("Password must be 8-72 characters and include uppercase, lowercase, number, and symbol.");
+      setError(t("validation.passwordStrength"));
       return;
     }
     if (password !== confirmPassword) {
-      setError("The passwords do not match.");
+      setError(t("validation.passwordMismatch"));
       return;
     }
     const input = { fullName: fullName.trim(), countryCode, phoneNumber, password, confirmPassword };
@@ -152,7 +157,7 @@ export function SignupScreen(props: SignupScreenProps) {
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.code === "PHONE_ALREADY_REGISTERED") {
         setPhoneExists(true);
-        setError("An account already exists with this phone number.\nPlease log in or reset your password.");
+        setError(t("signup.phoneExists"));
       } else {
         setError(readError(requestError));
       }
@@ -162,31 +167,31 @@ export function SignupScreen(props: SignupScreenProps) {
   }
 
   return (
-    <AuthLayout title="Create Customer Account" subtitle="Verify your phone to join TasawaQ">
-      <FormField label="Full name" value={fullName} onChangeText={setFullName} autoCapitalize="words" />
+    <AuthLayout title={t("signup.title")} subtitle={t("signup.subtitle")}>
+      <FormField label={t("fields.fullName")} value={fullName} onChangeText={setFullName} autoCapitalize="words" />
       <PhoneFields
         countryCode={countryCode}
         phoneNumber={phoneNumber}
         onCountryCodeChange={setCountryCode}
         onPhoneNumberChange={setPhoneNumber}
       />
-      <FormField label="Password" value={password} onChangeText={setPassword} secureTextEntry />
-      <Text style={styles.help}>Use 8+ characters with uppercase, lowercase, number, and symbol.</Text>
+      <FormField label={t("fields.password")} value={password} onChangeText={setPassword} secureTextEntry />
+      <Text style={styles.help}>{t("validation.passwordHelp")}</Text>
       <FormField
-        label="Confirm password"
+        label={t("fields.confirmPassword")}
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
       />
       <ErrorText message={error} />
-      <PrimaryButton label="Create Account" loading={loading} onPress={submit} />
+      <PrimaryButton label={t("signup.submit")} loading={loading} onPress={submit} />
       {phoneExists ? (
         <View style={styles.inlineActions}>
-          <SecondaryButton label="Go to Login" onPress={() => props.onLogin(prefill)} />
-          <SecondaryButton label="Forgot Password" onPress={() => props.onForgotPassword(prefill)} />
+          <SecondaryButton label={t("signup.goToLogin")} onPress={() => props.onLogin(prefill)} />
+          <SecondaryButton label={t("signup.forgotPassword")} onPress={() => props.onForgotPassword(prefill)} />
         </View>
       ) : null}
-      <LinkButton label="Back to Login" onPress={() => props.onLogin(prefill)} />
+      <LinkButton label={t("shared.backToLogin")} onPress={() => props.onLogin(prefill)} />
     </AuthLayout>
   );
 }
@@ -199,6 +204,7 @@ type ForgotPasswordScreenProps = {
 };
 
 export function ForgotPasswordScreen(props: ForgotPasswordScreenProps) {
+  const { t } = useTranslation(["auth", "common"]);
   const [countryCode, setCountryCode] = useState<CountryCode>(props.prefill?.countryCode ?? "+970");
   const [phoneNumber, setPhoneNumber] = useState(props.prefill?.phoneNumber ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -221,7 +227,7 @@ export function ForgotPasswordScreen(props: ForgotPasswordScreenProps) {
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.code === "ACCOUNT_NOT_FOUND") {
         setAccountNotFound(true);
-        setError("No account was found with this phone number.\nWould you like to create a new customer account?");
+        setError(t("forgotPassword.accountNotFound"));
       } else {
         setError(readError(requestError));
       }
@@ -231,7 +237,7 @@ export function ForgotPasswordScreen(props: ForgotPasswordScreenProps) {
   }
 
   return (
-    <AuthLayout title="Forgot Password" subtitle="We will create a free development verification code">
+    <AuthLayout title={t("forgotPassword.title")} subtitle={t("forgotPassword.subtitle")}>
       <PhoneFields
         countryCode={countryCode}
         phoneNumber={phoneNumber}
@@ -239,11 +245,11 @@ export function ForgotPasswordScreen(props: ForgotPasswordScreenProps) {
         onPhoneNumberChange={setPhoneNumber}
       />
       <ErrorText message={error} />
-      <PrimaryButton label="Continue" loading={loading} onPress={submit} />
+      <PrimaryButton label={t("shared.continue")} loading={loading} onPress={submit} />
       {accountNotFound ? (
-        <SecondaryButton label="Create Account" onPress={() => props.onCreateAccount(prefill)} />
+        <SecondaryButton label={t("forgotPassword.createAccount")} onPress={() => props.onCreateAccount(prefill)} />
       ) : null}
-      <LinkButton label="Back to Login" onPress={() => props.onLogin(prefill)} />
+      <LinkButton label={t("shared.backToLogin")} onPress={() => props.onLogin(prefill)} />
     </AuthLayout>
   );
 }
@@ -256,6 +262,7 @@ type OtpScreenProps = {
 };
 
 export function OtpScreen(props: OtpScreenProps) {
+  const { t } = useTranslation(["auth", "common"]);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -271,7 +278,7 @@ export function OtpScreen(props: OtpScreenProps) {
   async function verify() {
     setError(null);
     if (!/^\d{6}$/.test(code)) {
-      setError("Enter the complete six-digit verification code.");
+      setError(t("otp.incompleteCode"));
       return;
     }
     setLoading(true);
@@ -319,25 +326,25 @@ export function OtpScreen(props: OtpScreenProps) {
   }
 
   return (
-    <AuthLayout title="Verify Phone" subtitle={`Enter the code for ${maskPhone(props.screen.normalizedPhone)}`}>
+    <AuthLayout title={t("otp.title")} subtitle={t("otp.subtitle", { phone: maskPhone(props.screen.normalizedPhone) })}>
       <FormField
-        label="Six-digit verification code"
+        label={t("otp.codeLabel")}
         value={code}
         onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, 6))}
         keyboardType="number-pad"
         maxLength={6}
         textAlign="center"
       />
-      <Text style={styles.help}>The development code is printed only in the backend terminal.</Text>
+      <Text style={styles.help}>{t("otp.devCodeHelp")}</Text>
       <ErrorText message={error} />
-      <PrimaryButton label="Verify" loading={loading} onPress={verify} />
+      <PrimaryButton label={t("otp.verify")} loading={loading} onPress={verify} />
       <SecondaryButton
         disabled={countdown > 0 || resending}
-        label={countdown > 0 ? `Resend Code (${countdown}s)` : "Resend Code"}
+        label={countdown > 0 ? t("otp.resendCodeCountdown", { seconds: countdown }) : t("otp.resendCode")}
         loading={resending}
         onPress={resend}
       />
-      <LinkButton label="Back" onPress={props.onBack} />
+      <LinkButton label={t("shared.back")} onPress={props.onBack} />
     </AuthLayout>
   );
 }
@@ -347,6 +354,7 @@ export function NewPasswordScreen(props: {
   onSuccess: (message: string) => void;
   onBack: () => void;
 }) {
+  const { t } = useTranslation(["auth", "common"]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -355,11 +363,11 @@ export function NewPasswordScreen(props: {
   async function submit() {
     setError(null);
     if (!strongPasswordPattern.test(password)) {
-      setError("Password must be 8-72 characters and include uppercase, lowercase, number, and symbol.");
+      setError(t("validation.passwordStrength"));
       return;
     }
     if (password !== confirmPassword) {
-      setError("The passwords do not match.");
+      setError(t("validation.passwordMismatch"));
       return;
     }
     setLoading(true);
@@ -374,18 +382,18 @@ export function NewPasswordScreen(props: {
   }
 
   return (
-    <AuthLayout title="New Password" subtitle="Choose a new password for your account">
-      <FormField label="New password" value={password} onChangeText={setPassword} secureTextEntry />
-      <Text style={styles.help}>Use 8+ characters with uppercase, lowercase, number, and symbol.</Text>
+    <AuthLayout title={t("newPassword.title")} subtitle={t("newPassword.subtitle")}>
+      <FormField label={t("fields.newPassword")} value={password} onChangeText={setPassword} secureTextEntry />
+      <Text style={styles.help}>{t("validation.passwordHelp")}</Text>
       <FormField
-        label="Confirm new password"
+        label={t("fields.confirmNewPassword")}
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
       />
       <ErrorText message={error} />
-      <PrimaryButton label="Reset Password" loading={loading} onPress={submit} />
-      <LinkButton label="Back to Login" onPress={props.onBack} />
+      <PrimaryButton label={t("newPassword.submit")} loading={loading} onPress={submit} />
+      <LinkButton label={t("shared.backToLogin")} onPress={props.onBack} />
     </AuthLayout>
   );
 }
@@ -401,6 +409,7 @@ export function HomeScreen(props: {
   onOpenDriverDashboard?: () => void;
   onOpenNotifications: () => void;
 }) {
+  const { t } = useTranslation(["auth", "common"]);
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -431,34 +440,41 @@ export function HomeScreen(props: {
   }
   return (
     <AuthLayout
-      title={props.user.role === "CUSTOMER" ? "Customer Home" : `${titleCase(props.user.role)} Home`}
-      subtitle={`Welcome, ${props.user.fullName}`}
+      title={t("home.title", { role: t(`common:role.${props.user.role}`) })}
+      subtitle={t("home.subtitle", { name: props.user.fullName })}
     >
       {props.notice ? <Notice text={props.notice} /> : null}
       <View style={styles.profileCard}>
-        <Text style={styles.profileLabel}>Phone</Text>
+        <Text style={styles.profileLabel}>{t("home.phoneLabel")}</Text>
         <Text style={styles.profileValue}>{props.user.phone}</Text>
-        <Text style={styles.profileLabel}>Role</Text>
+        <Text style={styles.profileLabel}>{t("home.roleLabel")}</Text>
         <View style={styles.roleBadge}>
-          <Text style={styles.roleBadgeText}>{props.user.role}</Text>
+          <Text style={styles.roleBadgeText}>{t(`common:role.${props.user.role}`)}</Text>
         </View>
       </View>
       {props.onBrowseRestaurants ? (
-        <PrimaryButton label="Browse Restaurants" onPress={props.onBrowseRestaurants} />
+        <PrimaryButton label={t("home.browseRestaurants")} onPress={props.onBrowseRestaurants} />
       ) : null}
-      {props.onViewOrders ? <SecondaryButton label="My Orders" onPress={props.onViewOrders} /> : null}
-      {props.onManageOrders ? <PrimaryButton label="Manage Incoming Orders" onPress={props.onManageOrders} /> : null}
+      {props.onViewOrders ? <SecondaryButton label={t("home.myOrders")} onPress={props.onViewOrders} /> : null}
+      {props.onManageOrders ? (
+        <PrimaryButton label={t("home.manageOrders")} onPress={props.onManageOrders} />
+      ) : null}
       {props.onManageRestaurant ? (
-        <SecondaryButton label="Store Profile & Catalog" onPress={props.onManageRestaurant} />
+        <SecondaryButton label={t("home.manageRestaurant")} onPress={props.onManageRestaurant} />
       ) : null}
       {props.onOpenDriverDashboard ? (
-        <PrimaryButton label="Delivery Dashboard" onPress={props.onOpenDriverDashboard} />
+        <PrimaryButton label={t("home.driverDashboard")} onPress={props.onOpenDriverDashboard} />
       ) : null}
       <SecondaryButton
-        label={unreadCount > 0 ? `Notifications (${unreadCount})` : "Notifications"}
+        label={
+          unreadCount > 0
+            ? t("home.notificationsCount", { label: t("common:notifications"), count: unreadCount })
+            : t("common:notifications")
+        }
         onPress={props.onOpenNotifications}
       />
-      <SecondaryButton label="Log out" loading={loading} onPress={submitLogout} />
+      <SecondaryButton label={t("common:logout")} loading={loading} onPress={submitLogout} />
+      <LanguageSwitcher />
     </AuthLayout>
   );
 }
@@ -485,9 +501,10 @@ function PhoneFields(props: {
   onCountryCodeChange: (value: CountryCode) => void;
   onPhoneNumberChange: (value: string) => void;
 }) {
+  const { t } = useTranslation(["auth"]);
   return (
     <>
-      <Text style={styles.label}>Country code</Text>
+      <Text style={styles.label}>{t("fields.countryCode")}</Text>
       <View style={styles.countryRow}>
         {countryCodes.map((countryCode) => (
           <Pressable
@@ -512,9 +529,9 @@ function PhoneFields(props: {
       </View>
       <FormField
         keyboardType="phone-pad"
-        label="Phone number"
+        label={t("fields.phoneNumber")}
         onChangeText={props.onPhoneNumberChange}
-        placeholder="0591234567"
+        placeholder={t("fields.phoneNumberPlaceholder")}
         value={props.phoneNumber}
       />
     </>
@@ -603,9 +620,10 @@ function Notice({ text }: { text: string }) {
 }
 
 function DeveloperApiLabel() {
+  const { t } = useTranslation(["auth"]);
   return (
     <View style={styles.apiBox}>
-      <Text style={styles.apiLabel}>Development API</Text>
+      <Text style={styles.apiLabel}>{t("login.developerApiLabel")}</Text>
       <Text style={styles.apiValue}>{apiBaseUrl}</Text>
     </View>
   );
@@ -615,17 +633,13 @@ function readError(error: unknown): string {
   if (error instanceof ApiError || error instanceof PhoneValidationError || error instanceof Error) {
     return error.message;
   }
-  return "The request could not be completed. Please try again.";
+  return i18n.t("auth:shared.requestFailed");
 }
 
 function readRetrySeconds(details: unknown): number | null {
   if (!details || typeof details !== "object") return null;
   const value = (details as { retryAfterSeconds?: unknown }).retryAfterSeconds;
   return typeof value === "number" ? value : null;
-}
-
-function titleCase(value: string): string {
-  return value.charAt(0) + value.slice(1).toLowerCase();
 }
 
 const styles = StyleSheet.create({

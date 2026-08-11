@@ -1,0 +1,34 @@
+{
+  "home": {
+    "dashboardTitle": "لوحة التوصيل",
+    "dashboardSubtitle": "فعّل الاتصال لرؤية التوصيلات",
+    "onlineStatus": "أنت متصل",
+    "offlineStatus": "أنت غير متصل",
+    "yourActiveDeliveries": "توصيلاتك النشطة",
+    "noActiveDeliveries": "لا توجد لديك توصيلات نشطة.",
+    "deliverToLabel": "التوصيل إلى: {{address}}",
+    "availableDeliveries": "التوصيلات المتاحة",
+    "goOnlineToSee": "فعّل الاتصال لرؤية التوصيلات وقبولها.",
+    "noDeliveriesWaiting": "لا توجد توصيلات بانتظار سائق حاليًا.",
+    "pickupLabel": "الاستلام من: {{address}}",
+    "acceptDeliveryButton": "قبول التوصيل",
+    "markPickedUp": "تعليم كمُستلَم",
+    "startDelivery": "بدء التوصيل",
+    "markDelivered": "تعليم كمُوصَّل"
+  },
+  "detail": {
+    "detailsTitle": "تفاصيل التوصيل",
+    "defaultSubtitle": "التوصيل",
+    "notFoundError": "تعذّر العثور على هذا التوصيل.",
+    "statusLabel": "الحالة",
+    "pickupFromLabel": "الاستلام من",
+    "addressLine": "{{name}} - {{address}}",
+    "deliverToLabel": "التوصيل إلى",
+    "deliverAddressLine": "{{label}} - {{address}}",
+    "orderTotalLabel": "إجمالي الطلب",
+    "totalWithPayment": "{{amount}} ({{method}})",
+    "deliveryComplete": "اكتمل هذا التوصيل.",
+    "tryAgain": "حاول مرة أخرى",
+    "cashOnDelivery": "الدفع نقدًا عند الاستلام"
+  }
+}

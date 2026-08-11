@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 import { listAdminUsers, type AdminUser, type UserRole } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import i18n from "../../i18n";
 import {
   ActionButton,
   AdminPage,
@@ -22,24 +24,23 @@ import {
 
 type RoleFilter = "ALL" | UserRole;
 
-const roles: { label: string; value: RoleFilter }[] = [
-  { label: "All", value: "ALL" },
-  { label: "Customers", value: "CUSTOMER" },
-  { label: "Restaurants", value: "RESTAURANT" },
-  { label: "Drivers", value: "DRIVER" },
-  { label: "Admins", value: "ADMIN" }
-];
+const roleValues: RoleFilter[] = ["ALL", "CUSTOMER", "RESTAURANT", "DRIVER", "ADMIN"];
 
 export function AdminUsersScreen({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation(["admin", "common"]);
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [role, setRole] = useState<RoleFilter>("ALL");
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const roles = roleValues.map((value) => ({
+    value,
+    label: value === "ALL" ? t("users.filterAll") : t(`common:role.${value}`)
+  }));
 
   async function load() {
     try {
       const token = await getAccessToken();
-      if (!token) throw new Error("Your session has expired. Please log in again.");
+      if (!token) throw new Error(i18n.t("common:sessionExpired"));
       const page = await listAdminUsers(token, {
         role: role === "ALL" ? undefined : role,
         search: search.trim() || undefined
@@ -56,17 +57,17 @@ export function AdminUsersScreen({ onBack }: { onBack: () => void }) {
   }, [role]);
 
   return (
-    <AdminPage onBack={onBack} subtitle="Search accounts by role, name, or phone" title="Users">
+    <AdminPage onBack={onBack} subtitle={t("users.subtitle")} title={t("users.title")}>
       <FilterChips onChange={setRole} options={roles} value={role} />
       <View style={adminStyles.reasonBox}>
-        <Input onChangeText={setSearch} placeholder="Name or phone number" value={search} />
-        <ActionButton label="Search" onPress={() => void load()} />
+        <Input onChangeText={setSearch} placeholder={t("users.searchPlaceholder")} value={search} />
+        <ActionButton label={t("common:search")} onPress={() => void load()} />
       </View>
       <ErrorBanner message={error} />
       {users === null ? (
         <LoadingState />
       ) : users.length === 0 ? (
-        <EmptyState message="No users match this search." />
+        <EmptyState message={t("users.empty")} />
       ) : (
         users.map((user) => (
           <Card key={user.id}>
@@ -77,9 +78,9 @@ export function AdminUsersScreen({ onBack }: { onBack: () => void }) {
               </View>
               <StatusPill status={user.isActive ? "ACTIVE" : "INACTIVE"} />
             </View>
-            <KeyValue label="Role" value={user.role} />
-            <KeyValue label="Phone verified" value={user.phoneVerifiedAt ? "Yes" : "No"} />
-            <KeyValue label="Created" value={formatDate(user.createdAt)} />
+            <KeyValue label={t("users.roleLabel")} value={t(`common:role.${user.role}`)} />
+            <KeyValue label={t("users.phoneVerifiedLabel")} value={user.phoneVerifiedAt ? t("common:yes") : t("common:no")} />
+            <KeyValue label={t("users.createdLabel")} value={formatDate(user.createdAt)} />
           </Card>
         ))
       )}

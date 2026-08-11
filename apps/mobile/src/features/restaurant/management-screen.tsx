@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
@@ -28,11 +29,21 @@ import {
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates } from "../../core/location";
+import i18n from "../../i18n";
+import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { InventoryWorkspace } from "./inventory-screen";
 
 type Section = "profile" | "categories" | "items" | "inventory";
 
+const tabLabelKeys: Record<Section, string> = {
+  profile: "management.tabProfile",
+  categories: "management.tabCategories",
+  items: "management.tabItems",
+  inventory: "management.tabInventory"
+};
+
 export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation(["restaurantOps", "common"]);
   const [profile, setProfile] = useState<RestaurantOwnerProfile | null>(null);
   const [categories, setCategories] = useState<MenuCategoryOwner[]>([]);
   const [items, setItems] = useState<MenuItemOwner[]>([]);
@@ -83,10 +94,14 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
       <View style={styles.header}>
-        <Pressable onPress={onBack} style={styles.backButton}><Text style={styles.backText}>Back</Text></Pressable>
+        <Pressable onPress={onBack} style={styles.backButton}><Text style={styles.backText}>{t("common:back")}</Text></Pressable>
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>{profile?.businessType === "SUPERMARKET" ? "Supermarket workspace" : "Restaurant workspace"}</Text>
-          <Text style={styles.subtitle}>{profile?.businessType === "SUPERMARKET" ? "Profile, departments and product inventory" : "Profile, categories and menu items"}</Text>
+          <Text style={styles.title}>
+            {profile?.businessType === "SUPERMARKET" ? t("management.supermarketWorkspaceTitle") : t("management.restaurantWorkspaceTitle")}
+          </Text>
+          <Text style={styles.subtitle}>
+            {profile?.businessType === "SUPERMARKET" ? t("management.supermarketWorkspaceSubtitle") : t("management.restaurantWorkspaceSubtitle")}
+          </Text>
         </View>
       </View>
       <View style={styles.tabs}>
@@ -99,7 +114,7 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
             onPress={() => setSection(value)}
             style={[styles.tab, section === value && styles.tabActive]}
           >
-            <Text style={[styles.tabText, section === value && styles.tabTextActive]}>{titleCase(value)}</Text>
+            <Text style={[styles.tabText, section === value && styles.tabTextActive]}>{t(tabLabelKeys[value])}</Text>
           </Pressable>
         ))}
       </View>
@@ -114,12 +129,12 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
               busy={busy}
               profile={profile}
               onSave={(input) =>
-                run(async (token) => setProfile(await updateRestaurantOwnerProfile(token, input)), "Profile saved.")
+                run(async (token) => setProfile(await updateRestaurantOwnerProfile(token, input)), t("management.profileSavedNotice"))
               }
               onToggleOpen={() =>
                 run(
                   async (token) => setProfile(await setRestaurantOpenStatus(token, !profile.isOpen)),
-                  profile.isOpen ? "Store closed for new orders." : "Store opened for new orders."
+                  profile.isOpen ? t("management.storeClosedNotice") : t("management.storeOpenedNotice")
                 )
               }
             />
@@ -132,7 +147,7 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
                 run(async (token) => {
                   const created = await createRestaurantMenuCategory(token, { name, sortOrder });
                   setCategories((current) => [...current, created].sort((a, b) => a.sortOrder - b.sortOrder));
-                }, "Category created.")
+                }, t("management.categoryCreatedNotice"))
               }
               onToggle={(category) =>
                 run(async (token) => {
@@ -140,7 +155,7 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
                     isActive: !category.isActive
                   });
                   setCategories((current) => current.map((item) => item.id === updated.id ? updated : item));
-                }, category.isActive ? "Category hidden." : "Category activated.")
+                }, category.isActive ? t("management.categoryHiddenNotice") : t("management.categoryActivatedNotice"))
               }
             />
           ) : null}
@@ -160,13 +175,13 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
                     return (exists ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved])
                       .sort((a, b) => a.name.localeCompare(b.name));
                   });
-                }, editingId ? "Menu item updated." : "Menu item created.")
+                }, editingId ? t("management.menuItemUpdatedNotice") : t("management.menuItemCreatedNotice"))
               }
               onToggle={(item) =>
                 run(async (token) => {
                   const updated = await setRestaurantMenuItemAvailability(token, item.id, !item.isAvailable);
                   setItems((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
-                }, item.isAvailable ? "Item marked unavailable." : "Item is available again.")
+                }, item.isAvailable ? t("management.itemUnavailableNotice") : t("management.itemAvailableNotice"))
               }
             />
           ) : null}
@@ -185,6 +200,7 @@ function ProfileSection(props: {
   onSave: (input: { name: string; description: string; addressLine: string; logoUrl: string; latitude?: number; longitude?: number }) => void;
   onToggleOpen: () => void;
 }) {
+  const { t } = useTranslation(["restaurantOps"]);
   const [name, setName] = useState(props.profile.name);
   const [description, setDescription] = useState(props.profile.description ?? "");
   const [addressLine, setAddressLine] = useState(props.profile.addressLine);
@@ -213,31 +229,35 @@ function ProfileSection(props: {
       <View style={styles.statusRow}>
         <StatusPill value={props.profile.status} />
         <Text style={[styles.openState, props.profile.isOpen && styles.openStateActive]}>
-          {props.profile.isOpen ? "Accepting orders" : "Closed"}
+          {props.profile.isOpen ? t("management.acceptingOrders") : t("management.closedState")}
         </Text>
       </View>
       {props.profile.status !== "APPROVED" ? (
-        <Text style={styles.pendingNote}>You can prepare the profile and menu now. Customers see it only after approval.</Text>
+        <Text style={styles.pendingNote}>{t("management.pendingApprovalNote")}</Text>
       ) : null}
-      <Field label={props.profile.businessType === "SUPERMARKET" ? "Supermarket name" : "Restaurant name"} value={name} onChangeText={setName} />
-      <Field label="Description" value={description} onChangeText={setDescription} multiline />
-      <Field label="Address" value={addressLine} onChangeText={setAddressLine} multiline />
-      <Field label="Logo URL (optional)" value={logoUrl} onChangeText={setLogoUrl} />
+      <Field
+        label={props.profile.businessType === "SUPERMARKET" ? t("management.supermarketNameLabel") : t("management.restaurantNameLabel")}
+        value={name}
+        onChangeText={setName}
+      />
+      <Field label={t("management.descriptionLabel")} value={description} onChangeText={setDescription} multiline />
+      <Field label={t("management.addressLabel")} value={addressLine} onChangeText={setAddressLine} multiline />
+      <Field label={t("management.logoUrlLabel")} value={logoUrl} onChangeText={setLogoUrl} />
       <Text style={styles.locationNote}>
         {latitude !== null && longitude !== null
-          ? `Delivery origin: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
-          : "Set the store pin before opening. It is used to calculate delivery distance."}
+          ? t("management.deliveryOriginNote", { lat: latitude.toFixed(5), lng: longitude.toFixed(5) })
+          : t("management.setStorePinNote")}
       </Text>
       {locationError ? <Text style={styles.locationError}>{locationError}</Text> : null}
       <ActionButton
         disabled={props.busy || locating}
-        label={locating ? "Finding location..." : "Use current location as store pin"}
+        label={locating ? t("management.findingLocation") : t("management.useCurrentLocationAsPin")}
         onPress={() => void useCurrentLocation()}
         secondary
       />
       <ActionButton
         disabled={props.busy || name.trim().length < 2 || addressLine.trim().length < 3}
-        label="Save profile"
+        label={t("management.saveProfileButton")}
         onPress={() => props.onSave({
           name: name.trim(),
           description: description.trim(),
@@ -249,10 +269,11 @@ function ProfileSection(props: {
       />
       <ActionButton
         disabled={props.busy || props.profile.status !== "APPROVED" || latitude === null || longitude === null}
-        label={props.profile.isOpen ? "Close store" : "Open store"}
+        label={props.profile.isOpen ? t("management.closeStoreButton") : t("management.openStoreButton")}
         onPress={props.onToggleOpen}
         secondary
       />
+      <LanguageSwitcher />
     </View>
   );
 }
@@ -263,17 +284,18 @@ function CategoriesSection(props: {
   onCreate: (name: string, sortOrder: number) => void;
   onToggle: (category: MenuCategoryOwner) => void;
 }) {
+  const { t } = useTranslation(["restaurantOps"]);
   const [name, setName] = useState("");
   const [sortOrder, setSortOrder] = useState("0");
   return (
     <>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>New category</Text>
-        <Field label="Name" value={name} onChangeText={setName} />
-        <Field label="Sort order" value={sortOrder} onChangeText={setSortOrder} keyboardType="number-pad" />
+        <Text style={styles.cardTitle}>{t("management.newCategoryTitle")}</Text>
+        <Field label={t("management.categoryNameLabel")} value={name} onChangeText={setName} />
+        <Field label={t("management.sortOrderLabel")} value={sortOrder} onChangeText={setSortOrder} keyboardType="number-pad" />
         <ActionButton
           disabled={props.busy || name.trim().length < 1}
-          label="Add category"
+          label={t("management.addCategoryButton")}
           onPress={() => {
             props.onCreate(name.trim(), Math.max(0, Number.parseInt(sortOrder, 10) || 0));
             setName("");
@@ -281,16 +303,21 @@ function CategoriesSection(props: {
           }}
         />
       </View>
-      {props.categories.length === 0 ? <Empty text="Add a category before creating menu items." /> : null}
+      {props.categories.length === 0 ? <Empty text={t("management.addCategoryFirstEmpty")} /> : null}
       {props.categories.map((category) => (
         <View key={category.id} style={styles.listCard}>
           <View style={styles.listCopy}>
             <Text style={styles.listTitle}>{category.name}</Text>
-            <Text style={styles.listMeta}>Order {category.sortOrder} · {category.isActive ? "Visible" : "Hidden"}</Text>
+            <Text style={styles.listMeta}>
+              {t("management.orderVisibility", {
+                order: category.sortOrder,
+                visibility: category.isActive ? t("management.visibleLabel") : t("management.hiddenLabel")
+              })}
+            </Text>
           </View>
           <SmallButton
             disabled={props.busy}
-            label={category.isActive ? "Hide" : "Activate"}
+            label={category.isActive ? t("management.hideButton") : t("management.activateButton")}
             onPress={() => props.onToggle(category)}
           />
         </View>
@@ -323,6 +350,7 @@ function ItemsSection(props: {
   onSave: (draft: ItemDraft, editingId: string | null) => void;
   onToggle: (item: MenuItemOwner) => void;
 }) {
+  const { t } = useTranslation(["restaurantOps"]);
   const activeCategories = useMemo(() => props.categories.filter((category) => category.isActive), [props.categories]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState(activeCategories[0]?.id ?? props.categories[0]?.id ?? "");
@@ -373,15 +401,16 @@ function ItemsSection(props: {
     setReorderLevel(item.reorderLevel === null ? "" : String(item.reorderLevel));
   }
 
-  if (props.categories.length === 0) return <Empty text="Create a category first, then add menu items." />;
+  if (props.categories.length === 0) return <Empty text={t("management.createCategoryFirstEmpty")} />;
 
   return (
     <>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>
-          {editingId ? "Edit" : "New"} {props.businessType === "SUPERMARKET" ? "product" : "menu item"}
+          {editingId ? t("management.editItemPrefix") : t("management.newItemPrefix")}{" "}
+          {props.businessType === "SUPERMARKET" ? t("management.productWord") : t("management.menuItemWord")}
         </Text>
-        <Text style={styles.label}>{props.businessType === "SUPERMARKET" ? "Department" : "Category"}</Text>
+        <Text style={styles.label}>{props.businessType === "SUPERMARKET" ? t("management.departmentLabel") : t("management.categoryLabel")}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryPicker}>
           {props.categories.map((category) => (
             <Pressable
@@ -390,29 +419,29 @@ function ItemsSection(props: {
               style={[styles.categoryChip, categoryId === category.id && styles.categoryChipActive]}
             >
               <Text style={[styles.categoryChipText, categoryId === category.id && styles.categoryChipTextActive]}>
-                {category.name}{category.isActive ? "" : " (hidden)"}
+                {category.name}{category.isActive ? "" : t("management.hiddenSuffix")}
               </Text>
             </Pressable>
           ))}
         </ScrollView>
-        <Field label={props.businessType === "SUPERMARKET" ? "Product name" : "Item name"} value={name} onChangeText={setName} />
-        <Field label="Description" value={description} onChangeText={setDescription} multiline />
-        <Field label="Price (ILS)" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-        <Field label="Image URL (optional)" value={imageUrl} onChangeText={setImageUrl} />
+        <Field label={props.businessType === "SUPERMARKET" ? t("management.productNameLabel") : t("management.itemNameLabel")} value={name} onChangeText={setName} />
+        <Field label={t("management.descriptionLabel")} value={description} onChangeText={setDescription} multiline />
+        <Field label={t("management.priceLabel")} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+        <Field label={t("management.imageUrlLabel")} value={imageUrl} onChangeText={setImageUrl} />
         {props.businessType === "SUPERMARKET" ? (
           <>
-            <Field label="Brand (optional)" value={brand} onChangeText={setBrand} />
-            <Field label="SKU (optional, unique in this store)" value={sku} onChangeText={setSku} />
-            <Field label="Selling unit (for example: 1 L bottle)" value={unitLabel} onChangeText={setUnitLabel} />
-            <Field label="Stock quantity (blank means not tracked)" value={stockQuantity} onChangeText={setStockQuantity} keyboardType="number-pad" />
-            <Field label="Barcode (optional)" value={barcode} onChangeText={setBarcode} keyboardType="number-pad" />
-            <Field label="Low-stock alert at (optional)" value={reorderLevel} onChangeText={setReorderLevel} keyboardType="number-pad" />
+            <Field label={t("management.brandLabel")} value={brand} onChangeText={setBrand} />
+            <Field label={t("management.skuLabel")} value={sku} onChangeText={setSku} />
+            <Field label={t("management.sellingUnitLabel")} value={unitLabel} onChangeText={setUnitLabel} />
+            <Field label={t("management.stockQuantityLabel")} value={stockQuantity} onChangeText={setStockQuantity} keyboardType="number-pad" />
+            <Field label={t("management.barcodeLabel")} value={barcode} onChangeText={setBarcode} keyboardType="number-pad" />
+            <Field label={t("management.reorderLevelLabel")} value={reorderLevel} onChangeText={setReorderLevel} keyboardType="number-pad" />
             <Pressable
               onPress={() => setIsFeatured((current) => !current)}
               style={[styles.featuredToggle, isFeatured && styles.featuredToggleActive]}
             >
               <Text style={[styles.featuredToggleText, isFeatured && styles.featuredToggleTextActive]}>
-                {isFeatured ? "✓ Featured product" : "Mark as featured"}
+                {isFeatured ? t("management.featuredActive") : t("management.markFeatured")}
               </Text>
             </Pressable>
             <Pressable
@@ -420,14 +449,14 @@ function ItemsSection(props: {
               style={[styles.featuredToggle, isVariableWeight && styles.featuredToggleActive]}
             >
               <Text style={[styles.featuredToggleText, isVariableWeight && styles.featuredToggleTextActive]}>
-                {isVariableWeight ? "✓ Variable packed weight/quantity" : "Fixed selling quantity"}
+                {isVariableWeight ? t("management.variableWeightActive") : t("management.fixedQuantity")}
               </Text>
             </Pressable>
           </>
         ) : null}
         <ActionButton
           disabled={props.busy || !categoryId || name.trim().length < 1 || !Number.isFinite(priceMinor) || priceMinor < 0}
-          label={editingId ? "Save changes" : "Add item"}
+          label={editingId ? t("management.saveChangesButton") : t("management.addItemButton")}
           onPress={() => {
             props.onSave({
               categoryId,
@@ -453,23 +482,26 @@ function ItemsSection(props: {
             reset();
           }}
         />
-        {editingId ? <ActionButton label="Cancel editing" onPress={reset} secondary /> : null}
+        {editingId ? <ActionButton label={t("management.cancelEditingButton")} onPress={reset} secondary /> : null}
       </View>
-      {props.items.length === 0 ? <Empty text={props.businessType === "SUPERMARKET" ? "No products yet." : "No menu items yet."} /> : null}
+      {props.items.length === 0 ? (
+        <Empty text={props.businessType === "SUPERMARKET" ? t("management.noProductsYet") : t("management.noMenuItemsYet")} />
+      ) : null}
       {props.items.map((item) => (
         <View key={item.id} style={styles.listCard}>
           <View style={styles.listCopy}>
             <Text style={styles.listTitle}>{item.name}</Text>
             <Text style={styles.listMeta}>
-              {formatPrice(item.priceMinor)} · {item.unitLabel} · {item.isAvailable ? "Available" : "Unavailable"}
-              {item.stockQuantity === null ? "" : ` · Stock ${item.stockQuantity}`}{item.isFeatured ? " · Featured" : ""}
+              {formatPrice(item.priceMinor)} · {item.unitLabel} · {item.isAvailable ? t("management.availableLabel") : t("management.unavailableLabel")}
+              {item.stockQuantity === null ? "" : t("management.stockSuffix", { count: item.stockQuantity })}
+              {item.isFeatured ? t("management.featuredSuffix") : ""}
             </Text>
           </View>
           <View style={styles.itemActions}>
-            <SmallButton disabled={props.busy} label="Edit" onPress={() => edit(item)} />
+            <SmallButton disabled={props.busy} label={t("management.editButton")} onPress={() => edit(item)} />
             <SmallButton
               disabled={props.busy}
-              label={item.isAvailable ? "Pause" : "Resume"}
+              label={item.isAvailable ? t("management.pauseButton") : t("management.resumeButton")}
               onPress={() => props.onToggle(item)}
             />
           </View>
@@ -521,7 +553,8 @@ function SmallButton(props: { label: string; onPress: () => void; disabled?: boo
 }
 
 function StatusPill({ value }: { value: string }) {
-  return <View style={styles.statusPill}><Text style={styles.statusText}>{value.replaceAll("_", " ")}</Text></View>;
+  const { t } = useTranslation(["common"]);
+  return <View style={styles.statusPill}><Text style={styles.statusText}>{t(`status.${value}`, value.replaceAll("_", " "))}</Text></View>;
 }
 
 function Message({ tone, text }: { tone: "error" | "success"; text: string }) {
@@ -534,20 +567,16 @@ function Empty({ text }: { text: string }) {
 
 async function requireToken(): Promise<string> {
   const token = await getAccessToken();
-  if (!token) throw new Error("Your session has expired. Please log in again.");
+  if (!token) throw new Error(i18n.t("common:sessionExpired"));
   return token;
 }
 
 function readError(error: unknown): string {
-  return error instanceof ApiError || error instanceof Error ? error.message : "The request could not be completed.";
+  return error instanceof ApiError || error instanceof Error ? error.message : i18n.t("common:requestFailed");
 }
 
 function formatPrice(minor: number): string {
   return `${(minor / 100).toFixed(2)} ILS`;
-}
-
-function titleCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 const styles = StyleSheet.create({
@@ -555,7 +584,7 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", flexDirection: "row", paddingHorizontal: 18, paddingTop: 12 },
   backButton: { backgroundColor: "#FFFFFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   backText: { color: "#0F766E", fontWeight: "900" },
-  headerCopy: { flex: 1, marginLeft: 14 },
+  headerCopy: { flex: 1, marginStart: 14 },
   title: { color: "#102A2A", fontSize: 22, fontWeight: "900" },
   subtitle: { color: "#64748B", fontSize: 12, marginTop: 2 },
   tabs: { flexDirection: "row", gap: 7, padding: 18, paddingBottom: 8 },
@@ -585,14 +614,14 @@ const styles = StyleSheet.create({
   actionTextSecondary: { color: "#0F766E" },
   disabled: { opacity: 0.45 },
   listCard: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 16, flexDirection: "row", marginBottom: 10, padding: 15 },
-  listCopy: { flex: 1, paddingRight: 10 },
+  listCopy: { flex: 1, paddingEnd: 10 },
   listTitle: { color: "#102A2A", fontSize: 15, fontWeight: "900" },
   listMeta: { color: "#64748B", fontSize: 11, marginTop: 5 },
   itemActions: { gap: 6 },
   smallButton: { backgroundColor: "#E7F4F1", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   smallButtonText: { color: "#0F766E", fontSize: 11, fontWeight: "900" },
   categoryPicker: { marginBottom: 14 },
-  categoryChip: { backgroundColor: "#F1F5F9", borderRadius: 999, marginRight: 8, paddingHorizontal: 13, paddingVertical: 9 },
+  categoryChip: { backgroundColor: "#F1F5F9", borderRadius: 999, marginEnd: 8, paddingHorizontal: 13, paddingVertical: 9 },
   categoryChipActive: { backgroundColor: "#0F766E" },
   categoryChipText: { color: "#475569", fontSize: 11, fontWeight: "800" },
   categoryChipTextActive: { color: "#FFFFFF" },

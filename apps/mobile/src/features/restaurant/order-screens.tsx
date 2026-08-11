@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   FlatList,
@@ -27,6 +28,7 @@ import {
   type RestaurantOrderStatusAction
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import i18n from "../../i18n";
 import { nextRestaurantActionsByStatus } from "./order.rules";
 
 const currencyCode = "ILS";
@@ -37,6 +39,7 @@ type RestaurantOrdersScreenProps = {
 };
 
 export function RestaurantOrdersScreen(props: RestaurantOrdersScreenProps) {
+  const { t } = useTranslation(["restaurantOps", "common"]);
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,7 +49,7 @@ export function RestaurantOrdersScreen(props: RestaurantOrdersScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       const page = await listRestaurantOrders(accessToken, 1, 20);
@@ -73,14 +76,14 @@ export function RestaurantOrdersScreen(props: RestaurantOrdersScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle="Most recent first" title="Incoming Orders" />
+      <Header onBack={props.onBack} subtitle={t("orders.mostRecentFirst")} title={t("orders.incomingOrdersTitle")} />
       {orders === null ? (
         <View style={styles.centered}>
           {error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color="#0F766E" size="large" />}
         </View>
       ) : orders.length === 0 ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyText}>No orders yet.</Text>
+          <Text style={styles.emptyText}>{t("orders.noOrdersYet")}</Text>
         </View>
       ) : (
         <FlatList
@@ -99,7 +102,7 @@ export function RestaurantOrdersScreen(props: RestaurantOrdersScreenProps) {
                 <StatusBadge status={item.status} />
               </View>
               <Text style={styles.cardSubtitle}>
-                {item.items.reduce((sum, line) => sum + line.quantity, 0)} item(s)
+                {t("orders.itemCountLabel", { count: item.items.reduce((sum, line) => sum + line.quantity, 0) })}
               </Text>
               <Text style={styles.orderRowTotal}>{formatPrice(item.totalMinor)}</Text>
             </Pressable>
@@ -116,6 +119,7 @@ type RestaurantOrderDetailScreenProps = {
 };
 
 export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenProps) {
+  const { t } = useTranslation(["restaurantOps", "common"]);
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItemOwner[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +132,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       const [nextOrder, nextMenuItems] = await Promise.all([
@@ -154,7 +158,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setActionError("Your session has expired. Please log in again.");
+        setActionError(t("common:sessionExpired"));
         return;
       }
       const updated = await updateOrderStatus(accessToken, props.orderId, action);
@@ -175,7 +179,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setActionError("Your session has expired. Please log in again.");
+        setActionError(t("common:sessionExpired"));
         return;
       }
       setOrder(await proposeOrderItemFulfillment(accessToken, props.orderId, orderItemId, input));
@@ -189,7 +193,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle={order ? formatDate(order.createdAt) : "Order"} title="Order Details" />
+      <Header onBack={props.onBack} subtitle={order ? formatDate(order.createdAt) : t("orders.defaultSubtitle")} title={t("orders.orderDetailsTitle")} />
       {error ? (
         <View style={styles.centered}>
           <ErrorState message={error} onRetry={load} />
@@ -202,15 +206,15 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
         <ScrollView contentContainerStyle={styles.formContent}>
           <View style={styles.summaryCard}>
             <View style={styles.orderRowHeader}>
-              <Text style={styles.sectionTitle}>Status</Text>
+              <Text style={styles.sectionTitle}>{t("orders.statusLabel")}</Text>
               <StatusBadge status={order.status} />
             </View>
             {order.items.map((item) => (
               <View key={item.id} style={styles.orderItemBlock}>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryRowLabel}>
-                    {item.quantity} x {item.nameSnapshot} / {item.unitLabelSnapshot}
-                    {item.allowSubstitution ? " / replacement allowed" : ""}
+                    {t("orders.quantityUnitLine", { quantity: item.quantity, name: item.nameSnapshot, unit: item.unitLabelSnapshot })}
+                    {item.allowSubstitution ? t("orders.replacementAllowedSuffix") : ""}
                   </Text>
                   <Text style={styles.summaryRowValue}>{formatPrice(item.lineTotalMinor)}</Text>
                 </View>
@@ -228,13 +232,13 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
             ))}
             <View style={styles.summaryDivider} />
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryRowLabelBold}>Total</Text>
+              <Text style={styles.summaryRowLabelBold}>{t("orders.totalLabel")}</Text>
               <Text style={styles.summaryRowValueBold}>{formatPrice(order.totalMinor)}</Text>
             </View>
             <View style={styles.summaryDivider} />
-            <Text style={styles.label}>Delivery address</Text>
+            <Text style={styles.label}>{t("orders.deliveryAddressLabel")}</Text>
             <Text style={styles.addressText}>
-              {order.deliveryLabel} - {order.deliveryAddressLine}
+              {t("orders.addressLine", { label: order.deliveryLabel, address: order.deliveryAddressLine })}
             </Text>
           </View>
 
@@ -242,18 +246,18 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
 
           {nextRestaurantActionsByStatus[order.status].length > 0 ? (
             <View style={styles.actionRow}>
-              {nextRestaurantActionsByStatus[order.status].map(({ action, label }) => (
+              {nextRestaurantActionsByStatus[order.status].map(({ action, labelKey }) => (
                 <ActionButton
                   destructive={action === "REJECTED"}
                   key={action}
-                  label={label}
+                  label={t(labelKey)}
                   loading={actingOn === action}
                   onPress={() => performAction(action)}
                 />
               ))}
             </View>
           ) : (
-            <Text style={styles.footerNote}>No further action is needed from your restaurant for this order.</Text>
+            <Text style={styles.footerNote}>{t("orders.noFurtherAction")}</Text>
           )}
           <ErrorText message={actionError} />
         </ScrollView>
@@ -263,15 +267,18 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
 }
 
 function FulfillmentSummary(props: { item: OrderItemView }) {
+  const { t } = useTranslation(["restaurantOps", "common"]);
   const adjustment = props.item.fulfillmentAdjustment!;
   const proposedName = adjustment.replacementNameSnapshot ?? props.item.nameSnapshot;
   return (
     <View style={styles.fulfillmentSummary}>
-      <Text style={styles.fulfillmentTitle}>Fulfillment proposal: {adjustment.status}</Text>
+      <Text style={styles.fulfillmentTitle}>
+        {t("orders.fulfillmentProposalStatus", { status: t(`common:status.${adjustment.status}`, adjustment.status) })}
+      </Text>
       <Text style={styles.fulfillmentText}>
         {proposedName} / {(adjustment.actualQuantityMilli / 1_000).toFixed(3)} {adjustment.replacementUnitLabelSnapshot ?? props.item.unitLabelSnapshot}
       </Text>
-      <Text style={styles.fulfillmentText}>Proposed line total: {formatPrice(adjustment.lineTotalMinor)}</Text>
+      <Text style={styles.fulfillmentText}>{t("orders.proposedLineTotal", { amount: formatPrice(adjustment.lineTotalMinor) })}</Text>
       {adjustment.note ? <Text style={styles.fulfillmentNote}>{adjustment.note}</Text> : null}
     </View>
   );
@@ -283,6 +290,7 @@ function FulfillmentEditor(props: {
   busy: boolean;
   onSubmit: (input: { replacementMenuItemId?: string; actualQuantityMilli?: number; note?: string }) => Promise<void>;
 }) {
+  const { t } = useTranslation(["restaurantOps"]);
   const [replacementMenuItemId, setReplacementMenuItemId] = useState("");
   const [packedQuantity, setPackedQuantity] = useState(String(props.item.quantity));
   const [note, setNote] = useState("");
@@ -301,17 +309,17 @@ function FulfillmentEditor(props: {
   return (
     <View style={styles.fulfillmentEditor}>
       <Text style={styles.fulfillmentTitle}>
-        {props.item.fulfillmentAdjustment?.status === "REJECTED" ? "Revise fulfillment" : "Need a customer decision?"}
+        {props.item.fulfillmentAdjustment?.status === "REJECTED" ? t("orders.reviseFulfillment") : t("orders.needCustomerDecision")}
       </Text>
       {props.item.allowSubstitution ? (
         <>
-          <Text style={styles.editorLabel}>Replacement product (optional)</Text>
+          <Text style={styles.editorLabel}>{t("orders.replacementProductLabel")}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.replacementPicker}>
             <Pressable
               onPress={() => setReplacementMenuItemId("")}
               style={[styles.replacementChip, !replacementMenuItemId && styles.replacementChipActive]}
             >
-              <Text style={[styles.replacementChipText, !replacementMenuItemId && styles.replacementChipTextActive]}>Original product</Text>
+              <Text style={[styles.replacementChipText, !replacementMenuItemId && styles.replacementChipTextActive]}>{t("orders.originalProduct")}</Text>
             </Pressable>
             {alternatives.map((candidate) => (
               <Pressable
@@ -329,7 +337,7 @@ function FulfillmentEditor(props: {
       ) : null}
       {supportsVariableQuantity ? (
         <>
-          <Text style={styles.editorLabel}>Actual packed quantity (50%-150% of requested)</Text>
+          <Text style={styles.editorLabel}>{t("orders.actualPackedQuantityLabel")}</Text>
           <TextInput
             keyboardType="decimal-pad"
             onChangeText={setPackedQuantity}
@@ -338,11 +346,11 @@ function FulfillmentEditor(props: {
           />
         </>
       ) : null}
-      <Text style={styles.editorLabel}>Note for the customer (optional)</Text>
+      <Text style={styles.editorLabel}>{t("orders.noteForCustomerLabel")}</Text>
       <TextInput onChangeText={setNote} style={styles.editorInput} value={note} />
       <ActionButton
         disabled={!canPropose}
-        label={props.item.fulfillmentAdjustment?.status === "PENDING" ? "Replace pending proposal" : "Send for customer review"}
+        label={props.item.fulfillmentAdjustment?.status === "PENDING" ? t("orders.replacePendingProposal") : t("orders.sendForCustomerReview")}
         loading={props.busy}
         onPress={() => void props.onSubmit({
           replacementMenuItemId: replacementMenuItemId || undefined,
@@ -355,13 +363,14 @@ function FulfillmentEditor(props: {
 }
 
 function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
+  const { t } = useTranslation(["restaurantOps", "common"]);
   if (props.history.length === 0) return null;
   return (
     <View style={styles.summaryCard}>
-      <Text style={styles.sectionTitle}>Status history</Text>
+      <Text style={styles.sectionTitle}>{t("orders.statusHistoryTitle")}</Text>
       {props.history.map((entry) => (
         <View key={entry.id} style={styles.timelineRow}>
-          <Text style={styles.timelineStatus}>{entry.toStatus}</Text>
+          <Text style={styles.timelineStatus}>{t(`common:status.${entry.toStatus}`, entry.toStatus)}</Text>
           <Text style={styles.timelineDate}>{formatDate(entry.createdAt)}</Text>
           {entry.note ? <Text style={styles.timelineNote}>{entry.note}</Text> : null}
         </View>
@@ -371,10 +380,11 @@ function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
 }
 
 export function StatusBadge(props: { status: OrderStatusValue }) {
+  const { t } = useTranslation(["common"]);
   const palette = statusPalette(props.status);
   return (
     <View style={[styles.statusBadge, { backgroundColor: palette.background }]}>
-      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{props.status.replace(/_/g, " ")}</Text>
+      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{t(`status.${props.status}`, props.status.replace(/_/g, " "))}</Text>
     </View>
   );
 }
@@ -397,10 +407,11 @@ function statusPalette(status: OrderStatusValue): { background: string; text: st
 }
 
 function Header(props: { title: string; subtitle: string; onBack: () => void }) {
+  const { t } = useTranslation(["common"]);
   return (
     <View style={styles.header}>
       <Pressable accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
-        <Text style={styles.backButtonText}>Back</Text>
+        <Text style={styles.backButtonText}>{t("back")}</Text>
       </Pressable>
       <Text style={styles.headerTitle}>{props.title}</Text>
       <Text style={styles.headerSubtitle}>{props.subtitle}</Text>
@@ -409,12 +420,13 @@ function Header(props: { title: string; subtitle: string; onBack: () => void }) 
 }
 
 function ErrorState(props: { message: string; onRetry?: () => void }) {
+  const { t } = useTranslation(["restaurantOps"]);
   return (
     <View style={styles.errorBox}>
       <Text style={styles.errorText}>{props.message}</Text>
       {props.onRetry ? (
         <Pressable onPress={props.onRetry} style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>Try Again</Text>
+          <Text style={styles.retryButtonText}>{t("orders.tryAgain")}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -461,7 +473,7 @@ function readError(error: unknown): string {
   if (error instanceof ApiError || error instanceof Error) {
     return error.message;
   }
-  return "The request could not be completed. Please try again.";
+  return i18n.t("common:requestFailed");
 }
 
 const styles = StyleSheet.create({
@@ -507,7 +519,7 @@ const styles = StyleSheet.create({
   },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
   orderItemBlock: { borderBottomColor: "#E2E8F0", borderBottomWidth: 1, paddingBottom: 10, paddingTop: 6 },
-  summaryRowLabel: { color: "#475569", flex: 1, fontSize: 14, paddingRight: 8 },
+  summaryRowLabel: { color: "#475569", flex: 1, fontSize: 14, paddingEnd: 8 },
   summaryRowValue: { color: "#0F172A", fontSize: 14, fontWeight: "600" },
   summaryRowLabelBold: { color: "#0F172A", fontSize: 15, fontWeight: "800" },
   summaryRowValueBold: { color: "#0F766E", fontSize: 15, fontWeight: "800" },
@@ -537,7 +549,7 @@ const styles = StyleSheet.create({
   editorLabel: { color: "#334155", fontSize: 11, fontWeight: "800", marginBottom: 5, marginTop: 7 },
   editorInput: { backgroundColor: "#FFFFFF", borderColor: "#CCFBF1", borderRadius: 10, borderWidth: 1, color: "#0F172A", marginBottom: 5, minHeight: 42, paddingHorizontal: 11 },
   replacementPicker: { marginBottom: 4 },
-  replacementChip: { backgroundColor: "#FFFFFF", borderColor: "#CCFBF1", borderRadius: 999, borderWidth: 1, marginRight: 7, paddingHorizontal: 10, paddingVertical: 8 },
+  replacementChip: { backgroundColor: "#FFFFFF", borderColor: "#CCFBF1", borderRadius: 999, borderWidth: 1, marginEnd: 7, paddingHorizontal: 10, paddingVertical: 8 },
   replacementChipActive: { backgroundColor: "#0F766E", borderColor: "#0F766E" },
   replacementChipText: { color: "#475569", fontSize: 10, fontWeight: "800" },
   replacementChipTextActive: { color: "#FFFFFF" },

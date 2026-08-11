@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -27,6 +28,7 @@ import {
   type CountryCode
 } from "../../core/phone";
 import type { PhonePrefill } from "../../navigation/navigation";
+import i18n from "../../i18n";
 import { strongPasswordPattern } from "./auth.rules";
 
 type RegistrationProps = {
@@ -36,6 +38,7 @@ type RegistrationProps = {
 };
 
 export function RestaurantRegistrationScreen(props: RegistrationProps) {
+  const { t } = useTranslation(["auth", "common"]);
   const [businessType, setBusinessType] = useState<BusinessType>("RESTAURANT");
   const [ownerFullName, setOwnerFullName] = useState("");
   const [restaurantName, setRestaurantName] = useState("");
@@ -63,8 +66,8 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
     };
     const validationError = validateCommon(input.ownerFullName, prefill, password, confirmPassword);
     if (validationError) return setError(validationError);
-    if (input.restaurantName.length < 2) return setError("Please enter the store name.");
-    if (input.addressLine.length < 3) return setError("Please enter the store address.");
+    if (input.restaurantName.length < 2) return setError(t("restaurantRegistration.storeNameRequired"));
+    if (input.addressLine.length < 3) return setError(t("restaurantRegistration.addressRequired"));
 
     setError(null);
     setLoading(true);
@@ -72,7 +75,7 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
       await registerRestaurant(input);
       props.onRegistered(
         prefill,
-        `${businessType === "SUPERMARKET" ? "Supermarket" : "Restaurant"} application submitted. Log in to prepare your profile and catalog while approval is pending.`
+        t(businessType === "SUPERMARKET" ? "restaurantRegistration.successSupermarket" : "restaurantRegistration.successRestaurant")
       );
     } catch (requestError) {
       setError(readRegistrationError(requestError));
@@ -82,26 +85,31 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
   }
 
   return (
-    <RegistrationLayout
-      title="Register a store"
-      subtitle="Choose your business type and submit it for administrator approval"
-    >
+    <RegistrationLayout title={t("restaurantRegistration.title")} subtitle={t("restaurantRegistration.subtitle")}>
       <View style={styles.field}>
-        <Text style={styles.label}>Business type</Text>
+        <Text style={styles.label}>{t("restaurantRegistration.businessTypeLabel")}</Text>
         <View style={styles.businessTypeRow}>
           <Pressable onPress={() => setBusinessType("RESTAURANT")} style={[styles.businessTypeButton, businessType === "RESTAURANT" && styles.businessTypeSelected]}>
-            <Text style={[styles.businessTypeText, businessType === "RESTAURANT" && styles.businessTypeTextSelected]}>Restaurant</Text>
+            <Text style={[styles.businessTypeText, businessType === "RESTAURANT" && styles.businessTypeTextSelected]}>
+              {t("restaurantRegistration.businessTypeRestaurant")}
+            </Text>
           </Pressable>
           <Pressable onPress={() => setBusinessType("SUPERMARKET")} style={[styles.businessTypeButton, businessType === "SUPERMARKET" && styles.businessTypeSelected]}>
-            <Text style={[styles.businessTypeText, businessType === "SUPERMARKET" && styles.businessTypeTextSelected]}>Supermarket</Text>
+            <Text style={[styles.businessTypeText, businessType === "SUPERMARKET" && styles.businessTypeTextSelected]}>
+              {t("restaurantRegistration.businessTypeSupermarket")}
+            </Text>
           </Pressable>
         </View>
       </View>
-      <Field label="Owner full name" value={ownerFullName} onChangeText={setOwnerFullName} />
-      <Field label={businessType === "SUPERMARKET" ? "Supermarket name" : "Restaurant name"} value={restaurantName} onChangeText={setRestaurantName} />
-      <Field label="Address" value={addressLine} onChangeText={setAddressLine} multiline />
+      <Field label={t("restaurantRegistration.ownerFullNameLabel")} value={ownerFullName} onChangeText={setOwnerFullName} />
       <Field
-        label="Description (optional)"
+        label={t(businessType === "SUPERMARKET" ? "restaurantRegistration.supermarketNameLabel" : "restaurantRegistration.restaurantNameLabel")}
+        value={restaurantName}
+        onChangeText={setRestaurantName}
+      />
+      <Field label={t("restaurantRegistration.addressLabel")} value={addressLine} onChangeText={setAddressLine} multiline />
+      <Field
+        label={t("restaurantRegistration.descriptionLabel")}
         value={description}
         onChangeText={setDescription}
         multiline
@@ -119,13 +127,18 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
         onConfirmPasswordChange={setConfirmPassword}
       />
       <ErrorMessage message={error} />
-      <PrimaryButton label={`Submit ${businessType === "SUPERMARKET" ? "supermarket" : "restaurant"}`} loading={loading} onPress={() => void submit()} />
+      <PrimaryButton
+        label={t(businessType === "SUPERMARKET" ? "restaurantRegistration.submitSupermarket" : "restaurantRegistration.submitRestaurant")}
+        loading={loading}
+        onPress={() => void submit()}
+      />
       <BackButton onPress={() => props.onBack(prefill)} />
     </RegistrationLayout>
   );
 }
 
 export function DriverRegistrationScreen(props: RegistrationProps) {
+  const { t } = useTranslation(["auth", "common"]);
   const [fullName, setFullName] = useState("");
   const [countryCode, setCountryCode] = useState<CountryCode>(props.prefill?.countryCode ?? "+970");
   const [phoneNumber, setPhoneNumber] = useState(props.prefill?.phoneNumber ?? "");
@@ -150,10 +163,7 @@ export function DriverRegistrationScreen(props: RegistrationProps) {
     setLoading(true);
     try {
       await registerDriver(input);
-      props.onRegistered(
-        prefill,
-        "Driver application submitted. You can log in now; delivery work unlocks after administrator approval."
-      );
+      props.onRegistered(prefill, t("driverRegistration.success"));
     } catch (requestError) {
       setError(readRegistrationError(requestError));
     } finally {
@@ -162,11 +172,8 @@ export function DriverRegistrationScreen(props: RegistrationProps) {
   }
 
   return (
-    <RegistrationLayout
-      title="Register as a driver"
-      subtitle="Create a driver account and submit it for administrator approval"
-    >
-      <Field label="Full name" value={fullName} onChangeText={setFullName} />
+    <RegistrationLayout title={t("driverRegistration.title")} subtitle={t("driverRegistration.subtitle")}>
+      <Field label={t("fields.fullName")} value={fullName} onChangeText={setFullName} />
       <PhoneFields
         countryCode={countryCode}
         phoneNumber={phoneNumber}
@@ -180,7 +187,7 @@ export function DriverRegistrationScreen(props: RegistrationProps) {
         onConfirmPasswordChange={setConfirmPassword}
       />
       <ErrorMessage message={error} />
-      <PrimaryButton label="Submit driver application" loading={loading} onPress={() => void submit()} />
+      <PrimaryButton label={t("driverRegistration.submit")} loading={loading} onPress={() => void submit()} />
       <BackButton onPress={() => props.onBack(prefill)} />
     </RegistrationLayout>
   );
@@ -230,12 +237,13 @@ function PasswordFields(props: {
   onPasswordChange: (value: string) => void;
   onConfirmPasswordChange: (value: string) => void;
 }) {
+  const { t } = useTranslation(["auth"]);
   return (
     <>
-      <Field label="Password" value={props.password} onChangeText={props.onPasswordChange} secureTextEntry />
-      <Text style={styles.help}>Use 8+ characters with uppercase, lowercase, number, and symbol.</Text>
+      <Field label={t("fields.password")} value={props.password} onChangeText={props.onPasswordChange} secureTextEntry />
+      <Text style={styles.help}>{t("validation.passwordHelp")}</Text>
       <Field
-        label="Confirm password"
+        label={t("fields.confirmPassword")}
         value={props.confirmPassword}
         onChangeText={props.onConfirmPasswordChange}
         secureTextEntry
@@ -250,9 +258,10 @@ function PhoneFields(props: {
   onCountryCodeChange: (value: CountryCode) => void;
   onPhoneNumberChange: (value: string) => void;
 }) {
+  const { t } = useTranslation(["auth"]);
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>Mobile number</Text>
+      <Text style={styles.label}>{t("fields.mobileNumber")}</Text>
       <View style={styles.countryRow}>
         {countryCodes.map((code) => (
           <Pressable
@@ -267,7 +276,7 @@ function PhoneFields(props: {
       <TextInput
         keyboardType="phone-pad"
         onChangeText={props.onPhoneNumberChange}
-        placeholder="0591234567"
+        placeholder={t("fields.phoneNumberPlaceholder")}
         placeholderTextColor="#94A3B8"
         style={styles.input}
         value={props.phoneNumber}
@@ -285,9 +294,10 @@ function PrimaryButton(props: { label: string; loading: boolean; onPress: () => 
 }
 
 function BackButton({ onPress }: { onPress: () => void }) {
+  const { t } = useTranslation(["auth"]);
   return (
     <Pressable onPress={onPress} style={styles.backButton}>
-      <Text style={styles.backButtonText}>Back to login</Text>
+      <Text style={styles.backButtonText}>{t("shared.backToLogin")}</Text>
     </Pressable>
   );
 }
@@ -302,23 +312,23 @@ function validateCommon(
   password: string,
   confirmPassword: string
 ): string | null {
-  if (name.length < 2) return "Please enter the full name.";
+  if (name.length < 2) return i18n.t("auth:validation.fullNameRequired");
   try {
     normalizePhoneNumber(phone.countryCode, phone.phoneNumber);
   } catch (error) {
     return readRegistrationError(error);
   }
   if (!strongPasswordPattern.test(password)) {
-    return "Password must be 8-72 characters and include uppercase, lowercase, number, and symbol.";
+    return i18n.t("auth:validation.passwordStrength");
   }
-  if (password !== confirmPassword) return "The passwords do not match.";
+  if (password !== confirmPassword) return i18n.t("auth:validation.passwordMismatch");
   return null;
 }
 
 function readRegistrationError(error: unknown): string {
   if (error instanceof ApiError || error instanceof PhoneValidationError) return error.message;
   if (error instanceof Error) return error.message;
-  return "The request could not be completed.";
+  return i18n.t("auth:shared.requestFailed");
 }
 
 const styles = StyleSheet.create({

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ApiError, listMyNotifications, markNotificationRead, type NotificationView } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import i18n from "../../i18n";
 import { useRealtimeEvent } from "../../core/socket";
 
 type NotificationInboxScreenProps = {
@@ -10,6 +12,7 @@ type NotificationInboxScreenProps = {
 };
 
 export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
+  const { t } = useTranslation(["notifications", "common"]);
   const [notifications, setNotifications] = useState<NotificationView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -19,7 +22,7 @@ export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        setError("Your session has expired. Please log in again.");
+        setError(t("common:sessionExpired"));
         return;
       }
       const page = await listMyNotifications(accessToken, 1, 30);
@@ -59,9 +62,9 @@ export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>{t("common:back")}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Notifications</Text>
+        <Text style={styles.headerTitle}>{t("inbox.title")}</Text>
       </View>
       {notifications === null ? (
         <View style={styles.centered}>
@@ -69,7 +72,7 @@ export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
               <Pressable onPress={load} style={styles.retryButton}>
-                <Text style={styles.retryButtonText}>Try Again</Text>
+                <Text style={styles.retryButtonText}>{t("inbox.tryAgain")}</Text>
               </Pressable>
             </View>
           ) : (
@@ -78,7 +81,7 @@ export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
         </View>
       ) : notifications.length === 0 ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyText}>You have no notifications yet.</Text>
+          <Text style={styles.emptyText}>{t("inbox.emptyText")}</Text>
         </View>
       ) : (
         <FlatList
@@ -115,7 +118,7 @@ function readError(error: unknown): string {
   if (error instanceof ApiError || error instanceof Error) {
     return error.message;
   }
-  return "The request could not be completed. Please try again.";
+  return i18n.t("common:requestFailed");
 }
 
 const styles = StyleSheet.create({
@@ -145,7 +148,7 @@ const styles = StyleSheet.create({
   cardPressed: { opacity: 0.85 },
   cardHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   cardTitle: { color: "#0F172A", flex: 1, fontSize: 15, fontWeight: "700" },
-  unreadDot: { backgroundColor: "#0F766E", borderRadius: 5, height: 10, marginLeft: 8, width: 10 },
+  unreadDot: { backgroundColor: "#0F766E", borderRadius: 5, height: 10, marginStart: 8, width: 10 },
   cardBody: { color: "#475569", fontSize: 13.5, marginTop: 4 },
   cardDate: { color: "#94A3B8", fontSize: 11.5, marginTop: 8 },
   errorBox: { alignItems: "center" },

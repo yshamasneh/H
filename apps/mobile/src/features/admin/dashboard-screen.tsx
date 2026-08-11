@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 import { getAdminDashboard, type AdminDashboard, type PublicUser } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import i18n from "../../i18n";
+import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { useRealtimeEvent } from "../../core/socket";
 import {
   ActionButton,
@@ -31,6 +34,7 @@ export function AdminDashboardScreen(props: {
   onAuditLog: () => void;
   onNotifications: () => void;
 }) {
+  const { t } = useTranslation(["admin", "common"]);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -38,7 +42,7 @@ export function AdminDashboardScreen(props: {
   async function load() {
     try {
       const token = await getAccessToken();
-      if (!token) throw new Error("Your session has expired. Please log in again.");
+      if (!token) throw new Error(i18n.t("common:sessionExpired"));
       setDashboard(await getAdminDashboard(token));
       setError(null);
     } catch (requestError) {
@@ -64,35 +68,35 @@ export function AdminDashboardScreen(props: {
   }
 
   return (
-    <AdminPage title="TasawaQ Admin" subtitle={`Signed in as ${props.user.fullName}`}>
+    <AdminPage title={t("dashboard.brandTitle")} subtitle={t("dashboard.signedInAs", { name: props.user.fullName })}>
       <ErrorBanner message={error} />
       {dashboard ? (
         <>
           <View style={adminStyles.grid}>
-            <Stat label="Orders today" value={String(dashboard.ordersToday)} />
-            <Stat label="Revenue today" value={formatMoney(dashboard.revenueTodayMinor)} />
-            <Stat label="Active deliveries" value={String(dashboard.activeDeliveries)} />
-            <Stat label="Pending stores" value={String(dashboard.pendingRestaurantApprovals)} />
-            <Stat label="Online drivers" value={String(dashboard.onlineDriversCount)} />
-            <Stat label="New customers" value={String(dashboard.newCustomerSignupsToday)} />
+            <Stat label={t("dashboard.statOrdersToday")} value={String(dashboard.ordersToday)} />
+            <Stat label={t("dashboard.statRevenueToday")} value={formatMoney(dashboard.revenueTodayMinor)} />
+            <Stat label={t("dashboard.statActiveDeliveries")} value={String(dashboard.activeDeliveries)} />
+            <Stat label={t("dashboard.statPendingStores")} value={String(dashboard.pendingRestaurantApprovals)} />
+            <Stat label={t("dashboard.statOnlineDrivers")} value={String(dashboard.onlineDriversCount)} />
+            <Stat label={t("dashboard.statNewCustomers")} value={String(dashboard.newCustomerSignupsToday)} />
           </View>
 
-          <Text style={adminStyles.sectionTitle}>Management</Text>
-          <Card onPress={props.onRestaurants}><CardTitle>Stores</CardTitle><Meta>Restaurant and supermarket approvals, suspensions, and performance</Meta></Card>
-          <Card onPress={props.onOffers}><CardTitle>Offers</CardTitle><Meta>Publish product, order, delivery, and free-delivery campaigns</Meta></Card>
-          <Card onPress={props.onOrders}><CardTitle>Orders</CardTitle><Meta>Search all orders and apply support cancellations</Meta></Card>
-          <Card onPress={props.onDrivers}><CardTitle>Drivers</CardTitle><Meta>Approve drivers and manage their operational status</Meta></Card>
-          <Card onPress={props.onUsers}><CardTitle>Users</CardTitle><Meta>Search customers and accounts by role</Meta></Card>
-          <Card onPress={props.onAuditLog}><CardTitle>Audit Log</CardTitle><Meta>Review every recorded administration action</Meta></Card>
+          <Text style={adminStyles.sectionTitle}>{t("dashboard.managementSection")}</Text>
+          <Card onPress={props.onRestaurants}><CardTitle>{t("dashboard.storesTitle")}</CardTitle><Meta>{t("dashboard.storesMeta")}</Meta></Card>
+          <Card onPress={props.onOffers}><CardTitle>{t("dashboard.offersTitle")}</CardTitle><Meta>{t("dashboard.offersMeta")}</Meta></Card>
+          <Card onPress={props.onOrders}><CardTitle>{t("dashboard.ordersTitle")}</CardTitle><Meta>{t("dashboard.ordersMeta")}</Meta></Card>
+          <Card onPress={props.onDrivers}><CardTitle>{t("dashboard.driversTitle")}</CardTitle><Meta>{t("dashboard.driversMeta")}</Meta></Card>
+          <Card onPress={props.onUsers}><CardTitle>{t("dashboard.usersTitle")}</CardTitle><Meta>{t("dashboard.usersMeta")}</Meta></Card>
+          <Card onPress={props.onAuditLog}><CardTitle>{t("dashboard.auditLogTitle")}</CardTitle><Meta>{t("dashboard.auditLogMeta")}</Meta></Card>
 
-          <Text style={adminStyles.sectionTitle}>Recent activity</Text>
+          <Text style={adminStyles.sectionTitle}>{t("dashboard.recentActivity")}</Text>
           {dashboard.activityFeed.length === 0 ? (
-            <EmptyState message="No order activity yet." />
+            <EmptyState message={t("dashboard.noActivity")} />
           ) : (
             dashboard.activityFeed.map((entry) => (
               <Card key={entry.id}>
                 <CardTitle>{entry.restaurantName}</CardTitle>
-                <KeyValue label="Order status" value={entry.toStatus.replace(/_/g, " ")} />
+                <KeyValue label={t("dashboard.orderStatusLabel")} value={t(`common:status.${entry.toStatus}`, entry.toStatus.replace(/_/g, " "))} />
                 <Meta>{formatDate(entry.createdAt)}</Meta>
               </Card>
             ))
@@ -100,9 +104,10 @@ export function AdminDashboardScreen(props: {
         </>
       ) : error ? null : <LoadingState />}
       <ActionRow>
-        <ActionButton label="Notifications" onPress={props.onNotifications} variant="secondary" />
-        <ActionButton label="Log out" loading={loggingOut} onPress={() => void logOut()} variant="danger" />
+        <ActionButton label={t("common:notifications")} onPress={props.onNotifications} variant="secondary" />
+        <ActionButton label={t("common:logout")} loading={loggingOut} onPress={() => void logOut()} variant="danger" />
       </ActionRow>
+      <LanguageSwitcher />
     </AdminPage>
   );
 }

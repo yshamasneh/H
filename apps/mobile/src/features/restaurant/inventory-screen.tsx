@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   ApiError,
@@ -19,8 +20,10 @@ import {
   type Supplier
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import i18n from "../../i18n";
 
 export function InventoryWorkspace() {
+  const { t } = useTranslation(["restaurantOps", "common"]);
   const [inventory, setInventory] = useState<InventoryPage | null>(null);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -92,7 +95,7 @@ export function InventoryWorkspace() {
       const item = await lookupStoreInventoryBarcode(await requireToken(), barcode.trim());
       setSelectedItemId(item.id);
       setPurchaseItemId(item.id);
-      setNotice(`Barcode matched ${item.name}.`);
+      setNotice(t("inventory.barcodeMatchedNotice", { name: item.name }));
     } catch (requestError) {
       setError(readError(requestError));
     } finally {
@@ -109,20 +112,20 @@ export function InventoryWorkspace() {
       {notice ? <Text style={styles.success}>{notice}</Text> : null}
 
       <View style={styles.summaryGrid}>
-        <Summary label="Products" value={summary?.totalProducts ?? 0} />
-        <Summary label="Tracked" value={summary?.trackedProducts ?? 0} />
-        <Summary label="Low stock" value={summary?.lowStockProducts ?? 0} alert />
-        <Summary label="Out" value={summary?.outOfStockProducts ?? 0} alert />
+        <Summary label={t("inventory.productsLabel")} value={summary?.totalProducts ?? 0} />
+        <Summary label={t("inventory.trackedLabel")} value={summary?.trackedProducts ?? 0} />
+        <Summary label={t("inventory.lowStockLabel")} value={summary?.lowStockProducts ?? 0} alert />
+        <Summary label={t("inventory.outLabel")} value={summary?.outOfStockProducts ?? 0} alert />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Find inventory</Text>
-        <Field label="Search product, SKU, brand or barcode" value={search} onChangeText={setSearch} />
+        <Text style={styles.cardTitle}>{t("inventory.findInventoryTitle")}</Text>
+        <Field label={t("inventory.searchLabel")} value={search} onChangeText={setSearch} />
         <View style={styles.row}>
-          <Button disabled={busy} label="Search" onPress={() => void load(search, lowStockOnly)} />
+          <Button disabled={busy} label={t("common:search")} onPress={() => void load(search, lowStockOnly)} />
           <Button
             disabled={busy}
-            label={lowStockOnly ? "Show all" : "Low stock only"}
+            label={lowStockOnly ? t("inventory.showAllButton") : t("inventory.lowStockOnlyButton")}
             onPress={() => {
               const next = !lowStockOnly;
               setLowStockOnly(next);
@@ -131,69 +134,69 @@ export function InventoryWorkspace() {
             secondary
           />
         </View>
-        <Field label="Barcode lookup / scanner input" value={barcode} onChangeText={setBarcode} keyboardType="number-pad" />
-        <Button disabled={busy || !barcode.trim()} label="Look up barcode" onPress={() => void findBarcode()} secondary />
+        <Field label={t("inventory.barcodeLookupLabel")} value={barcode} onChangeText={setBarcode} keyboardType="number-pad" />
+        <Button disabled={busy || !barcode.trim()} label={t("inventory.lookUpBarcodeButton")} onPress={() => void findBarcode()} secondary />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Manual stock adjustment</Text>
+        <Text style={styles.cardTitle}>{t("inventory.manualAdjustmentTitle")}</Text>
         <ItemPicker items={inventory?.items ?? []} selectedId={selectedItemId} onSelect={setSelectedItemId} />
-        <Field label="Change (+ receive / - remove)" value={adjustment} onChangeText={setAdjustment} keyboardType="numbers-and-punctuation" />
-        <Field label="Reason" value={adjustmentReason} onChangeText={setAdjustmentReason} />
+        <Field label={t("inventory.changeLabel")} value={adjustment} onChangeText={setAdjustment} keyboardType="numbers-and-punctuation" />
+        <Field label={t("inventory.reasonLabel")} value={adjustmentReason} onChangeText={setAdjustmentReason} />
         <Button
           disabled={busy || !selectedItemId || !adjustment.trim() || adjustmentReason.trim().length < 2}
-          label="Apply adjustment"
+          label={t("inventory.applyAdjustmentButton")}
           onPress={() => void run(
             (token) => adjustStoreInventory(token, selectedItemId, Number.parseInt(adjustment, 10), adjustmentReason.trim()),
-            "Inventory adjusted and logged."
+            t("inventory.adjustmentAppliedNotice")
           ).then(() => { setAdjustment(""); setAdjustmentReason(""); })}
         />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Products</Text>
+        <Text style={styles.cardTitle}>{t("inventory.productsTitle")}</Text>
         {(inventory?.items ?? []).map((item) => (
           <Pressable key={item.id} onPress={() => setSelectedItemId(item.id)} style={[styles.itemCard, item.isLowStock && styles.lowStockCard]}>
             <View style={styles.itemCopy}>
               <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.meta}>{item.sku ?? "No SKU"}{item.barcode ? ` · ${item.barcode}` : ""}</Text>
+              <Text style={styles.meta}>{item.sku ?? t("inventory.noSku")}{item.barcode ? ` · ${item.barcode}` : ""}</Text>
             </View>
             <Text style={[styles.stock, item.isLowStock && styles.stockAlert]}>
-              {item.stockQuantity === null ? "Untracked" : `${item.stockQuantity} ${item.unitLabel}`}
+              {item.stockQuantity === null ? t("inventory.untracked") : `${item.stockQuantity} ${item.unitLabel}`}
             </Text>
           </Pressable>
         ))}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Suppliers</Text>
-        <Field label="Supplier name" value={supplierName} onChangeText={setSupplierName} />
-        <Field label="Phone (optional)" value={supplierPhone} onChangeText={setSupplierPhone} keyboardType="phone-pad" />
+        <Text style={styles.cardTitle}>{t("inventory.suppliersTitle")}</Text>
+        <Field label={t("inventory.supplierNameLabel")} value={supplierName} onChangeText={setSupplierName} />
+        <Field label={t("inventory.phoneOptionalLabel")} value={supplierPhone} onChangeText={setSupplierPhone} keyboardType="phone-pad" />
         <Button
           disabled={busy || supplierName.trim().length < 2}
-          label="Add supplier"
+          label={t("inventory.addSupplierButton")}
           onPress={() => void run(
             (token) => createStoreSupplier(token, { name: supplierName.trim(), phone: supplierPhone.trim() || undefined }),
-            "Supplier added."
+            t("inventory.supplierAddedNotice")
           ).then(() => { setSupplierName(""); setSupplierPhone(""); })}
         />
         {suppliers.map((supplier) => <Text key={supplier.id} style={styles.listLine}>{supplier.name}{supplier.phone ? ` · ${supplier.phone}` : ""}</Text>)}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>New purchase order</Text>
-        <Text style={styles.label}>Supplier</Text>
+        <Text style={styles.cardTitle}>{t("inventory.newPurchaseOrderTitle")}</Text>
+        <Text style={styles.label}>{t("inventory.supplierLabel")}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.picker}>
           {suppliers.map((supplier) => <Chip key={supplier.id} active={purchaseSupplierId === supplier.id} label={supplier.name} onPress={() => setPurchaseSupplierId(supplier.id)} />)}
         </ScrollView>
-        <Text style={styles.label}>Product</Text>
+        <Text style={styles.label}>{t("inventory.productLabel")}</Text>
         <ItemPicker items={inventory?.items ?? []} selectedId={purchaseItemId} onSelect={setPurchaseItemId} />
-        <Field label="Quantity" value={purchaseQuantity} onChangeText={setPurchaseQuantity} keyboardType="number-pad" />
-        <Field label="Unit cost (ILS)" value={purchaseUnitCost} onChangeText={setPurchaseUnitCost} keyboardType="decimal-pad" />
-        <Field label="Supplier reference (optional)" value={purchaseReference} onChangeText={setPurchaseReference} />
+        <Field label={t("inventory.quantityLabel")} value={purchaseQuantity} onChangeText={setPurchaseQuantity} keyboardType="number-pad" />
+        <Field label={t("inventory.unitCostLabel")} value={purchaseUnitCost} onChangeText={setPurchaseUnitCost} keyboardType="decimal-pad" />
+        <Field label={t("inventory.supplierReferenceLabel")} value={purchaseReference} onChangeText={setPurchaseReference} />
         <Button
           disabled={busy || !purchaseSupplierId || !purchaseItemId || Number.parseInt(purchaseQuantity, 10) < 1}
-          label="Create draft purchase"
+          label={t("inventory.createDraftPurchaseButton")}
           onPress={() => void run(
             (token) => createStorePurchaseOrder(token, {
               supplierId: purchaseSupplierId,
@@ -204,23 +207,23 @@ export function InventoryWorkspace() {
                 unitCostMinor: Math.max(0, Math.round(Number(purchaseUnitCost.replace(",", ".")) * 100) || 0)
               }]
             }),
-            "Draft purchase order created."
+            t("inventory.draftPurchaseCreatedNotice")
           ).then(() => { setPurchaseQuantity(""); setPurchaseUnitCost(""); setPurchaseReference(""); })}
         />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Purchase orders</Text>
-        {purchaseOrders.length === 0 ? <Text style={styles.meta}>No purchase orders yet.</Text> : null}
+        <Text style={styles.cardTitle}>{t("inventory.purchaseOrdersTitle")}</Text>
+        {purchaseOrders.length === 0 ? <Text style={styles.meta}>{t("inventory.noPurchaseOrders")}</Text> : null}
         {purchaseOrders.map((order) => (
           <View key={order.id} style={styles.purchaseCard}>
-            <Text style={styles.itemName}>{order.reference ?? `Purchase ${order.id.slice(0, 8)}`}</Text>
-            <Text style={styles.meta}>{order.supplier.name} · {order.status} · {formatMoney(order.totalCostMinor)}</Text>
+            <Text style={styles.itemName}>{order.reference ?? t("inventory.purchaseFallbackName", { id: order.id.slice(0, 8) })}</Text>
+            <Text style={styles.meta}>{order.supplier.name} · {t(`common:status.${order.status}`, order.status)} · {formatMoney(order.totalCostMinor)}</Text>
             {order.items.map((line) => <Text key={line.id} style={styles.listLine}>{line.quantity} × {line.menuItem.name}</Text>)}
             {order.status === "DRAFT" ? (
               <View style={styles.row}>
-                <Button disabled={busy} label="Receive stock" onPress={() => void run((token) => receiveStorePurchaseOrder(token, order.id), "Purchase received into stock.")} />
-                <Button disabled={busy} label="Cancel" onPress={() => void run((token) => cancelStorePurchaseOrder(token, order.id), "Purchase order cancelled.")} secondary />
+                <Button disabled={busy} label={t("inventory.receiveStockButton")} onPress={() => void run((token) => receiveStorePurchaseOrder(token, order.id), t("inventory.purchaseReceivedNotice"))} />
+                <Button disabled={busy} label={t("common:cancel")} onPress={() => void run((token) => cancelStorePurchaseOrder(token, order.id), t("inventory.purchaseCancelledNotice"))} secondary />
               </View>
             ) : null}
           </View>
@@ -228,12 +231,12 @@ export function InventoryWorkspace() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Recent stock movements</Text>
+        <Text style={styles.cardTitle}>{t("inventory.recentMovementsTitle")}</Text>
         {movements.map((movement) => (
           <View key={movement.id} style={styles.movementRow}>
             <View style={styles.itemCopy}>
               <Text style={styles.itemName}>{movement.menuItem.name}</Text>
-              <Text style={styles.meta}>{movement.type.replaceAll("_", " ")} · {movement.reason ?? "System movement"}</Text>
+              <Text style={styles.meta}>{movement.type.replaceAll("_", " ")} · {movement.reason ?? t("inventory.systemMovement")}</Text>
             </View>
             <Text style={[styles.stock, movement.quantityDelta < 0 && styles.stockAlert]}>
               {movement.quantityDelta > 0 ? "+" : ""}{movement.quantityDelta} → {movement.stockAfter}
@@ -265,8 +268,8 @@ function Button(props: { label: string; onPress: () => void; disabled?: boolean;
   return <Pressable disabled={props.disabled} onPress={props.onPress} style={[styles.button, props.secondary && styles.buttonSecondary, props.disabled && styles.disabled]}><Text style={[styles.buttonText, props.secondary && styles.buttonTextSecondary]}>{props.label}</Text></Pressable>;
 }
 
-async function requireToken() { const token = await getAccessToken(); if (!token) throw new Error("Your session has expired."); return token; }
-function readError(error: unknown) { return error instanceof ApiError || error instanceof Error ? error.message : "The request could not be completed."; }
+async function requireToken() { const token = await getAccessToken(); if (!token) throw new Error(i18n.t("common:sessionExpired")); return token; }
+function readError(error: unknown) { return error instanceof ApiError || error instanceof Error ? error.message : i18n.t("common:requestFailed"); }
 function formatMoney(minor: number) { return `${(minor / 100).toFixed(2)} ILS`; }
 
 const styles = StyleSheet.create({
@@ -287,13 +290,13 @@ const styles = StyleSheet.create({
   buttonTextSecondary: { color: "#0F766E" },
   disabled: { opacity: 0.45 },
   picker: { marginBottom: 14 },
-  chip: { backgroundColor: "#F1F5F9", borderRadius: 999, marginRight: 7, paddingHorizontal: 12, paddingVertical: 9 },
+  chip: { backgroundColor: "#F1F5F9", borderRadius: 999, marginEnd: 7, paddingHorizontal: 12, paddingVertical: 9 },
   chipActive: { backgroundColor: "#0F766E" },
   chipText: { color: "#475569", fontSize: 11, fontWeight: "800" },
   chipTextActive: { color: "#FFFFFF" },
   itemCard: { alignItems: "center", borderBottomColor: "#E2E8F0", borderBottomWidth: 1, flexDirection: "row", paddingVertical: 12 },
   lowStockCard: { backgroundColor: "#FFF7ED", marginHorizontal: -8, paddingHorizontal: 8 },
-  itemCopy: { flex: 1, paddingRight: 8 },
+  itemCopy: { flex: 1, paddingEnd: 8 },
   itemName: { color: "#102A2A", fontSize: 13, fontWeight: "900" },
   meta: { color: "#64748B", fontSize: 10, lineHeight: 15, marginTop: 3 },
   stock: { color: "#15803D", fontSize: 12, fontWeight: "900" },

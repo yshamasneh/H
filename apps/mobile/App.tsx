@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +10,8 @@ import {
   View
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import i18n, { resolveInitialLanguage } from "./src/i18n";
+import { reconcileRTL, reloadApp } from "./src/i18n/rtl";
 import {
   fetchCurrentUser,
   logout,
@@ -118,6 +121,7 @@ export default function App() {
 }
 
 function TasawaQApp() {
+  const { t } = useTranslation();
   const [screen, setScreen] = useState<AppScreen>(initialScreen);
   const [isBooting, setIsBooting] = useState(true);
   const [isSplashVisible, setIsSplashVisible] = useState(true);
@@ -130,6 +134,16 @@ function TasawaQApp() {
     }, splashDurationMs);
 
     async function restoreSession() {
+      const language = await resolveInitialLanguage();
+      if (i18n.language !== language) await i18n.changeLanguage(language);
+      if (reconcileRTL(language)) {
+        // A native reload is about to happen (see reconcileRTL's doc comment).
+        // Deliberately skip setIsBooting(false) so the loading screen stays
+        // up instead of flashing mis-mirrored UI before the reload lands.
+        reloadApp();
+        return;
+      }
+
       try {
         const [accessToken, storedRefreshToken] = await Promise.all([getAccessToken(), getRefreshToken()]);
         if (!accessToken) return;
@@ -183,20 +197,26 @@ function TasawaQApp() {
     item: MenuItemSummary & { allowSubstitution?: boolean }
   ) {
     if (cart && cart.restaurantId !== restaurant.id) {
-      const confirmationMessage = `Your cart has items from ${cart.restaurantName}. Adding an item from ${restaurant.name} will clear it and start a new order.`;
+      const confirmationMessage = t("common:startNewCartBody", {
+        restaurantName: cart.restaurantName,
+        newRestaurantName: restaurant.name
+      });
       if (Platform.OS === "web") {
-        if (typeof globalThis.confirm === "function" && globalThis.confirm(`Start a new cart?\n\n${confirmationMessage}`)) {
+        if (
+          typeof globalThis.confirm === "function" &&
+          globalThis.confirm(`${t("common:startNewCartTitle")}\n\n${confirmationMessage}`)
+        ) {
           setCart(startCart(restaurant, item));
         }
         return;
       }
       Alert.alert(
-        "Start a new cart?",
+        t("common:startNewCartTitle"),
         confirmationMessage,
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common:cancel"), style: "cancel" },
           {
-            text: "Clear Cart",
+            text: t("common:clearCart"),
             style: "destructive",
             onPress: () => setCart(startCart(restaurant, item))
           }
@@ -308,9 +328,7 @@ function TasawaQApp() {
     case "otp":
       return (
         <OtpScreen
-          onAuthenticated={(result) =>
-            handleAuthenticated(result, "Your customer account was created successfully.")
-          }
+          onAuthenticated={(result) => handleAuthenticated(result, t("common:accountCreatedNotice"))}
           onBack={() =>
             setScreen(
               screen.purpose === "signup"

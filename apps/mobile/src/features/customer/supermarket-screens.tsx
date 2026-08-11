@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   FlatList,
@@ -23,12 +24,14 @@ import {
   type SupermarketProduct
 } from "../../core/api";
 import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
+import i18n from "../../i18n";
 import { customerTheme } from "./theme";
 
 export function SupermarketListScreen(props: {
   onBack: () => void;
   onOpenSupermarket: (supermarket: RestaurantSummary) => void;
 }) {
+  const { t } = useTranslation(["customer"]);
   const [stores, setStores] = useState<RestaurantSummary[] | null>(null);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -62,15 +65,15 @@ export function SupermarketListScreen(props: {
       <View style={styles.storeHeader}>
         <BackButton onPress={props.onBack} />
         <View style={styles.headerCopy}>
-          <Text style={styles.headerEyebrow}>TASAWAQ MARKET</Text>
-          <Text style={styles.headerTitle}>Supermarkets</Text>
-          <Text style={styles.headerSubtitle}>Groceries delivered to your door</Text>
+          <Text style={styles.headerEyebrow}>{t("supermarket.marketLabel")}</Text>
+          <Text style={styles.headerTitle}>{t("supermarket.title")}</Text>
+          <Text style={styles.headerSubtitle}>{t("supermarket.subtitle")}</Text>
         </View>
       </View>
       <View style={styles.searchBox}>
         <TextInput
           onChangeText={setSearch}
-          placeholder="Search supermarkets"
+          placeholder={t("supermarket.searchPlaceholder")}
           placeholderTextColor={customerTheme.colors.textMuted}
           style={styles.searchInput}
           value={search}
@@ -80,7 +83,7 @@ export function SupermarketListScreen(props: {
       {stores === null ? (
         <Centered>{error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color={customerTheme.colors.primary} size="large" />}</Centered>
       ) : visibleStores?.length === 0 ? (
-        <Centered><Text style={styles.emptyText}>No supermarkets match your search.</Text></Centered>
+        <Centered><Text style={styles.emptyText}>{t("supermarket.noMatch")}</Text></Centered>
       ) : (
         <FlatList
           contentContainerStyle={styles.storeList}
@@ -96,7 +99,7 @@ export function SupermarketListScreen(props: {
                 <Text style={styles.storeName}>{item.name}</Text>
                 {item.description ? <Text numberOfLines={2} style={styles.muted}>{item.description}</Text> : null}
                 <Text numberOfLines={1} style={styles.address}>⌖ {item.addressLine}</Text>
-                <Text style={styles.open}>Open now · Cash on delivery</Text>
+                <Text style={styles.open}>{t("home.openNowCash")}</Text>
               </View>
             </Pressable>
           )}
@@ -115,6 +118,7 @@ export function SupermarketCatalogScreen(props: {
   onOpenProduct: (productId: string) => void;
   onViewCart: () => void;
 }) {
+  const { t } = useTranslation(["customer", "common"]);
   const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -139,7 +143,7 @@ export function SupermarketCatalogScreen(props: {
       <View style={styles.catalogHeader}>
         <BackButton onPress={props.onBack} />
         <View style={styles.headerCopy}>
-          <Text style={styles.headerEyebrow}>SUPERMARKET</Text>
+          <Text style={styles.headerEyebrow}>{t("supermarket.supermarketLabel")}</Text>
           <Text numberOfLines={1} style={styles.catalogTitle}>{catalog?.supermarket.name ?? props.supermarketName}</Text>
         </View>
       </View>
@@ -147,23 +151,23 @@ export function SupermarketCatalogScreen(props: {
         <TextInput
           onChangeText={setSearchInput}
           onSubmitEditing={() => setSearch(searchInput.trim())}
-          placeholder="Search products, brands or SKU"
+          placeholder={t("supermarket.searchProductsPlaceholder")}
           placeholderTextColor={customerTheme.colors.textMuted}
           returnKeyType="search"
           style={[styles.searchInput, styles.catalogSearchInput]}
           value={searchInput}
         />
-        <Pressable onPress={() => setSearch(searchInput.trim())} style={styles.searchButton}><Text style={styles.searchButtonText}>Search</Text></Pressable>
+        <Pressable onPress={() => setSearch(searchInput.trim())} style={styles.searchButton}><Text style={styles.searchButtonText}>{t("common:search")}</Text></Pressable>
       </View>
       {catalog ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.departmentStrip} contentContainerStyle={styles.departmentContent}>
-          <Chip active={!departmentId} label="All" onPress={() => setDepartmentId(undefined)} />
-          <Chip active={featured} label="Featured" onPress={() => setFeatured((current) => !current)} />
+          <Chip active={!departmentId} label={t("supermarket.allChip")} onPress={() => setDepartmentId(undefined)} />
+          <Chip active={featured} label={t("supermarket.featuredChip")} onPress={() => setFeatured((current) => !current)} />
           {catalog.departments.map((department) => (
             <Chip
               active={departmentId === department.id}
               key={department.id}
-              label={`${department.name} (${department.productCount})`}
+              label={t("supermarket.departmentWithCount", { name: department.name, count: department.productCount })}
               onPress={() => setDepartmentId(departmentId === department.id ? undefined : department.id)}
             />
           ))}
@@ -172,7 +176,7 @@ export function SupermarketCatalogScreen(props: {
       {error ? <Centered><ErrorState message={error} /></Centered> : catalog === null ? (
         <Centered><ActivityIndicator color={customerTheme.colors.primary} size="large" /></Centered>
       ) : catalog.products.length === 0 ? (
-        <Centered><Text style={styles.emptyText}>No products found for these filters.</Text></Centered>
+        <Centered><Text style={styles.emptyText}>{t("supermarket.noProductsFound")}</Text></Centered>
       ) : (
         <FlatList
           contentContainerStyle={[styles.productGrid, showCart && styles.productGridWithCart]}
@@ -198,6 +202,7 @@ export function SupermarketProductScreen(props: {
   onAddItem: (item: SupermarketProduct & { allowSubstitution?: boolean }) => void;
   onViewCart: () => void;
 }) {
+  const { t } = useTranslation(["customer"]);
   const [product, setProduct] = useState<SupermarketProduct | null>(null);
   const [allowSubstitution, setAllowSubstitution] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -214,7 +219,7 @@ export function SupermarketProductScreen(props: {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.secondary} barStyle="light-content" />
-      <View style={styles.productDetailHeader}><BackButton onPress={props.onBack} /><Text style={styles.productDetailHeaderTitle}>Product details</Text></View>
+      <View style={styles.productDetailHeader}><BackButton onPress={props.onBack} /><Text style={styles.productDetailHeaderTitle}>{t("supermarket.productDetailsTitle")}</Text></View>
       {error ? <Centered><ErrorState message={error} /></Centered> : product === null ? (
         <Centered><ActivityIndicator color={customerTheme.colors.primary} size="large" /></Centered>
       ) : (
@@ -223,25 +228,35 @@ export function SupermarketProductScreen(props: {
           <Text style={styles.detailDepartment}>{product.categoryName}</Text>
           <Text style={styles.detailName}>{product.name}</Text>
           {product.brand ? <Text style={styles.detailBrand}>{product.brand}</Text> : null}
-          <Text style={styles.detailUnit}>Sold by {product.unitLabel}{product.sku ? ` · SKU ${product.sku}` : ""}</Text>
+          <Text style={styles.detailUnit}>
+            {product.sku
+              ? t("supermarket.soldByLabelWithSku", { unit: product.unitLabel, sku: product.sku })
+              : t("supermarket.soldByLabel", { unit: product.unitLabel })}
+          </Text>
           {product.description ? <Text style={styles.detailDescription}>{product.description}</Text> : null}
-          {product.offer ? <Text style={styles.offerBadge}>{product.offer.title} · {product.offer.discountPercent}% off</Text> : null}
+          {product.offer ? (
+            <Text style={styles.offerBadge}>{t("supermarket.offerLabel", { title: product.offer.title, percent: product.offer.discountPercent })}</Text>
+          ) : null}
           <View style={styles.detailPriceRow}>
             {product.offer ? <Text style={styles.oldPrice}>{formatPrice(product.priceMinor)}</Text> : null}
             <Text style={styles.detailPrice}>{formatPrice(product.effectivePriceMinor)}</Text>
           </View>
-          <Text style={styles.stockText}>{product.stockQuantity === null ? "Available" : `${product.stockQuantity} in stock`}</Text>
+          <Text style={styles.stockText}>
+            {product.stockQuantity === null ? t("supermarket.availableStock") : t("supermarket.inStock", { count: product.stockQuantity })}
+          </Text>
           <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: allowSubstitution }}
             onPress={() => setAllowSubstitution((current) => !current)}
             style={[styles.substitutionCard, allowSubstitution && styles.substitutionCardActive]}
           >
-            <Text style={styles.substitutionTitle}>{allowSubstitution ? "✓ Allow a similar replacement" : "Do not replace this product"}</Text>
-            <Text style={styles.muted}>The store will see your preference if this item becomes unavailable.</Text>
+            <Text style={styles.substitutionTitle}>
+              {allowSubstitution ? t("supermarket.allowSubstitution") : t("supermarket.doNotReplace")}
+            </Text>
+            <Text style={styles.muted}>{t("supermarket.substitutionHelper")}</Text>
           </Pressable>
           <Pressable onPress={() => props.onAddItem({ ...product, allowSubstitution })} style={styles.addDetailButton}>
-            <Text style={styles.addDetailText}>Add to basket · {formatPrice(product.effectivePriceMinor)}</Text>
+            <Text style={styles.addDetailText}>{t("supermarket.addToBasket", { price: formatPrice(product.effectivePriceMinor) })}</Text>
           </Pressable>
         </ScrollView>
       )}
@@ -251,6 +266,7 @@ export function SupermarketProductScreen(props: {
 }
 
 function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpen: () => void }) {
+  const { t } = useTranslation(["customer"]);
   return (
     <Pressable onPress={props.onOpen} style={({ pressed }) => [styles.productCard, pressed && styles.pressed]}>
       <View style={styles.productArtwork}>{props.item.imageUrl ? <Image resizeMode="cover" source={{ uri: props.item.imageUrl }} style={styles.image} /> : <Text style={styles.productEmoji}>🥫</Text>}</View>
@@ -258,10 +274,18 @@ function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpe
       {props.item.brand ? <Text numberOfLines={1} style={styles.productBrand}>{props.item.brand}</Text> : null}
       <Text numberOfLines={2} style={styles.productName}>{props.item.name}</Text>
       <Text style={styles.productUnit}>{props.item.unitLabel}</Text>
-      {props.item.offer ? <Text style={styles.offerBadge}>{props.item.offer.discountPercent}% off</Text> : null}
+      {props.item.offer ? (
+        <Text style={styles.offerBadge}>{t("supermarket.offerPercentOnly", { percent: props.item.offer.discountPercent })}</Text>
+      ) : null}
       <View style={styles.cardPriceRow}>
         <Text style={styles.productPrice}>{formatPrice(props.item.effectivePriceMinor)}</Text>
-        <Pressable accessibilityLabel={`Add ${props.item.name}`} onPress={(event) => { event.stopPropagation(); props.onAdd(); }} style={styles.addButton}><Text style={styles.addButtonText}>+</Text></Pressable>
+        <Pressable
+          accessibilityLabel={t("supermarket.addProductAccessibility", { name: props.item.name })}
+          onPress={(event) => { event.stopPropagation(); props.onAdd(); }}
+          style={styles.addButton}
+        >
+          <Text style={styles.addButtonText}>+</Text>
+        </Pressable>
       </View>
     </Pressable>
   );
@@ -272,23 +296,41 @@ function Chip(props: { active: boolean; label: string; onPress: () => void }) {
 }
 
 function CartDock(props: { cart: Cart; onPress: () => void }) {
-  return <View style={styles.cartDock}><Pressable onPress={props.onPress} style={styles.cartButton}><Text style={styles.cartCount}>{cartItemCount(props.cart)}</Text><Text style={styles.cartLabel}>View basket</Text><Text style={styles.cartPrice}>{formatPrice(cartSubtotalMinor(props.cart))}</Text></Pressable></View>;
+  const { t } = useTranslation(["customer"]);
+  return (
+    <View style={styles.cartDock}>
+      <Pressable onPress={props.onPress} style={styles.cartButton}>
+        <Text style={styles.cartCount}>{cartItemCount(props.cart)}</Text>
+        <Text style={styles.cartLabel}>{t("restaurants.viewBasket")}</Text>
+        <Text style={styles.cartPrice}>{formatPrice(cartSubtotalMinor(props.cart))}</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 function BackButton({ onPress }: { onPress: () => void }) {
-  return <Pressable accessibilityLabel="Go back" onPress={onPress} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>;
+  const { t } = useTranslation(["customer"]);
+  return <Pressable accessibilityLabel={t("supermarket.goBackAccessibility")} onPress={onPress} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>;
 }
 
 function Centered({ children }: { children: React.ReactNode }) { return <View style={styles.centered}>{children}</View>; }
-function ErrorState(props: { message: string; onRetry?: () => void }) { return <View style={styles.errorState}><Text style={styles.errorText}>{props.message}</Text>{props.onRetry ? <Pressable onPress={props.onRetry} style={styles.retryButton}><Text style={styles.retryText}>Try again</Text></Pressable> : null}</View>; }
+function ErrorState(props: { message: string; onRetry?: () => void }) {
+  const { t } = useTranslation(["customer"]);
+  return (
+    <View style={styles.errorState}>
+      <Text style={styles.errorText}>{props.message}</Text>
+      {props.onRetry ? <Pressable onPress={props.onRetry} style={styles.retryButton}><Text style={styles.retryText}>{t("restaurants.tryAgain")}</Text></Pressable> : null}
+    </View>
+  );
+}
 function formatPrice(value: number) { return `${(value / 100).toFixed(2)} ILS`; }
-function readError(error: unknown) { return error instanceof ApiError || error instanceof Error ? error.message : "The request could not be completed."; }
+function readError(error: unknown) { return error instanceof ApiError || error instanceof Error ? error.message : i18n.t("common:requestFailed"); }
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   storeHeader: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, flexDirection: "row", padding: 20 },
   catalogHeader: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, flexDirection: "row", minHeight: 86, padding: 16 },
-  headerCopy: { flex: 1, marginLeft: 14 },
+  headerCopy: { flex: 1, marginStart: 14 },
   headerEyebrow: { color: "#B8D8CD", fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
   headerTitle: { color: "#FFFFFF", fontSize: 28, fontWeight: "900", marginTop: 4 },
   catalogTitle: { color: "#FFFFFF", fontSize: 20, fontWeight: "900", marginTop: 3 },
@@ -316,7 +358,7 @@ const styles = StyleSheet.create({
   searchButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   departmentStrip: { flexGrow: 0, maxHeight: 54 },
   departmentContent: { paddingHorizontal: 12, paddingBottom: 8 },
-  chip: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: 999, borderWidth: 1, marginRight: 8, paddingHorizontal: 14, paddingVertical: 9 },
+  chip: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: 999, borderWidth: 1, marginEnd: 8, paddingHorizontal: 14, paddingVertical: 9 },
   chipActive: { backgroundColor: customerTheme.colors.secondary, borderColor: customerTheme.colors.secondary },
   chipText: { color: customerTheme.colors.textMuted, fontSize: 11, fontWeight: "800" },
   chipTextActive: { color: "#FFFFFF" },
@@ -335,13 +377,13 @@ const styles = StyleSheet.create({
   productPrice: { color: customerTheme.colors.secondary, flex: 1, fontSize: 13, fontWeight: "900" },
   addButton: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: 12, height: 34, justifyContent: "center", width: 34 },
   addButtonText: { color: "#FFFFFF", fontSize: 21, fontWeight: "900" },
-  cartDock: { backgroundColor: "rgba(255,249,245,0.97)", bottom: 0, left: 0, padding: 13, position: "absolute", right: 0 },
+  cartDock: { backgroundColor: "rgba(255,249,245,0.97)", bottom: 0, start: 0, padding: 13, position: "absolute", end: 0 },
   cartButton: { alignItems: "center", alignSelf: "center", backgroundColor: customerTheme.colors.primary, borderRadius: 16, flexDirection: "row", maxWidth: 870, minHeight: 56, paddingHorizontal: 14, width: "100%" },
   cartCount: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
-  cartLabel: { color: "#FFFFFF", flex: 1, fontSize: 14, fontWeight: "900", marginLeft: 14 },
+  cartLabel: { color: "#FFFFFF", flex: 1, fontSize: 14, fontWeight: "900", marginStart: 14 },
   cartPrice: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
   productDetailHeader: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, flexDirection: "row", padding: 16 },
-  productDetailHeaderTitle: { color: "#FFFFFF", flex: 1, fontSize: 18, fontWeight: "900", marginLeft: 14 },
+  productDetailHeaderTitle: { color: "#FFFFFF", flex: 1, fontSize: 18, fontWeight: "900", marginStart: 14 },
   detailContent: { alignSelf: "center", maxWidth: 720, padding: 20, width: "100%" },
   detailArtwork: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: 24, height: 270, justifyContent: "center", overflow: "hidden" },
   detailEmoji: { fontSize: 100 },
