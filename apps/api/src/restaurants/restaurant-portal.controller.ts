@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -105,6 +105,28 @@ export class RestaurantPortalController {
     return this.menu.updateItem(restaurant.id, itemId, input, {
       canManagePrices: requestHoldsPermission(request, "MANAGE_PRICES")
     });
+  }
+
+  @Delete("me/menu/items/:itemId")
+  @RequirePermission("MANAGE_PRODUCTS")
+  @ApiOperation({ summary: "Delete a product that has never been ordered" })
+  async deleteItem(
+    @Req() request: AuthenticatedRequest,
+    @Param("itemId", new ParseUUIDPipe()) itemId: string
+  ) {
+    const restaurant = await this.restaurants.requireOwnRestaurant(request.user.id);
+    return this.menu.deleteItem(restaurant.id, itemId);
+  }
+
+  @Delete("me/menu/categories/:categoryId")
+  @RequirePermission("MANAGE_MENU")
+  @ApiOperation({ summary: "Delete an empty category" })
+  async deleteCategory(
+    @Req() request: AuthenticatedRequest,
+    @Param("categoryId", new ParseUUIDPipe()) categoryId: string
+  ) {
+    const restaurant = await this.restaurants.requireOwnRestaurant(request.user.id);
+    return this.menu.deleteCategory(restaurant.id, categoryId);
   }
 
   @Patch("me/menu/items/:itemId/availability")

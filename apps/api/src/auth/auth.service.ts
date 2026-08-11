@@ -9,6 +9,8 @@ import {
   type User,
   UserRole
 } from "../generated/prisma/client";
+import { AuthorizationService } from "../common/authorization/authorization.service";
+import { allPermissions } from "../common/authorization/permissions";
 import { ApiException } from "../common/api.exception";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -18,7 +20,7 @@ import {
   ResetPasswordDto,
   VerifyOtpDto
 } from "./auth.dto";
-import type { AuthResult, AuthenticatedUser, JwtPayload, PublicUser } from "./auth.types";
+import type { AccessContextView, AuthResult, AuthenticatedUser, JwtPayload, PublicUser } from "./auth.types";
 import {
   hashOpaqueToken,
   hashOtp,
@@ -45,6 +47,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
+    private readonly authorization: AuthorizationService,
     @Inject(OTP_PROVIDER) private readonly otpProvider: OtpProvider
   ) {}
 
@@ -203,8 +206,35 @@ export class AuthService {
     return { message: "You have been logged out." };
   }
 
-  me(user: AuthenticatedUser): { user: PublicUser } {
-    return { user: toPublicUser(user) };
+  /**
+   * Returns the caller plus the access context the interface needs to decide what to render.
+   *
+   * The permissions are advisory for the client only — every operation is still checked by
+   * PermissionsGuard on the way in. Sending them avoids the interface guessing, and avoids it
+   * offering a control that the API will then refuse.
+   */
+  async me(user: AuthenticatedUser): Promise<{ user: PublicUser; access: AccessContextView }> {
+    const context = await this.authorization.resolve(user.id, user.role);
+    const businessId = AuthorizationService.soleBusinessId(context);
+    const business = businessId
+      ? await this.prisma.restaurant.findUnique({
+          where: { id: businessId },
+          select: { id: true, name: true, businessType: true, status: true, isOpen: true }
+        })
+      : null;
+    const grant = context.businessGrants.find((entry) => entry.businessId === businessId);
+
+    return {
+      user: toPublicUser(user),
+      access: {
+        isSuperAdmin: context.isSuperAdmin,
+        permissions: context.isSuperAdmin
+          ? [...allPermissions]
+          : [...context.platformPermissions, ...(grant?.permissions ?? [])],
+        roleKey: grant?.roleKey ?? null,
+        business
+      }
+    };
   }
 
   async requestPasswordResetCode(input: PhoneDto): Promise<OtpRequestResult> {

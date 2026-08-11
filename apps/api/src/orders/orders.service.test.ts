@@ -583,6 +583,55 @@ test("adminGetOrder returns any order regardless of ownership", async () => {
   assert.equal(view.id, order.id);
 });
 
+test("the live queue groups orders the way the floor thinks about them, oldest first", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const first = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  const second = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  const third = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, second.id, "ACCEPTED", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, third.id, "ACCEPTED", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, third.id, "PREPARING", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, third.id, "READY_FOR_PICKUP", undefined);
+
+  const queue = await service.listLiveForBusiness(restaurant.ownerUserId);
+
+  assert.deepEqual(queue.new.map((order) => order.id), [first.id]);
+  // ACCEPTED and PREPARING are one operational group.
+  assert.deepEqual(queue.inProgress.map((order) => order.id), [second.id]);
+  assert.deepEqual(queue.ready.map((order) => order.id), [third.id]);
+  assert.equal(queue.business.businessType, "RESTAURANT");
+  // The elapsed-time badges are measured against the server's clock, not the tablet's.
+  assert.ok(queue.serverTime instanceof Date);
+});
+
+test("the live queue never shows another business's orders", async () => {
+  const { prisma, service } = createService();
+  const mine = prisma.seedRestaurant();
+  const theirs = prisma.seedRestaurant({ name: "Other" });
+  const theirItem = prisma.seedMenuItem(theirs.id);
+  await service.createOrder(randomUUID(), baseInput(theirs.id, theirItem.id) as never);
+
+  const queue = await service.listLiveForBusiness(mine.ownerUserId);
+
+  assert.deepEqual([queue.new.length, queue.inProgress.length, queue.ready.length], [0, 0, 0]);
+});
+
+test("a terminal order drops out of the live queue entirely", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "REJECTED", "No stock");
+
+  const queue = await service.listLiveForBusiness(restaurant.ownerUserId);
+
+  // This is what stops the alert: the order leaves PLACED, so nothing is left to sound about.
+  assert.deepEqual([queue.new.length, queue.inProgress.length, queue.ready.length], [0, 0, 0]);
+});
+
 test("an admin cancellation closes the courier task so no driver can complete it", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();

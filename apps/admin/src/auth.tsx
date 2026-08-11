@@ -1,38 +1,64 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, fetchCurrentUser, getAccessToken, login as apiLogin, logout as apiLogout, setAccessToken, type PublicUser } from "./api";
+import {
+  ApiError,
+  fetchCurrentUser,
+  getAccessToken,
+  login as apiLogin,
+  logout as apiLogout,
+  setAccessToken,
+  type AccessContext,
+  type Permission,
+  type PublicUser
+} from "./api";
 
 type AuthState = {
   user: PublicUser | null;
+  access: AccessContext | null;
   isBooting: boolean;
   error: string | null;
+  /**
+   * Whether the interface should offer a capability. The API checks every operation regardless, so
+   * this only decides what is worth rendering — it is never the thing that protects an action.
+   */
+  can: (permission: Permission) => boolean;
   signIn: (countryCode: string, phoneNumber: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshAccess: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
 
+/** Roles that have somewhere to go in this application. */
+const supportedRoles = ["ADMIN", "RESTAURANT"];
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const [user, setUser] = useState<PublicUser | null>(null);
+  const [access, setAccess] = useState<AccessContext | null>(null);
   const [isBooting, setIsBooting] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  async function loadCurrent(): Promise<boolean> {
+    const current = await fetchCurrentUser();
+    if (!supportedRoles.includes(current.user.role)) {
+      setAccessToken(null);
+      setError(t("login.errorNotAdminRestore"));
+      return false;
+    }
+    setUser(current.user);
+    setAccess(current.access);
+    return true;
+  }
+
   useEffect(() => {
     async function restore() {
-      const token = getAccessToken();
-      if (!token) {
+      if (!getAccessToken()) {
         setIsBooting(false);
         return;
       }
       try {
-        const currentUser = await fetchCurrentUser();
-        if (currentUser.role !== "ADMIN") {
-          setAccessToken(null);
-          setError(t("login.errorNotAdminRestore"));
-        } else {
-          setUser(currentUser);
-        }
+        await loadCurrent();
       } catch {
         setAccessToken(null);
       } finally {
@@ -40,18 +66,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     void restore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function signIn(countryCode: string, phoneNumber: string, password: string) {
     setError(null);
     try {
       const result = await apiLogin({ countryCode, phoneNumber, password });
-      if (result.user.role !== "ADMIN") {
+      if (!supportedRoles.includes(result.user.role)) {
         setError(t("login.errorNotAdminSignIn"));
         return;
       }
       setAccessToken(result.accessToken);
-      setUser(result.user);
+      // Permissions come from the API rather than being inferred from the role, so a role whose
+      // permissions change later needs no client change.
+      await loadCurrent();
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : t("login.errorGeneric"));
     }
@@ -65,9 +94,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setAccessToken(null);
     setUser(null);
+    setAccess(null);
   }
 
-  return <AuthContext.Provider value={{ user, isBooting, error, signIn, signOut }}>{children}</AuthContext.Provider>;
+  async function refreshAccess() {
+    try {
+      await loadCurrent();
+    } catch {
+      // A failed refresh leaves the previous context in place; the next request will surface it.
+    }
+  }
+
+  function can(permission: Permission): boolean {
+    if (!access) return false;
+    return access.isSuperAdmin || access.permissions.includes(permission);
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, access, isBooting, error, can, signIn, signOut, refreshAccess }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthState {

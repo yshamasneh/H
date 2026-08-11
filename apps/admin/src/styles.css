@@ -368,3 +368,22 @@ table.data-table {
 .reason-modal p { margin: 0 0 14px; font-size: 13px; color: var(--ink-500); }
 
 textarea.text-input { width: 100%; min-height: 80px; resize: vertical; font-family: inherit; }
+
+/* Live order queue. New component types for the business shell, using the existing tokens and
+   logical properties so they mirror correctly in Arabic. */
+.queue-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start; }
+.order-ticket {
+  display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: start;
+  background: var(--card); border: 1px solid var(--border); border-inline-start: 4px solid var(--border);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer; font: inherit; color: inherit;
+}
+.order-ticket:hover { border-color: var(--brand); }
+.order-ticket.late { border-inline-start-color: var(--danger); background: var(--danger-soft); }
+.order-ticket-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.order-ticket-ref { font-weight: 800; font-size: 15px; color: var(--ink-950); letter-spacing: .02em; }
+.order-ticket-body { display: flex; justify-content: space-between; gap: 10px; font-size: 14.5px; color: var(--ink-800); }
+.order-ticket-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--ink-500); }
+
+/* Wide tables scroll inside their own container so the page never scrolls sideways. */
+.table-scroll { overflow-x: auto; }
+.num { font-variant-numeric: tabular-nums; }

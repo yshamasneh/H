@@ -135,7 +135,8 @@ function matchesOrderFilters(order: OrderRecord, where: any): boolean {
   if (!where) return true;
   if (where.customerId && order.customerId !== where.customerId) return false;
   if (where.restaurantId && order.restaurantId !== where.restaurantId) return false;
-  if (where.status && order.status !== where.status) return false;
+  if (where.status?.in) { if (!where.status.in.includes(order.status)) return false; }
+  else if (where.status && order.status !== where.status) return false;
   if (where.createdAt?.gte && order.createdAt < where.createdAt.gte) return false;
   if (where.createdAt?.lte && order.createdAt > where.createdAt.lte) return false;
   return true;
@@ -291,6 +292,8 @@ export class FakeOrdersPrisma {
       let matches = this.orders.filter((order) => matchesOrderFilters(order, where));
       if (orderBy?.createdAt === "desc") {
         matches = [...matches].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+      } else if (orderBy?.createdAt === "asc") {
+        matches = [...matches].sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
       }
       const sliced = typeof take === "number" ? matches.slice(skip, skip + take) : matches.slice(skip);
       return sliced.map((order) => this.hydrateOrder(order));

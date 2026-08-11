@@ -4,6 +4,7 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { ApiException } from "../common/api.exception";
 import { OtpPurpose, UserRole } from "../generated/prisma/client";
+import { AuthorizationService } from "../common/authorization/authorization.service";
 import { AuthService } from "./auth.service";
 import { hashPassword } from "./crypto.util";
 import type { OtpDelivery, OtpProvider } from "./otp.provider";
@@ -47,7 +48,8 @@ function createContext() {
     OTP_MAX_ATTEMPTS: 5,
     PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES: 10
   });
-  const auth = new AuthService(prisma as never, config, new JwtService(), otp);
+  const authorization = new AuthorizationService(prisma as never);
+  const auth = new AuthService(prisma as never, config, new JwtService(), authorization, otp);
   return { prisma, otp, auth };
 }
 

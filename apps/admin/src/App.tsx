@@ -3,6 +3,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { AuditLogPage } from "./pages/AuditLogPage";
+import { BusinessOrderPage } from "./pages/business/BusinessOrderPage";
+import { CataloguePage } from "./pages/business/CataloguePage";
+import { InventoryPage } from "./pages/business/InventoryPage";
+import { LiveOrdersPage } from "./pages/business/LiveOrdersPage";
+import { StaffPage } from "./pages/business/StaffPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DriversPage } from "./pages/DriversPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -24,19 +29,36 @@ export default function App() {
     return <LoginPage />;
   }
 
+  // Two shells, one application: a business account operates its own store, a platform account
+  // administers the platform. Which one you get follows from the account type.
+  return <Layout>{user.role === "RESTAURANT" ? <BusinessRoutes /> : <PlatformRoutes />}</Layout>;
+}
+
+function BusinessRoutes() {
   return (
-    <Layout>
-      <Routes>
-        <Route element={<DashboardPage />} path="/" />
-        <Route element={<RestaurantsPage />} path="/restaurants" />
-        <Route element={<RestaurantDetailPage />} path="/restaurants/:restaurantId" />
-        <Route element={<OrdersPage />} path="/orders" />
-        <Route element={<OrderDetailPage />} path="/orders/:orderId" />
-        <Route element={<DriversPage />} path="/drivers" />
-        <Route element={<UsersPage />} path="/users" />
-        <Route element={<AuditLogPage />} path="/audit-log" />
-        <Route element={<Navigate replace to="/" />} path="*" />
-      </Routes>
-    </Layout>
+    <Routes>
+      <Route element={<LiveOrdersPage />} path="/business" />
+      <Route element={<BusinessOrderPage />} path="/business/orders/:orderId" />
+      <Route element={<CataloguePage />} path="/business/catalogue" />
+      <Route element={<InventoryPage />} path="/business/inventory" />
+      <Route element={<StaffPage />} path="/business/staff" />
+      <Route element={<Navigate replace to="/business" />} path="*" />
+    </Routes>
+  );
+}
+
+function PlatformRoutes() {
+  return (
+    <Routes>
+      <Route element={<DashboardPage />} path="/" />
+      <Route element={<RestaurantsPage />} path="/restaurants" />
+      <Route element={<RestaurantDetailPage />} path="/restaurants/:restaurantId" />
+      <Route element={<OrdersPage />} path="/orders" />
+      <Route element={<OrderDetailPage />} path="/orders/:orderId" />
+      <Route element={<DriversPage />} path="/drivers" />
+      <Route element={<UsersPage />} path="/users" />
+      <Route element={<AuditLogPage />} path="/audit-log" />
+      <Route element={<Navigate replace to="/" />} path="*" />
+    </Routes>
   );
 }

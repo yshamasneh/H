@@ -461,3 +461,32 @@ Four defects and one business-model correction, all of which had to land before 
 - A failed delivery deliberately does **not** restore stock. The goods left the premises, and the business is paid for them under the agreed policy, so returning them to inventory would overstate stock.
 - Two verification orders were created in the development database and left in place, one `DELIVERY_FAILED` and one `CANCELLED`. They are genuine records and their stock effects are explained by the `InventoryMovement` ledger; deleting them would have left inventory inconsistent.
 - The mobile app's service-fee removal is in the working tree but deliberately not committed here, because those files also carry unrelated in-progress i18n work that is not mine to commit.
+
+## 2026-08-11: Phase 15.3 — Business shell and live order intake
+
+The screen a restaurant or supermarket actually operates from. It did not exist before this phase: business owners had only the mobile app, and there was no web interface for entering products at all.
+
+### Completed
+
+- **Two shells, one application.** `apps/admin` now serves both a platform shell and a business shell; which one you get follows from the account type, and every section is gated by permission. Nothing about the platform shell changed except that its navigation is now permission-filtered too.
+- **`/auth/me` returns an access context** — permissions, business, and role key — so the interface stops guessing what to render and never offers a control the API will refuse. Advisory only; every operation is still authorized server-side.
+- **Live Orders**: new / in progress / ready, oldest first because the oldest unhandled order is the most urgent. Order tickets carry reference, item count, total and elapsed time, and escalate visually past three minutes. One request (`GET /restaurant/me/orders/live`) rather than three, so the safety poll stays cheap; it uses the `(restaurantId, status, createdAt)` index added in 15.0.
+- **The alert is driven by server state.** The loop runs while the server still reports unaccepted orders, so it stops because the order left `PLACED` — whoever accepted it, on whichever device. It is never gated on this browser having clicked something, which is what makes the two-employee case correct. Escalates to a double tone past three minutes.
+- **Sound must be armed once, and says so.** Browsers refuse audio without a user gesture, so a tablet that reloads overnight would otherwise sit silent with no indication. Arming is explicit, persisted, and its state is always visible; a blocked context surfaces its own message. The tone is generated with Web Audio rather than shipped as an asset.
+- **Four refresh paths**: socket event, socket reconnect, tab focus, and a 30-second poll regardless. A socket is the fast path, not the reliable one — a dropped connection would otherwise be indistinguishable from a quiet evening.
+- **Order detail** with accept, reject, and advance, reusing the existing compare-and-swap. Losing an acceptance race is treated as normal rather than an error: the view re-fetches and reports who handled it. The substitution panel appears only for a supermarket.
+- **Catalogue**: categories and products, create/edit/delete, availability toggles. Price inputs are disabled without `MANAGE_PRICES` and the API enforces the same rule independently. Two new guarded delete endpoints refuse to destroy history — a product that appears on any order, or a category that still holds products.
+- **Inventory, suppliers and purchase orders** for supermarkets, and **staff management** using the 15.2 endpoints.
+
+### Verified
+
+- `npm run typecheck` clean; API 194 tests (193 pass, 1 skipped, 0 fail), mobile 23 pass; `npm run test:e2e` passes; `npm run build` succeeds.
+- Verified over real HTTP with three accounts. `/auth/me` returns 11 permissions and `BUSINESS_ADMIN` for a business owner, 21 and `isSuperAdmin` for the platform admin. Three concurrent acceptances of one order produced exactly one 200 and two 409s, and the order then left the `new` group — which is precisely what silences the alert everywhere. The full catalogue lifecycle worked, and both delete guards refused: a product with eight order lines and a category still holding products.
+- Verified in a real browser at 2048×926 in Arabic. The sidebar sits on the right, the queue columns read right to left with `جديدة` rightmost, and a restaurant sees no inventory section while a supermarket does — along with the SKU, barcode, and stock fields a restaurant has no use for.
+- **Realtime confirmed without any browser interaction**: an order placed by `curl` appeared in the `جديدة` column on its own, and the "last updated" stamp advanced.
+
+### What could not be verified in this environment
+
+- **Whether sound is audible.** There is no audio capture here. What was verified is everything around it: arming flips the indicator and clears the warning, no autoplay or `AudioContext` error appears in the console, and the queue state that drives the loop behaves correctly. The tone itself needs a human with speakers.
+- **Multi-device silencing** was verified through the API rather than two real browsers: the winner of a concurrent acceptance takes the order out of `PLACED`, and every client's next refresh sees an empty `new` group. Two tablets side by side would be a better test.
+- Screenshot capture timed out repeatedly on heavier pages; those were confirmed through the accessibility tree instead, which also proved the layout renders once rather than twice as one truncated capture suggested.

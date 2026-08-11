@@ -1,4 +1,4 @@
-import type { UserRole } from "../generated/prisma/enums";
+import type { BusinessType, RestaurantStatus, UserRole } from "../generated/prisma/enums";
 
 export type PublicUser = {
   id: string;
@@ -28,4 +28,21 @@ export type JwtPayload = {
   ver: number;
   iat?: number;
   exp?: number;
+};
+
+/**
+ * What the interface needs to decide which sections to render. Advisory only: every operation is
+ * still authorized server-side, so a client that ignores this gains nothing.
+ */
+export type AccessContextView = {
+  isSuperAdmin: boolean;
+  permissions: string[];
+  roleKey: string | null;
+  business: {
+    id: string;
+    name: string;
+    businessType: BusinessType;
+    status: RestaurantStatus;
+    isOpen: boolean;
+  } | null;
 };

@@ -1,3 +1,5 @@
+import type { AccessContext } from "./api.business";
+export type { AccessContext, BusinessType, Permission } from "./api.business";
 const configuredApiUrl = (import.meta as any).env?.VITE_API_URL?.replace(/\/$/, "");
 if ((import.meta as any).env?.PROD && (!configuredApiUrl || !configuredApiUrl.startsWith("https://"))) {
   throw new Error("Production builds require an HTTPS VITE_API_URL.");
@@ -176,8 +178,8 @@ export function login(input: { countryCode: string; phoneNumber: string; passwor
   return request("/api/v1/auth/login", { method: "POST", body: input });
 }
 
-export function fetchCurrentUser(): Promise<PublicUser> {
-  return request<{ user: PublicUser }>("/api/v1/auth/me").then((response) => response.user);
+export function fetchCurrentUser(): Promise<{ user: PublicUser; access: AccessContext }> {
+  return request("/api/v1/auth/me");
 }
 
 export function logout(): Promise<{ message: string }> {
@@ -264,14 +266,14 @@ export function listAuditLog(
   return request(`/api/v1/admin/audit-log${toQuery(params)}`);
 }
 
-function toQuery(params: Record<string, unknown>): string {
+export function toQuery(params: Record<string, unknown>): string {
   const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== "");
   if (entries.length === 0) return "";
   const search = new URLSearchParams(entries.map(([key, value]) => [key, String(value)]));
   return `?${search.toString()}`;
 }
 
-async function request<T>(path: string, options: { method?: "GET" | "POST" | "PATCH"; body?: unknown } = {}): Promise<T> {
+export async function request<T>(path: string, options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {}): Promise<T> {
   const accessToken = getAccessToken();
   let response: Response;
   try {

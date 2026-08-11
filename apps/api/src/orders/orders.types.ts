@@ -1,4 +1,5 @@
 import type {
+  BusinessType,
   DeliveryFailureReason,
   DeliveryFaultParty,
   DeliveryStatus,
@@ -109,4 +110,16 @@ export type Page<T> = {
   page: number;
   pageSize: number;
   total: number;
+};
+
+/**
+ * The live queue a business operates from. `serverTime` is included so elapsed-time badges are
+ * measured against the server's clock rather than a tablet's, which may be wrong.
+ */
+export type LiveOrderQueueView = {
+  business: { id: string; name: string; businessType: BusinessType; isOpen: boolean };
+  new: OrderDetailView[];
+  inProgress: OrderDetailView[];
+  ready: OrderDetailView[];
+  serverTime: Date;
 };

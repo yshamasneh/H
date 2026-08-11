@@ -123,6 +123,44 @@ export class MenuService {
     return toItemView(updated);
   }
 
+  /**
+   * Deletes a product, but refuses once it appears on any order.
+   *
+   * Order lines snapshot their own name and price, but the row still references the product, and
+   * removing it would break the link between an order and what was actually sold. Marking the item
+   * unavailable is the right move for something no longer offered.
+   */
+  async deleteItem(restaurantId: string, itemId: string): Promise<{ message: string }> {
+    const item = await this.requireOwnItem(restaurantId, itemId);
+    const orderedCount = await this.prisma.orderItem.count({ where: { menuItemId: item.id } });
+    if (orderedCount > 0) {
+      throw new ApiException(
+        409,
+        "MENU_ITEM_IN_USE",
+        "This product appears on past orders and cannot be deleted. Mark it unavailable instead.",
+        { orderedCount }
+      );
+    }
+    await this.prisma.menuItem.delete({ where: { id: item.id } });
+    return { message: "The product was deleted." };
+  }
+
+  /** Refuses while the category still holds products, so nothing is deleted by surprise. */
+  async deleteCategory(restaurantId: string, categoryId: string): Promise<{ message: string }> {
+    const category = await this.requireOwnCategory(restaurantId, categoryId);
+    const itemCount = await this.prisma.menuItem.count({ where: { categoryId: category.id } });
+    if (itemCount > 0) {
+      throw new ApiException(
+        409,
+        "MENU_CATEGORY_NOT_EMPTY",
+        "Move or delete this category's products before deleting the category.",
+        { itemCount }
+      );
+    }
+    await this.prisma.menuCategory.delete({ where: { id: category.id } });
+    return { message: "The category was deleted." };
+  }
+
   async setItemAvailability(restaurantId: string, itemId: string, isAvailable: boolean): Promise<MenuItemOwnerView> {
     const item = await this.requireOwnItem(restaurantId, itemId);
     const updated = await this.prisma.menuItem.update({ where: { id: item.id }, data: { isAvailable } });

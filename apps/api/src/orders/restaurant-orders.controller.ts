@@ -25,6 +25,12 @@ export class RestaurantOrdersController {
     return this.orders.listForRestaurantOwner(request.user.id, query.page ?? 1, query.pageSize ?? 20);
   }
 
+  @Get("live")
+  @ApiOperation({ summary: "The operational order queue grouped into new, in progress, and ready" })
+  live(@Req() request: AuthenticatedRequest) {
+    return this.orders.listLiveForBusiness(request.user.id);
+  }
+
   @Get(":orderId")
   @ApiOperation({ summary: "Get a single order belonging to the authenticated restaurant" })
   getOne(@Req() request: AuthenticatedRequest, @Param("orderId", new ParseUUIDPipe()) orderId: string) {

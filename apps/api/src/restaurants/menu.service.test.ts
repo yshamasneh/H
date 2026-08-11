@@ -168,6 +168,48 @@ test("resending the same price is not treated as a price change", async () => {
   assert.equal(updated.name, "Shawarma Plate");
 });
 
+test("a product that has never been ordered can be deleted", async () => {
+  const { prisma, menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Mains" });
+  const item = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Temp", priceMinor: 100 });
+
+  await menu.deleteItem("restaurant-a", item.id);
+
+  assert.equal(prisma.menuItems.some((candidate) => candidate.id === item.id), false);
+});
+
+test("a product that appears on an order is refused rather than deleted", async () => {
+  const { prisma, menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Mains" });
+  const item = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Sold", priceMinor: 100 });
+  prisma.seedOrderItemFor(item.id);
+
+  // Order lines snapshot their own name and price, but the reference must stay resolvable.
+  await assert.rejects(menu.deleteItem("restaurant-a", item.id), hasCode("MENU_ITEM_IN_USE"));
+  assert.equal(prisma.menuItems.some((candidate) => candidate.id === item.id), true);
+});
+
+test("a category is only deletable once it holds no products", async () => {
+  const { prisma, menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Mains" });
+  const item = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Temp", priceMinor: 100 });
+
+  await assert.rejects(menu.deleteCategory("restaurant-a", category.id), hasCode("MENU_CATEGORY_NOT_EMPTY"));
+
+  await menu.deleteItem("restaurant-a", item.id);
+  await menu.deleteCategory("restaurant-a", category.id);
+  assert.equal(prisma.menuCategories.some((candidate) => candidate.id === category.id), false);
+});
+
+test("one restaurant cannot delete another restaurant's product or category", async () => {
+  const { menu } = createServices();
+  const categoryB = await menu.createCategory("restaurant-b", { name: "Theirs" });
+  const itemB = await menu.createItem("restaurant-b", { categoryId: categoryB.id, name: "Theirs", priceMinor: 100 });
+
+  await assert.rejects(menu.deleteItem("restaurant-a", itemB.id), hasCode("MENU_ITEM_NOT_FOUND"));
+  await assert.rejects(menu.deleteCategory("restaurant-a", categoryB.id), hasCode("MENU_CATEGORY_NOT_FOUND"));
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

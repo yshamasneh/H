@@ -95,6 +95,7 @@ export class FakeRestaurantPrisma {
   readonly users: UserRecord[] = [];
   readonly restaurants: RestaurantRecord[] = [];
   readonly menuCategories: MenuCategoryRecord[] = [];
+  readonly orderItems: { id: string; menuItemId: string }[] = [];
   readonly menuItems: MenuItemRecord[] = [];
   readonly orders: OrderRecord[] = [];
   readonly notifications: NotificationRecord[] = [];
@@ -113,6 +114,7 @@ export class FakeRestaurantPrisma {
   readonly restaurant = {} as any;
   readonly menuCategory = {} as any;
   readonly menuItem = {} as any;
+  readonly orderItem = {} as any;
   readonly order = {} as any;
   readonly notification = {} as any;
   readonly auditLog = {} as any;
@@ -285,6 +287,22 @@ export class FakeRestaurantPrisma {
       return category;
     };
 
+    // Deletion is guarded by these counts, so the fake has to answer them.
+    this.orderItem.count = async ({ where }: any) =>
+      this.orderItems.filter((line) => line.menuItemId === where.menuItemId).length;
+    this.menuItem.count = async ({ where }: any) =>
+      this.menuItems.filter((item) => item.categoryId === where.categoryId).length;
+    this.menuItem.delete = async ({ where }: any) => {
+      const index = this.menuItems.findIndex((item) => item.id === where.id);
+      if (index < 0) throw new Error("missing menu item");
+      return this.menuItems.splice(index, 1)[0];
+    };
+    this.menuCategory.delete = async ({ where }: any) => {
+      const index = this.menuCategories.findIndex((category) => category.id === where.id);
+      if (index < 0) throw new Error("missing menu category");
+      return this.menuCategories.splice(index, 1)[0];
+    };
+
     this.menuItem.findUnique = async ({ where }: any) =>
       this.menuItems.find((item) => item.id === where.id) ?? null;
     this.menuItem.findFirst = async ({ where }: any) => {
@@ -422,6 +440,11 @@ export class FakeRestaurantPrisma {
     };
     this.orders.push(order);
     return order;
+  }
+
+  /** Marks a product as having appeared on an order, which is what blocks deletion. */
+  seedOrderItemFor(menuItemId: string): void {
+    this.orderItems.push({ id: randomUUID(), menuItemId });
   }
 
   seedApprovedOpenRestaurant(overrides: Partial<RestaurantRecord> = {}): RestaurantRecord {

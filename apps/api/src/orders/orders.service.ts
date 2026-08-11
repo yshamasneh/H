@@ -33,7 +33,7 @@ import type {
   ProposeFulfillmentAdjustmentDto,
   RestaurantOrderStatusAction
 } from "./orders.dto";
-import type { OrderQuoteView, Page } from "./orders.types";
+import type { LiveOrderQueueView, OrderQuoteView, Page } from "./orders.types";
 import type { OrderDetailView } from "./orders.types";
 import { calculateOrderFees, defaultDeliveryPricing, type DeliveryPricingConfig } from "./pricing";
 
@@ -179,6 +179,46 @@ export class OrdersService {
       page,
       pageSize,
       total
+    };
+  }
+
+  /**
+   * The operational queue for a business, grouped the way the floor thinks about it.
+   *
+   * One request rather than three so the 30-second safety poll stays cheap, and ordered oldest
+   * first because the oldest unhandled order is always the most urgent. Uses the
+   * (restaurantId, status, createdAt) index.
+   */
+  async listLiveForBusiness(memberUserId: string): Promise<LiveOrderQueueView> {
+    const restaurant = await this.requireOwnRestaurant(memberUserId);
+    const groups = {
+      new: [OrderStatus.PLACED],
+      inProgress: [OrderStatus.ACCEPTED, OrderStatus.PREPARING],
+      ready: [OrderStatus.READY_FOR_PICKUP]
+    } as const;
+
+    const [newOrders, inProgress, ready] = await Promise.all(
+      Object.values(groups).map((statuses) =>
+        this.prisma.order.findMany({
+          where: { restaurantId: restaurant.id, status: { in: [...statuses] } },
+          include: orderInclude,
+          orderBy: { createdAt: "asc" },
+          take: 100
+        })
+      )
+    );
+
+    return {
+      business: {
+        id: restaurant.id,
+        name: restaurant.name,
+        businessType: restaurant.businessType,
+        isOpen: restaurant.isOpen
+      },
+      new: newOrders.map((order) => toOrderDetailView(order, withActorNames)),
+      inProgress: inProgress.map((order) => toOrderDetailView(order, withActorNames)),
+      ready: ready.map((order) => toOrderDetailView(order, withActorNames)),
+      serverTime: new Date()
     };
   }
 
