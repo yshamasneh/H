@@ -19,7 +19,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
 import { restaurantModerationTransitions } from "./restaurant.rules";
-import type { AdminRestaurantsQueryDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
+import type { AdminCreateBusinessDto, AdminRestaurantsQueryDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
 import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantProfileView, RestaurantPublicView, SupermarketCatalogView, SupermarketProductView } from "./restaurants.types";
 
 @Injectable()
@@ -92,6 +92,55 @@ export class RestaurantsService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Creates a business from the Super Admin dashboard, owner account included.
+   *
+   * Deliberately delegates to `register` rather than duplicating it: that path already creates the
+   * owner, the business, and — since 15.1 — the BusinessMember row without which the owner would be
+   * locked out of their own portal. A second implementation would be a second place for that bug to
+   * come back. The only differences are that an administrator can approve it immediately and that
+   * the action is attributed in the audit log.
+   */
+  async adminCreateBusiness(
+    adminUserId: string,
+    input: AdminCreateBusinessDto
+  ): Promise<RestaurantProfileView> {
+    const registration = await this.register({
+      countryCode: input.countryCode,
+      phoneNumber: input.phoneNumber,
+      ownerFullName: input.ownerFullName,
+      password: input.password,
+      confirmPassword: input.password,
+      restaurantName: input.businessName,
+      addressLine: input.addressLine,
+      description: input.description,
+      businessType: input.businessType
+    } as RestaurantRegisterDto);
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const business = input.approveImmediately
+        ? await tx.restaurant.update({
+            where: { id: registration.restaurantId },
+            data: { status: RestaurantStatus.APPROVED }
+          })
+        : await tx.restaurant.findUniqueOrThrow({ where: { id: registration.restaurantId } });
+      await writeAuditLog(tx, {
+        actorUserId: adminUserId,
+        action: "BUSINESS_CREATED_BY_ADMIN",
+        entityType: "Restaurant",
+        entityId: business.id,
+        businessId: business.id,
+        metadata: {
+          businessType: business.businessType,
+          approvedImmediately: input.approveImmediately === true
+        }
+      });
+      return business;
+    });
+
+    return toProfileView(created);
   }
 
   /** Resolves the caller's business from their membership, so staff accounts work, not just owners. */

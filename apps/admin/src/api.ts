@@ -298,3 +298,37 @@ export async function request<T>(path: string, options: { method?: "GET" | "POST
   }
   return payload as T;
 }
+
+// ---- platform user and business management (15.5) ----
+
+export function createAdminUser(body: {
+  fullName: string;
+  countryCode: string;
+  phoneNumber: string;
+  password: string;
+  platformRoleKey?: string;
+}): Promise<AdminUserView> {
+  return request("/api/v1/admin/users/admins", { method: "POST", body });
+}
+
+export function setUserActive(userId: string, isActive: boolean, reason: string): Promise<AdminUserView> {
+  return request(`/api/v1/admin/users/${userId}/active`, { method: "PATCH", body: { isActive, reason } });
+}
+
+export function assignPlatformRole(userId: string, platformRoleKey?: string): Promise<AdminUserView> {
+  return request(`/api/v1/admin/users/${userId}/platform-role`, { method: "PATCH", body: { platformRoleKey } });
+}
+
+export function createBusiness(body: {
+  businessName: string;
+  ownerFullName: string;
+  countryCode: string;
+  phoneNumber: string;
+  password: string;
+  addressLine: string;
+  businessType: "RESTAURANT" | "SUPERMARKET";
+  description?: string;
+  approveImmediately?: boolean;
+}): Promise<RestaurantProfile> {
+  return request("/api/v1/admin/restaurants", { method: "POST", body });
+}

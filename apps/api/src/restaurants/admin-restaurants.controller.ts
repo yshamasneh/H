@@ -7,7 +7,7 @@ import { RequirePermission } from "../common/decorators/require-permission.decor
 import { RolesGuard } from "../common/guards/roles.guard";
 import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { UserRole } from "../generated/prisma/client";
-import { AdminRestaurantsQueryDto, RestaurantAdminActionReasonDto } from "./restaurants.dto";
+import { AdminCreateBusinessDto, AdminRestaurantsQueryDto, RestaurantAdminActionReasonDto } from "./restaurants.dto";
 import { RestaurantsService } from "./restaurants.service";
 import { OrdersPaginationQueryDto } from "../orders/orders.dto";
 
@@ -24,6 +24,12 @@ export class AdminRestaurantsController {
   @ApiOperation({ summary: "List restaurants, optionally filtered by status and open/closed" })
   list(@Query() query: AdminRestaurantsQueryDto) {
     return this.restaurants.adminList(query);
+  }
+
+  @Post()
+  @ApiOperation({ summary: "Create a restaurant or supermarket together with its owner account" })
+  create(@Req() request: AuthenticatedRequest, @Body() input: AdminCreateBusinessDto) {
+    return this.restaurants.adminCreateBusiness(request.user.id, input);
   }
 
   @Get(":restaurantId")

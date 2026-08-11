@@ -60,7 +60,17 @@ export class FakeAdminPrisma {
   readonly orderStatusHistories: OrderStatusHistoryRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
 
+  readonly roles: { id: string; key: string; scope: string }[] = [
+    { id: randomUUID(), key: "SUPER_ADMIN", scope: "PLATFORM" },
+    { id: randomUUID(), key: "BUSINESS_ADMIN", scope: "BUSINESS" }
+  ];
+  readonly refreshSessions: { userId: string; revokedAt: Date | null }[] = [];
+
+  private transactionTail: Promise<void> = Promise.resolve();
+
   readonly user = {} as any;
+  readonly role = {} as any;
+  readonly refreshSession = {} as any;
   readonly restaurant = {} as any;
   readonly order = {} as any;
   readonly delivery = {} as any;
@@ -93,6 +103,38 @@ export class FakeAdminPrisma {
           (where?.isOnline === undefined || profile.isOnline === where.isOnline) &&
           (!where?.status || profile.status === where.status)
       ).length;
+
+    this.role.findUnique = async ({ where }: any) =>
+      this.roles.find((role) => (where.key ? role.key === where.key : role.id === where.id)) ?? null;
+    this.auditLog.create = async ({ data }: any) => { this.auditLogs.push(data); return data; };
+    this.refreshSession.updateMany = async ({ where }: any) => {
+      const matches = this.refreshSessions.filter((session) => session.userId === where.userId && session.revokedAt === null);
+      for (const session of matches) session.revokedAt = new Date();
+      return { count: matches.length };
+    };
+    this.user.findUnique = async ({ where }: any) =>
+      this.users.find((user) => (where.phone ? user.phone === where.phone : user.id === where.id)) ?? null;
+    this.user.create = async ({ data }: any) => {
+      const user: UserRecord = {
+        id: randomUUID(),
+        fullName: data.fullName,
+        phone: data.phone,
+        passwordHash: data.passwordHash,
+        role: data.role,
+        isActive: data.isActive ?? true,
+        phoneVerifiedAt: data.phoneVerifiedAt ?? null,
+        createdAt: new Date()
+      };
+      (user as any).platformRoleId = data.platformRoleId ?? null;
+      this.users.push(user);
+      return user;
+    };
+    this.user.update = async ({ where, data }: any) => {
+      const user = this.users.find((candidate) => candidate.id === where.id)!;
+      if (data.isActive !== undefined) user.isActive = data.isActive;
+      if (data.platformRoleId !== undefined) (user as any).platformRoleId = data.platformRoleId;
+      return user;
+    };
 
     this.user.count = async ({ where }: any) =>
       this.users.filter(
@@ -151,6 +193,21 @@ export class FakeAdminPrisma {
           (!where?.createdAt?.gte || entry.createdAt >= where.createdAt.gte) &&
           (!where?.createdAt?.lte || entry.createdAt <= where.createdAt.lte)
       ).length;
+  }
+
+  /** Serialises transaction bodies the way the other fakes do, so concurrency tests are meaningful. */
+  async $transaction<T>(operation: (transaction: this) => Promise<T>): Promise<T> {
+    let release!: () => void;
+    const previous = this.transactionTail;
+    this.transactionTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation(this);
+    } finally {
+      release();
+    }
   }
 
   seedUser(overrides: Partial<UserRecord> = {}): UserRecord {

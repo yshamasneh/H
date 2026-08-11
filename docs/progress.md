@@ -490,3 +490,26 @@ The screen a restaurant or supermarket actually operates from. It did not exist 
 - **Whether sound is audible.** There is no audio capture here. What was verified is everything around it: arming flips the indicator and clears the warning, no autoplay or `AudioContext` error appears in the console, and the queue state that drives the loop behaves correctly. The tone itself needs a human with speakers.
 - **Multi-device silencing** was verified through the API rather than two real browsers: the winner of a concurrent acceptance takes the order out of `PLACED`, and every client's next refresh sees an empty `new` group. Two tablets side by side would be a better test.
 - Screenshot capture timed out repeatedly on heavier pages; those were confirmed through the accessibility tree instead, which also proved the layout renders once rather than twice as one truncated capture suggested.
+
+## 2026-08-11: Phase 15.5 — Business and user creation from Super Admin
+
+Turns the platform shell from a read-and-approve tool into one that can actually onboard.
+
+### Completed
+
+- **Create a restaurant or supermarket, owner account included.** `adminCreateBusiness` delegates to the existing `register` service rather than duplicating it: that path already creates the owner, the business, and the `BusinessMember` row without which the owner is locked out of their own portal — the bug the end-to-end suite caught in 15.1. A second implementation would be a second place for it to come back. The only additions are optional immediate approval and an attributed audit entry.
+- **Create administrators.** An initial password is set by the creator and passed on, matching how business and driver accounts are already onboarded, since there is no email or SMS delivery. A platform role is optional at creation: an administrator with none holds no permissions and is refused by every administration route, which makes `MANAGE_ADMINS` meaningful rather than decorative.
+- **Suspend and restore accounts, and assign or remove platform roles.** Suspension is deliberately not deletion — orders reference their customer and business, and a financial record must always resolve to a person. Suspending bumps the token version and revokes refresh sessions in the same transaction, so it takes effect on the caller's next request rather than whenever a token happens to expire.
+- **Nobody can change their own access.** Refused by the API, not merely hidden in the interface.
+- `/admin/users` moves from a single read-only listing to full management, still behind `MANAGE_USERS` with the admin-specific operations behind `MANAGE_ADMINS`.
+
+### Verified
+
+- `npm run typecheck` clean; API 202 tests (201 pass, 1 skipped, 0 fail), mobile 23 pass; `npm run build` succeeds. Eight new tests cover creation, duplicate phone numbers, session revocation on suspension, self-change refusal, repeated suspension, and platform-role assignment and removal.
+- Verified over real HTTP. A supermarket created from the Super Admin dashboard came back `APPROVED`, and its owner could immediately sign in, read `/auth/me` with `BUSINESS_ADMIN` and 11 permissions, and open both the live queue and the inventory section — the membership row was there.
+- A newly created administrator with no platform role was refused `/admin/users` with 403; after being granted `SUPER_ADMIN` the same route returned 200. Suspending them turned their existing token into a 401 immediately and blocked a fresh login with 403. An attempt to suspend one's own account returned `409 ADMIN_SELF_CHANGE`.
+- All verification accounts, the created business, and their audit rows were removed afterwards; user, business, membership, role and order counts match their pre-verification values.
+
+### Notes
+
+- A build failure caught a field that a guard clause had silently skipped adding, after a typecheck chain had short-circuited without printing its failure. Worth remembering that `cmd && echo OK` prints nothing on failure, which reads too much like success.

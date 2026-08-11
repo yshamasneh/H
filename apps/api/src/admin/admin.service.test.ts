@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
+import { ApiException } from "../common/api.exception";
 import { OrderStatus, RestaurantStatus, UserRole } from "../generated/prisma/client";
 import { AdminService } from "./admin.service";
 import { FakeAdminPrisma } from "./testing/fake-prisma";
@@ -101,3 +102,138 @@ test("listAuditLog filters by actor and action", async () => {
   const byAction = await service.listAuditLog({ action: "DRIVER_SUSPENDED" } as never);
   assert.equal(byAction.total, 1);
 });
+
+test("creating an administrator stores the account, its platform role, and an audit entry", async () => {
+  const { prisma, service } = createService();
+  const actor = randomUUID();
+
+  const created = await service.createAdminUser(actor, {
+    fullName: "Nadia  Haddad",
+    countryCode: "+970",
+    phoneNumber: "0591112233",
+    password: "Admin@12345",
+    platformRoleKey: "SUPER_ADMIN"
+  });
+
+  assert.equal(created.role, UserRole.ADMIN);
+  assert.equal(created.phone, "+970591112233");
+  // Whitespace is collapsed the same way every other name entry point does it.
+  assert.equal(created.fullName, "Nadia Haddad");
+  const stored = prisma.users.find((user) => user.id === created.id)!;
+  assert.equal((stored as unknown as { platformRoleId: string }).platformRoleId, prisma.roles[0].id);
+  assert.ok(stored.phoneVerifiedAt, "there is no OTP step for an admin-created account");
+  assert.equal(prisma.auditLogs.at(-1)?.action, "ADMIN_USER_CREATED");
+});
+
+test("an administrator can be created without any platform role", async () => {
+  const { prisma, service } = createService();
+  const created = await service.createAdminUser(randomUUID(), {
+    fullName: "No Powers",
+    countryCode: "+970",
+    phoneNumber: "0591112244",
+    password: "Admin@12345"
+  });
+
+  const stored = prisma.users.find((user) => user.id === created.id)!;
+  assert.equal((stored as unknown as { platformRoleId: string | null }).platformRoleId, null);
+});
+
+test("a duplicate phone number is refused rather than creating a second account", async () => {
+  const { prisma, service } = createService();
+  const input = {
+    fullName: "First",
+    countryCode: "+970" as const,
+    phoneNumber: "0591112255",
+    password: "Admin@12345"
+  };
+  await service.createAdminUser(randomUUID(), input);
+
+  await assert.rejects(
+    service.createAdminUser(randomUUID(), { ...input, fullName: "Second" }),
+    hasCode("PHONE_ALREADY_REGISTERED")
+  );
+  assert.equal(prisma.users.filter((user) => user.phone === "+970591112255").length, 1);
+});
+
+test("suspending an account ends its sessions and records the reason", async () => {
+  const { prisma, service } = createService();
+  const target = await service.createAdminUser(randomUUID(), {
+    fullName: "Target",
+    countryCode: "+970",
+    phoneNumber: "0591112266",
+    password: "Admin@12345"
+  });
+  prisma.refreshSessions.push({ userId: target.id, revokedAt: null });
+
+  const suspended = await service.setUserActive(randomUUID(), target.id, {
+    isActive: false,
+    reason: "Left the company"
+  });
+
+  assert.equal(suspended.isActive, false);
+  // A suspension has to bite on the next request, not whenever a token happens to expire.
+  assert.equal(prisma.refreshSessions[0].revokedAt !== null, true);
+  assert.equal(prisma.auditLogs.at(-1)?.action, "USER_SUSPENDED");
+  assert.equal(prisma.auditLogs.at(-1)?.reason, "Left the company");
+});
+
+test("an administrator cannot suspend or re-role their own account", async () => {
+  const { service } = createService();
+  const actor = randomUUID();
+
+  await assert.rejects(
+    service.setUserActive(actor, actor, { isActive: false, reason: "Locking myself out" }),
+    hasCode("ADMIN_SELF_CHANGE")
+  );
+  await assert.rejects(
+    service.assignPlatformRole(actor, actor, { platformRoleKey: "SUPER_ADMIN" }),
+    hasCode("ADMIN_SELF_CHANGE")
+  );
+});
+
+test("suspending an already suspended account is refused rather than silently repeated", async () => {
+  const { service } = createService();
+  const target = await service.createAdminUser(randomUUID(), {
+    fullName: "Target",
+    countryCode: "+970",
+    phoneNumber: "0591112277",
+    password: "Admin@12345"
+  });
+  await service.setUserActive(randomUUID(), target.id, { isActive: false, reason: "First" });
+
+  await assert.rejects(
+    service.setUserActive(randomUUID(), target.id, { isActive: false, reason: "Again" }),
+    hasCode("USER_STATUS_UNCHANGED")
+  );
+});
+
+test("a platform role can only be given to an administrator account", async () => {
+  const { prisma, service } = createService();
+  const customer = prisma.seedUser({ role: UserRole.CUSTOMER });
+
+  await assert.rejects(
+    service.assignPlatformRole(randomUUID(), customer.id, { platformRoleKey: "SUPER_ADMIN" }),
+    hasCode("PLATFORM_ROLE_NOT_APPLICABLE")
+  );
+});
+
+test("a platform role can be removed again", async () => {
+  const { prisma, service } = createService();
+  const admin = await service.createAdminUser(randomUUID(), {
+    fullName: "Temp Admin",
+    countryCode: "+970",
+    phoneNumber: "0591112288",
+    password: "Admin@12345",
+    platformRoleKey: "SUPER_ADMIN"
+  });
+
+  await service.assignPlatformRole(randomUUID(), admin.id, {});
+
+  const stored = prisma.users.find((user) => user.id === admin.id)!;
+  assert.equal((stored as unknown as { platformRoleId: string | null }).platformRoleId, null);
+  assert.equal(prisma.auditLogs.at(-1)?.action, "PLATFORM_ROLE_ASSIGNED");
+});
+
+function hasCode(code: string): (error: unknown) => boolean {
+  return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
+}

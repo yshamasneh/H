@@ -379,3 +379,46 @@ export class RestaurantAdminActionReasonDto {
   @MaxLength(300)
   reason!: string;
 }
+
+export class AdminCreateBusinessDto extends PhoneDto {
+  @ApiProperty({ example: "Wasel Kitchen" })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  businessName!: string;
+
+  @ApiProperty({ example: "Sami Odeh" })
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  ownerFullName!: string;
+
+  @ApiProperty({ example: "Owner@12345" })
+  @IsString()
+  @MinLength(8)
+  @MaxLength(72)
+  password!: string;
+
+  @ApiProperty({ example: "Al-Manara Square, Ramallah" })
+  @IsString()
+  @MinLength(4)
+  @MaxLength(240)
+  addressLine!: string;
+
+  @ApiPropertyOptional({ enum: businessTypeValues, example: "RESTAURANT" })
+  @IsOptional()
+  @IsIn(businessTypeValues)
+  businessType?: BusinessTypeValue;
+
+  @ApiPropertyOptional({ example: "Charcoal grill and mezze." })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
+
+  /** An administrator creating a business has already vetted it, so approval need not be a second step. */
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  approveImmediately?: boolean;
+}
