@@ -19,7 +19,20 @@ import {
   type RestaurantOffer,
   type RestaurantSummary
 } from "../../core/api";
+import { colors, iconSize, radius, spacing } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
+
+/* On the dark hero/offer panels below (customerTheme.colors.secondary, which
+   resolves to the same near-black as surfaceInverse), text hierarchy uses
+   translucent white the same way apps/admin's dark sidebar does — there is
+   no token for it there either, since it's a function of the specific panel
+   colour rather than a reusable semantic. */
+const onDark = {
+  strong: colors.textInverse,
+  medium: "rgba(255, 255, 255, 0.72)",
+  soft: "rgba(255, 255, 255, 0.55)"
+};
 
 const logo = require("../../../assets/logo/jovo-wordmark.png");
 
@@ -182,9 +195,9 @@ export function CustomerHomeScreen(props: {
         ) : restaurants.length === 0 ? (
           <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.restaurantsEmpty")}</Text></View>
         ) : (
-          restaurants.map((restaurant, index) => (
+          restaurants.map((restaurant) => (
             <Pressable key={restaurant.id} onPress={() => props.onOpenRestaurant(restaurant)} style={styles.restaurantCard}>
-              <View style={[styles.restaurantVisual, index % 2 ? styles.visualGreen : styles.visualOrange]}>
+              <View style={styles.restaurantVisual}>
                 {restaurant.logoUrl ? <Image resizeMode="cover" source={{ uri: restaurant.logoUrl }} style={styles.fullImage} /> : <Text style={styles.restaurantEmoji}>🍽️</Text>}
               </View>
               <View style={styles.restaurantInfo}>
@@ -235,65 +248,63 @@ function offerLabel(offer: RestaurantOffer, t: (key: string, options?: Record<st
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
-  content: { alignSelf: "center", maxWidth: 900, padding: 20, paddingBottom: 48, width: "100%" },
+  content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
   topBar: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  eyebrow: { color: customerTheme.colors.textMuted, fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
-  location: { color: customerTheme.colors.text, fontSize: 14, fontWeight: "800", marginTop: 3 },
-  iconButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: 16, height: 46, justifyContent: "center", position: "relative", width: 46, ...customerTheme.shadow },
-  iconText: { color: customerTheme.colors.secondary, fontSize: 25, fontWeight: "700" },
-  notificationDot: { backgroundColor: customerTheme.colors.primary, borderColor: "#FFFFFF", borderRadius: 6, borderWidth: 2, height: 10, position: "absolute", end: 7, top: 7, width: 10 },
-  greetingRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 24 },
+  eyebrow: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
+  location: { ...text("bodySm", "bold"), color: customerTheme.colors.text, marginTop: spacing[1] },
+  iconButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 46, justifyContent: "center", position: "relative", width: 46, ...customerTheme.shadow },
+  iconText: { color: customerTheme.colors.secondary, fontSize: iconSize.md },
+  notificationDot: { backgroundColor: customerTheme.colors.primary, borderColor: colors.surface, borderRadius: 6, borderWidth: 2, height: 10, position: "absolute", end: 7, top: 7, width: 10 },
+  greetingRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[6] },
   greetingText: { flex: 1 },
-  greeting: { color: customerTheme.colors.text, fontSize: 28, fontWeight: "900" },
-  greetingSubtitle: { color: customerTheme.colors.textMuted, fontSize: 15, marginTop: 5 },
+  greeting: { ...text("display", "bold"), color: customerTheme.colors.text },
+  greetingSubtitle: { ...text("body"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
   logo: { height: 34, width: 110 },
-  notice: { backgroundColor: customerTheme.colors.successSoft, borderRadius: 12, color: customerTheme.colors.success, fontSize: 13, marginTop: 14, padding: 12 },
-  searchBar: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: 18, borderWidth: 1, flexDirection: "row", marginTop: 22, minHeight: 56, paddingHorizontal: 15 },
-  searchIcon: { color: customerTheme.colors.text, fontSize: 25, marginEnd: 10 },
-  searchText: { color: "#9A9F9C", flex: 1, fontSize: 14 },
-  filterButton: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 11, height: 36, justifyContent: "center", width: 36 },
-  filterText: { color: customerTheme.colors.primary, fontSize: 20, fontWeight: "900", transform: [{ rotate: "90deg" }] },
-  marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, borderRadius: 22, flexDirection: "row", marginTop: 18, minHeight: 112, padding: 16, ...customerTheme.shadow },
-  marketIcon: { alignItems: "center", backgroundColor: "#E2F6EA", borderRadius: 18, height: 70, justifyContent: "center", width: 70 },
-  marketEmoji: { fontSize: 35 },
-  marketCopy: { flex: 1, marginStart: 14 },
-  marketEyebrow: { color: "#A9D7C7", fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
-  marketTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "900", marginTop: 4 },
-  marketDescription: { color: "#D9E9E3", fontSize: 11, lineHeight: 16, marginTop: 4 },
-  marketArrow: { color: "#FFFFFF", fontSize: 31, marginStart: 8 },
-  sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 14, marginTop: 28 },
-  sectionTitle: { color: customerTheme.colors.text, fontSize: 20, fontWeight: "900" },
-  seeAll: { color: customerTheme.colors.primary, fontSize: 13, fontWeight: "800" },
-  loader: { marginVertical: 35 },
-  emptyCard: { backgroundColor: customerTheme.colors.surface, borderRadius: 18, padding: 25 },
-  emptyTitle: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "900", marginBottom: 6, textAlign: "center" },
-  emptyText: { color: customerTheme.colors.textMuted, textAlign: "center" },
-  offerCard: { backgroundColor: customerTheme.colors.secondary, borderRadius: 22, flexDirection: "row", marginBottom: 14, minHeight: 150, overflow: "hidden", ...customerTheme.shadow },
-  offerVisual: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, justifyContent: "center", minHeight: 150, width: "38%" },
+  notice: { ...text("bodySm"), backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.md, color: customerTheme.colors.success, marginTop: spacing[4], padding: spacing[3] },
+  searchBar: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", marginTop: spacing[6], minHeight: 56, paddingHorizontal: spacing[4] },
+  searchIcon: { color: customerTheme.colors.text, fontSize: iconSize.md, marginEnd: spacing[3] },
+  searchText: { ...text("bodySm"), color: customerTheme.colors.textMuted, flex: 1 },
+  filterButton: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
+  filterText: { color: customerTheme.colors.primary, fontSize: iconSize.sm, fontWeight: "900", transform: [{ rotate: "90deg" }] },
+  marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, borderRadius: radius.lg, flexDirection: "row", marginTop: spacing[5], minHeight: 112, padding: spacing[4], ...customerTheme.shadow },
+  marketIcon: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, height: 70, justifyContent: "center", width: 70 },
+  marketEmoji: { fontSize: iconSize.xl },
+  marketCopy: { flex: 1, marginStart: spacing[4] },
+  marketEyebrow: { ...text("label", "bold"), color: customerTheme.colors.primary },
+  marketTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
+  marketDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
+  marketArrow: { color: onDark.strong, fontSize: iconSize.xl, marginStart: spacing[2] },
+  sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[4], marginTop: spacing[7] },
+  sectionTitle: { ...text("h2", "bold"), color: customerTheme.colors.text },
+  seeAll: { ...text("caption", "bold"), color: customerTheme.colors.primary },
+  loader: { marginVertical: spacing[8] },
+  emptyCard: { backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, padding: spacing[6] },
+  emptyTitle: { ...text("body", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2], textAlign: "center" },
+  emptyText: { ...text("bodySm"), color: customerTheme.colors.textMuted, textAlign: "center" },
+  offerCard: { backgroundColor: customerTheme.colors.secondary, borderRadius: radius.lg, flexDirection: "row", marginBottom: spacing[4], minHeight: 150, overflow: "hidden", ...customerTheme.shadow },
+  offerVisual: { alignItems: "center", backgroundColor: colors.neutralSubtle, justifyContent: "center", minHeight: 150, width: "38%" },
   fullImage: { height: "100%", width: "100%" },
   offerLogo: { height: 86, width: 86 },
-  offerEmoji: { color: customerTheme.colors.primary, fontSize: 48, fontWeight: "900" },
-  offerCopy: { flex: 1, justifyContent: "center", padding: 16 },
-  offerRestaurant: { color: "#C8D9D3", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
-  offerTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "900", marginTop: 5 },
-  offerDescription: { color: "#E2ECE8", fontSize: 11, lineHeight: 16, marginTop: 5 },
-  offerDiscount: { color: "#FFCBB8", fontSize: 13, fontWeight: "900", marginTop: 9 },
-  offerExpiry: { color: "#C8D9D3", fontSize: 10, marginTop: 4 },
-  restaurantCard: { backgroundColor: customerTheme.colors.surface, borderRadius: 20, marginBottom: 15, overflow: "hidden", ...customerTheme.shadow },
-  marketStoreCard: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: 20, flexDirection: "row", marginBottom: 15, overflow: "hidden", ...customerTheme.shadow },
-  marketStoreIcon: { alignItems: "center", alignSelf: "stretch", backgroundColor: "#DDEFE4", justifyContent: "center", width: 105 },
-  marketStoreEmoji: { fontSize: 45 },
-  restaurantVisual: { alignItems: "center", height: 135, justifyContent: "center", position: "relative" },
-  visualOrange: { backgroundColor: "#FFE0C8" },
-  visualGreen: { backgroundColor: "#DDEFE4" },
-  restaurantEmoji: { fontSize: 66 },
-  restaurantInfo: { padding: 15 },
-  restaurantName: { color: customerTheme.colors.text, flex: 1, fontSize: 17, fontWeight: "900", marginEnd: 10 },
-  restaurantMeta: { color: customerTheme.colors.textMuted, fontSize: 12, marginTop: 5 },
-  restaurantAddress: { color: customerTheme.colors.textMuted, fontSize: 11, marginTop: 8 },
-  restaurantOpen: { color: customerTheme.colors.success, fontSize: 11, fontWeight: "800", marginTop: 8 },
-  quickActions: { flexDirection: "row", gap: 10, marginTop: 14 },
-  quickButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: 16, borderWidth: 1, flex: 1, minHeight: 80, justifyContent: "center", padding: 10 },
-  quickIcon: { color: customerTheme.colors.primary, fontSize: 22, fontWeight: "900" },
-  quickLabel: { color: customerTheme.colors.text, fontSize: 11, fontWeight: "700", marginTop: 5 }
+  offerEmoji: { color: customerTheme.colors.primary, fontSize: iconSize.xxxl, fontWeight: "900" },
+  offerCopy: { flex: 1, justifyContent: "center", padding: spacing[4] },
+  offerRestaurant: { ...text("label", "bold"), color: onDark.medium },
+  offerTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
+  offerDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
+  offerDiscount: { ...text("bodySm", "bold"), color: customerTheme.colors.primary, marginTop: spacing[2] },
+  offerExpiry: { ...text("label"), color: onDark.soft },
+  restaurantCard: { backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, marginBottom: spacing[4], overflow: "hidden", ...customerTheme.shadow },
+  marketStoreCard: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, flexDirection: "row", marginBottom: spacing[4], overflow: "hidden", ...customerTheme.shadow },
+  marketStoreIcon: { alignItems: "center", alignSelf: "stretch", backgroundColor: colors.neutralSubtle, justifyContent: "center", width: 105 },
+  marketStoreEmoji: { fontSize: iconSize.xxxl },
+  restaurantVisual: { alignItems: "center", height: 135, justifyContent: "center", position: "relative", backgroundColor: colors.neutralSubtle },
+  restaurantEmoji: { fontSize: iconSize.xxxl },
+  restaurantInfo: { padding: spacing[4] },
+  restaurantName: { ...text("h3", "bold"), color: customerTheme.colors.text, flex: 1, marginEnd: spacing[3] },
+  restaurantMeta: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
+  restaurantAddress: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[2] },
+  restaurantOpen: { ...text("label", "bold"), color: customerTheme.colors.success, marginTop: spacing[2] },
+  quickActions: { flexDirection: "row", gap: spacing[2], marginTop: spacing[4] },
+  quickButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, minHeight: 80, justifyContent: "center", padding: spacing[3] },
+  quickIcon: { color: customerTheme.colors.primary, fontSize: iconSize.md, fontWeight: "900" },
+  quickLabel: { ...text("label", "medium"), color: customerTheme.colors.text, marginTop: spacing[1] }
 });
