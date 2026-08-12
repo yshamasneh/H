@@ -42,6 +42,8 @@ import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
 import i18n from "../../i18n";
 import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
+import { colors, radius, spacing } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 import { strongPasswordPattern } from "./auth.rules";
 
 const logo = require("../../../assets/logo/jovo-wordmark.png");
@@ -482,7 +484,7 @@ export function HomeScreen(props: {
 function AuthLayout(props: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Image accessibilityLabel="JOVO" resizeMode="contain" source={logo} style={styles.logo} />
@@ -558,7 +560,7 @@ function FormField(props: {
         maxLength={props.maxLength}
         onChangeText={props.onChangeText}
         placeholder={props.placeholder}
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={colors.textMuted}
         secureTextEntry={props.secureTextEntry}
         style={[styles.input, props.textAlign === "center" && styles.centerInput]}
         value={props.value}
@@ -574,7 +576,7 @@ function PrimaryButton(props: { label: string; loading?: boolean; onPress: () =>
       onPress={props.onPress}
       style={({ pressed }) => [styles.primaryButton, (pressed || props.loading) && styles.buttonPressed]}
     >
-      {props.loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{props.label}</Text>}
+      {props.loading ? <ActivityIndicator color={colors.textInverse} /> : <Text style={styles.primaryText}>{props.label}</Text>}
     </Pressable>
   );
 }
@@ -595,7 +597,7 @@ function SecondaryButton(props: {
       ]}
     >
       {props.loading ? (
-        <ActivityIndicator color="#0F766E" />
+        <ActivityIndicator color={colors.text} />
       ) : (
         <Text style={styles.secondaryText}>{props.label}</Text>
       )}
@@ -643,85 +645,85 @@ function readRetrySeconds(details: unknown): number | null {
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: "#F5FAFC", flex: 1 },
+  screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   flex: { flex: 1 },
-  content: { flexGrow: 1, padding: 24, paddingBottom: 48 },
+  content: { flexGrow: 1, padding: spacing[6], paddingBottom: spacing[9] },
   logo: { alignSelf: "center", height: 68, width: 220 },
-  title: { color: "#0F172A", fontSize: 28, fontWeight: "800", textAlign: "center" },
-  subtitle: { color: "#64748B", fontSize: 15, marginBottom: 22, marginTop: 6, textAlign: "center" },
+  title: { ...text("h1", "bold"), color: colors.text, textAlign: "center" },
+  subtitle: { ...text("body"), color: colors.textMuted, marginBottom: spacing[5], marginTop: spacing[2], textAlign: "center" },
   panel: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D9E2EC",
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    padding: 20
+    padding: spacing[5]
   },
-  label: { color: "#334155", fontSize: 14, fontWeight: "700", marginBottom: 8, marginTop: 14 },
+  label: { ...text("bodySm", "bold"), color: colors.text, marginBottom: spacing[2], marginTop: spacing[4] },
   input: {
-    backgroundColor: "#F8FAFC",
-    borderColor: "#CBD5E1",
-    borderRadius: 10,
+    backgroundColor: colors.surfaceSunk,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
     borderWidth: 1,
-    color: "#0F172A",
-    fontSize: 16,
+    color: colors.text,
+    ...text("body"),
     minHeight: 52,
-    paddingHorizontal: 14
+    paddingHorizontal: spacing[4]
   },
-  centerInput: { fontSize: 24, fontWeight: "700", letterSpacing: 8, textAlign: "center" },
-  countryRow: { flexDirection: "row", gap: 10 },
+  centerInput: { ...text("h1", "bold"), letterSpacing: 8, textAlign: "center" },
+  countryRow: { flexDirection: "row", gap: spacing[3] },
   countryButton: {
     alignItems: "center",
-    borderColor: "#CBD5E1",
-    borderRadius: 10,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
     borderWidth: 1,
     flex: 1,
     minHeight: 48,
     justifyContent: "center"
   },
-  countryButtonSelected: { backgroundColor: "#DDF7F1", borderColor: "#0F766E" },
-  countryButtonText: { color: "#475569", fontSize: 16, fontWeight: "700" },
-  countryButtonTextSelected: { color: "#0F766E" },
-  help: { color: "#64748B", fontSize: 12, lineHeight: 18, marginTop: 7 },
-  error: { color: "#B91C1C", fontSize: 14, lineHeight: 20, marginTop: 14 },
+  countryButtonSelected: { backgroundColor: colors.primarySubtle, borderColor: colors.primary },
+  countryButtonText: { ...text("body", "bold"), color: colors.textMuted },
+  countryButtonTextSelected: { color: colors.primaryPressed },
+  help: { ...text("caption"), color: colors.textMuted, marginTop: spacing[2] },
+  error: { ...text("bodySm"), color: colors.error, marginTop: spacing[4] },
   notice: {
-    backgroundColor: "#DCFCE7",
-    borderRadius: 10,
-    color: "#166534",
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 8,
-    padding: 12
+    ...text("bodySm"),
+    backgroundColor: colors.successSubtle,
+    borderRadius: radius.md,
+    color: colors.success,
+    marginBottom: spacing[2],
+    padding: spacing[3]
   },
   primaryButton: {
     alignItems: "center",
-    backgroundColor: "#0F766E",
-    borderRadius: 10,
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
     justifyContent: "center",
-    marginTop: 20,
+    marginTop: spacing[5],
     minHeight: 52
   },
-  buttonPressed: { backgroundColor: "#115E59", opacity: 0.8 },
-  primaryText: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+  buttonPressed: { backgroundColor: colors.primaryPressed, opacity: 0.8 },
+  primaryText: { ...text("body", "bold"), color: colors.textInverse },
   secondaryButton: {
     alignItems: "center",
-    borderColor: "#0F766E",
-    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
     borderWidth: 1,
     justifyContent: "center",
-    marginTop: 12,
+    marginTop: spacing[3],
     minHeight: 50
   },
   secondaryDisabled: { opacity: 0.45 },
-  secondaryText: { color: "#0F766E", fontSize: 15, fontWeight: "800" },
-  linkButton: { alignItems: "center", padding: 12 },
-  linkText: { color: "#0369A1", fontSize: 14, fontWeight: "700" },
-  inlineActions: { marginTop: 4 },
-  profileCard: { backgroundColor: "#F8FAFC", borderRadius: 12, padding: 16 },
-  profileLabel: { color: "#64748B", fontSize: 12, fontWeight: "700", marginBottom: 5, marginTop: 9 },
-  profileValue: { color: "#0F172A", fontSize: 18, fontWeight: "700" },
-  roleBadge: { alignSelf: "flex-start", backgroundColor: "#E0F2FE", borderRadius: 8, padding: 8 },
-  roleBadgeText: { color: "#0369A1", fontSize: 13, fontWeight: "800" },
-  apiBox: { marginTop: 18 },
-  apiLabel: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
-  apiValue: { color: "#64748B", fontSize: 12, marginTop: 3 }
+  secondaryText: { ...text("bodySm", "bold"), color: colors.text },
+  linkButton: { alignItems: "center", padding: spacing[3] },
+  linkText: { ...text("bodySm", "medium"), color: colors.textMuted },
+  inlineActions: { marginTop: spacing[1] },
+  profileCard: { backgroundColor: colors.surfaceSunk, borderRadius: radius.md, padding: spacing[4] },
+  profileLabel: { ...text("caption", "bold"), color: colors.textMuted, marginBottom: spacing[1], marginTop: spacing[2] },
+  profileValue: { ...text("h3", "bold"), color: colors.text },
+  roleBadge: { alignSelf: "flex-start", backgroundColor: colors.neutralSubtle, borderRadius: radius.sm, padding: spacing[2] },
+  roleBadgeText: { ...text("caption", "bold"), color: colors.text },
+  apiBox: { marginTop: spacing[5] },
+  apiLabel: { ...text("label", "bold"), color: colors.textMuted },
+  apiValue: { ...text("caption"), color: colors.textMuted, marginTop: spacing[1] }
 });
