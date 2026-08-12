@@ -6,6 +6,8 @@ import { ApiError, listMyNotifications, markNotificationRead, type NotificationV
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
 import { useRealtimeEvent } from "../../core/socket";
+import { colors, radius, spacing } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 
 type NotificationInboxScreenProps = {
   onBack: () => void;
@@ -59,7 +61,7 @@ export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
           <Text style={styles.backButtonText}>{t("common:back")}</Text>
@@ -76,7 +78,7 @@ export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
               </Pressable>
             </View>
           ) : (
-            <ActivityIndicator color="#0F766E" size="large" />
+            <ActivityIndicator color={colors.primary} size="large" />
           )}
         </View>
       ) : notifications.length === 0 ? (
@@ -88,7 +90,7 @@ export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
           contentContainerStyle={styles.listContent}
           data={notifications}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor="#0F766E" />}
+          refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor={colors.primary} />}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => markRead(item)}
@@ -122,44 +124,44 @@ function readError(error: unknown): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: "#F5FAFC", flex: 1 },
+  screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   header: {
-    backgroundColor: "#FFFFFF",
-    borderBottomColor: "#D9E2EC",
+    backgroundColor: colors.surface,
+    borderBottomColor: colors.border,
     borderBottomWidth: 1,
-    padding: 20,
-    paddingTop: 12
+    padding: spacing[5],
+    paddingTop: spacing[3]
   },
-  backButton: { alignSelf: "flex-start", marginBottom: 10, paddingVertical: 4 },
-  backButtonText: { color: "#0369A1", fontSize: 14, fontWeight: "700" },
-  headerTitle: { color: "#0F172A", fontSize: 24, fontWeight: "800" },
-  centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: 24 },
-  emptyText: { color: "#64748B", fontSize: 15, textAlign: "center" },
-  listContent: { padding: 16, paddingBottom: 40 },
+  backButton: { alignSelf: "flex-start", marginBottom: spacing[2], paddingVertical: spacing[1] },
+  backButtonText: { ...text("bodySm", "bold"), color: colors.textMuted },
+  headerTitle: { ...text("h1", "bold"), color: colors.text },
+  centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[6] },
+  emptyText: { ...text("body"), color: colors.textMuted, textAlign: "center" },
+  listContent: { padding: spacing[4], paddingBottom: spacing[8] },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
     borderWidth: 1,
-    marginBottom: 10,
-    padding: 14
+    marginBottom: spacing[2],
+    padding: spacing[4]
   },
-  cardUnread: { backgroundColor: "#F0FDFA", borderColor: "#0F766E" },
+  cardUnread: { backgroundColor: colors.primarySubtle, borderColor: colors.primary },
   cardPressed: { opacity: 0.85 },
   cardHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  cardTitle: { color: "#0F172A", flex: 1, fontSize: 15, fontWeight: "700" },
-  unreadDot: { backgroundColor: "#0F766E", borderRadius: 5, height: 10, marginStart: 8, width: 10 },
-  cardBody: { color: "#475569", fontSize: 13.5, marginTop: 4 },
-  cardDate: { color: "#94A3B8", fontSize: 11.5, marginTop: 8 },
+  cardTitle: { ...text("bodySm", "bold"), color: colors.text, flex: 1 },
+  unreadDot: { backgroundColor: colors.primary, borderRadius: 5, height: 10, marginStart: spacing[2], width: 10 },
+  cardBody: { ...text("caption"), color: colors.textMuted, marginTop: spacing[1] },
+  cardDate: { ...text("label"), color: colors.textMuted, marginTop: spacing[2] },
   errorBox: { alignItems: "center" },
-  errorText: { color: "#B91C1C", fontSize: 14, lineHeight: 20, textAlign: "center" },
+  errorText: { ...text("bodySm"), color: colors.error, textAlign: "center" },
   retryButton: {
-    borderColor: "#0F766E",
-    borderRadius: 10,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
     borderWidth: 1,
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10
+    marginTop: spacing[4],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3]
   },
-  retryButtonText: { color: "#0F766E", fontSize: 14, fontWeight: "800" }
+  retryButtonText: { ...text("bodySm", "bold"), color: colors.primary }
 });
