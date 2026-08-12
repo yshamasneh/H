@@ -845,3 +845,186 @@ each file separately, then run the repo-wide zero-hex audit. Once B3 is
 fully done, do a first visual pass (expo web export, both languages) before
 starting B4. Then continue through B4-B8 per the original task instructions.
 ```
+
+## 2026-08-12: B3 complete, plus the visual pass that found three real RTL bugs
+
+Finished the two remaining files, then did the visual pass this doc's previous
+entry flagged as not yet done — and it was right to insist: three real,
+user-visible bugs existed that no amount of typechecking or grepping would
+ever have caught, all specific to the web target. All fixed and committed on
+`agent/phase-15-and-jovo-brand`.
+
+### B3 completion
+
+- `features/restaurant/order-screens.tsx` (68 hex) and
+  `features/restaurant/management-screen.tsx` (51 hex) migrated using the
+  exact recipe from the prior entry — both had their own duplicated
+  status-colour switch statement (order-screens) or approval-status pill
+  (management-screen), both now read from the shared
+  `statusFamily`/`statusPalette` in `theme/tokens.ts` instead.
+- Repo-wide audit confirmed clean:
+  `grep -rlE "#[0-9A-Fa-f]{3,8}\b" apps/mobile/src | grep -v theme/tokens.ts`
+  returns nothing. All 18 files, zero hardcoded hex, zero bare font sizes.
+  `npm run typecheck` and `npm test` (23/23) clean throughout.
+
+### The visual pass — three real bugs found and fixed
+
+Set up a real browser session against the Expo web export (`npx expo start
+--web`) with a live PostgreSQL-backed API, logged in as the seeded customer,
+driver, and restaurant-owner accounts (`+970590000000/2/3`, all
+`Test@12345`), in both languages. Everything below was *seen*, not inferred.
+
+1. **Arabic text was silently rendering in Inter, not Cairo, at English
+   line-height, on every screen, on web.** `theme/typography.ts`'s `text()`
+   reads direction inside module-scope `StyleSheet.create()` blocks that
+   every screen evaluates once at import time, before React ever mounts.
+   `react-native-web`'s `I18nManager` is a stub (confirmed by reading
+   `node_modules/react-native-web/dist/exports/I18nManager/index.js` —
+   `allowRTL`/`forceRTL` are no-ops, `isRTL` is hardcoded `false` forever),
+   so the direction was permanently wrong on web regardless of app state.
+   Root-caused via `getComputedStyle()` on a live Arabic heading, which
+   showed `fontFamily: Inter-Bold` and LTR line-height on a page whose `dir`
+   attribute correctly said `rtl`. **Fixed** by making `theme/tokens.ts`'s
+   `isRTL()` read the document's own `dir` attribute on web instead of
+   `I18nManager.isRTL`; added `src/i18n/rtl-preset.ts`, imported first in
+   `index.ts` (before `App`, before any screen), which sets that attribute
+   synchronously from stored language so it's correct before any module's
+   styles are built; `reconcileRTL`'s web branch now also triggers a reload
+   on an actual language switch, matching native's contract, since these
+   module-scope styles need a clean re-evaluation rather than a live patch.
+2. **Absolute-positioned elements (`end`/`start`) didn't mirror in RTL on
+   web** — confirmed visually on the restaurant menu screen: the back button
+   and the favourite-heart icon were both on the wrong side. Root-caused by
+   reading `react-native-web`'s source further: `end`/`start` compile to the
+   CSS logical properties `insetInlineEnd`/`insetInlineStart`, but their
+   *resolved physical value* depends on an internal `LocaleContext` that
+   defaults to `"ltr"` unless some ancestor element carries an explicit
+   `dir` **prop** (not attribute) — `exports/createElement` wraps any
+   `dir`-bearing element in a `LocaleProvider` for exactly this reason nothing
+   in the app ever did. Flex-based mirroring (`flexDirection: "row"`,
+   `textAlign`, `marginStart`) was unaffected because the browser's own CSS
+   bidi engine resolves those from the `dir` *attribute* directly, with no
+   react-native-web involvement — which is why this was invisible until an
+   absolutely-positioned element was actually looked at. **Fixed** with a
+   small `RTLRoot` wrapper in `App.tsx` that passes `dir` down from the live
+   `i18n.language`, wrapping the entire app once.
+3. **Five hardcoded "‹" back-chevron glyphs (plus one "›" disclosure
+   chevron) didn't flip direction** even after fix #2 made their *position*
+   correct — a right-positioned back button pointing left reads as visually
+   inconsistent. Fixed in `account-screen.tsx`, `cart-screens.tsx`,
+   `restaurant-screens.tsx` (×2), `supermarket-screens.tsx`, and
+   `home-screen.tsx`'s market banner, all now `isRTL() ? "›" : "‹"` (or the
+   reverse for the disclosure chevron).
+
+All three fixes verified by reading computed styles live in the browser
+(`getComputedStyle`), not just by re-screenshotting — `fontFamily:
+"Cairo-Bold"`, `lineHeight: "29px"` (20 × 1.45, the RTL heading multiplier),
+and the back button rendering top-right with a right-pointing glyph,
+consistently, across a full page reload with no infinite-reload regression
+(an earlier attempt at fix #1, using `I18nManager.isRTL` for the
+already-changed? check, caused exactly that loop before the `dir`-attribute
+comparison replaced it — caught by watching the console for a repeating
+"Running application" log, not assumed away).
+
+### Also fixed during the pass (not bugs, but visibly wrong once seen)
+
+- Customer home screen's quick-actions row (account/orders/notifications/
+  sign-out) was four orange icons in a row — none of them the screen's
+  primary action, which is exactly what "orange is scarce, one primary
+  action per screen" rules out. Changed to neutral (`colors.text`).
+
+### Confirmed working correctly (not just typechecked)
+
+Login (both languages) → customer home → restaurant browse → menu → add to
+cart → cart screen → account (profile, saved addresses with the Leaflet map,
+language switcher, notification toggle, delete-account danger styling) →
+driver home → delivery dashboard → restaurant-owner home → incoming orders
+list. Status badges read from the shared token palette everywhere checked.
+Empty states already have guiding copy in the screens touched this session
+(e.g. "You have no active deliveries" / "Turn on connection to see and
+accept deliveries" on the driver dashboard) — not yet audited screen-by-screen,
+that's B4's job.
+
+### Found and confirmed real, left for B4 (not fixed here — out of scope for
+a visual-verification pass, and exactly what B4 is for)
+
+- **API errors reach the user in English inside the Arabic UI**, confirmed
+  live: a wrong-password login attempt in Arabic showed
+  `Invalid phone number or password.` verbatim in English. This is the exact
+  audit finding B4's brief names.
+  - **What actually needs to happen**: this is a backend-message localization
+    gap, not a frontend copy fix. Every mobile screen's error handlers do
+    `catch (error) { setError(readError(error)) }`, and every `readError`
+    helper across all ~18 files does the same thing: `error instanceof
+    ApiError || error instanceof Error ? error.message : <localized generic
+    fallback>` — i.e. it displays `apps/api`'s raw English `message` field
+    verbatim whenever the error has a recognizable shape, which is every
+    real API error. `apps/api` is out of scope for this design pass, so B4
+    cannot translate the messages at the source. The fix has to live in
+    `apps/mobile`: build an Arabic/English translation table keyed by
+    `ApiError.code` (`PHONE_ALREADY_REGISTERED`, `ACCOUNT_NOT_FOUND`,
+    `ORDER_INVALID_TRANSITION`, etc. — grep `apps/api/src` for
+    `throw new ApiError` / equivalent to enumerate the actual set), with the
+    existing English `message` as the fallback for any code not yet in the
+    table, and swap every screen's `readError`-equivalent to consult it
+    instead of returning `error.message` directly. Given there isn't one
+    shared `readError` today — it's duplicated per-file, sometimes as
+    `readError`, sometimes `readRegistrationError`, `readAdminError`, etc. —
+    this is also a natural point to consolidate them into one shared
+    `src/core/errors.ts` while fixing this, rather than patching N
+    near-duplicate copies.
+- **Missing Arabic translation for at least one status key**: the
+  restaurant-owner's order list showed a raw `DELIVERY FAILED` badge in
+  English inside the Arabic UI (the `t("status.DELIVERY_FAILED", ...)` call
+  fell through to its English-shaped fallback). `docs/progress.md`'s Phase
+  15.0 entry already flagged a related gap
+  (`status.PREPARING_SUPERMARKET` added to *admin's* locale but not wired
+  up) — worth a full audit of `apps/mobile/src/i18n/locales/ar/common.json`'s
+  `status.*` keys against every `OrderStatus`/`DeliveryStatus` enum value
+  actually reachable, not just this one.
+- **Seed/demo business names are pre-JOVO-rename content**: "TasawaQ Fresh
+  Market" and "Wasel Demo Kitchen" render as-is on the customer home screen
+  and browse lists. This is database content from `apps/api`'s seed script,
+  not `apps/mobile` UI chrome — out of scope for this design pass entirely,
+  flagging only so it isn't mistaken for a leftover rebrand bug later.
+- Not re-verified after the B3-completion commits (order-screens.tsx,
+  management-screen.tsx) specifically in the browser — typecheck/tests pass
+  and the pattern matches 16 already-verified files exactly, but the
+  restaurant-owner's order-detail screen (fulfillment proposal editor) and
+  the full management-screen workspace (profile/categories/items tabs)
+  weren distinctly loaded during this pass. Worth a quick look early in B4
+  before restyling them further.
+
+### Environment notes for next session
+
+- `apps/mobile/.env` (gitignored, machine-local) now points
+  `EXPO_PUBLIC_API_URL` at `http://localhost:3000` rather than a LAN IP that
+  doesn't resolve in this environment. If a future session sees "Could not
+  reach the server" immediately on login, check this file first before
+  assuming an app bug.
+- The Expo web dev server's `dist/` cache directory intermittently held an
+  `EBUSY` lock in this environment (Windows file-lock, likely a leftover
+  process) — `npx expo start --web -c` (clear cache) plus manually killing
+  whatever process `Get-NetTCPConnection -LocalPort 19006` reports resolved
+  it every time it came up. Always verify a dev-server restart actually
+  bound to the port and served fresh HTML (`curl | grep html`) before
+  trusting anything rendered in the browser — a stale process silently
+  serving old code produced a very confusing hour on the RTL bug above
+  before this was caught.
+
+### Prompt for the next session (start B4)
+
+```
+Continue the JOVO design pass (apps/mobile ONLY) on branch
+agent/phase-15-and-jovo-brand. B3 is fully complete and visually verified —
+read docs/progress.md's "B3 complete, plus the visual pass that found three
+real RTL bugs" entry first, especially the "Found and confirmed real, left
+for B4" section, which has concrete starting points including a root-cause
+analysis for the API-error-language bug (needs a code-keyed translation
+table in apps/mobile, not a copy fix) and a status-translation audit.
+Start B4 (components and states: buttons, inputs, cards, badges, modals,
+toasts, list rows, tabs, status indicators; then loading/empty/error/success
+states everywhere, skeletons over spinners). Verify visually in the browser
+(expo web, both languages) as you go, the way B3's second half did, not just
+by typecheck. Commit and report at each meaningful boundary.
+```
