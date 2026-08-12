@@ -1,6 +1,7 @@
 import { createElement, useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import type { LocationMapProps } from "./location-map.types";
+import { colors, radius, spacing } from "../theme/tokens";
 
 const channel = "tasawaq-location-map";
 
@@ -74,10 +75,10 @@ function createMapDocument(
 
 const styles = StyleSheet.create({
   frame: {
-    borderColor: "#D8E4E8",
-    borderRadius: 18,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginVertical: 10,
+    marginVertical: spacing[3],
     overflow: "hidden",
     width: "100%"
   }

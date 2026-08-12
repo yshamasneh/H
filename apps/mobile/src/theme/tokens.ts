@@ -67,6 +67,21 @@ export const radius = {
   pill: 999
 } as const;
 
+/* --- icon / decorative-glyph sizing --------------------------------------- */
+/* For dimensions, not type — placeholder emoji standing in for product
+   photography, back-chevron glyphs, and similar. These aren't read as
+   language, so they don't take the Arabic optical-size correction that
+   theme/typography.ts applies to real text. */
+export const iconSize = {
+  xs: 16,
+  sm: 20,
+  md: 24,
+  lg: 28,
+  xl: 32,
+  xxl: 40,
+  xxxl: 48
+} as const;
+
 /* --- elevation ------------------------------------------------------------ */
 /* Deliberately shallow, matching admin: a hairline border does most of the
    work, shadow is a soft accent rather than the primary depth cue. */

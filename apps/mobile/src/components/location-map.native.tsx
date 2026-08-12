@@ -1,6 +1,7 @@
 import MapView, { Marker, type MapPressEvent, type Region } from "react-native-maps";
 import { StyleSheet, View } from "react-native";
 import type { LocationMapProps, MapCoordinate } from "./location-map.types";
+import { colors, radius, spacing } from "../theme/tokens";
 
 const latitudeDelta = 0.025;
 const longitudeDelta = 0.025;
@@ -28,7 +29,7 @@ export function LocationMap(props: LocationMapProps) {
             coordinate={props.coordinate}
             draggable
             onDragEnd={(event) => drag(event.nativeEvent.coordinate)}
-            pinColor="#0E7C66"
+            pinColor={colors.primary}
             title="موقع التوصيل"
           />
         ) : null}
@@ -47,10 +48,10 @@ export function LocationMap(props: LocationMapProps) {
 
 const styles = StyleSheet.create({
   frame: {
-    borderColor: "#D8E4E8",
-    borderRadius: 18,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginVertical: 10,
+    marginVertical: spacing[3],
     overflow: "hidden",
     width: "100%"
   }

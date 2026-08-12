@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supportedLanguages, type SupportedLanguage } from "../core/language";
+import { colors, radius, spacing } from "../theme/tokens";
+import { text } from "../theme/typography";
 import { changeLanguage } from "./index";
 import { reconcileRTL, reloadApp } from "./rtl";
 
@@ -45,42 +47,39 @@ export function LanguageSwitcher() {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 12
+    marginTop: spacing[3]
   },
   label: {
-    color: "#64748B",
-    fontSize: 12.5,
-    fontWeight: "700",
-    marginBottom: 8,
-    textTransform: "uppercase"
+    ...text("label", "medium"),
+    color: colors.textMuted,
+    marginBottom: spacing[2]
   },
   optionRow: {
-    backgroundColor: "#EEF1F8",
-    borderRadius: 10,
+    backgroundColor: colors.surfaceSunk,
+    borderRadius: radius.sm,
     flexDirection: "row",
-    gap: 4,
-    padding: 4
+    gap: spacing[1],
+    padding: spacing[1]
   },
   option: {
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: radius.sm,
     flex: 1,
-    paddingVertical: 8
+    paddingVertical: spacing[2]
   },
   optionActive: {
-    backgroundColor: "#0F766E"
+    backgroundColor: colors.primary
   },
   optionText: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: "700"
+    ...text("bodySm", "semibold"),
+    color: colors.textMuted
   },
   optionTextActive: {
-    color: "#FFFFFF"
+    color: colors.textInverse
   },
   restartingText: {
-    color: "#64748B",
-    fontSize: 12,
-    marginTop: 8
+    ...text("caption"),
+    color: colors.textMuted,
+    marginTop: spacing[2]
   }
 });

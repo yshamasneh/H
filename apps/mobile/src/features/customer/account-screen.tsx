@@ -40,6 +40,8 @@ import {
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
 import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
+import { colors, iconSize, radius, spacing } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
 
 const defaultCoordinate: MapCoordinate = { latitude: 31.9038, longitude: 35.2034 };
@@ -311,31 +313,31 @@ function readError(error: unknown): string {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
-  header: { alignItems: "center", borderBottomColor: customerTheme.colors.border, borderBottomWidth: 1, flexDirection: "row", padding: 14 },
-  back: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 14, height: 42, justifyContent: "center", width: 42 },
-  backText: { color: customerTheme.colors.text, fontSize: 28 },
-  headerTitle: { color: customerTheme.colors.text, flex: 1, fontSize: 20, fontWeight: "900", textAlign: "center" },
+  header: { alignItems: "center", borderBottomColor: customerTheme.colors.border, borderBottomWidth: 1, flexDirection: "row", padding: spacing[4] },
+  back: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 42, justifyContent: "center", width: 42 },
+  backText: { color: customerTheme.colors.text, fontSize: iconSize.lg },
+  headerTitle: { ...text("h2", "bold"), color: customerTheme.colors.text, flex: 1, textAlign: "center" },
   headerSpacer: { width: 42 },
-  content: { alignSelf: "center", maxWidth: 900, padding: 18, paddingBottom: 50, width: "100%" },
-  card: { backgroundColor: "#FFFFFF", borderColor: customerTheme.colors.border, borderRadius: 20, borderWidth: 1, marginBottom: 16, padding: 18 },
-  title: { color: customerTheme.colors.text, fontSize: 18, fontWeight: "900", marginBottom: 12, textAlign: "auto" },
-  subtitle: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "800", marginBottom: 10, marginTop: 18, textAlign: "auto" },
-  label: { color: customerTheme.colors.text, fontSize: 12, fontWeight: "800", marginBottom: 6, textAlign: "auto" },
-  input: { backgroundColor: "#F8FBFC", borderColor: customerTheme.colors.border, borderRadius: 13, borderWidth: 1, color: customerTheme.colors.text, marginBottom: 11, padding: 13, textAlign: "auto" },
+  content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
+  card: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[4], padding: spacing[5] },
+  title: { ...text("h3", "bold"), color: customerTheme.colors.text, marginBottom: spacing[3], textAlign: "auto" },
+  subtitle: { ...text("body", "bold"), color: customerTheme.colors.text, marginBottom: spacing[3], marginTop: spacing[5], textAlign: "auto" },
+  label: { ...text("caption", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2], textAlign: "auto" },
+  input: { backgroundColor: customerTheme.colors.surfaceMuted, borderColor: customerTheme.colors.border, borderRadius: radius.md, borderWidth: 1, color: customerTheme.colors.text, marginBottom: spacing[3], padding: spacing[3], textAlign: "auto" },
   multiline: { minHeight: 78, textAlignVertical: "top" },
-  helper: { color: customerTheme.colors.textMuted, fontSize: 12, lineHeight: 18, textAlign: "auto" },
-  button: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: 13, marginTop: 14, padding: 14 },
-  buttonText: { color: "#FFFFFF", fontWeight: "900" },
-  addressCard: { borderBottomColor: customerTheme.colors.border, borderBottomWidth: 1, paddingVertical: 12 },
-  addressTitle: { color: customerTheme.colors.text, fontSize: 14, fontWeight: "900", textAlign: "auto" },
-  row: { flexDirection: "row", gap: 8, justifyContent: "flex-end", marginTop: 9 },
-  smallButton: { borderColor: customerTheme.colors.primary, borderRadius: 10, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8 },
-  smallText: { color: customerTheme.colors.primary, fontSize: 11, fontWeight: "800" },
+  helper: { ...text("caption"), color: customerTheme.colors.textMuted, textAlign: "auto" },
+  button: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.md, marginTop: spacing[4], padding: spacing[4] },
+  buttonText: { ...text("bodySm", "bold"), color: colors.textInverse },
+  addressCard: { borderBottomColor: customerTheme.colors.border, borderBottomWidth: 1, paddingVertical: spacing[3] },
+  addressTitle: { ...text("bodySm", "bold"), color: customerTheme.colors.text, textAlign: "auto" },
+  row: { flexDirection: "row", gap: spacing[2], justifyContent: "flex-end", marginTop: spacing[2] },
+  smallButton: { borderColor: customerTheme.colors.primary, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  smallText: { ...text("label", "bold"), color: customerTheme.colors.primary },
   smallDanger: { borderColor: customerTheme.colors.danger },
   smallDangerText: { color: customerTheme.colors.danger },
-  notice: { backgroundColor: customerTheme.colors.successSoft, borderRadius: 12, color: customerTheme.colors.success, marginBottom: 12, padding: 12, textAlign: "auto" },
-  error: { backgroundColor: "#FDE8E5", borderRadius: 12, color: customerTheme.colors.danger, marginBottom: 12, padding: 12, textAlign: "auto" },
-  dangerCard: { borderColor: "#F4B7AD" },
-  deleteButton: { alignItems: "center", borderColor: customerTheme.colors.danger, borderRadius: 13, borderWidth: 1, marginTop: 14, padding: 13 },
-  deleteText: { color: customerTheme.colors.danger, fontWeight: "900" }
+  notice: { ...text("bodySm"), backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.md, color: customerTheme.colors.success, marginBottom: spacing[3], padding: spacing[3], textAlign: "auto" },
+  error: { ...text("bodySm"), backgroundColor: colors.errorSubtle, borderRadius: radius.md, color: customerTheme.colors.danger, marginBottom: spacing[3], padding: spacing[3], textAlign: "auto" },
+  dangerCard: { borderColor: customerTheme.colors.danger },
+  deleteButton: { alignItems: "center", borderColor: customerTheme.colors.danger, borderRadius: radius.md, borderWidth: 1, marginTop: spacing[4], padding: spacing[3] },
+  deleteText: { ...text("bodySm", "bold"), color: customerTheme.colors.danger }
 });
