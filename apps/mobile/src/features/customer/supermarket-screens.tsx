@@ -25,7 +25,7 @@ import {
 } from "../../core/api";
 import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
 import i18n from "../../i18n";
-import { colors, iconSize, radius, spacing, withAlpha } from "../../theme/tokens";
+import { colors, iconSize, isRTL, radius, spacing, withAlpha } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
 
@@ -312,7 +312,7 @@ function CartDock(props: { cart: Cart; onPress: () => void }) {
 
 function BackButton({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation(["customer"]);
-  return <Pressable accessibilityLabel={t("supermarket.goBackAccessibility")} onPress={onPress} style={styles.backButton}><Text style={styles.backText}>‹</Text></Pressable>;
+  return <Pressable accessibilityLabel={t("supermarket.goBackAccessibility")} onPress={onPress} style={styles.backButton}><Text style={styles.backText}>{isRTL() ? "›" : "‹"}</Text></Pressable>;
 }
 
 function Centered({ children }: { children: React.ReactNode }) { return <View style={styles.centered}>{children}</View>; }

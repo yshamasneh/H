@@ -25,7 +25,7 @@ import {
 } from "../../core/api";
 import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
 import i18n from "../../i18n";
-import { colors, iconSize, radius, spacing, withAlpha } from "../../theme/tokens";
+import { colors, iconSize, isRTL, radius, spacing, withAlpha } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
 
@@ -73,7 +73,7 @@ export function RestaurantListScreen(props: RestaurantListScreenProps) {
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <View style={styles.pageWidth}>
         <View style={styles.topHeader}>
-          <CircleButton label="‹" onPress={props.onBack} />
+          <CircleButton label={isRTL() ? "›" : "‹"} onPress={props.onBack} />
           <View style={styles.topHeaderText}>
             <Text style={styles.headerEyebrow}>JOVO</Text>
             <Text style={styles.headerLocation}>{t("restaurants.availableRestaurants")}</Text>
@@ -167,7 +167,7 @@ export function RestaurantMenuScreen(props: RestaurantMenuScreenProps) {
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.secondary} barStyle="light-content" />
       <View style={styles.menuHero}>
-        <CircleButton dark label="‹" onPress={props.onBack} />
+        <CircleButton dark label={isRTL() ? "›" : "‹"} onPress={props.onBack} />
         <View style={styles.menuHeroArt}>
           <Text style={styles.menuHeroEmoji}>🍽️</Text>
         </View>

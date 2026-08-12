@@ -19,7 +19,7 @@ import {
   type RestaurantOffer,
   type RestaurantSummary
 } from "../../core/api";
-import { colors, iconSize, radius, spacing } from "../../theme/tokens";
+import { colors, iconSize, isRTL, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
 
@@ -115,7 +115,7 @@ export function CustomerHomeScreen(props: {
             <Text style={styles.marketTitle}>{t("home.supermarketTitle")}</Text>
             <Text style={styles.marketDescription}>{t("home.supermarketDescription")}</Text>
           </View>
-          <Text style={styles.marketArrow}>›</Text>
+          <Text style={styles.marketArrow}>{isRTL() ? "‹" : "›"}</Text>
         </Pressable>
 
         <View style={styles.sectionHeader}>
@@ -305,6 +305,6 @@ const styles = StyleSheet.create({
   restaurantOpen: { ...text("label", "bold"), color: customerTheme.colors.success, marginTop: spacing[2] },
   quickActions: { flexDirection: "row", gap: spacing[2], marginTop: spacing[4] },
   quickButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, minHeight: 80, justifyContent: "center", padding: spacing[3] },
-  quickIcon: { color: customerTheme.colors.primary, fontSize: iconSize.md, fontWeight: "900" },
+  quickIcon: { color: customerTheme.colors.text, fontSize: iconSize.md, fontWeight: "900" },
   quickLabel: { ...text("label", "medium"), color: customerTheme.colors.text, marginTop: spacing[1] }
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import i18n, { resolveInitialLanguage } from "./src/i18n";
-import { reconcileRTL, reloadApp } from "./src/i18n/rtl";
+import { isRTLLanguage, reconcileRTL, reloadApp } from "./src/i18n/rtl";
+import type { SupportedLanguage } from "./src/core/language";
 import { useAppFonts } from "./src/theme/fonts";
 import { colors } from "./src/theme/tokens";
 import {
@@ -117,8 +118,41 @@ const logo = require("./assets/logo/jovo-wordmark.png");
 export default function App() {
   return (
     <SafeAreaProvider>
-      <TasawaQApp />
+      <RTLRoot>
+        <TasawaQApp />
+      </RTLRoot>
     </SafeAreaProvider>
+  );
+}
+
+/**
+ * On web, react-native-web only resolves logical position props (`end`,
+ * `start` — used throughout for RTL-mirrored absolute positioning, e.g. a
+ * badge pinned to the inline-end corner) against its own internal
+ * LocaleContext, which is hardcoded to "ltr" unless some element up the
+ * tree was given an explicit `dir` prop (see
+ * node_modules/react-native-web/dist/exports/createElement, which wraps any
+ * element carrying a `dir` prop in a LocaleProvider set to that direction).
+ * It does not read I18nManager or the document's own `dir` attribute for
+ * this. Without this wrapper, every `end`/`start`-positioned element
+ * quietly renders on the wrong side in Arabic, on web only — flex-based
+ * mirroring (flexDirection: "row", textAlign, marginStart/paddingStart)
+ * still works regardless, since that's resolved by the browser's native CSS
+ * bidi engine from the `dir` *attribute*, not this context.
+ *
+ * `View`'s TypeScript types don't declare `dir` (it's DOM-only), hence the
+ * cast — the prop still reaches the DOM node on web via passthrough, and is
+ * simply ignored by native's View, which does not accept it.
+ */
+const DirView = View as unknown as ComponentType<{ dir?: "rtl" | "ltr"; style?: unknown; children?: ReactNode }>;
+
+function RTLRoot({ children }: { children: ReactNode }) {
+  const { i18n: i18nInstance } = useTranslation();
+  const dir = isRTLLanguage(i18nInstance.language as SupportedLanguage) ? "rtl" : "ltr";
+  return (
+    <DirView dir={dir} style={styles.rtlRoot}>
+      {children}
+    </DirView>
   );
 }
 
@@ -583,6 +617,9 @@ function TasawaQApp() {
 }
 
 const styles = StyleSheet.create({
+  rtlRoot: {
+    flex: 1
+  },
   splashScreen: {
     alignItems: "center",
     backgroundColor: colors.surface,

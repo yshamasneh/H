@@ -40,7 +40,7 @@ import {
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
 import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
-import { colors, iconSize, radius, spacing } from "../../theme/tokens";
+import { colors, iconSize, isRTL, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
 
@@ -229,7 +229,7 @@ export function AccountScreen(props: {
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <View style={styles.header}>
-        <Pressable onPress={props.onBack} style={styles.back}><Text style={styles.backText}>‹</Text></Pressable>
+        <Pressable onPress={props.onBack} style={styles.back}><Text style={styles.backText}>{isRTL() ? "›" : "‹"}</Text></Pressable>
         <Text style={styles.headerTitle}>{t("account.headerTitle")}</Text>
         <View style={styles.headerSpacer} />
       </View>

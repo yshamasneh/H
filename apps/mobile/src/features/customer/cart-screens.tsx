@@ -38,7 +38,7 @@ import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
 import { customerTheme } from "./theme";
-import { colors, iconSize, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
+import { colors, iconSize, isRTL, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import i18n from "../../i18n";
 import { LocationMap } from "../../components/location-map";
@@ -804,7 +804,7 @@ function Header(props: { title: string; subtitle: string; onBack: () => void }) 
   return (
     <View style={styles.header}>
       <Pressable accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
-        <Text style={styles.backButtonText}>‹</Text>
+        <Text style={styles.backButtonText}>{isRTL() ? "›" : "‹"}</Text>
       </Pressable>
       <View style={styles.headerCopy}>
         <Text style={styles.headerTitle}>{props.title}</Text>

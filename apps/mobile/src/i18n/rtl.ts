@@ -20,23 +20,37 @@ export function isRTLLanguage(language: SupportedLanguage): boolean {
  *
  * On web, react-native-web resolves logical style props (marginStart,
  * flexDirection: 'row', etc.) via the browser's own CSS bidi engine, which
- * repaints instantly from the `dir` attribute with no reload needed — and
- * critically, forceRTL's in-memory JS flag does NOT persist across a hard
- * page reload the way native's does, so auto-reloading here would loop.
- * We therefore apply the dir/lang attributes directly and never signal a
- * reload on web.
+ * repaints instantly from the `dir` attribute — applied here unconditionally
+ * so mirroring is correct even during the moment before a reload lands.
+ * But theme/typography.ts's `text()` helper also reads direction (via
+ * theme/tokens.ts's `isRTL()`), synchronously, inside module-scope
+ * StyleSheet.create() calls that every screen evaluates once at import time
+ * — a reload is required here too, for the same reason as native: those
+ * styles need to be rebuilt against the new direction from a clean module
+ * evaluation, not patched live.
+ *
+ * react-native-web's I18nManager is a stub — allowRTL/forceRTL are no-ops
+ * and isRTL is hardcoded to always return false (see
+ * node_modules/react-native-web/dist/exports/I18nManager) — so it cannot be
+ * used to detect "did the direction actually change" on web the way native
+ * does. Comparing against the `dir` attribute's value *before* this call
+ * overwrites it serves the same purpose and is what theme/tokens.ts's
+ * `isRTL()` reads as its own source of truth on web, so the two stay
+ * consistent. (A page reload is safe here because
+ * src/i18n/rtl-preset.ts re-derives the correct direction from *stored*
+ * language on the very next load, synchronously, before any module
+ * evaluates — there is nothing left over from this call that the next load
+ * depends on.)
  */
 export function reconcileRTL(language: SupportedLanguage): boolean {
   const desiredRTL = isRTLLanguage(language);
 
   if (Platform.OS === "web") {
-    if (typeof document !== "undefined") {
-      document.documentElement.dir = desiredRTL ? "rtl" : "ltr";
-      document.documentElement.lang = language;
-    }
-    I18nManager.allowRTL(desiredRTL);
-    I18nManager.forceRTL(desiredRTL);
-    return false;
+    if (typeof document === "undefined") return false;
+    const currentRTL = document.documentElement.dir === "rtl";
+    document.documentElement.dir = desiredRTL ? "rtl" : "ltr";
+    document.documentElement.lang = language;
+    return currentRTL !== desiredRTL;
   }
 
   if (I18nManager.isRTL === desiredRTL) return false;

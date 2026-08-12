@@ -166,12 +166,23 @@ export const statusPalette: Record<StatusFamily, { background: string; foregroun
 };
 
 /**
- * I18nManager.isRTL is reconciled with the chosen language before any screen
- * renders (see src/i18n/rtl.ts — a native language switch forces a reload
- * specifically so this is always true by the time JS evaluates). Reading it
- * here is therefore as reliable as admin's [dir="rtl"] CSS selector.
+ * On native, I18nManager.isRTL is reconciled with the chosen language before
+ * any screen renders (see src/i18n/rtl.ts — a language switch forces a
+ * reload specifically so this is always true by the time JS evaluates).
+ *
+ * On web, react-native-web's I18nManager is a stub: allowRTL/forceRTL are
+ * no-ops and isRTL is hardcoded to always return false (see
+ * node_modules/react-native-web/dist/exports/I18nManager) — it can never
+ * reflect a switch to Arabic. The document's own `dir` attribute (set
+ * synchronously at boot by src/i18n/rtl-preset.ts, before this or any other
+ * screen module evaluates, and kept in sync by reconcileRTL afterward) is
+ * the actual source of truth there, exactly as it already is for admin's
+ * [dir="rtl"] CSS selector.
  */
 export function isRTL(): boolean {
+  if (Platform.OS === "web") {
+    return typeof document !== "undefined" && document.documentElement.dir === "rtl";
+  }
   return I18nManager.isRTL;
 }
 
