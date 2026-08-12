@@ -631,6 +631,33 @@ was left out of B2.
   the only content differences are the identifiers, the splash colours, and the
   manifest changes listed above.
 
+### The Android build was NOT verified — do this first
+
+**`./gradlew :app:assembleDebug` never completed in this session.** It was
+started twice and killed both times by the session ending, not by a build
+failure: no error was produced, no APK exists, and `android/app/build/` was
+never created. What it did reach on the first attempt is that Gradle configured
+the project, resolved dependencies, and got as far as compiling the included
+React Native and Expo gradle plugins — so `settings.gradle` and the rename are
+not obviously broken. That is *evidence*, not verification.
+
+Both attempts were slow for an environment reason worth knowing: `JAVA_HOME`
+points at `C:\Program Files\Android\Android Studio\jbr`, which does not
+exist on this machine. Temurin JDK 21 at
+`C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot` works and is what
+both attempts used. On the first attempt the Kotlin compile daemon also failed
+to connect and fell back to in-process compilation.
+
+Run this before trusting the rename:
+
+```sh
+cd apps/mobile/android
+JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-21.0.9.10-hotspot"   ./gradlew :app:assembleDebug
+```
+
+If it fails on the Kotlin package path, the suspects are
+`app/src/main/java/com/jovo/app/*.kt` and `namespace` in `app/build.gradle`.
+
 ### What could NOT be verified in this environment
 
 - **Anything behind the login screen.** Reaching the customer home, the
