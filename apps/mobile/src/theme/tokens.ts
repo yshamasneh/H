@@ -174,3 +174,18 @@ export const statusPalette: Record<StatusFamily, { background: string; foregroun
 export function isRTL(): boolean {
   return I18nManager.isRTL;
 }
+
+/**
+ * Alpha-blends a token colour for the rare cases that need translucency —
+ * a floating bar over scrolling content, white-on-dark text hierarchy on a
+ * surfaceInverse panel. `colors.*` itself stays solid; this is the one
+ * escape hatch so those spots still read from a token instead of a literal
+ * hex/rgb triple.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.substring(0, 2), 16);
+  const g = parseInt(value.substring(2, 4), 16);
+  const b = parseInt(value.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
