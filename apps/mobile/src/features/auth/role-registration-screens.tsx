@@ -29,6 +29,8 @@ import {
 } from "../../core/phone";
 import type { PhonePrefill } from "../../navigation/navigation";
 import i18n from "../../i18n";
+import { colors, radius, spacing } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 import { strongPasswordPattern } from "./auth.rules";
 
 type RegistrationProps = {
@@ -196,7 +198,7 @@ export function DriverRegistrationScreen(props: RegistrationProps) {
 function RegistrationLayout(props: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.brand}>JOVO</Text>
@@ -277,7 +279,7 @@ function PhoneFields(props: {
         keyboardType="phone-pad"
         onChangeText={props.onPhoneNumberChange}
         placeholder={t("fields.phoneNumberPlaceholder")}
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={colors.textMuted}
         style={styles.input}
         value={props.phoneNumber}
       />
@@ -288,7 +290,7 @@ function PhoneFields(props: {
 function PrimaryButton(props: { label: string; loading: boolean; onPress: () => void }) {
   return (
     <Pressable disabled={props.loading} onPress={props.onPress} style={styles.primaryButton}>
-      {props.loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{props.label}</Text>}
+      {props.loading ? <ActivityIndicator color={colors.textInverse} /> : <Text style={styles.primaryButtonText}>{props.label}</Text>}
     </Pressable>
   );
 }
@@ -332,31 +334,31 @@ function readRegistrationError(error: unknown): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: "#F5FAFC", flex: 1 },
+  screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   flex: { flex: 1 },
-  content: { alignSelf: "center", maxWidth: 620, padding: 22, paddingBottom: 48, width: "100%" },
-  brand: { color: "#0F766E", fontSize: 13, fontWeight: "900", letterSpacing: 2, textAlign: "center" },
-  title: { color: "#102A2A", fontSize: 28, fontWeight: "900", marginTop: 14, textAlign: "center" },
-  subtitle: { color: "#64748B", fontSize: 14, lineHeight: 20, marginTop: 7, textAlign: "center" },
-  panel: { backgroundColor: "#FFFFFF", borderRadius: 22, marginTop: 24, padding: 20 },
-  field: { marginBottom: 15 },
-  label: { color: "#334155", fontSize: 13, fontWeight: "800", marginBottom: 7 },
-  input: { backgroundColor: "#F8FAFC", borderColor: "#DCE5E4", borderRadius: 13, borderWidth: 1, color: "#102A2A", minHeight: 50, paddingHorizontal: 14 },
-  multilineInput: { minHeight: 82, paddingTop: 13, textAlignVertical: "top" },
-  help: { color: "#64748B", fontSize: 11, marginBottom: 13, marginTop: -8 },
-  countryRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
-  businessTypeRow: { flexDirection: "row", gap: 9 },
-  businessTypeButton: { alignItems: "center", backgroundColor: "#F8FAFC", borderColor: "#DCE5E4", borderRadius: 13, borderWidth: 1, flex: 1, paddingVertical: 14 },
-  businessTypeSelected: { backgroundColor: "#DDF4EF", borderColor: "#0F766E" },
-  businessTypeText: { color: "#64748B", fontWeight: "800" },
-  businessTypeTextSelected: { color: "#0F766E" },
-  countryButton: { backgroundColor: "#F8FAFC", borderColor: "#DCE5E4", borderRadius: 11, borderWidth: 1, paddingHorizontal: 17, paddingVertical: 10 },
-  countryButtonSelected: { backgroundColor: "#DDF4EF", borderColor: "#0F766E" },
-  countryText: { color: "#64748B", fontWeight: "800" },
-  countryTextSelected: { color: "#0F766E" },
-  error: { backgroundColor: "#FEE2E2", borderRadius: 11, color: "#B91C1C", marginBottom: 13, padding: 11 },
-  primaryButton: { alignItems: "center", backgroundColor: "#0F766E", borderRadius: 14, justifyContent: "center", minHeight: 52, paddingHorizontal: 18 },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
-  backButton: { alignItems: "center", marginTop: 16, padding: 8 },
-  backButtonText: { color: "#0F766E", fontSize: 13, fontWeight: "800" }
+  content: { alignSelf: "center", maxWidth: 620, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
+  brand: { ...text("label", "bold"), color: colors.primary, textAlign: "center" },
+  title: { ...text("h1", "bold"), color: colors.text, marginTop: spacing[3], textAlign: "center" },
+  subtitle: { ...text("bodySm"), color: colors.textMuted, marginTop: spacing[2], textAlign: "center" },
+  panel: { backgroundColor: colors.surface, borderRadius: radius.lg, marginTop: spacing[6], padding: spacing[5] },
+  field: { marginBottom: spacing[4] },
+  label: { ...text("caption", "bold"), color: colors.text, marginBottom: spacing[2] },
+  input: { backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 50, paddingHorizontal: spacing[4] },
+  multilineInput: { minHeight: 82, paddingTop: spacing[3], textAlignVertical: "top" },
+  help: { ...text("label"), color: colors.textMuted, marginBottom: spacing[3], marginTop: -8 },
+  countryRow: { flexDirection: "row", gap: spacing[2], marginBottom: spacing[2] },
+  businessTypeRow: { flexDirection: "row", gap: spacing[2] },
+  businessTypeButton: { alignItems: "center", backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flex: 1, paddingVertical: spacing[4] },
+  businessTypeSelected: { backgroundColor: colors.primarySubtle, borderColor: colors.primary },
+  businessTypeText: { ...text("bodySm", "bold"), color: colors.textMuted },
+  businessTypeTextSelected: { color: colors.primaryPressed },
+  countryButton: { backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.sm, borderWidth: 1, paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
+  countryButtonSelected: { backgroundColor: colors.primarySubtle, borderColor: colors.primary },
+  countryText: { ...text("bodySm", "bold"), color: colors.textMuted },
+  countryTextSelected: { color: colors.primaryPressed },
+  error: { ...text("bodySm"), backgroundColor: colors.errorSubtle, borderRadius: radius.sm, color: colors.error, marginBottom: spacing[3], padding: spacing[3] },
+  primaryButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.lg, justifyContent: "center", minHeight: 52, paddingHorizontal: spacing[4] },
+  primaryButtonText: { ...text("bodySm", "bold"), color: colors.textInverse },
+  backButton: { alignItems: "center", marginTop: spacing[4], padding: spacing[2] },
+  backButtonText: { ...text("caption", "bold"), color: colors.textMuted }
 });
