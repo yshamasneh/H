@@ -38,6 +38,8 @@ import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
 import { customerTheme } from "./theme";
+import { colors, iconSize, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 import i18n from "../../i18n";
 import { LocationMap } from "../../components/location-map";
 import type { MapCoordinate } from "../../components/location-map.types";
@@ -348,7 +350,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         <TextInput
           onChangeText={setDeliveryLabel}
           placeholder={t("checkout.labelPlaceholder")}
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={customerTheme.colors.textMuted}
           style={styles.input}
           value={deliveryLabel}
         />
@@ -357,7 +359,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           multiline
           onChangeText={setDeliveryAddressLine}
           placeholder={t("checkout.addressPlaceholder")}
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={customerTheme.colors.textMuted}
           style={[styles.input, styles.multilineInput]}
           value={deliveryAddressLine}
         />
@@ -410,7 +412,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           multiline
           onChangeText={setCustomerNote}
           placeholder={t("checkout.notesPlaceholder")}
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={customerTheme.colors.textMuted}
           style={[styles.input, styles.multilineInput]}
           value={customerNote}
         />
@@ -745,29 +747,12 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
 
 function StatusBadge(props: { status: OrderDetail["status"] }) {
   const { t } = useTranslation(["common"]);
-  const palette = statusPalette(props.status);
+  const palette = tokenStatusPalette[statusFamily(props.status)];
   return (
     <View style={[styles.statusBadge, { backgroundColor: palette.background }]}>
-      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{t(`status.${props.status}`, props.status.replace(/_/g, " "))}</Text>
+      <Text style={[styles.statusBadgeText, { color: palette.foreground }]}>{t(`status.${props.status}`, props.status.replace(/_/g, " "))}</Text>
     </View>
   );
-}
-
-function statusPalette(status: OrderDetail["status"]): { background: string; text: string } {
-  switch (status) {
-    case "PLACED":
-      return { background: "#FEF9C3", text: "#854D0E" };
-    case "ACCEPTED":
-    case "PREPARING":
-      return { background: "#DBEAFE", text: "#1E40AF" };
-    case "READY_FOR_PICKUP":
-      return { background: "#E0E7FF", text: "#3730A3" };
-    case "DELIVERED":
-      return { background: "#DCFCE7", text: "#166534" };
-    case "REJECTED":
-    case "CANCELLED":
-      return { background: "#FEE2E2", text: "#B91C1C" };
-  }
 }
 
 function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
@@ -860,7 +845,7 @@ function PrimaryButton(props: { label: string; loading?: boolean; destructive?: 
         (pressed || props.loading) && styles.buttonPressed
       ]}
     >
-      {props.loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{props.label}</Text>}
+      {props.loading ? <ActivityIndicator color={colors.textInverse} /> : <Text style={styles.primaryButtonText}>{props.label}</Text>}
     </Pressable>
   );
 }
@@ -914,202 +899,202 @@ const styles = StyleSheet.create({
     borderBottomColor: customerTheme.colors.border,
     borderBottomWidth: 1,
     flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 14
+    gap: spacing[3],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[4]
   },
-  backButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: 15, height: 44, justifyContent: "center", width: 44, ...customerTheme.shadow },
-  backButtonText: { color: customerTheme.colors.text, fontSize: 29, fontWeight: "500", marginTop: -3 },
+  backButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 44, justifyContent: "center", width: 44, ...customerTheme.shadow },
+  backButtonText: { color: customerTheme.colors.text, fontSize: iconSize.xl, fontWeight: "500", marginTop: -3 },
   headerCopy: { alignItems: "center", flex: 1 },
   headerSpacer: { width: 44 },
-  headerTitle: { color: customerTheme.colors.text, fontSize: 20, fontWeight: "900" },
-  headerSubtitle: { color: customerTheme.colors.textMuted, fontSize: 12, marginTop: 3, maxWidth: 250 },
-  centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: 24 },
-  emptyIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 42, height: 84, justifyContent: "center", marginBottom: 18, width: 84 },
-  emptyIconText: { fontSize: 38 },
-  emptyTitle: { color: customerTheme.colors.text, fontSize: 21, fontWeight: "900", marginBottom: 7 },
-  emptyText: { color: customerTheme.colors.textMuted, fontSize: 14, lineHeight: 20, maxWidth: 310, textAlign: "center" },
-  listContent: { alignSelf: "center", maxWidth: 900, padding: 18, paddingBottom: 40, width: "100%" },
-  formContent: { alignSelf: "center", maxWidth: 900, padding: 18, paddingBottom: 50, width: "100%" },
+  headerTitle: { ...text("h2", "bold"), color: customerTheme.colors.text },
+  headerSubtitle: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1], maxWidth: 250 },
+  centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[6] },
+  emptyIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 42, height: 84, justifyContent: "center", marginBottom: spacing[5], width: 84 },
+  emptyIconText: { fontSize: iconSize.xxl },
+  emptyTitle: { ...text("h1", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2] },
+  emptyText: { ...text("bodySm"), color: customerTheme.colors.textMuted, maxWidth: 310, textAlign: "center" },
+  listContent: { alignSelf: "center", maxWidth: 900, padding: spacing[4], paddingBottom: spacing[8], width: "100%" },
+  formContent: { alignSelf: "center", maxWidth: 900, padding: spacing[4], paddingBottom: spacing[9], width: "100%" },
   card: {
     backgroundColor: customerTheme.colors.surface,
     borderColor: customerTheme.colors.border,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginBottom: 15,
-    padding: 17,
+    marginBottom: spacing[4],
+    padding: spacing[4],
     ...customerTheme.shadow
   },
   cardPressed: { opacity: 0.72, transform: [{ scale: 0.995 }] },
-  cardTitle: { color: customerTheme.colors.text, fontSize: 17, fontWeight: "900" },
-  cardSubtitle: { color: customerTheme.colors.textMuted, fontSize: 12, marginTop: 4 },
-  orderIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 13, height: 42, justifyContent: "center", marginBottom: 12, width: 42 },
-  orderIconText: { color: customerTheme.colors.primary, fontSize: 20, fontWeight: "900" },
+  cardTitle: { ...text("h3", "bold"), color: customerTheme.colors.text },
+  cardSubtitle: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
+  orderIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.md, height: 42, justifyContent: "center", marginBottom: spacing[3], width: 42 },
+  orderIconText: { color: customerTheme.colors.primary, fontSize: iconSize.sm, fontWeight: "900" },
   orderRowHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  orderRowTotal: { color: customerTheme.colors.primary, fontSize: 16, fontWeight: "900", marginTop: 9 },
-  statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  statusBadgeText: { fontSize: 10, fontWeight: "900" },
+  orderRowTotal: { ...text("bodySm", "bold"), color: customerTheme.colors.primary, marginTop: spacing[2] },
+  statusBadge: { borderRadius: radius.pill, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  statusBadgeText: { ...text("label", "bold") },
   timelineRow: { flexDirection: "row", minHeight: 58 },
-  timelineMarker: { alignItems: "center", marginEnd: 12, width: 16 },
+  timelineMarker: { alignItems: "center", marginEnd: spacing[3], width: 16 },
   timelineDot: { backgroundColor: customerTheme.colors.primary, borderColor: customerTheme.colors.primarySoft, borderRadius: 8, borderWidth: 4, height: 16, width: 16 },
   timelineLine: { backgroundColor: customerTheme.colors.primarySoft, flex: 1, width: 3 },
-  timelineCopy: { flex: 1, paddingBottom: 13 },
-  timelineStatus: { color: customerTheme.colors.text, fontSize: 14, fontWeight: "800" },
-  timelineDate: { color: customerTheme.colors.textMuted, fontSize: 11, marginTop: 3 },
-  deliveryHeading: { alignItems: "center", flexDirection: "row", gap: 12, marginBottom: 12 },
-  deliveryIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 15, height: 48, justifyContent: "center", width: 48 },
-  deliveryIconText: { color: customerTheme.colors.primary, fontSize: 23, fontWeight: "900" },
+  timelineCopy: { flex: 1, paddingBottom: spacing[3] },
+  timelineStatus: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
+  timelineDate: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
+  deliveryHeading: { alignItems: "center", flexDirection: "row", gap: spacing[3], marginBottom: spacing[3] },
+  deliveryIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.lg, height: 48, justifyContent: "center", width: 48 },
+  deliveryIconText: { color: customerTheme.colors.primary, fontSize: iconSize.md, fontWeight: "900" },
   cartRow: {
     backgroundColor: customerTheme.colors.surface,
     borderColor: customerTheme.colors.border,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginBottom: 13,
-    padding: 14,
+    marginBottom: spacing[3],
+    padding: spacing[4],
     ...customerTheme.shadow
   },
   cartItemTop: { alignItems: "center", flexDirection: "row" },
-  cartItemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: 15, height: 72, justifyContent: "center", marginEnd: 13, width: 72 },
-  cartItemEmoji: { fontSize: 34 },
+  cartItemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.lg, height: 72, justifyContent: "center", marginEnd: spacing[3], width: 72 },
+  cartItemEmoji: { fontSize: iconSize.xl },
   cartRowInfo: { flex: 1 },
-  cartRowName: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "900" },
-  cartRowUnitPrice: { color: customerTheme.colors.textMuted, fontSize: 12, marginTop: 3 },
-  substitutionText: { color: customerTheme.colors.secondary, fontSize: 12, fontWeight: "700", marginTop: 8 },
-  quantityStepper: { alignItems: "center", alignSelf: "flex-end", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: 12, flexDirection: "row", gap: 13, marginTop: 12, padding: 4 },
+  cartRowName: { ...text("body", "bold"), color: customerTheme.colors.text },
+  cartRowUnitPrice: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
+  substitutionText: { ...text("caption", "medium"), color: customerTheme.colors.secondary, marginTop: spacing[2] },
+  quantityStepper: { alignItems: "center", alignSelf: "flex-end", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.md, flexDirection: "row", gap: spacing[3], marginTop: spacing[3], padding: spacing[1] },
   stepperButton: {
     alignItems: "center",
     backgroundColor: customerTheme.colors.surface,
-    borderRadius: 9,
+    borderRadius: radius.sm,
     height: 32,
     justifyContent: "center",
     width: 32
   },
-  stepperButtonText: { color: customerTheme.colors.primary, fontSize: 18, fontWeight: "900" },
-  stepperValue: { color: customerTheme.colors.text, fontSize: 14, fontWeight: "900", minWidth: 20, textAlign: "center" },
-  cartRowLineTotal: { color: customerTheme.colors.primary, fontSize: 14, fontWeight: "900", marginTop: 8 },
-  removeButton: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#FDE8E5", borderRadius: 12, height: 32, justifyContent: "center", width: 32 },
-  removeButtonText: { color: customerTheme.colors.danger, fontSize: 21, fontWeight: "500", marginTop: -2 },
+  stepperButtonText: { color: customerTheme.colors.primary, fontSize: iconSize.sm, fontWeight: "900" },
+  stepperValue: { ...text("bodySm", "bold"), color: customerTheme.colors.text, minWidth: 20, textAlign: "center" },
+  cartRowLineTotal: { ...text("bodySm", "bold"), color: customerTheme.colors.primary, marginTop: spacing[2] },
+  removeButton: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.errorSubtle, borderRadius: radius.md, height: 32, justifyContent: "center", width: 32 },
+  removeButtonText: { color: customerTheme.colors.danger, fontSize: iconSize.sm, fontWeight: "500", marginTop: -2 },
   footer: {
     alignSelf: "center",
     backgroundColor: customerTheme.colors.surface,
     borderTopColor: customerTheme.colors.border,
     borderTopWidth: 1,
     maxWidth: 900,
-    padding: 18,
+    padding: spacing[5],
     width: "100%"
   },
-  footerRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  footerLabel: { color: customerTheme.colors.text, fontSize: 16, fontWeight: "800" },
-  footerValue: { color: customerTheme.colors.primary, fontSize: 18, fontWeight: "900" },
-  footerNote: { color: customerTheme.colors.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 12, marginTop: 5 },
-  sectionTitle: { color: customerTheme.colors.text, fontSize: 17, fontWeight: "900", marginBottom: 12, marginTop: 7 },
+  footerRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[1] },
+  footerLabel: { ...text("body", "bold"), color: customerTheme.colors.text },
+  footerValue: { ...text("h3", "bold"), color: customerTheme.colors.primary },
+  footerNote: { ...text("label"), color: customerTheme.colors.textMuted, marginBottom: spacing[3], marginTop: spacing[1] },
+  sectionTitle: { ...text("h3", "bold"), color: customerTheme.colors.text, marginBottom: spacing[3], marginTop: spacing[2] },
   summaryCard: {
     backgroundColor: customerTheme.colors.surface,
     borderColor: customerTheme.colors.border,
-    borderRadius: 20,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginBottom: 18,
-    padding: 18,
+    marginBottom: spacing[5],
+    padding: spacing[5],
     ...customerTheme.shadow
   },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  summaryRowLabel: { color: customerTheme.colors.textMuted, flex: 1, fontSize: 13, paddingEnd: 8 },
-  summaryRowValue: { color: customerTheme.colors.text, fontSize: 13, fontWeight: "700" },
-  summaryRowLabelBold: { color: customerTheme.colors.text, fontSize: 15, fontWeight: "900" },
-  summaryRowValueBold: { color: customerTheme.colors.primary, fontSize: 17, fontWeight: "900" },
-  summaryDivider: { backgroundColor: customerTheme.colors.border, height: 1, marginVertical: 10 },
-  label: { color: customerTheme.colors.text, fontSize: 12, fontWeight: "900", marginBottom: 7, marginTop: 12 },
-  addressText: { color: customerTheme.colors.text, fontSize: 13, lineHeight: 19 },
-  locationNote: { color: customerTheme.colors.textMuted, fontSize: 11, lineHeight: 17, marginBottom: 8, marginTop: 8 },
-  promotionText: { color: customerTheme.colors.success, fontSize: 12, fontWeight: "800", marginBottom: 5 },
-  fulfillmentReviewCard: { backgroundColor: "#FFFBEB", borderColor: "#F59E0B", borderRadius: 20, borderWidth: 1, marginBottom: 18, padding: 18 },
-  fulfillmentReviewEyebrow: { color: "#B45309", fontSize: 10, fontWeight: "900", letterSpacing: 0.8, marginBottom: 7 },
-  fulfillmentReviewTitle: { color: customerTheme.colors.text, fontSize: 17, fontWeight: "900", marginBottom: 8 },
-  fulfillmentReviewText: { color: "#78350F", fontSize: 13, lineHeight: 19 },
-  fulfillmentReviewPrice: { color: "#92400E", fontSize: 14, fontWeight: "900", marginTop: 8 },
-  fulfillmentReviewNote: { color: "#78350F", fontSize: 12, fontStyle: "italic", marginTop: 7 },
-  fulfillmentReviewActions: { flexDirection: "row", gap: 9, marginTop: 14 },
-  fulfillmentApproveButton: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: 12, flex: 1, paddingVertical: 12 },
-  fulfillmentApproveText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
-  fulfillmentRejectButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: customerTheme.colors.danger, borderRadius: 12, borderWidth: 1, flex: 1, paddingVertical: 12 },
-  fulfillmentRejectText: { color: customerTheme.colors.danger, fontSize: 13, fontWeight: "900" },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[2] },
+  summaryRowLabel: { ...text("caption"), color: customerTheme.colors.textMuted, flex: 1, paddingEnd: spacing[2] },
+  summaryRowValue: { ...text("caption", "medium"), color: customerTheme.colors.text },
+  summaryRowLabelBold: { ...text("body", "bold"), color: customerTheme.colors.text },
+  summaryRowValueBold: { ...text("h3", "bold"), color: customerTheme.colors.primary },
+  summaryDivider: { backgroundColor: customerTheme.colors.border, height: 1, marginVertical: spacing[2] },
+  label: { ...text("caption", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2], marginTop: spacing[3] },
+  addressText: { ...text("caption"), color: customerTheme.colors.text },
+  locationNote: { ...text("label"), color: customerTheme.colors.textMuted, marginBottom: spacing[2], marginTop: spacing[2] },
+  promotionText: { ...text("caption", "bold"), color: customerTheme.colors.success, marginBottom: spacing[1] },
+  fulfillmentReviewCard: { backgroundColor: colors.warningSubtle, borderColor: colors.warning, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[5], padding: spacing[5] },
+  fulfillmentReviewEyebrow: { ...text("label", "bold"), color: colors.warning, marginBottom: spacing[2] },
+  fulfillmentReviewTitle: { ...text("h3", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2] },
+  fulfillmentReviewText: { ...text("caption"), color: colors.warning },
+  fulfillmentReviewPrice: { ...text("bodySm", "bold"), color: colors.warning, marginTop: spacing[2] },
+  fulfillmentReviewNote: { ...text("caption"), color: colors.warning, fontStyle: "italic", marginTop: spacing[2] },
+  fulfillmentReviewActions: { flexDirection: "row", gap: spacing[2], marginTop: spacing[4] },
+  fulfillmentApproveButton: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.md, flex: 1, paddingVertical: spacing[3] },
+  fulfillmentApproveText: { ...text("caption", "bold"), color: colors.textInverse },
+  fulfillmentRejectButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: customerTheme.colors.danger, borderRadius: radius.md, borderWidth: 1, flex: 1, paddingVertical: spacing[3] },
+  fulfillmentRejectText: { ...text("caption", "bold"), color: customerTheme.colors.danger },
   fulfillmentButtonDisabled: { opacity: 0.45 },
   input: {
     backgroundColor: customerTheme.colors.surface,
     borderColor: customerTheme.colors.border,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     borderWidth: 1,
     color: customerTheme.colors.text,
-    fontSize: 14,
-    marginBottom: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 13
+    ...text("bodySm"),
+    marginBottom: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3]
   },
-  savedAddressList: { marginBottom: 10 },
-  savedAddressChip: { backgroundColor: customerTheme.colors.primarySoft, borderRadius: 999, marginEnd: 8, paddingHorizontal: 14, paddingVertical: 10 },
-  savedAddressChipText: { color: customerTheme.colors.primaryDark, fontSize: 12, fontWeight: "900" },
+  savedAddressList: { marginBottom: spacing[2] },
+  savedAddressChip: { backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.pill, marginEnd: spacing[2], paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
+  savedAddressChipText: { ...text("label", "bold"), color: customerTheme.colors.primaryDark },
   multilineInput: { minHeight: 86, textAlignVertical: "top" },
   paymentOption: {
     backgroundColor: customerTheme.colors.surface,
     borderColor: customerTheme.colors.border,
-    borderRadius: 14,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginBottom: 9,
-    padding: 16
+    marginBottom: spacing[2],
+    padding: spacing[4]
   },
   paymentOptionSelected: { backgroundColor: customerTheme.colors.primarySoft, borderColor: customerTheme.colors.primary },
-  paymentOptionText: { color: customerTheme.colors.text, fontSize: 14, fontWeight: "700" },
+  paymentOptionText: { ...text("bodySm", "medium"), color: customerTheme.colors.text },
   paymentOptionTextSelected: { color: customerTheme.colors.primaryDark, fontWeight: "900" },
-  checkoutSteps: { alignItems: "center", flexDirection: "row", justifyContent: "center", marginTop: 2 },
+  checkoutSteps: { alignItems: "center", flexDirection: "row", justifyContent: "center", marginTop: spacing[1] },
   stepComplete: { alignItems: "center", backgroundColor: customerTheme.colors.success, borderRadius: 17, height: 34, justifyContent: "center", width: 34 },
-  stepCompleteText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  stepCompleteText: { ...text("bodySm", "bold"), color: colors.textInverse },
   stepActive: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: 17, height: 34, justifyContent: "center", width: 34 },
-  stepActiveText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
-  stepMuted: { alignItems: "center", backgroundColor: "#E5E7E6", borderRadius: 17, height: 34, justifyContent: "center", width: 34 },
-  stepMutedText: { color: customerTheme.colors.textMuted, fontSize: 13, fontWeight: "800" },
+  stepActiveText: { ...text("caption", "bold"), color: colors.textInverse },
+  stepMuted: { alignItems: "center", backgroundColor: colors.neutralSubtle, borderRadius: 17, height: 34, justifyContent: "center", width: 34 },
+  stepMutedText: { ...text("caption", "bold"), color: customerTheme.colors.textMuted },
   stepLine: { backgroundColor: customerTheme.colors.success, height: 3, width: 70 },
-  stepLineMuted: { backgroundColor: "#E5E7E6", height: 3, width: 70 },
-  stepLabels: { flexDirection: "row", justifyContent: "space-between", marginBottom: 18, marginHorizontal: 35, marginTop: 7 },
-  stepLabel: { color: customerTheme.colors.textMuted, fontSize: 10, fontWeight: "800" },
-  successBanner: { alignItems: "center", backgroundColor: customerTheme.colors.successSoft, borderRadius: 22, marginBottom: 18, padding: 24 },
+  stepLineMuted: { backgroundColor: colors.neutralSubtle, height: 3, width: 70 },
+  stepLabels: { flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[5], marginHorizontal: spacing[8], marginTop: spacing[2] },
+  stepLabel: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
+  successBanner: { alignItems: "center", backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.lg, marginBottom: spacing[5], padding: spacing[6] },
   successIcon: { alignItems: "center", backgroundColor: customerTheme.colors.success, borderRadius: 35, height: 70, justifyContent: "center", width: 70 },
-  successIconText: { color: "#FFFFFF", fontSize: 34, fontWeight: "900" },
-  successTitle: { color: customerTheme.colors.text, fontSize: 22, fontWeight: "900", marginTop: 16 },
-  successBannerText: { color: customerTheme.colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: "center" },
+  successIconText: { color: colors.textInverse, fontSize: iconSize.xl, fontWeight: "900" },
+  successTitle: { ...text("h2", "bold"), color: customerTheme.colors.text, marginTop: spacing[4] },
+  successBannerText: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[2], textAlign: "center" },
   primaryButton: {
     alignItems: "center",
     backgroundColor: customerTheme.colors.primary,
-    borderRadius: 15,
-    marginTop: 14,
+    borderRadius: radius.lg,
+    marginTop: spacing[4],
     minHeight: 54,
     justifyContent: "center",
-    paddingVertical: 14,
+    paddingVertical: spacing[4],
     ...customerTheme.shadow
   },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  primaryButtonText: { ...text("body", "bold"), color: colors.textInverse },
   destructiveButton: { backgroundColor: customerTheme.colors.danger },
   secondaryButton: {
     alignItems: "center",
     backgroundColor: customerTheme.colors.surface,
     borderColor: customerTheme.colors.primarySoft,
-    borderRadius: 15,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginTop: 10,
+    marginTop: spacing[3],
     minHeight: 52,
     justifyContent: "center",
-    paddingVertical: 14
+    paddingVertical: spacing[4]
   },
-  secondaryButtonText: { color: customerTheme.colors.primary, fontSize: 14, fontWeight: "900" },
+  secondaryButtonText: { ...text("bodySm", "bold"), color: customerTheme.colors.primary },
   buttonPressed: { opacity: 0.7, transform: [{ scale: 0.995 }] },
   errorBox: { alignItems: "center" },
-  errorText: { color: customerTheme.colors.danger, fontSize: 14, lineHeight: 20, textAlign: "center" },
-  inlineErrorText: { backgroundColor: "#FDE8E5", borderRadius: 10, color: customerTheme.colors.danger, fontSize: 13, marginTop: 8, padding: 11 },
+  errorText: { ...text("bodySm"), color: customerTheme.colors.danger, textAlign: "center" },
+  inlineErrorText: { backgroundColor: colors.errorSubtle, borderRadius: radius.md, color: customerTheme.colors.danger, ...text("caption"), marginTop: spacing[2], padding: spacing[3] },
   retryButton: {
     backgroundColor: customerTheme.colors.primary,
-    borderRadius: 12,
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10
+    borderRadius: radius.md,
+    marginTop: spacing[4],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[2]
   },
-  retryButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" }
+  retryButtonText: { ...text("caption", "bold"), color: colors.textInverse }
 });
