@@ -29,6 +29,8 @@ import {
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
+import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 import { nextRestaurantActionsByStatus } from "./order.rules";
 
 const currencyCode = "ILS";
@@ -75,11 +77,11 @@ export function RestaurantOrdersScreen(props: RestaurantOrdersScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={t("orders.mostRecentFirst")} title={t("orders.incomingOrdersTitle")} />
       {orders === null ? (
         <View style={styles.centered}>
-          {error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color="#0F766E" size="large" />}
+          {error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color={colors.primary} size="large" />}
         </View>
       ) : orders.length === 0 ? (
         <View style={styles.centered}>
@@ -90,7 +92,7 @@ export function RestaurantOrdersScreen(props: RestaurantOrdersScreenProps) {
           contentContainerStyle={styles.listContent}
           data={orders}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor="#0F766E" />}
+          refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor={colors.primary} />}
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"
@@ -192,7 +194,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={order ? formatDate(order.createdAt) : t("orders.defaultSubtitle")} title={t("orders.orderDetailsTitle")} />
       {error ? (
         <View style={styles.centered}>
@@ -200,7 +202,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
         </View>
       ) : order === null ? (
         <View style={styles.centered}>
-          <ActivityIndicator color="#0F766E" size="large" />
+          <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.formContent}>
@@ -381,29 +383,12 @@ function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
 
 export function StatusBadge(props: { status: OrderStatusValue }) {
   const { t } = useTranslation(["common"]);
-  const palette = statusPalette(props.status);
+  const palette = tokenStatusPalette[statusFamily(props.status)];
   return (
     <View style={[styles.statusBadge, { backgroundColor: palette.background }]}>
-      <Text style={[styles.statusBadgeText, { color: palette.text }]}>{t(`status.${props.status}`, props.status.replace(/_/g, " "))}</Text>
+      <Text style={[styles.statusBadgeText, { color: palette.foreground }]}>{t(`status.${props.status}`, props.status.replace(/_/g, " "))}</Text>
     </View>
   );
-}
-
-function statusPalette(status: OrderStatusValue): { background: string; text: string } {
-  switch (status) {
-    case "PLACED":
-      return { background: "#FEF9C3", text: "#854D0E" };
-    case "ACCEPTED":
-    case "PREPARING":
-      return { background: "#DBEAFE", text: "#1E40AF" };
-    case "READY_FOR_PICKUP":
-      return { background: "#E0E7FF", text: "#3730A3" };
-    case "DELIVERED":
-      return { background: "#DCFCE7", text: "#166534" };
-    case "REJECTED":
-    case "CANCELLED":
-      return { background: "#FEE2E2", text: "#B91C1C" };
-  }
 }
 
 function Header(props: { title: string; subtitle: string; onBack: () => void }) {
@@ -451,7 +436,7 @@ function ActionButton(props: { label: string; loading?: boolean; disabled?: bool
       ]}
     >
       {props.loading ? (
-        <ActivityIndicator color="#FFFFFF" />
+        <ActivityIndicator color={colors.textInverse} />
       ) : (
         <Text style={styles.actionButtonText}>{props.label}</Text>
       )}
@@ -477,93 +462,93 @@ function readError(error: unknown): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: "#F5FAFC", flex: 1 },
+  screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   header: {
-    backgroundColor: "#FFFFFF",
-    borderBottomColor: "#D9E2EC",
+    backgroundColor: colors.surface,
+    borderBottomColor: colors.border,
     borderBottomWidth: 1,
-    padding: 20,
-    paddingTop: 12
+    padding: spacing[5],
+    paddingTop: spacing[3]
   },
-  backButton: { alignSelf: "flex-start", marginBottom: 10, paddingVertical: 4 },
-  backButtonText: { color: "#0369A1", fontSize: 14, fontWeight: "700" },
-  headerTitle: { color: "#0F172A", fontSize: 24, fontWeight: "800" },
-  headerSubtitle: { color: "#64748B", fontSize: 14, marginTop: 4 },
-  centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: 24 },
-  emptyText: { color: "#64748B", fontSize: 15, textAlign: "center" },
-  listContent: { padding: 16, paddingBottom: 40 },
-  formContent: { padding: 16, paddingBottom: 40 },
+  backButton: { alignSelf: "flex-start", marginBottom: spacing[2], paddingVertical: spacing[1] },
+  backButtonText: { ...text("bodySm", "bold"), color: colors.textMuted },
+  headerTitle: { ...text("h1", "bold"), color: colors.text },
+  headerSubtitle: { ...text("bodySm"), color: colors.textMuted, marginTop: spacing[1] },
+  centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[6] },
+  emptyText: { ...text("body"), color: colors.textMuted, textAlign: "center" },
+  listContent: { padding: spacing[4], paddingBottom: spacing[8] },
+  formContent: { padding: spacing[4], paddingBottom: spacing[8] },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D9E2EC",
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginBottom: 12,
-    padding: 16
+    marginBottom: spacing[3],
+    padding: spacing[4]
   },
-  cardPressed: { backgroundColor: "#F0FDFA", borderColor: "#0F766E" },
-  cardTitle: { color: "#0F172A", fontSize: 15, fontWeight: "800" },
-  cardSubtitle: { color: "#64748B", fontSize: 13, marginTop: 4 },
+  cardPressed: { backgroundColor: colors.primarySubtle, borderColor: colors.primary },
+  cardTitle: { ...text("bodySm", "bold"), color: colors.text },
+  cardSubtitle: { ...text("caption"), color: colors.textMuted, marginTop: spacing[1] },
   orderRowHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  orderRowTotal: { color: "#0F766E", fontSize: 16, fontWeight: "800", marginTop: 8 },
-  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  statusBadgeText: { fontSize: 11, fontWeight: "800" },
-  sectionTitle: { color: "#0F172A", fontSize: 16, fontWeight: "800", marginBottom: 10, marginTop: 6 },
+  orderRowTotal: { ...text("bodySm", "bold"), color: colors.primary, marginTop: spacing[2] },
+  statusBadge: { borderRadius: radius.sm, paddingHorizontal: spacing[2], paddingVertical: spacing[1] },
+  statusBadgeText: { ...text("label", "bold") },
+  sectionTitle: { ...text("h3", "bold"), color: colors.text, marginBottom: spacing[2], marginTop: spacing[1] },
   summaryCard: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D9E2EC",
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    marginBottom: 16,
-    padding: 16
+    marginBottom: spacing[4],
+    padding: spacing[4]
   },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
-  orderItemBlock: { borderBottomColor: "#E2E8F0", borderBottomWidth: 1, paddingBottom: 10, paddingTop: 6 },
-  summaryRowLabel: { color: "#475569", flex: 1, fontSize: 14, paddingEnd: 8 },
-  summaryRowValue: { color: "#0F172A", fontSize: 14, fontWeight: "600" },
-  summaryRowLabelBold: { color: "#0F172A", fontSize: 15, fontWeight: "800" },
-  summaryRowValueBold: { color: "#0F766E", fontSize: 15, fontWeight: "800" },
-  summaryDivider: { backgroundColor: "#E2E8F0", height: 1, marginVertical: 8 },
-  label: { color: "#334155", fontSize: 13, fontWeight: "700", marginBottom: 6, marginTop: 10 },
-  addressText: { color: "#0F172A", fontSize: 14 },
-  timelineRow: { borderColor: "#E2E8F0", borderTopWidth: 1, paddingVertical: 8 },
-  timelineStatus: { color: "#0F172A", fontSize: 14, fontWeight: "700" },
-  timelineDate: { color: "#64748B", fontSize: 12, marginTop: 2 },
-  timelineNote: { color: "#475569", fontSize: 13, fontStyle: "italic", marginTop: 4 },
-  actionRow: { gap: 10, marginTop: 6 },
+  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[2] },
+  orderItemBlock: { borderBottomColor: colors.border, borderBottomWidth: 1, paddingBottom: spacing[2], paddingTop: spacing[1] },
+  summaryRowLabel: { ...text("bodySm"), color: colors.textMuted, flex: 1, paddingEnd: spacing[2] },
+  summaryRowValue: { ...text("bodySm", "medium"), color: colors.text },
+  summaryRowLabelBold: { ...text("bodySm", "bold"), color: colors.text },
+  summaryRowValueBold: { ...text("bodySm", "bold"), color: colors.primary },
+  summaryDivider: { backgroundColor: colors.border, height: 1, marginVertical: spacing[2] },
+  label: { ...text("caption", "bold"), color: colors.text, marginBottom: spacing[2], marginTop: spacing[3] },
+  addressText: { ...text("bodySm"), color: colors.text },
+  timelineRow: { borderColor: colors.border, borderTopWidth: 1, paddingVertical: spacing[2] },
+  timelineStatus: { ...text("bodySm", "bold"), color: colors.text },
+  timelineDate: { ...text("label"), color: colors.textMuted, marginTop: spacing[1] },
+  timelineNote: { ...text("caption"), color: colors.textMuted, fontStyle: "italic", marginTop: spacing[1] },
+  actionRow: { gap: spacing[2], marginTop: spacing[1] },
   actionButton: {
     alignItems: "center",
-    backgroundColor: "#0F766E",
-    borderRadius: 12,
-    paddingVertical: 14
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing[4]
   },
-  actionButtonDestructive: { backgroundColor: "#B91C1C" },
-  actionButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+  actionButtonDestructive: { backgroundColor: colors.error },
+  actionButtonText: { ...text("bodySm", "bold"), color: colors.textInverse },
   buttonPressed: { opacity: 0.85 },
   buttonDisabled: { opacity: 0.45 },
-  fulfillmentSummary: { backgroundColor: "#F8FAFC", borderRadius: 10, marginTop: 6, padding: 10 },
-  fulfillmentEditor: { backgroundColor: "#F0FDFA", borderRadius: 12, marginTop: 10, padding: 12 },
-  fulfillmentTitle: { color: "#0F766E", fontSize: 12, fontWeight: "900", marginBottom: 5 },
-  fulfillmentText: { color: "#334155", fontSize: 11, lineHeight: 17 },
-  fulfillmentNote: { color: "#475569", fontSize: 11, fontStyle: "italic", marginTop: 4 },
-  editorLabel: { color: "#334155", fontSize: 11, fontWeight: "800", marginBottom: 5, marginTop: 7 },
-  editorInput: { backgroundColor: "#FFFFFF", borderColor: "#CCFBF1", borderRadius: 10, borderWidth: 1, color: "#0F172A", marginBottom: 5, minHeight: 42, paddingHorizontal: 11 },
-  replacementPicker: { marginBottom: 4 },
-  replacementChip: { backgroundColor: "#FFFFFF", borderColor: "#CCFBF1", borderRadius: 999, borderWidth: 1, marginEnd: 7, paddingHorizontal: 10, paddingVertical: 8 },
-  replacementChipActive: { backgroundColor: "#0F766E", borderColor: "#0F766E" },
-  replacementChipText: { color: "#475569", fontSize: 10, fontWeight: "800" },
-  replacementChipTextActive: { color: "#FFFFFF" },
-  footerNote: { color: "#64748B", fontSize: 13, marginTop: 6, textAlign: "center" },
+  fulfillmentSummary: { backgroundColor: colors.surfaceSunk, borderRadius: radius.sm, marginTop: spacing[1], padding: spacing[2] },
+  fulfillmentEditor: { backgroundColor: colors.warningSubtle, borderRadius: radius.md, marginTop: spacing[2], padding: spacing[3] },
+  fulfillmentTitle: { ...text("label", "bold"), color: colors.warning, marginBottom: spacing[1] },
+  fulfillmentText: { ...text("label"), color: colors.text },
+  fulfillmentNote: { ...text("label"), color: colors.textMuted, fontStyle: "italic", marginTop: spacing[1] },
+  editorLabel: { ...text("label", "bold"), color: colors.text, marginBottom: spacing[1], marginTop: spacing[2] },
+  editorInput: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, marginBottom: spacing[1], minHeight: 42, paddingHorizontal: spacing[3] },
+  replacementPicker: { marginBottom: spacing[1] },
+  replacementChip: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, marginEnd: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  replacementChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  replacementChipText: { ...text("label", "bold"), color: colors.textMuted },
+  replacementChipTextActive: { color: colors.textInverse },
+  footerNote: { ...text("caption"), color: colors.textMuted, marginTop: spacing[2], textAlign: "center" },
   errorBox: { alignItems: "center" },
-  errorText: { color: "#B91C1C", fontSize: 14, lineHeight: 20, textAlign: "center" },
-  inlineErrorText: { color: "#B91C1C", fontSize: 13, marginTop: 10, textAlign: "center" },
+  errorText: { ...text("bodySm"), color: colors.error, textAlign: "center" },
+  inlineErrorText: { ...text("caption"), color: colors.error, marginTop: spacing[3], textAlign: "center" },
   retryButton: {
-    borderColor: "#0F766E",
-    borderRadius: 10,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
     borderWidth: 1,
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10
+    marginTop: spacing[4],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3]
   },
-  retryButtonText: { color: "#0F766E", fontSize: 14, fontWeight: "800" }
+  retryButtonText: { ...text("bodySm", "bold"), color: colors.primary }
 });
