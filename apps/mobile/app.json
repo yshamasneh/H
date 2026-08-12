@@ -1,29 +1,35 @@
 {
   "expo": {
     "name": "JOVO",
-    "slug": "wasel",
+    "slug": "jovo",
     "version": "0.13.0",
-    "scheme": "tasawaq",
+    "scheme": "jovo",
     "icon": "./assets/store/app-icon-1024.png",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.wasel.app",
+      "bundleIdentifier": "com.jovo.app",
       "buildNumber": "13",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.wasel.app",
+      "package": "com.jovo.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/store/adaptive-icon-foreground.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "versionCode": 13,
       "allowBackup": false,
+      "usesCleartextTraffic": false,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.SYSTEM_ALERT_WINDOW"
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -36,8 +42,8 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FFFFFF",
-          "image": "./assets/logo/jovo-wordmark.png",
-          "imageWidth": 260,
+          "image": "./assets/store/splash-icon.png",
+          "imageWidth": 200,
           "resizeMode": "contain"
         }
       ],

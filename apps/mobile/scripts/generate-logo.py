@@ -207,9 +207,19 @@ if __name__ == "__main__":
     # Store icon: the mark on white, since a wordmark is unreadable at 48px.
     save(centred(mark(**V), 1024, 0.62, ORANGE, WHITE), store, "app-icon-1024.png")
 
+    # Native splash icon. Android 12+ masks this to a circle and shows only the
+    # inner two thirds, so the wordmark cannot go here -- it would be clipped to
+    # "OV". The mark carries the splash; the wordmark shows on the JS splash
+    # that follows.
+    save(
+        centred(mark(**V), 1024, 0.44, ORANGE, (0, 0, 0, 0)),
+        store,
+        "splash-icon.png",
+    )
+
     # Adaptive foreground: content kept inside the centre 66% safe zone.
     save(
-        centred(mark(**V), 1024, 0.42, ORANGE, (0, 0, 0, 0)),
+        centred(mark(**V), 1024, 0.52, ORANGE, (0, 0, 0, 0)),
         store,
         "adaptive-icon-foreground.png",
     )

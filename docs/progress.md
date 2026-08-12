@@ -537,3 +537,107 @@ The token layer and the type system everything downstream will consume. No scree
 
 - The login screen and sidebar changed surface colour as a direct consequence of tokenisation — the dark gradients were hardcoded values with no equivalent in a light-only system. The remaining shell work (sidebar structure and density) is B3.
 - Three inline `style` objects carrying colour or font size were replaced with classes. The remaining inline styles are layout nudges only and are cleaned up in B4.
+
+## 2026-08-12: B2 — JOVO name, mark, and native identifiers (mobile only)
+
+The mobile app now calls itself JOVO everywhere a person can see, and the Android
+project is built as `com.jovo.app`. Scope was `apps/mobile` only; `apps/admin`
+was deliberately not touched, and no file outside `apps/mobile` changed except one
+`.gitignore` line for `__pycache__`.
+
+Two commits, in this order, so the risky half has a clean fallback:
+
+1. `df6a922` — user-facing rename and logo assets.
+2. (this commit) — native identifiers and the regenerated `android/`.
+
+### Completed
+
+- **User-facing rename only.** Screen text, both locale trees, and app metadata.
+  Database tables, model names, API routes, i18n *key* names, the internal
+  `TasawaQApp` component, the `tasawaq.push-token` key and the
+  `tasawaq-location-map` broadcast channel are all unchanged, as are the
+  `wasel_access_token` / `wasel_refresh_token` / `wasel_language` storage keys —
+  renaming those would sign every existing user out for a change none of them
+  would see. The supermarket vertical reads `JOVO MARKET` / `جوفو ماركت`.
+- **The logo is generated, not drawn** (`apps/mobile/scripts/generate-logo.py`),
+  so every size comes from one source of truth and can be re-rendered. The V's
+  outer edges are tangents to a round head and converge on a single point that
+  drops below the baseline — a location pin's profile. The shoulders are cut flat
+  above the head's widest point; letting them curl over turns the shape into a
+  heart, which four intermediate renders confirmed before this one was chosen.
+- **Different assets for different slots, deliberately.** The wordmark is for
+  in-app use. The app icon and the *native* splash use the mark alone: four
+  letters are unreadable at 48px, and Android 12+ masks the splash icon to a
+  circle showing only the inner two thirds, which would have clipped the wordmark
+  to "OV". The full wordmark still appears on the JS splash that follows.
+- **Native identifiers**: `com.jovo.app` (namespace, applicationId,
+  bundleIdentifier), slug `jovo`, scheme `jovo`, `rootProject.name` and
+  `app_name` `JOVO`, Kotlin package path `com/jovo/app/`. `android/` was
+  regenerated with `expo prebuild --platform android --clean`.
+- **Splash treatment** is now white with the orange mark, replacing `#F5FAFC` in
+  `colors.xml`, `styles.xml`, and the JS splash in `App.tsx`.
+- **An adaptive icon was added.** Without one, the launcher scales and crops the
+  full-bleed 1024 icon badly; the foreground is now sized to the centre safe zone.
+
+### Regeneration side effects that were corrected, not accepted
+
+`expo prebuild --clean` resets the whole directory, and the previous `android/`
+carried hand-made choices with no app.json equivalent. These are re-applied by
+`apps/mobile/scripts/post-prebuild.py`, **which must be run after every future
+prebuild**:
+
+- `android.enableMinifyInReleaseBuilds` and
+  `android.enableShrinkResourcesInReleaseBuilds` were dropped; both restored.
+- `EX_DEV_CLIENT_NETWORK_INSPECTOR` was flipped back to `true`; restored to
+  `false`.
+- The template re-added `signingConfig signingConfigs.debug` to the **release**
+  build type, which would sign a release APK with the checked-in debug keystore.
+  Removed again.
+
+Adopting `expo-build-properties` would move the gradle.properties values into
+app.json and let them survive prebuild unaided. That is a dependency change and
+was left out of B2.
+
+### Two changes that came from regeneration and are worth a decision
+
+- **`CAMERA` and `RECORD_AUDIO` permissions appeared.** The committed `android/`
+  predated `expo-camera`, so it was stale rather than minimal. `CAMERA` is real —
+  barcode scanning. `RECORD_AUDIO` is pulled in by `expo-camera` and is not used,
+  so it was added to the existing `blockedPermissions` list, matching the intent
+  already expressed there. Worth confirming that barcode scanning still works on
+  a real device.
+- **`android:usesCleartextTraffic="false"` is no longer emitted** into the main
+  manifest. Setting `android.usesCleartextTraffic: false` in app.json does not
+  produce the attribute. The effective behaviour is unchanged, because the
+  platform default is already `false` above API 28 and the debug manifest still
+  overrides it to `true`, but the intent is now implicit rather than written down.
+
+### Verified
+
+- `npm run typecheck` clean; mobile tests 23 pass, 0 fail.
+- **Verified in a real browser in both languages** against a running API, at the
+  login screen: the JOVO wordmark renders in orange, correctly oriented, and
+  **does not mirror in RTL** — the J stays on the left in Arabic exactly as in
+  English, while the surrounding layout flips correctly (labels right-aligned,
+  `+970` on the right). The browser tab title reads `JOVO`, confirming the
+  metadata rename reached the web target.
+- **Small sizes were checked before the shape was committed to**, by rendering
+  the wordmark at 48, 32, 24 and 16px and the icon at 192, 96, 72, 48, 36 and
+  24px. The wordmark stays readable to 16px; the mark stays legible to 24px.
+- **Both square assets were checked under a circular mask**, which is how
+  Android 12+ draws the splash icon and how most launchers draw the icon. Neither
+  is clipped.
+- `expo prebuild` output inspected file by file against the previous `android/`;
+  the only content differences are the identifiers, the splash colours, and the
+  manifest changes listed above.
+
+### What could NOT be verified in this environment
+
+- **Anything behind the login screen.** Reaching the customer home, the
+  supermarket header (`JOVO MARKET` / `جوفو ماركت`), and the admin badge requires
+  authenticating, and entering an account password is not something this agent
+  will do. The strings and the image sources are wired correctly and typecheck,
+  but nobody has *looked* at those three screens. **Check them on the device.**
+- **The app icon and splash on a real launcher.** They were verified as images
+  and under a simulated circular mask, not on a device.
+- **iOS entirely.** Only `android/` was regenerated; `ios/` is not in the repo.
