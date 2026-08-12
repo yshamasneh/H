@@ -1,31 +1,37 @@
-import { Platform } from "react-native";
+import { colors as tokenColors, radius as tokenRadius, shadow as tokenShadow } from "../../theme/tokens";
 
+/**
+ * A thin adapter over the shared JOVO tokens (src/theme/tokens.ts), kept so
+ * the customer screens that already destructure `customerTheme.colors.*`
+ * don't need call-site changes. Every value here is a reference into the
+ * token module, never a literal — this file carries no colour of its own.
+ *
+ * Two names existed before the JOVO palette and don't map 1:1:
+ * - `secondary` (previously a dark teal accent for prices) has no token
+ *   equivalent — JOVO has no secondary brand hue, only orange plus neutral
+ *   text — so it now points at `text`. Price emphasis comes from weight, not
+ *   colour.
+ * - `surfaceMuted` (a thumbnail/placeholder background) now points at the
+ *   neutral `surfaceSunk` rather than an orange-tinted surface, since orange
+ *   is deliberately scarce and a placeholder box is not a call to action.
+ */
 export const customerTheme = {
   colors: {
-    background: "#FFF9F5",
-    surface: "#FFFFFF",
-    surfaceMuted: "#FFF1E8",
-    primary: "#F4511E",
-    primaryDark: "#C7350C",
-    primarySoft: "#FFE2D5",
-    secondary: "#173F35",
-    text: "#1E2421",
-    textMuted: "#6E7772",
-    border: "#EDE7E2",
-    success: "#18864B",
-    successSoft: "#E2F6EA",
-    warning: "#D97706",
-    danger: "#C9362B"
+    background: tokenColors.surfaceSunk,
+    surface: tokenColors.surface,
+    surfaceMuted: tokenColors.surfaceSunk,
+    primary: tokenColors.primary,
+    primaryDark: tokenColors.primaryPressed,
+    primarySoft: tokenColors.primarySubtle,
+    secondary: tokenColors.text,
+    text: tokenColors.text,
+    textMuted: tokenColors.textMuted,
+    border: tokenColors.border,
+    success: tokenColors.success,
+    successSoft: tokenColors.successSubtle,
+    warning: tokenColors.warning,
+    danger: tokenColors.error
   },
-  radius: { small: 10, medium: 16, large: 24, pill: 999 },
-  shadow: Platform.select({
-    web: { boxShadow: "0 12px 36px rgba(40, 30, 20, 0.08)" },
-    default: {
-      elevation: 4,
-      shadowColor: "#3B2C24",
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12
-    }
-  })
+  radius: { small: tokenRadius.sm, medium: tokenRadius.md, large: tokenRadius.lg, pill: tokenRadius.pill },
+  shadow: tokenShadow[2]
 } as const;

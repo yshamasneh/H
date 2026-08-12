@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import i18n from "../../i18n";
+import { colors, radius, shadow, spacing, statusFamily, statusPalette } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 
 const brandMarkSource = require("../../../assets/logo/jovo-mark.png");
 
@@ -25,7 +27,7 @@ export function AdminPage(props: {
   const { t } = useTranslation(["common"]);
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#0F172A" barStyle="light-content" />
+      <StatusBar backgroundColor={colors.surface} barStyle="dark-content" />
       <View style={styles.header}>
         {props.onBack ? (
           <Pressable onPress={props.onBack} style={styles.backButton}>
@@ -83,10 +85,10 @@ export function KeyValue(props: { label: string; value: string }) {
 
 export function StatusPill({ status }: { status: string }) {
   const { t } = useTranslation(["common"]);
-  const palette = statusPalette(status);
+  const palette = statusPalette[statusFamily(status)];
   return (
     <View style={[styles.pill, { backgroundColor: palette.background }]}>
-      <Text style={[styles.pillText, { color: palette.text }]}>{t(`status.${status}`, status.replace(/_/g, " "))}</Text>
+      <Text style={[styles.pillText, { color: palette.foreground }]}>{t(`status.${status}`, status.replace(/_/g, " "))}</Text>
     </View>
   );
 }
@@ -112,7 +114,7 @@ export function ActionButton(props: {
       ]}
     >
       {props.loading ? (
-        <ActivityIndicator color={variant === "secondary" ? "#0F766E" : "#FFFFFF"} />
+        <ActivityIndicator color={variant === "secondary" ? colors.text : colors.textInverse} />
       ) : (
         <Text style={[styles.actionText, variant === "secondary" && styles.secondaryText]}>{props.label}</Text>
       )}
@@ -135,7 +137,7 @@ export function Input(props: {
       multiline={props.multiline}
       onChangeText={props.onChangeText}
       placeholder={props.placeholder}
-      placeholderTextColor="#94A3B8"
+      placeholderTextColor={colors.textMuted}
       style={[styles.input, props.multiline && styles.multilineInput]}
       value={props.value}
     />
@@ -167,7 +169,7 @@ export function FilterChips<T extends string>(props: {
 export function LoadingState() {
   return (
     <View style={styles.stateBox}>
-      <ActivityIndicator color="#0F766E" size="large" />
+      <ActivityIndicator color={colors.primary} size="large" />
     </View>
   );
 }
@@ -192,64 +194,89 @@ export function readAdminError(error: unknown): string {
   return error instanceof Error ? error.message : i18n.t("common:genericError");
 }
 
-function statusPalette(status: string): { background: string; text: string } {
-  if (["APPROVED", "DELIVERED", "ACTIVE", "ONLINE"].includes(status)) {
-    return { background: "#DCFCE7", text: "#166534" };
-  }
-  if (["REJECTED", "CANCELLED", "SUSPENDED", "INACTIVE"].includes(status)) {
-    return { background: "#FEE2E2", text: "#991B1B" };
-  }
-  if (["PENDING", "PLACED", "PENDING_ASSIGNMENT"].includes(status)) {
-    return { background: "#FEF3C7", text: "#92400E" };
-  }
-  return { background: "#DBEAFE", text: "#1E40AF" };
-}
-
 export const adminStyles = StyleSheet.create({
-  sectionTitle: { color: "#0F172A", fontSize: 18, fontWeight: "800", marginBottom: 10, marginTop: 10 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  statCard: { backgroundColor: "#FFFFFF", borderColor: "#E2E8F0", borderRadius: 14, borderWidth: 1, minWidth: 145, padding: 16, flexGrow: 1 },
-  statValue: { color: "#0F766E", fontSize: 25, fontWeight: "900" },
-  statLabel: { color: "#475569", fontSize: 13, fontWeight: "700", marginTop: 5 },
-  rowBetween: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
-  reasonBox: { backgroundColor: "#F8FAFC", borderRadius: 12, marginTop: 10, padding: 10 }
+  sectionTitle: { ...text("h3", "bold"), color: colors.text, marginBottom: spacing[3], marginTop: spacing[3] },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
+  statCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    minWidth: 145,
+    padding: spacing[4],
+    flexGrow: 1,
+    ...shadow[1]
+  },
+  statValue: { ...text("display", "heavy"), color: colors.text },
+  statLabel: { ...text("label", "medium"), color: colors.textMuted, marginTop: spacing[1] },
+  rowBetween: { alignItems: "center", flexDirection: "row", gap: spacing[3], justifyContent: "space-between" },
+  reasonBox: { backgroundColor: colors.surfaceSunk, borderRadius: radius.md, marginTop: spacing[3], padding: spacing[3] }
 });
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: "#F5F7FB", flex: 1 },
-  header: { alignItems: "center", backgroundColor: "#0F172A", flexDirection: "row", gap: 12, paddingHorizontal: 18, paddingVertical: 16 },
+  screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
+  header: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: spacing[3],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[4]
+  },
   headerText: { flex: 1 },
-  brandMark: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 11, height: 42, justifyContent: "center", width: 42 },
+  brandMark: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceSunk,
+    borderRadius: radius.md,
+    height: 40,
+    justifyContent: "center",
+    width: 40
+  },
   brandMarkImage: { height: 22, width: 22 },
-  title: { color: "#F8FAFC", fontSize: 21, fontWeight: "900" },
-  subtitle: { color: "#94A3B8", fontSize: 12, marginTop: 2 },
-  backButton: { borderColor: "#475569", borderRadius: 9, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },
-  backButtonText: { color: "#E2E8F0", fontSize: 13, fontWeight: "700" },
-  content: { gap: 12, padding: 18, paddingBottom: 50 },
-  card: { backgroundColor: "#FFFFFF", borderColor: "#E2E8F0", borderRadius: 14, borderWidth: 1, padding: 16 },
-  cardTitle: { color: "#0F172A", fontSize: 16, fontWeight: "800" },
-  meta: { color: "#64748B", fontSize: 13, lineHeight: 19, marginTop: 5 },
-  keyValue: { borderBottomColor: "#F1F5F9", borderBottomWidth: 1, flexDirection: "row", gap: 10, justifyContent: "space-between", paddingVertical: 9 },
-  key: { color: "#64748B", flex: 1, fontSize: 13 },
-  value: { color: "#0F172A", flex: 1, fontSize: 13, fontWeight: "700", textAlign: "auto" },
-  pill: { alignSelf: "flex-start", borderRadius: 999, marginTop: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  pillText: { fontSize: 11, fontWeight: "900" },
-  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
-  actionButton: { alignItems: "center", borderRadius: 10, justifyContent: "center", minHeight: 42, minWidth: 100, paddingHorizontal: 14, paddingVertical: 10 },
-  primaryButton: { backgroundColor: "#0F766E" },
-  dangerButton: { backgroundColor: "#B91C1C" },
-  secondaryButton: { backgroundColor: "#FFFFFF", borderColor: "#99F6E4", borderWidth: 1 },
-  actionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
-  secondaryText: { color: "#0F766E" },
+  title: { ...text("h2", "bold"), color: colors.text },
+  subtitle: { ...text("caption"), color: colors.textMuted, marginTop: spacing[1] },
+  backButton: {
+    borderColor: colors.borderStrong,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2]
+  },
+  backButtonText: { ...text("caption", "semibold"), color: colors.text },
+  content: { gap: spacing[3], padding: spacing[5], paddingBottom: spacing[9] },
+  card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, padding: spacing[4], ...shadow[1] },
+  cardTitle: { ...text("h3", "semibold"), color: colors.text },
+  meta: { ...text("bodySm"), color: colors.textMuted, marginTop: spacing[1] },
+  keyValue: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: spacing[3],
+    justifyContent: "space-between",
+    paddingVertical: spacing[2]
+  },
+  key: { ...text("bodySm"), color: colors.textMuted, flex: 1 },
+  value: { ...text("bodySm", "semibold"), color: colors.text, flex: 1, textAlign: "auto" },
+  pill: { alignSelf: "flex-start", borderRadius: radius.pill, marginTop: spacing[2], paddingHorizontal: spacing[2], paddingVertical: spacing[1] },
+  pillText: { ...text("label", "medium") },
+  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing[2], marginTop: spacing[3] },
+  actionButton: { alignItems: "center", borderRadius: radius.sm, justifyContent: "center", minHeight: 44, minWidth: 100, paddingHorizontal: spacing[4], paddingVertical: spacing[2] },
+  primaryButton: { backgroundColor: colors.primary },
+  dangerButton: { backgroundColor: colors.error },
+  secondaryButton: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderWidth: 1 },
+  actionText: { ...text("bodySm", "semibold"), color: colors.textInverse },
+  secondaryText: { color: colors.text },
   pressed: { opacity: 0.62 },
-  input: { backgroundColor: "#FFFFFF", borderColor: "#CBD5E1", borderRadius: 10, borderWidth: 1, color: "#0F172A", fontSize: 14, paddingHorizontal: 13, paddingVertical: 11 },
+  input: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: radius.sm, borderWidth: 1, color: colors.text, ...text("bodySm"), paddingHorizontal: spacing[3], paddingVertical: spacing[3] },
   multilineInput: { minHeight: 78, textAlignVertical: "top" },
   chips: { flexGrow: 0 },
-  chip: { backgroundColor: "#E2E8F0", borderRadius: 999, marginEnd: 8, paddingHorizontal: 13, paddingVertical: 8 },
-  chipSelected: { backgroundColor: "#0F766E" },
-  chipText: { color: "#475569", fontSize: 12, fontWeight: "700" },
-  chipTextSelected: { color: "#FFFFFF" },
-  stateBox: { alignItems: "center", minHeight: 180, justifyContent: "center" },
-  empty: { color: "#64748B", padding: 30, textAlign: "center" },
-  error: { backgroundColor: "#FEE2E2", borderRadius: 10, color: "#991B1B", padding: 12 }
+  chip: { backgroundColor: colors.surfaceSunk, borderRadius: radius.pill, marginEnd: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  chipSelected: { backgroundColor: colors.primary },
+  chipText: { ...text("caption", "medium"), color: colors.textMuted },
+  chipTextSelected: { color: colors.textInverse },
+  stateBox: { alignItems: "center", justifyContent: "center", paddingVertical: spacing[9] },
+  empty: { ...text("bodySm"), color: colors.textMuted, padding: spacing[7], textAlign: "center" },
+  error: { backgroundColor: colors.errorSubtle, borderRadius: radius.sm, color: colors.error, padding: spacing[3], ...text("bodySm") }
 });

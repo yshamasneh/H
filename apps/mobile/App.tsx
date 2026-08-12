@@ -12,6 +12,8 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import i18n, { resolveInitialLanguage } from "./src/i18n";
 import { reconcileRTL, reloadApp } from "./src/i18n/rtl";
+import { useAppFonts } from "./src/theme/fonts";
+import { colors } from "./src/theme/tokens";
 import {
   fetchCurrentUser,
   logout,
@@ -122,15 +124,21 @@ export default function App() {
 
 function TasawaQApp() {
   const { t } = useTranslation();
+  const { fontsReady, fontError } = useAppFonts();
   const [screen, setScreen] = useState<AppScreen>(initialScreen);
   const [isBooting, setIsBooting] = useState(true);
-  const [isSplashVisible, setIsSplashVisible] = useState(true);
+  const [minSplashElapsed, setMinSplashElapsed] = useState(false);
   const [cart, setCart] = useState<Cart | null>(null);
+  // Every screen after the splash renders text in Cairo/Inter, so the splash
+  // (a logo image, no text) stays up until fonts are ready too — otherwise
+  // the loading screen or first screen would flash in the system font.
+  // fontError still releases the gate rather than hanging forever.
+  const isSplashVisible = !minSplashElapsed || (!fontsReady && !fontError);
 
   useEffect(() => {
     let isMounted = true;
     const splashTimer = setTimeout(() => {
-      if (isMounted) setIsSplashVisible(false);
+      if (isMounted) setMinSplashElapsed(true);
     }, splashDurationMs);
 
     async function restoreSession() {
@@ -256,7 +264,7 @@ function TasawaQApp() {
   if (isSplashVisible) {
     return (
       <SafeAreaView style={styles.splashScreen}>
-        <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+        <StatusBar backgroundColor={colors.surface} barStyle="dark-content" />
         <Image
           accessibilityLabel="JOVO"
           resizeMode="contain"
@@ -270,9 +278,9 @@ function TasawaQApp() {
   if (isBooting) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
-        <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+        <StatusBar backgroundColor={colors.surface} barStyle="dark-content" />
         <View style={styles.centered}>
-          <ActivityIndicator color="#0F766E" size="large" />
+          <ActivityIndicator color={colors.primary} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -577,7 +585,7 @@ function TasawaQApp() {
 const styles = StyleSheet.create({
   splashScreen: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     flex: 1,
     justifyContent: "center"
   },
@@ -587,7 +595,7 @@ const styles = StyleSheet.create({
     width: "70%"
   },
   loadingScreen: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     flex: 1
   },
   centered: {

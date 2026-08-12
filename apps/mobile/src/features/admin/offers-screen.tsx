@@ -30,10 +30,13 @@ import {
   LoadingState,
   Meta,
   StatusPill,
+  adminStyles,
   formatDate,
   formatMoney,
   readAdminError
 } from "./ui";
+import { colors, radius, spacing } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 
 const typeValues: OfferTypeValue[] = ["PRODUCT_PERCENTAGE", "ORDER_PERCENTAGE", "DELIVERY_PERCENTAGE", "FREE_DELIVERY"];
 
@@ -237,7 +240,7 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
         <ActionButton disabled={busy} label={t("offers.publishButton")} loading={busy} onPress={() => void create()} />
       </Card>
 
-      <Text style={styles.heading}>{t("offers.allOffersTitle")}</Text>
+      <Text style={adminStyles.sectionTitle}>{t("offers.allOffersTitle")}</Text>
       {offers === null ? (
         <LoadingState />
       ) : offers.length === 0 ? (
@@ -308,13 +311,12 @@ async function requireToken(): Promise<string> {
 
 const styles = StyleSheet.create({
   copy: { flex: 1 },
-  choice: { backgroundColor: "#E2E8F0", borderRadius: 999, marginEnd: 8, marginTop: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  choiceSelected: { backgroundColor: "#0F766E" },
-  choiceText: { color: "#475569", fontSize: 12, fontWeight: "700" },
-  choiceTextSelected: { color: "#FFFFFF" },
-  choiceWrap: { flexDirection: "row", flexWrap: "wrap", marginBottom: 4 },
-  heading: { color: "#0F172A", fontSize: 18, fontWeight: "900", marginTop: 8 },
-  label: { color: "#334155", fontSize: 12, fontWeight: "800", marginBottom: 6, marginTop: 14 },
-  notice: { backgroundColor: "#DCFCE7", borderRadius: 10, color: "#166534", padding: 12 },
-  row: { alignItems: "flex-start", flexDirection: "row", gap: 10, justifyContent: "space-between" }
+  choice: { backgroundColor: colors.surfaceSunk, borderRadius: radius.pill, marginEnd: spacing[2], marginTop: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  choiceSelected: { backgroundColor: colors.primary },
+  choiceText: { ...text("caption", "semibold"), color: colors.textMuted },
+  choiceTextSelected: { color: colors.textInverse },
+  choiceWrap: { flexDirection: "row", flexWrap: "wrap", marginBottom: spacing[1] },
+  label: { ...text("caption", "medium"), color: colors.text, marginBottom: spacing[2], marginTop: spacing[3] },
+  notice: { backgroundColor: colors.successSubtle, borderRadius: radius.md, color: colors.success, padding: spacing[3], ...text("bodySm") },
+  row: { alignItems: "flex-start", flexDirection: "row", gap: spacing[3], justifyContent: "space-between" }
 });
