@@ -31,6 +31,8 @@ import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates } from "../../core/location";
 import i18n from "../../i18n";
 import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
+import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 import { InventoryWorkspace } from "./inventory-screen";
 
 type Section = "profile" | "categories" | "items" | "inventory";
@@ -92,7 +94,7 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
       <View style={styles.header}>
         <Pressable onPress={onBack} style={styles.backButton}><Text style={styles.backText}>{t("common:back")}</Text></Pressable>
         <View style={styles.headerCopy}>
@@ -119,7 +121,7 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
         ))}
       </View>
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#0F766E" size="large" /></View>
+        <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>
       ) : (
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {error ? <Message tone="error" text={error} /> : null}
@@ -554,7 +556,12 @@ function SmallButton(props: { label: string; onPress: () => void; disabled?: boo
 
 function StatusPill({ value }: { value: string }) {
   const { t } = useTranslation(["common"]);
-  return <View style={styles.statusPill}><Text style={styles.statusText}>{t(`status.${value}`, value.replaceAll("_", " "))}</Text></View>;
+  const palette = tokenStatusPalette[statusFamily(value)];
+  return (
+    <View style={[styles.statusPill, { backgroundColor: palette.background }]}>
+      <Text style={[styles.statusText, { color: palette.foreground }]}>{t(`status.${value}`, value.replaceAll("_", " "))}</Text>
+    </View>
+  );
 }
 
 function Message({ tone, text }: { tone: "error" | "success"; text: string }) {
@@ -580,58 +587,58 @@ function formatPrice(minor: number): string {
 }
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: "#F5FAFC", flex: 1 },
-  header: { alignItems: "center", flexDirection: "row", paddingHorizontal: 18, paddingTop: 12 },
-  backButton: { backgroundColor: "#FFFFFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
-  backText: { color: "#0F766E", fontWeight: "900" },
-  headerCopy: { flex: 1, marginStart: 14 },
-  title: { color: "#102A2A", fontSize: 22, fontWeight: "900" },
-  subtitle: { color: "#64748B", fontSize: 12, marginTop: 2 },
-  tabs: { flexDirection: "row", gap: 7, padding: 18, paddingBottom: 8 },
-  tab: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 12, flex: 1, padding: 11 },
-  tabActive: { backgroundColor: "#0F766E" },
-  tabText: { color: "#64748B", fontSize: 12, fontWeight: "800" },
-  tabTextActive: { color: "#FFFFFF" },
+  screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
+  header: { alignItems: "center", flexDirection: "row", paddingHorizontal: spacing[4], paddingTop: spacing[3] },
+  backButton: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
+  backText: { ...text("bodySm", "bold"), color: colors.primary },
+  headerCopy: { flex: 1, marginStart: spacing[4] },
+  title: { ...text("h1", "bold"), color: colors.text },
+  subtitle: { ...text("caption"), color: colors.textMuted, marginTop: spacing[1] },
+  tabs: { flexDirection: "row", gap: spacing[2], padding: spacing[4], paddingBottom: spacing[2] },
+  tab: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, flex: 1, padding: spacing[3] },
+  tabActive: { backgroundColor: colors.primary },
+  tabText: { ...text("caption", "bold"), color: colors.textMuted },
+  tabTextActive: { color: colors.textInverse },
   center: { alignItems: "center", flex: 1, justifyContent: "center" },
-  content: { alignSelf: "center", maxWidth: 760, padding: 18, paddingBottom: 50, width: "100%" },
-  card: { backgroundColor: "#FFFFFF", borderRadius: 20, marginBottom: 16, padding: 18 },
-  cardTitle: { color: "#102A2A", fontSize: 18, fontWeight: "900", marginBottom: 16 },
-  statusRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
-  statusPill: { backgroundColor: "#FFF2D8", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  statusText: { color: "#9A6700", fontSize: 11, fontWeight: "900" },
-  openState: { color: "#B91C1C", fontSize: 12, fontWeight: "900" },
-  openStateActive: { color: "#15803D" },
-  pendingNote: { backgroundColor: "#EFF6FF", borderRadius: 12, color: "#1D4ED8", lineHeight: 18, marginBottom: 16, padding: 12 },
-  locationNote: { backgroundColor: "#F0FDFA", borderRadius: 12, color: "#115E59", fontSize: 12, lineHeight: 18, padding: 12 },
-  locationError: { color: "#B91C1C", fontSize: 12, marginTop: 7 },
-  field: { marginBottom: 14 },
-  label: { color: "#334155", fontSize: 12, fontWeight: "800", marginBottom: 7 },
-  input: { backgroundColor: "#F8FAFC", borderColor: "#DCE5E4", borderRadius: 12, borderWidth: 1, color: "#102A2A", minHeight: 48, paddingHorizontal: 13 },
-  multilineInput: { minHeight: 78, paddingTop: 12, textAlignVertical: "top" },
-  actionButton: { alignItems: "center", backgroundColor: "#0F766E", borderRadius: 13, justifyContent: "center", marginTop: 4, minHeight: 48, paddingHorizontal: 15 },
-  actionButtonSecondary: { backgroundColor: "#E7F4F1", marginTop: 9 },
-  actionText: { color: "#FFFFFF", fontWeight: "900" },
-  actionTextSecondary: { color: "#0F766E" },
+  content: { alignSelf: "center", maxWidth: 760, padding: spacing[4], paddingBottom: spacing[9], width: "100%" },
+  card: { backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing[4], padding: spacing[4] },
+  cardTitle: { ...text("h3", "bold"), color: colors.text, marginBottom: spacing[4] },
+  statusRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[3] },
+  statusPill: { borderRadius: radius.pill, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  statusText: { ...text("label", "bold") },
+  openState: { ...text("caption", "bold"), color: colors.error },
+  openStateActive: { color: colors.success },
+  pendingNote: { ...text("bodySm"), backgroundColor: colors.infoSubtle, borderRadius: radius.md, color: colors.info, marginBottom: spacing[4], padding: spacing[3] },
+  locationNote: { backgroundColor: colors.primarySubtle, borderRadius: radius.md, color: colors.primaryPressed, ...text("caption"), padding: spacing[3] },
+  locationError: { ...text("caption"), color: colors.error, marginTop: spacing[2] },
+  field: { marginBottom: spacing[4] },
+  label: { ...text("caption", "bold"), color: colors.text, marginBottom: spacing[2] },
+  input: { backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 48, paddingHorizontal: spacing[3] },
+  multilineInput: { minHeight: 78, paddingTop: spacing[3], textAlignVertical: "top" },
+  actionButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.md, justifyContent: "center", marginTop: spacing[1], minHeight: 48, paddingHorizontal: spacing[4] },
+  actionButtonSecondary: { backgroundColor: colors.primarySubtle, marginTop: spacing[2] },
+  actionText: { ...text("bodySm", "bold"), color: colors.textInverse },
+  actionTextSecondary: { color: colors.primaryPressed },
   disabled: { opacity: 0.45 },
-  listCard: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 16, flexDirection: "row", marginBottom: 10, padding: 15 },
-  listCopy: { flex: 1, paddingEnd: 10 },
-  listTitle: { color: "#102A2A", fontSize: 15, fontWeight: "900" },
-  listMeta: { color: "#64748B", fontSize: 11, marginTop: 5 },
-  itemActions: { gap: 6 },
-  smallButton: { backgroundColor: "#E7F4F1", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
-  smallButtonText: { color: "#0F766E", fontSize: 11, fontWeight: "900" },
-  categoryPicker: { marginBottom: 14 },
-  categoryChip: { backgroundColor: "#F1F5F9", borderRadius: 999, marginEnd: 8, paddingHorizontal: 13, paddingVertical: 9 },
-  categoryChipActive: { backgroundColor: "#0F766E" },
-  categoryChipText: { color: "#475569", fontSize: 11, fontWeight: "800" },
-  categoryChipTextActive: { color: "#FFFFFF" },
-  featuredToggle: { alignItems: "center", backgroundColor: "#F8FAFC", borderColor: "#DCE5E4", borderRadius: 12, borderWidth: 1, marginBottom: 14, padding: 13 },
-  featuredToggleActive: { backgroundColor: "#DCFCE7", borderColor: "#15803D" },
-  featuredToggleText: { color: "#64748B", fontSize: 12, fontWeight: "800" },
-  featuredToggleTextActive: { color: "#166534" },
-  message: { borderRadius: 12, marginBottom: 12, padding: 12 },
-  error: { backgroundColor: "#FEE2E2", color: "#B91C1C" },
-  success: { backgroundColor: "#DCFCE7", color: "#166534" },
-  empty: { backgroundColor: "#FFFFFF", borderRadius: 16, padding: 24 },
-  emptyText: { color: "#64748B", textAlign: "center" }
+  listCard: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, flexDirection: "row", marginBottom: spacing[2], padding: spacing[4] },
+  listCopy: { flex: 1, paddingEnd: spacing[2] },
+  listTitle: { ...text("bodySm", "bold"), color: colors.text },
+  listMeta: { ...text("label"), color: colors.textMuted, marginTop: spacing[1] },
+  itemActions: { gap: spacing[1] },
+  smallButton: { backgroundColor: colors.primarySubtle, borderRadius: radius.sm, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  smallButtonText: { ...text("label", "bold"), color: colors.primaryPressed },
+  categoryPicker: { marginBottom: spacing[4] },
+  categoryChip: { backgroundColor: colors.surfaceSunk, borderRadius: radius.pill, marginEnd: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  categoryChipActive: { backgroundColor: colors.primary },
+  categoryChipText: { ...text("label", "bold"), color: colors.textMuted },
+  categoryChipTextActive: { color: colors.textInverse },
+  featuredToggle: { alignItems: "center", backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, marginBottom: spacing[4], padding: spacing[3] },
+  featuredToggleActive: { backgroundColor: colors.successSubtle, borderColor: colors.success },
+  featuredToggleText: { ...text("caption", "bold"), color: colors.textMuted },
+  featuredToggleTextActive: { color: colors.success },
+  message: { borderRadius: radius.md, marginBottom: spacing[3], padding: spacing[3] },
+  error: { backgroundColor: colors.errorSubtle, color: colors.error },
+  success: { backgroundColor: colors.successSubtle, color: colors.success },
+  empty: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing[6] },
+  emptyText: { ...text("bodySm"), color: colors.textMuted, textAlign: "center" }
 });
