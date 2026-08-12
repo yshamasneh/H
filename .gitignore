@@ -16,3 +16,5 @@ logs/
 backups/
 secrets/
 apps/api/src/generated/
+__pycache__/
+*.pyc

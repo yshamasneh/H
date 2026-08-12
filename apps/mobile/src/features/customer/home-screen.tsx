@@ -21,7 +21,7 @@ import {
 } from "../../core/api";
 import { customerTheme } from "./theme";
 
-const logo = require("../../../assets/logo/TasawaQ.png");
+const logo = require("../../../assets/logo/jovo-wordmark.png");
 
 export function CustomerHomeScreen(props: {
   user: PublicUser;
@@ -70,7 +70,7 @@ export function CustomerHomeScreen(props: {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <View>
-            <Text style={styles.eyebrow}>TASAWAQ</Text>
+            <Text style={styles.eyebrow}>JOVO</Text>
             <Text style={styles.location}>{t("home.localRestaurants")}</Text>
           </View>
           <Pressable onPress={props.onOpenNotifications} style={styles.iconButton}>
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   greetingText: { flex: 1 },
   greeting: { color: customerTheme.colors.text, fontSize: 28, fontWeight: "900" },
   greetingSubtitle: { color: customerTheme.colors.textMuted, fontSize: 15, marginTop: 5 },
-  logo: { height: 58, width: 90 },
+  logo: { height: 34, width: 110 },
   notice: { backgroundColor: customerTheme.colors.successSoft, borderRadius: 12, color: customerTheme.colors.success, fontSize: 13, marginTop: 14, padding: 12 },
   searchBar: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: 18, borderWidth: 1, flexDirection: "row", marginTop: 22, minHeight: 56, paddingHorizontal: 15 },
   searchIcon: { color: customerTheme.colors.text, fontSize: 25, marginEnd: 10 },

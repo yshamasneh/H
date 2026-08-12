@@ -110,7 +110,7 @@ import {
 } from "./src/features/customer/supermarket-screens";
 
 const splashDurationMs = 3000;
-const logo = require("./assets/logo/TasawaQ.png");
+const logo = require("./assets/logo/jovo-wordmark.png");
 
 export default function App() {
   return (
@@ -256,9 +256,9 @@ function TasawaQApp() {
   if (isSplashVisible) {
     return (
       <SafeAreaView style={styles.splashScreen}>
-        <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+        <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
         <Image
-          accessibilityLabel="TasawaQ logo"
+          accessibilityLabel="JOVO"
           resizeMode="contain"
           source={logo}
           style={styles.splashLogo}
@@ -270,7 +270,7 @@ function TasawaQApp() {
   if (isBooting) {
     return (
       <SafeAreaView style={styles.loadingScreen}>
-        <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
+        <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
         <View style={styles.centered}>
           <ActivityIndicator color="#0F766E" size="large" />
         </View>
@@ -577,17 +577,17 @@ function TasawaQApp() {
 const styles = StyleSheet.create({
   splashScreen: {
     alignItems: "center",
-    backgroundColor: "#F5FAFC",
+    backgroundColor: "#FFFFFF",
     flex: 1,
     justifyContent: "center"
   },
   splashLogo: {
-    height: 320,
-    maxWidth: 460,
-    width: "88%"
+    height: 96,
+    maxWidth: 300,
+    width: "70%"
   },
   loadingScreen: {
-    backgroundColor: "#F5FAFC",
+    backgroundColor: "#FFFFFF",
     flex: 1
   },
   centered: {

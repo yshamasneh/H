@@ -199,7 +199,7 @@ function RegistrationLayout(props: { title: string; subtitle: string; children: 
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={styles.brand}>TASAWAQ</Text>
+          <Text style={styles.brand}>JOVO</Text>
           <Text style={styles.title}>{props.title}</Text>
           <Text style={styles.subtitle}>{props.subtitle}</Text>
           <View style={styles.panel}>{props.children}</View>

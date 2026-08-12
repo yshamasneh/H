@@ -10,7 +10,7 @@
     "offersSectionTitle": "Offers",
     "noOffersTitle": "No active offers right now",
     "noOffersText": "New restaurant offers will appear here when they are published.",
-    "tasawaqWideOffer": "TasawaQ-wide offer",
+    "tasawaqWideOffer": "JOVO-wide offer",
     "offerEndsLabel": "Ends {{date}}",
     "supermarketsSectionTitle": "Supermarkets",
     "seeAll": "See all",
@@ -75,7 +75,7 @@
     "itemOfferLabelWithMinimum": "{{title}} · {{percent}}% off over {{amount}}"
   },
   "supermarket": {
-    "marketLabel": "TASAWAQ MARKET",
+    "marketLabel": "JOVO MARKET",
     "title": "Supermarkets",
     "subtitle": "Groceries delivered to your door",
     "searchPlaceholder": "Search supermarkets",

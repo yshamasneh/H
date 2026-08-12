@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StatusBar,
@@ -12,6 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import i18n from "../../i18n";
+
+const brandMarkSource = require("../../../assets/logo/jovo-mark.png");
 
 export function AdminPage(props: {
   title: string;
@@ -30,7 +33,12 @@ export function AdminPage(props: {
           </Pressable>
         ) : (
           <View style={styles.brandMark}>
-            <Text style={styles.brandMarkText}>TQ</Text>
+            <Image
+              accessibilityLabel="JOVO"
+              resizeMode="contain"
+              source={brandMarkSource}
+              style={styles.brandMarkImage}
+            />
           </View>
         )}
         <View style={styles.headerText}>
@@ -211,8 +219,8 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: "#F5F7FB", flex: 1 },
   header: { alignItems: "center", backgroundColor: "#0F172A", flexDirection: "row", gap: 12, paddingHorizontal: 18, paddingVertical: 16 },
   headerText: { flex: 1 },
-  brandMark: { alignItems: "center", backgroundColor: "#0F766E", borderRadius: 11, height: 42, justifyContent: "center", width: 42 },
-  brandMarkText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  brandMark: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 11, height: 42, justifyContent: "center", width: 42 },
+  brandMarkImage: { height: 22, width: 22 },
   title: { color: "#F8FAFC", fontSize: 21, fontWeight: "900" },
   subtitle: { color: "#94A3B8", fontSize: 12, marginTop: 2 },
   backButton: { borderColor: "#475569", borderRadius: 9, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8 },

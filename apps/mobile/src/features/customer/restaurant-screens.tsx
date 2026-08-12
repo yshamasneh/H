@@ -73,7 +73,7 @@ export function RestaurantListScreen(props: RestaurantListScreenProps) {
         <View style={styles.topHeader}>
           <CircleButton label="‹" onPress={props.onBack} />
           <View style={styles.topHeaderText}>
-            <Text style={styles.headerEyebrow}>TASAWAQ</Text>
+            <Text style={styles.headerEyebrow}>JOVO</Text>
             <Text style={styles.headerLocation}>{t("restaurants.availableRestaurants")}</Text>
           </View>
           <View style={styles.headerSpacer} />

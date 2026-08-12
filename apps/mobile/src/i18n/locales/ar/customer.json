@@ -10,7 +10,7 @@
     "offersSectionTitle": "العروض",
     "noOffersTitle": "لا توجد عروض نشطة حاليًا",
     "noOffersText": "ستظهر هنا عروض المطاعم الجديدة فور نشرها.",
-    "tasawaqWideOffer": "عرض على مستوى تسوّق",
+    "tasawaqWideOffer": "عرض على مستوى جوفو",
     "offerEndsLabel": "ينتهي في {{date}}",
     "supermarketsSectionTitle": "السوبر ماركت",
     "seeAll": "عرض الكل",
@@ -75,7 +75,7 @@
     "itemOfferLabelWithMinimum": "{{title}} · خصم {{percent}}% عند طلب أكثر من {{amount}}"
   },
   "supermarket": {
-    "marketLabel": "سوق تسوّق",
+    "marketLabel": "جوفو ماركت",
     "title": "السوبر ماركت",
     "subtitle": "بقالة توصَل إلى باب منزلك",
     "searchPlaceholder": "ابحث عن سوبر ماركت",

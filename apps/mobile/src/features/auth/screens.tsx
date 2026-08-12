@@ -44,7 +44,7 @@ import i18n from "../../i18n";
 import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { strongPasswordPattern } from "./auth.rules";
 
-const logo = require("../../../assets/logo/TasawaQ.png");
+const logo = require("../../../assets/logo/jovo-wordmark.png");
 
 type LoginScreenProps = {
   prefill?: PhonePrefill;
@@ -485,7 +485,7 @@ function AuthLayout(props: { title: string; subtitle: string; children: ReactNod
       <StatusBar backgroundColor="#F5FAFC" barStyle="dark-content" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Image accessibilityLabel="TasawaQ logo" resizeMode="contain" source={logo} style={styles.logo} />
+          <Image accessibilityLabel="JOVO" resizeMode="contain" source={logo} style={styles.logo} />
           <Text style={styles.title}>{props.title}</Text>
           <Text style={styles.subtitle}>{props.subtitle}</Text>
           <View style={styles.panel}>{props.children}</View>
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: "#F5FAFC", flex: 1 },
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: 24, paddingBottom: 48 },
-  logo: { alignSelf: "center", height: 155, width: 205 },
+  logo: { alignSelf: "center", height: 68, width: 220 },
   title: { color: "#0F172A", fontSize: 28, fontWeight: "800", textAlign: "center" },
   subtitle: { color: "#64748B", fontSize: 15, marginBottom: 22, marginTop: 6, textAlign: "center" },
   panel: {
