@@ -21,6 +21,8 @@ import {
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
+import { colors, radius, spacing } from "../../theme/tokens";
+import { text } from "../../theme/typography";
 
 export function InventoryWorkspace() {
   const { t } = useTranslation(["restaurantOps", "common"]);
@@ -103,7 +105,7 @@ export function InventoryWorkspace() {
     }
   }
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color="#0F766E" size="large" /></View>;
+  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>;
 
   const summary = inventory?.summary;
   return (
@@ -273,37 +275,37 @@ function readError(error: unknown) { return error instanceof ApiError || error i
 function formatMoney(minor: number) { return `${(minor / 100).toFixed(2)} ILS`; }
 
 const styles = StyleSheet.create({
-  center: { alignItems: "center", padding: 40 },
-  card: { backgroundColor: "#FFFFFF", borderRadius: 20, marginBottom: 16, padding: 18 },
-  cardTitle: { color: "#102A2A", fontSize: 18, fontWeight: "900", marginBottom: 15 },
-  summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
-  summaryCard: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 14, flexBasis: "47%", flexGrow: 1, padding: 13 },
-  summaryAlert: { backgroundColor: "#FEF2F2" },
-  summaryValue: { color: "#0F766E", fontSize: 22, fontWeight: "900" },
-  field: { marginBottom: 13 },
-  label: { color: "#334155", fontSize: 12, fontWeight: "800", marginBottom: 7 },
-  input: { backgroundColor: "#F8FAFC", borderColor: "#DCE5E4", borderRadius: 12, borderWidth: 1, color: "#102A2A", minHeight: 48, paddingHorizontal: 13 },
-  row: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  button: { alignItems: "center", backgroundColor: "#0F766E", borderRadius: 12, flex: 1, justifyContent: "center", minHeight: 46, paddingHorizontal: 12 },
-  buttonSecondary: { backgroundColor: "#E7F4F1" },
-  buttonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900", textAlign: "center" },
-  buttonTextSecondary: { color: "#0F766E" },
+  center: { alignItems: "center", padding: spacing[8] },
+  card: { backgroundColor: colors.surface, borderRadius: radius.lg, marginBottom: spacing[4], padding: spacing[5] },
+  cardTitle: { ...text("h3", "bold"), color: colors.text, marginBottom: spacing[4] },
+  summaryGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[2], marginBottom: spacing[4] },
+  summaryCard: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, flexBasis: "47%", flexGrow: 1, padding: spacing[3] },
+  summaryAlert: { backgroundColor: colors.errorSubtle },
+  summaryValue: { ...text("h1", "bold"), color: colors.primary },
+  field: { marginBottom: spacing[3] },
+  label: { ...text("caption", "bold"), color: colors.text, marginBottom: spacing[2] },
+  input: { backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 48, paddingHorizontal: spacing[3] },
+  row: { flexDirection: "row", gap: spacing[2], marginBottom: spacing[3] },
+  button: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.md, flex: 1, justifyContent: "center", minHeight: 46, paddingHorizontal: spacing[3] },
+  buttonSecondary: { backgroundColor: colors.primarySubtle },
+  buttonText: { ...text("caption", "bold"), color: colors.textInverse, textAlign: "center" },
+  buttonTextSecondary: { color: colors.primaryPressed },
   disabled: { opacity: 0.45 },
-  picker: { marginBottom: 14 },
-  chip: { backgroundColor: "#F1F5F9", borderRadius: 999, marginEnd: 7, paddingHorizontal: 12, paddingVertical: 9 },
-  chipActive: { backgroundColor: "#0F766E" },
-  chipText: { color: "#475569", fontSize: 11, fontWeight: "800" },
-  chipTextActive: { color: "#FFFFFF" },
-  itemCard: { alignItems: "center", borderBottomColor: "#E2E8F0", borderBottomWidth: 1, flexDirection: "row", paddingVertical: 12 },
-  lowStockCard: { backgroundColor: "#FFF7ED", marginHorizontal: -8, paddingHorizontal: 8 },
-  itemCopy: { flex: 1, paddingEnd: 8 },
-  itemName: { color: "#102A2A", fontSize: 13, fontWeight: "900" },
-  meta: { color: "#64748B", fontSize: 10, lineHeight: 15, marginTop: 3 },
-  stock: { color: "#15803D", fontSize: 12, fontWeight: "900" },
-  stockAlert: { color: "#B91C1C" },
-  listLine: { color: "#475569", fontSize: 11, marginTop: 8 },
-  purchaseCard: { borderColor: "#E2E8F0", borderRadius: 14, borderWidth: 1, marginTop: 10, padding: 13 },
-  movementRow: { alignItems: "center", borderBottomColor: "#E2E8F0", borderBottomWidth: 1, flexDirection: "row", paddingVertical: 11 },
-  error: { backgroundColor: "#FEE2E2", borderRadius: 12, color: "#B91C1C", marginBottom: 12, padding: 12 },
-  success: { backgroundColor: "#DCFCE7", borderRadius: 12, color: "#166534", marginBottom: 12, padding: 12 }
+  picker: { marginBottom: spacing[4] },
+  chip: { backgroundColor: colors.surfaceSunk, borderRadius: radius.pill, marginEnd: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  chipActive: { backgroundColor: colors.primary },
+  chipText: { ...text("label", "bold"), color: colors.textMuted },
+  chipTextActive: { color: colors.textInverse },
+  itemCard: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", paddingVertical: spacing[3] },
+  lowStockCard: { backgroundColor: colors.warningSubtle, marginHorizontal: -8, paddingHorizontal: spacing[2] },
+  itemCopy: { flex: 1, paddingEnd: spacing[2] },
+  itemName: { ...text("bodySm", "bold"), color: colors.text },
+  meta: { ...text("label"), color: colors.textMuted, marginTop: spacing[1] },
+  stock: { ...text("caption", "bold"), color: colors.success },
+  stockAlert: { color: colors.error },
+  listLine: { ...text("label"), color: colors.textMuted, marginTop: spacing[2] },
+  purchaseCard: { borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, marginTop: spacing[2], padding: spacing[3] },
+  movementRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", paddingVertical: spacing[3] },
+  error: { ...text("bodySm"), backgroundColor: colors.errorSubtle, borderRadius: radius.md, color: colors.error, marginBottom: spacing[3], padding: spacing[3] },
+  success: { ...text("bodySm"), backgroundColor: colors.successSubtle, borderRadius: radius.md, color: colors.success, marginBottom: spacing[3], padding: spacing[3] }
 });
