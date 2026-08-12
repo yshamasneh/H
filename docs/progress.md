@@ -668,3 +668,180 @@ If it fails on the Kotlin package path, the suspects are
 - **The app icon and splash on a real launcher.** They were verified as images
   and under a simulated circular mask, not on a device.
 - **iOS entirely.** Only `android/` was regenerated; `ios/` is not in the repo.
+
+## 2026-08-12: B3 — Port the JOVO token system to mobile (in progress, stopped for context)
+
+Scope was `apps/mobile` only, per the standing instruction; `apps/admin` and
+`apps/api` were not touched. Everything below is committed on
+`agent/phase-15-and-jovo-brand`, one commit per file/group, working tree clean
+at each commit.
+
+### Completed
+
+- **Built the token layer**: `src/theme/tokens.ts` (colours, 4px spacing scale,
+  radii, elevation, motion, `statusFamily`/`statusPalette` for the five status
+  families, `iconSize` for decorative/glyph sizing, `withAlpha()` for the rare
+  translucent spot), `src/theme/typography.ts` (RTL-corrected `text(role,
+  weight)` returning `fontSize`/`lineHeight`/`letterSpacing`/`fontFamily`/
+  `writingDirection`), `src/theme/fonts.ts` (`useAppFonts()` via `expo-font`).
+  Palette, spacing, radii and the five status families are numerically
+  identical to `apps/admin/src/styles.css` — same brand, same system.
+- **Self-hosted Cairo and Inter as static TTFs** (`apps/mobile/assets/fonts/`,
+  `OFL.txt` included): downloaded the upstream *variable* fonts from
+  `google/fonts` and instanced 400/600/700 with `fontTools.varLib.instancer`
+  (Cairo pinned `slnt=0`, Inter pinned `opsz=14`), since RN font loading wants
+  plain static instances rather than a variable-font renderer. `expo-font` was
+  promoted from a transitive dependency to an explicit one
+  (`apps/mobile/package.json`, `~14.0.12`, matching the installed SDK-54
+  version) — a real dependency change, called out here since it's the one this
+  phase added.
+- **`App.tsx`** now calls `useAppFonts()` and keeps the splash screen up until
+  both the 3s minimum *and* fonts are ready (a `fontError` still releases the
+  gate rather than hanging), so no screen flashes in the system font before
+  Cairo/Inter finish loading.
+- **`customerTheme` (`features/customer/theme.ts`) is now a thin adapter over
+  the tokens** — every value is a reference into `theme/tokens.ts`, not a
+  literal. Two names that predate the JOVO palette don't map 1:1 and are
+  documented inline: `secondary` (was a dark teal price accent, now points at
+  `text` — JOVO has no secondary brand hue) and `surfaceMuted` (was an
+  orange-tinted placeholder background, now points at the neutral
+  `surfaceSunk`, since orange is deliberately scarce and a thumbnail
+  placeholder isn't a call to action).
+- **16 of 18 screen files with hardcoded colour are fully migrated** (zero
+  hardcoded hex, zero bare font sizes — verified after every file with
+  `grep -n "#[0-9A-Fa-f]\{3,8\}"` returning nothing and a clean
+  `npm run typecheck --workspace=@wasel/mobile`):
+  - `features/admin/ui.tsx` + `offers-screen.tsx` — the shared business/admin
+    UI kit, which carried 6 more screens (dashboard, restaurants, drivers,
+    orders, users, audit-log) onto tokens for free since they only consume
+    `ui.tsx`'s exports and had no hex of their own.
+  - `i18n/LanguageSwitcher.tsx`, `components/location-map.native.tsx` +
+    `.web.tsx`.
+  - `features/customer/account-screen.tsx`, `home-screen.tsx`,
+    `restaurant-screens.tsx`, `supermarket-screens.tsx`, `cart-screens.tsx`
+    (cart/checkout/history/detail).
+  - `features/auth/screens.tsx` (login/signup/OTP/home) and
+    `role-registration-screens.tsx` — these carried the *old* teal palette
+    (`#0F766E`/`#F5FAFC`) completely untouched by the earlier customer-side
+    rebrand, i.e. exactly the audit's "a driver and a customer are visibly
+    using different products" finding, and every role passes through login.
+  - `features/driver/screens.tsx`, `features/shared/notification-screens.tsx`,
+    `features/restaurant/inventory-screen.tsx`.
+  - Along the way, two screens (`cart-screens.tsx`'s `OrderDetailScreen` and
+    `driver/screens.tsx`'s delivery detail) had their own local copy of a
+    status→colour switch statement, duplicating `tokens.ts`'s
+    `statusFamily`/`statusPalette`. Both now import the shared one — order and
+    delivery status colour is computed in exactly one place across the app.
+  - Also, both `home-screen.tsx` and `restaurant-screens.tsx` had an
+    orange/green placeholder-thumbnail colour alternation on cards with no
+    photo; both were unified to one neutral tint (the split served decoration,
+    not meaning).
+- **`npm run typecheck` and `npm test` (23/23) pass** after every single
+  file-level commit, not just at the end — verified as part of the workflow,
+  not after the fact.
+
+### Remaining before B3 is done
+
+Two files still carry the old teal palette in full, both restaurant/business
+operator screens, both **not yet started**:
+
+- **`apps/mobile/src/features/restaurant/order-screens.tsx`** (~569 lines, 68
+  hardcoded hex values) — the restaurant's incoming-order queue and order
+  detail/status-transition screens. Note: this is also B5's "live queue" —
+  tokenizing it now is still worth doing (mechanical colour/size correctness),
+  but expect B5 to substantially restructure its layout regardless (larger
+  type, louder new-order card), so don't over-invest in polishing this pass.
+- **`apps/mobile/src/features/restaurant/management-screen.tsx`** (~637 lines,
+  51 hardcoded hex values) — restaurant/supermarket profile, categories, menu
+  items, staff management.
+
+Both follow the exact same pattern as every file already migrated this
+session (confirmed by reading both — same `"#0F766E"`/`"#F5FAFC"`/`"#FFFFFF"`-
+family palette, same inline `StyleSheet.create` shape, same
+`ActivityIndicator color="#0F766E"` / `StatusBar backgroundColor="#F5FAFC"`
+spots to fix). The mechanical recipe that worked for all 16 prior files:
+
+1. Add the import: `import { colors, radius, spacing, statusFamily,
+   statusPalette as tokenStatusPalette } from "../../theme/tokens";` and
+   `import { text } from "../../theme/typography";` (only pull in
+   `statusFamily`/`tokenStatusPalette` if the file has its own status-colour
+   switch to delete — check first with `grep -n "case \"PLACED\"\|case
+   \"PENDING\""`).
+2. Fix JSX-level literal props one at a time (`StatusBar backgroundColor=`,
+   `ActivityIndicator color=`, `RefreshControl tintColor=`,
+   `placeholderTextColor=`) — these are usually only 3-6 spots per file.
+3. Rewrite the trailing `const styles = StyleSheet.create({...})` block in one
+   `Edit` call: every colour → the matching `colors.*` token (surface→surface,
+   text→text, muted→textMuted, borders→border/borderStrong, the teal brand
+   colour→`colors.primary`/`primaryPressed`/`primarySubtle`, status greens/
+   reds/ambers→`colors.success…`/`error…`/`warning…`), every `fontSize`+
+   `fontWeight` pair → `...text(role, weight)` (role by visual hierarchy: page
+   titles `h1`/`h2`, card titles `h3`, body copy `body`/`bodySm`, small meta
+   `caption`, tiny labels/badges `label`), every spacing/margin/padding number
+   → the nearest `spacing[1..10]` (4/8/12/16/20/24/32/40/48/64), every
+   `borderRadius` → `radius.sm/md/lg/pill` (6/10/14/999). Decorative emoji/icon
+   glyph sizes (not real text) → `iconSize.xs..xxxl` instead of `text()`.
+4. Verify: `grep -n "#[0-9A-Fa-f]\{3,8\}" <file>` returns nothing,
+   `npm run typecheck --workspace=@wasel/mobile` is clean,
+   `npm run test --workspace=@wasel/mobile` still shows 23/23.
+5. Commit that file alone before moving to the next.
+
+After both files: re-run the repo-wide audit to confirm zero hardcoded hex
+remains outside `theme/tokens.ts` itself:
+
+```sh
+cd apps/mobile/src && grep -rlE "#[0-9A-Fa-f]{3,8}\b" --include=*.tsx --include=*.ts . | grep -v theme/tokens.ts
+```
+
+It should print nothing. Only then is B3 actually complete — commit, report to
+the user what was verified and how (this doc plus `npm run build` — the mobile
+build (`expo export --platform all`) has **not** been run this session and is
+worth doing once B3 closes, to catch anything the typecheck alone wouldn't).
+Then move to B4.
+
+### Judgment calls made this session (worth knowing before continuing)
+
+- Auth's secondary/link buttons were changed from orange-outline/orange-text
+  to neutral (border `borderStrong`, text `text`/`textMuted`). With the
+  primary button now solid JOVO orange, every other button also being orange
+  violated "orange is scarce, one primary action per screen." Expect this
+  pattern (primary = orange fill, everything else = neutral) to recur in the
+  two remaining files and in B4's component pass generally.
+- Where a dark panel needed text hierarchy (home screen's hero/offer cards,
+  supermarket headers), used `withAlpha(colors.textInverse, 0.55|0.72|1)`
+  rather than inventing new tint tokens — mirrors how admin's own dark sidebar
+  does it in `styles.css` with raw `rgba(255,255,255,X)`, which isn't
+  tokenized there either.
+- `iconSize` (a second, smaller scale) was added for decorative glyphs/emoji
+  placeholders that aren't linguistic text (back-chevrons, product-photo
+  stand-in emoji) — they don't want the Arabic optical-size correction real
+  type gets from `theme/typography.ts`.
+
+### What could NOT be verified this session
+
+- **No visual verification at all** — no dev server / Expo web export was run
+  this session, so nothing above has been *looked at*, only typechecked and
+  hex-grepped. That should happen before or immediately after finishing the
+  last two files: `cd apps/mobile && npx expo start --web` (or `npm run
+  build:web`) and check at minimum the login screen (teal→orange should be
+  obvious), the customer home screen, and one business-operator screen in both
+  languages.
+- **No Android build** — unrelated to this session's changes but still true
+  from B2: `./gradlew :app:assembleDebug` has still never completed in this
+  environment.
+
+### Prompt for the next session
+
+```
+Continue B3 (apps/mobile ONLY, same scope rule as before — do not touch
+apps/admin or apps/api) on branch agent/phase-15-and-jovo-brand. Read
+docs/progress.md's "B3 — Port the JOVO token system to mobile" entry first;
+it documents 16/18 files done and the exact mechanical recipe for the last
+two: apps/mobile/src/features/restaurant/order-screens.tsx (68 hardcoded hex)
+and apps/mobile/src/features/restaurant/management-screen.tsx (51). Migrate
+both onto src/theme/tokens.ts and src/theme/typography.ts following that
+recipe, verify with the grep/typecheck/test commands listed there, commit
+each file separately, then run the repo-wide zero-hex audit. Once B3 is
+fully done, do a first visual pass (expo web export, both languages) before
+starting B4. Then continue through B4-B8 per the original task instructions.
+```
