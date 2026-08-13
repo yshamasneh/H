@@ -1221,3 +1221,77 @@ Do NOT hide or change the restaurant vertical; that is deferred.
 Verify visually in the browser (expo web, both languages) as you go, the way
 B3 did, not just by typecheck. Commit and push at each meaningful boundary.
 ```
+
+### NEW SCOPE received 2026-08-13, NOT STARTED — read before touching customer screens
+
+This arrived at the end of the session and **no work was done on any of it.**
+It supersedes the shorter design-pass description above.
+
+**Critical structural decision: JOVO MARKET is the only supermarket partner.**
+It is not one store among many — it *is* the store. The customer must land
+directly in its catalogue. Remove store-selection / store-list / "browse
+supermarkets" from the customer flow entirely, and rework home so JOVO MARKET
+is the identity of the home experience (branding, categories, featured items),
+not a card you tap into.
+
+**Multi-store assumptions found so far.** This is what was already read this
+session, NOT an exhaustive audit — finish the sweep before implementing:
+
+- `src/navigation/navigation.ts` — a `supermarkets` list screen and
+  `goToSupermarkets()`; `supermarket-catalog` and `supermarket-product` both
+  carry `supermarketId` + `supermarketName` params, which stop making sense
+  when there is exactly one store.
+- `App.tsx` — `onOpenSupermarket` handler wiring the list → catalogue hop.
+- `src/features/customer/supermarket-screens.tsx` — the store-list screen.
+- `src/features/customer/home-screen.tsx` — surfaces stores as tappable cards.
+- API: `GET /api/v1/restaurants` returns a mixed list including `businessType`;
+  the client currently filters/browses it. Decide whether the single store is
+  resolved once at boot instead.
+- Still to check: search, favorites, and the bottom navigation.
+
+**Quality bar:** DoorDash / Uber Eats / Talabat — matched on hierarchy,
+confidence, and restraint, not copied. First three seconds should read as a
+funded, finished product.
+
+**Per-screen targets** (home, browse, product detail, cart, checkout, order
+tracking, account): home = JOVO MARKET branding as hero, distinct visual
+weights for category vs product cards, one focal point, skeleton matching the
+real layout. Browse = breathing room, scannable filters with clear selection,
+fast search, guiding empty states. Product detail = price the most prominent
+number, add-to-cart unmistakable in JOVO orange, tactile quantity selector.
+Cart = every line scannable, running total visible without scrolling, one
+checkout action, inviting empty state. Checkout = address / cash-on-delivery /
+summary as distinct labeled sections, weighty confirm button, and a real
+confirmation screen with order number and next steps — not a dismissal to home.
+Order tracking = status readable at a glance via the five-family colour system.
+Account = organised sections, and where Settings lives.
+
+**Icons:** audit every icon; flag and fix mixed outline/filled styles,
+mismatched stroke weights, and multiple icon families. One set across the
+customer flow. Active vs inactive must differ clearly — orange for
+active/primary only, inactive neutral grey. Consistent sizing per role.
+**Ask before adding an icon library**; only justified if the current set is
+genuinely inconsistent.
+
+**Ease of use:** fewest taps per primary action, comfortable tap targets, most
+important action most visually obvious, remove anything not helping the user
+act faster. **Deliverable: count taps from app open to completed order and
+report the number.**
+
+**Constraints:** light mode only; orange ~10% of any view, one primary action
+per screen; Arabic native RTL with Cairo and correct line-height; directional
+icons (back, chevron) mirror, non-directional (bag, star) do not; reuse the B3
+tokens, no new hardcoded colours. **Verify visually in both languages (web
+export is fine) before calling any screen done — typecheck alone is not
+sufficient evidence.** Start with home, since the single-store restructuring
+affects it most.
+
+**Note a possible tension to resolve with the owner:** an earlier instruction
+this session said explicitly *do not hide or change the restaurant vertical,
+that decision is deferred*. Removing store selection from the customer flow may
+touch shared browsing code paths. Keep restaurant browsing/ordering working as
+-is unless told otherwise, and confirm before changing anything restaurant-side.
+
+**The checkout crash is still unfixed** (see above). If the checkout flow is
+touched: keep the ErrorBoundary, do not mask a real error, and make the success
+path look finished only once it actually works.
