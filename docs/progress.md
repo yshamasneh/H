@@ -1028,3 +1028,196 @@ states everywhere, skeletons over spinners). Verify visually in the browser
 (expo web, both languages) as you go, the way B3's second half did, not just
 by typecheck. Commit and report at each meaningful boundary.
 ```
+
+## 2026-08-13: Release-build crash fixed; checkout crash contained but NOT fixed; design pass NOT started
+
+Branch: `agent/phase-15-and-jovo-brand`. Everything below is committed and pushed.
+
+### State: what is done, committed, and pushed
+
+- `a9d589d` — **EAS release-build crash. Fixed and verified in the real APK.**
+- `f5038f6` — **App-level ErrorBoundary.** Mitigation only, see below.
+
+Working tree clean; `HEAD` == `origin/agent/phase-15-and-jovo-brand`.
+
+### The EAS crash (done — do not re-investigate)
+
+Every EAS Android build succeeded but the APK crashed instantly at launch:
+`Error: Production builds require an HTTPS EXPO_PUBLIC_API_URL.` — a
+module-level throw in `apps/mobile/src/core/api.ts` firing at import time,
+before any UI, with no red box because release builds have none.
+
+Root cause: `apps/mobile/src/env.d.ts` declared `process` as `{ env?: {...} }`
+— **optional** `env`. TypeScript therefore forced every call site to write
+`process.env?.EXPO_PUBLIC_API_URL`. That parses as an `OptionalMemberExpression`,
+but `babel-preset-expo`'s inline-env-vars plugin
+(`node_modules/babel-preset-expo/build/inline-env-vars.js:23`) registers only a
+`MemberExpression` visitor. It never matched, so the value was never inlined
+and was never recorded in `publicEnvVars` metadata — silently, no warning at
+any log level.
+
+This is why supplying the variable four different ways (EAS-hosted var,
+`eas.json` env block, `NODE_ENV=production`, a `.env` file) all produced
+identical crashing APKs: none of them were ever the problem.
+
+Fix touches both `env.d.ts` (non-optional `env`) and `api.ts` (plain member
+access). Fixing only `api.ts` fails typecheck — the type declaration is what
+created the trap, so both must stay as they are.
+
+Verified in the real artifact, not by build status: build `ef51d60a`,
+downloaded the APK, extracted `assets/index.android.bundle` (Hermes bytecode,
+magic `c61fbc03`), grepped it. URL literal present once; `EXPO_PUBLIC_API_URL`
+present once and only inside the error message; zero surviving `process.env?.`
+accesses. Previously: zero URL matches, and the un-inlined property access
+present.
+
+**Verification method that actually works** — a green build status means
+nothing here, two "successful" builds still crashed:
+`eas build:view <id> --json` → download `applicationArchiveUrl` →
+`unzip -o apk "assets/*"` → `grep -a -o '<url>' assets/index.android.bundle`.
+Note `eas build:view` does **not** accept `--non-interactive`; passing it makes
+every call error out and produce no JSON.
+
+### The checkout crash (CONTAINED, NOT FIXED — this is the next task)
+
+Symptom: completing checkout ("confirm order" in cart) kicks the user
+completely out of the app instead of showing the confirmation screen.
+
+**Root cause is NOT known.** `f5038f6` adds an ErrorBoundary, which is a
+mitigation, not the fix. The app previously had no error boundary anywhere, so
+any render-time throw unmounted the entire React tree — on a release build that
+presents as the app closing itself with no message.
+
+Ruled out, with evidence — do not spend time re-checking these:
+
+- **The order API.** Placed a real order end to end against the running API;
+  returns 201 with a complete payload. (Test order `d19f0b81` exists in the
+  local DB from that check — delete it if it gets in the way.)
+- **Response/type mismatch.** Every field the confirmation screen and
+  `OrderSummaryCard` read — `restaurant.name`, `items[].nameSnapshot`,
+  `lineTotalMinor`, `appliedPromotions`, `statusHistory`, the `*Minor` totals —
+  is present in the real response with the expected type.
+- **`StatusBadge`.** `statusFamily()` always returns a valid family, so the
+  palette lookup cannot be undefined.
+- **Hermes / `Intl`.** The price and date formatters in the cart flow are hand
+  rolled; no `toLocaleString`/`Intl` anywhere in that path. So this is not a
+  works-on-web/crashes-on-device locale issue.
+- **Socket / order-subscription.** Not connected on the confirmation path.
+- **Null `delivery`.** `DeliveryProgressCard` is typed `NonNullable` and is
+  guarded by its caller.
+
+**Next step — reproduce it, do not guess.** Two options:
+
+1. `npx expo start --web`, log in as the seeded customer, place an order, read
+   the console error. (Per the B3 notes: always confirm the dev server actually
+   bound and is serving fresh HTML before trusting the browser.)
+2. Rebuild the APK — the installed one predates `f5038f6` and has no boundary —
+   place an order on device, and **read the error straight off the boundary's
+   on-screen message.** It renders `error.message` deliberately so this is
+   diagnosable without wireless ADB and logcat.
+
+Once the message is in hand the fix should be short.
+
+### Three pending judgment calls — reasoning, so they are not blindly reverted
+
+1. **`NODE_ENV=production` left in `eas.json`'s `preview.env`, though proven
+   unnecessary.** It was added on a since-disproven theory that Metro's
+   env-inlining was gated on it. It is not: inlining is gated on
+   `caller.isDev` (`babel-preset-expo/build/common.js:84`), and bundling
+   without `NODE_ENV` still inlines correctly (verified locally). It is also
+   mildly harmful — EAS warns it makes npm install production-only packages.
+   It was left in because the verified-good APK was built *with* it, and
+   removing it would invalidate that verification without a fresh build.
+   **Safe to remove, but re-verify with the APK grep above when you do.**
+2. **`.env.production` + `.easignore` negation approach dropped in favour of
+   the `eas.json` env block.** Proven unnecessary: re-bundling with
+   `EXPO_NO_DOTENV=1` — so only an injected env var could supply the value —
+   still inlined correctly, meaning the `eas.json` block alone is sufficient.
+   The `!apps/mobile/.env.production` negation was therefore removed rather
+   than shipping env files into the build archive (mild secret-leak vector,
+   and a second source of truth for the same value). Do not resurrect this
+   approach; it was never the problem.
+3. **ErrorBoundary committed without reproducing the bug first.** Deliberate.
+   A visible error screen is strictly better than silent app death regardless
+   of this specific bug, and it is the diagnostic that will identify the real
+   cause on a real device. It is purely additive and reverts cleanly. It
+   should **not** be mistaken for a fix to the checkout bug.
+
+### Design pass: NOT STARTED
+
+To be unambiguous: **none** of the following was begun. No files were created
+or modified for any of it.
+
+- **Settings screen** — not started, nothing written. Note that
+  `LanguageSwitcher` is currently duplicated across five screens
+  (`customer/account-screen.tsx`, `auth/screens.tsx`, `driver/screens.tsx`,
+  `admin/dashboard-screen.tsx`, `restaurant/management-screen.tsx`);
+  consolidating it into Settings means touching all five.
+- **Persistent bottom navigation** — not started. Bottom nav and logout
+  currently require scrolling to reach; logout belongs in Settings.
+- **B4–B8 polish pass** — not started. No work on customer home, browsing,
+  cart, or checkout polish.
+
+Out of scope by explicit instruction: do **not** hide or change the restaurant
+vertical. That decision is deferred until after the polish pass.
+
+### Environment notes
+
+- Seeded logins, all password `Test@12345`, no OTP (`phoneVerifiedAt` preset).
+  Enter country code `+970` and the local part: customer `590000000`, admin
+  `590000001`, restaurant owner `590000002`, driver `590000003`, supermarket
+  owner `590000004`. All five verified by real login.
+- **Login is throttled 5/min** (`auth.controller.ts:21`), and failed attempts
+  count. A 429 while cycling through test accounts is the throttler, not a bad
+  credential.
+- There is **no `SUPERMARKET` role**. `UserRole` is
+  `CUSTOMER | RESTAURANT | DRIVER | ADMIN`; supermarket vs restaurant is
+  `businessType` on the business. Both owners log in as `RESTAURANT`. Tab count
+  in the management workspace reveals which: 3 tabs = RESTAURANT, 4 tabs
+  (incl. Inventory) = SUPERMARKET.
+- Stray accounts in the local DB that are not from the seed and behave oddly if
+  picked by mistake: `+970590000008` (REJECTED business), `+970599112233`
+  (SUSPENDED business), and four `Smoke Test Driver` accounts with unknown
+  passwords.
+- The API must be running on port 3000 and the ngrok tunnel live before any
+  rebuild; the tunnel hostname is hardcoded in `eas.json` and dies whenever the
+  tunnel restarts.
+
+### Prompt for the next session
+
+```
+Continue on branch agent/phase-15-and-jovo-brand. Read docs/progress.md's
+"2026-08-13: Release-build crash fixed; checkout crash contained but NOT
+fixed; design pass NOT started" entry first — it has the full state, what is
+already ruled out on the checkout bug, and three judgment calls with their
+reasoning that should not be reverted without reading them.
+
+Two pieces of work, in this order:
+
+1. Fix the checkout crash. Completing checkout kicks the user out of the app.
+   Root cause is NOT yet known — the API, type mismatches, StatusBadge,
+   Hermes/Intl, the socket, and null delivery are all already ruled out with
+   evidence. Do NOT guess-and-rebuild. Reproduce it first: either expo web
+   with the seeded customer, or rebuild the APK and read the error off the
+   new ErrorBoundary's on-screen message. Then fix, and verify by placing a
+   test order end to end and confirming the app stays open and shows the
+   confirmation screen.
+
+2. Start the design pass, which has not been begun at all:
+   - A proper Settings screen reachable from account/profile, with sections
+     for language, account, notifications, about/legal, and logout. Move the
+     LanguageSwitcher into it — it is currently duplicated across five
+     screens and should not float elsewhere in the UI.
+   - Make the primary bottom navigation fixed/persistent so it stays visible
+     while content scrolls. Logout belongs in Settings, not somewhere you
+     scroll to find.
+   - Then the B4-B8 polish pass across the whole app: consistent spacing,
+     clear hierarchy, proper empty/loading/error states, and the restrained
+     orange-accent rule (~10% of any view). Prioritise customer home,
+     browsing, cart, and checkout, but the goal is the whole app feeling
+     coherent — not one polished screen surrounded by rough ones.
+
+Do NOT hide or change the restaurant vertical; that is deferred.
+Verify visually in the browser (expo web, both languages) as you go, the way
+B3 did, not just by typecheck. Commit and push at each meaningful boundary.
+```
