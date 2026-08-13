@@ -1295,3 +1295,27 @@ touch shared browsing code paths. Keep restaurant browsing/ordering working as
 **The checkout crash is still unfixed** (see above). If the checkout flow is
 touched: keep the ErrorBoundary, do not mask a real error, and make the success
 path look finished only once it actually works.
+
+#### OWNER DECISION 2026-08-13 — the restaurant/supermarket conflict is resolved
+
+The tension flagged above is settled. Build on this basis:
+
+- **Restaurant browsing stays exactly as it is.** No changes to restaurant
+  code or restaurant flow, at all, while doing this work.
+- **JOVO MARKET becomes a direct customer entry point** with no
+  store-selection list in front of it.
+- **The two are decoupled.** Do *not* route supermarket access through the
+  same list screen that restaurants use. Supermarket access gets its own
+  direct path.
+
+This removes the earlier "restaurant vertical is deferred, confirm first"
+caveat: it is not deferred-and-ambiguous any more, it is explicitly
+"leave it alone entirely". The decoupling is the mechanism — a shared list
+screen is what would have forced restaurant-side edits, so the direct
+supermarket entry point is what keeps restaurant code untouched.
+
+Implementation not started. The open design question to settle first is how
+the single store is resolved: the customer needs JOVO MARKET's id without
+picking it from a list, so decide between resolving it once at boot, hard
+configuring it, or adding a dedicated single-store endpoint — rather than
+reusing the mixed `GET /api/v1/restaurants` list the current flow browses.
