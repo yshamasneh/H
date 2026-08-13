@@ -345,7 +345,11 @@ export class ApiError extends Error {
   }
 }
 
-const configuredApiUrl = process.env?.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
+// Must be a plain `process.env.X` member expression: babel-preset-expo's
+// inline-env-vars plugin only visits MemberExpression, so `process.env?.X`
+// (an OptionalMemberExpression) is silently left un-inlined and reads as
+// undefined in release bundles.
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
 const developmentApiUrl =
   Platform.select({
     android: "http://10.0.2.2:3000",

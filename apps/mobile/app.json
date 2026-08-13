@@ -30,6 +30,10 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.RECORD_AUDIO"
+      ],
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -57,6 +61,12 @@
     ],
     "updates": {
       "enabled": false
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "46a8fe97-9509-4e20-b8b5-a2b11ba6d2e7"
+      }
+    },
+    "owner": "mohammadsham00"
   }
 }
