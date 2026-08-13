@@ -96,6 +96,7 @@ import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/featu
 import { RestaurantListScreen, RestaurantMenuScreen } from "./src/features/customer/restaurant-screens";
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./src/core/session";
 import { disconnectSocket } from "./src/core/socket";
+import { ErrorBoundary } from "./src/components/error-boundary";
 import { AdminDashboardScreen } from "./src/features/admin/dashboard-screen";
 import { AdminRestaurantsScreen, AdminRestaurantDetailScreen } from "./src/features/admin/restaurants-screen";
 import { AdminDriversScreen } from "./src/features/admin/drivers-screen";
@@ -119,7 +120,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <RTLRoot>
-        <TasawaQApp />
+        <ErrorBoundary>
+          <TasawaQApp />
+        </ErrorBoundary>
       </RTLRoot>
     </SafeAreaProvider>
   );
