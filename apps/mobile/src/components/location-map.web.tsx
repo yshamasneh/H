@@ -5,6 +5,11 @@ import { colors, radius, spacing } from "../theme/tokens";
 
 const channel = "tasawaq-location-map";
 
+// The web map is Leaflet over OpenStreetMap in an iframe — no Google Maps SDK
+// and no API key involved — so it is always available. The native module gates
+// this on a configured key; see location-map.native.tsx.
+export const isInteractiveMapAvailable = true;
+
 export function LocationMap(props: LocationMapProps) {
   const frame = useRef<HTMLIFrameElement | null>(null);
   const documentHtml = useMemo(

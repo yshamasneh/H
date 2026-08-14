@@ -70,5 +70,13 @@
     "RESTAURANT": "Restaurant",
     "DRIVER": "Driver",
     "ADMIN": "Admin"
-  }
+  },
+  "map": {
+    "deliveryPinTitle": "Delivery location",
+    "unavailableTitle": "Map preview unavailable",
+    "unavailableBody": "Type your address above, or tap \"Use my current location\". Your delivery point is saved either way."
+  },
+  "unexpectedErrorTitle": "Something went wrong",
+  "unexpectedErrorBody": "The app hit an unexpected problem on this screen. Your account and any placed order are safe.",
+  "backToHome": "Back to home"
 }
