@@ -1319,3 +1319,171 @@ the single store is resolved: the customer needs JOVO MARKET's id without
 picking it from a list, so decide between resolving it once at boot, hard
 configuring it, or adding a dedicated single-store endpoint — rather than
 reusing the mixed `GET /api/v1/restaurants` list the current flow browses.
+
+## 2026-08-14: JOVO MARKET-only customer flow; checkout crash investigated, not reproduced
+
+Branch: `agent/phase-15-and-jovo-brand`. Everything below is committed and pushed.
+
+### The checkout crash — investigated with real orders, NOT reproduced, NOT confirmed fixed
+
+**It does not reproduce on the web target.** Five real orders were placed end
+to end this session against the live API and PostgreSQL — two before any code
+changed (one supermarket, one restaurant) and three after — logged in as the
+seeded customer, in both Arabic and English. Every one reached the confirmation
+screen with the correct totals. No JS exception reached the console at any
+point; the only console errors present are the Chrome extension's own
+"message channel closed" noise, not the app's.
+
+So there was no error message to read, and the previous session's premise —
+that the ErrorBoundary would surface one on web — does not hold: **the crash is
+native-only.** No Android device and no emulator exist in this environment
+(`adb devices` empty, `emulator -list-avds` empty), and building an APK was
+explicitly out of scope, so the actual on-device error was never obtained.
+**Do not record this bug as fixed.**
+
+Two attempts to get closer to a release bundle without a device both dead-ended,
+and the reasons are worth keeping:
+
+- `expo export` and `expo start --no-dev --minify` both force production mode,
+  which loads `apps/mobile/.env.production` (machine-local, gitignored, excluded
+  from EAS by `.easignore`'s `.env.*`). It points at a **dead ngrok tunnel**, so
+  the exported app cannot reach the local API and drops straight to login.
+- Removing that file does not help either: with a local `http://` URL the
+  `!__DEV__ && !startsWith("https://")` guard in `core/api.ts:360` throws at
+  import. **A production web bundle cannot be pointed at a local HTTP API at
+  all.** Testing production JS locally would need an HTTPS local endpoint.
+- Also worth knowing: **Metro's transform cache holds the inlined env value.**
+  Two consecutive exports with different `EXPO_PUBLIC_API_URL` produced the same
+  baked-in URL until `--clear` was passed. Verify what actually shipped with
+  `grep -a -o -E "https?://[a-z0-9.:-]+" dist/_expo/static/js/web/index-*.js`.
+
+#### What *was* found, and fixed: `react-native-maps` with no API key (`79d62f6`)
+
+This is a verified defect, independent of the crash. `react-native-maps` renders
+Google Maps on Android, and the Android SDK refuses to initialise without a
+`com.google.android.geo.API_KEY` manifest entry. Expo only emits that entry from
+`android.config.googleMaps.apiKey` in app.json.
+
+Confirmed absent everywhere: not in `app.json`, not in the generated
+`android/app/src/main/AndroidManifest.xml` (grepping `geo.API_KEY`,
+`googleMaps`, `MAPS_API_KEY` across `android/` returns nothing), and
+`react-native-maps`' own `AndroidManifest.xml` is an empty `<manifest>` element
+that supplies nothing. The package *is* autolinked
+(`android/build/generated/autolinking/autolinking.json` lists it), so the native
+view really is constructed.
+
+Why that lands on checkout specifically: `CheckoutScreen` renders `LocationMap`,
+and placing an order navigates straight from checkout to the confirmation
+screen. That unmount is the one moment a customer reliably drops a MapView, and
+the teardown path is `MapManager.onDropViewInstance` -> `MapView.doDestroy()` ->
+`onPause()`/`onDestroy()`
+(`node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/`), which
+runs against a GoogleMap delegate that authorisation never created. A native
+crash there is not catchable by the JS ErrorBoundary — consistent with the app
+closing itself and the boundary never showing anything.
+
+**This is a plausible cause, not a proven one.** It is fixed because it is wrong
+regardless: `location-map.native.tsx` now reads the configured key from
+`Constants.expoConfig` and mounts `MapView` only when one exists, rendering a
+coordinate panel otherwise. Nothing in the address step depends on the map — the
+address is typed and "use my current location" goes through `expo-location`,
+which needs no Maps SDK. Web (Leaflet over OSM) and iOS (Apple Maps, no key
+needed) are unaffected. Setting `android.config.googleMaps.apiKey` restores the
+map with no further code change.
+
+**Next session: build an APK and place one order.** If it still closes the app,
+the map was not the cause, and the ErrorBoundary should now be present in the
+build to show the real message.
+
+### JOVO MARKET is now the customer's direct entry point (`8d4ed31`)
+
+- **Single-store resolution** — new `src/features/customer/market.ts`.
+  `resolveMarketStore()` reads the one approved supermarket from the public
+  listing and caches the promise; a failed lookup is deliberately not cached, so
+  one offline moment cannot make the catalogue unreachable for the rest of the
+  session. Not hardcoded: the id differs between the seeded local database,
+  staging and production. No new API endpoint was needed. If several
+  supermarkets are ever approved the first wins — documented and deliberate,
+  not enforced by the API.
+- **The store-selection list is gone.** `SupermarketListScreen` deleted, the
+  `supermarkets` route removed from `AppScreen`, `goToSupermarkets` removed.
+  `goToSupermarketCatalog` now takes optional `{ departmentId, search }`, and the
+  catalogue screen accepts `initialDepartmentId` / `initialSearch`.
+- **Home is the storefront, not a card you tap into.** `home-screen.tsx` renders
+  JOVO MARKET's departments inline (tapping one opens the catalogue already
+  filtered), a product grid from the catalogue underneath with working
+  add-to-cart and a cart dock, and a search bar that opens the catalogue. The
+  store name comes from the resolved store.
+- **Offers are filtered** to supermarket-scoped and platform-wide only, so no
+  offer card can route into a vertical that is not open. Platform-wide offers
+  now open the market catalogue.
+- **Restaurants show a "coming soon" card** where they used to be listed. **No
+  "notify me"**: there is no subscription endpoint behind it, and a button that
+  only flips local state would promise a notification the app cannot send. That
+  was the one optional item in the brief and it was skipped on purpose.
+
+Files touched: `App.tsx`, `navigation/navigation.ts`, `navigation.test.ts`,
+`features/customer/home-screen.tsx`, `supermarket-screens.tsx`,
+`cart-screens.tsx`, new `features/customer/market.ts`, and the four
+`en|ar` x `customer|cart` locale files.
+
+### Restaurant code and the business side: untouched and confirmed working
+
+Nothing was deleted. `restaurant-screens.tsx`, the `restaurants` and
+`restaurant-menu` routes, `goToRestaurants`, `goToRestaurantMenu`, all
+restaurant models and every business-side screen are intact — only the
+customer's entry points to browsing are gone, so re-enabling it means restoring
+those entry points.
+
+Verified in the browser, not assumed:
+
+- Restaurant owner (`+970590000002`): home, **Incoming Orders queue**, order
+  detail, and a **real Accept transition** — an order moved `PLACED -> ACCEPTED`
+  with the status history updating and the next action becoming "Start
+  Preparing". Restaurant workspace loaded with its **3 tabs** (Profile /
+  Categories / Items), profile populated, menu-item editor working.
+- Supermarket owner (`+970590000004`): **Supermarket workspace with 4 tabs**
+  (Profile / Categories / Items / **Inventory**), profile populated.
+
+### The confirmation screen now looks finished
+
+It had no order number at all, and its copy said "the restaurant has received
+your order" in a supermarket-only launch. It now shows the order number derived
+as `id.slice(0, 8).toUpperCase()` — **the same derivation the business order
+ticket uses** (`apps/admin` `BusinessOrderPage`), so the customer and the store
+quote the same number — plus three concrete next steps ending in the exact cash
+amount due, and a pointer to My Orders for tracking.
+
+### Verified
+
+- `npm run typecheck` clean across all three workspaces.
+- `npm test`: **API 201 pass / 1 skipped by design / 0 fail**, **mobile 25/25**
+  (23 prior + 2 new navigation tests for the catalogue's initial filters).
+- `npx expo export --platform all` builds web, iOS and Android bundles cleanly.
+- Real browser, live API and PostgreSQL, **both languages**: home storefront,
+  department filtering, add-to-cart from home, product detail, cart, checkout,
+  and the confirmation screen in Arabic RTL and English LTR.
+
+### Small things worth knowing
+
+- `home.departmentProductCount` interpolates `{{total}}`, **not `{{count}}`**.
+  `count` is i18next's plural trigger, and this project deliberately avoids
+  runtime `Intl` (no `Intl.PluralRules` guarantee on Hermes, no polyfill
+  imported). The copy is count-neutral instead.
+- `common:map.*` and the error-boundary strings were added to both locales; the
+  boundary had been falling back to hardcoded English literals.
+- Locale keys orphaned by the removed list screen (`supermarket.title`,
+  `home.supermarketsSectionTitle`, `home.searchRestaurantsPlaceholder`, ...) were
+  left in place. They are harmless and are exactly what is needed back when
+  restaurant browsing returns.
+- The seeded store is still named **"TasawaQ Fresh Market"** in the database, so
+  that is what the storefront header shows. Pre-rename seed content, out of
+  scope here, flagged again so it is not mistaken for a rebrand bug.
+- API errors still surface in English inside the Arabic UI (seen again this
+  session: "Your session is missing or has expired"). Unchanged, still the B4
+  item with its root-cause analysis in the 2026-08-12 entry.
+
+### Explicitly not touched, per instruction
+
+Settings screen, persistent bottom navigation, and the broader B4-B8
+design/polish pass. None of it was started.
