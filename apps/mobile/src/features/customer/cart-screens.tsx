@@ -432,22 +432,53 @@ type OrderConfirmationScreenProps = {
 
 export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
   const { t } = useTranslation(["cart"]);
+  const { order } = props;
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
-      <Header onBack={props.onDone} subtitle={props.order.restaurant.name} title={t("confirmation.title")} />
+      <Header onBack={props.onDone} subtitle={order.restaurant.name} title={t("confirmation.title")} />
       <ScrollView contentContainerStyle={styles.formContent}>
         <View style={styles.successBanner}>
           <View style={styles.successIcon}><Text style={styles.successIconText}>✓</Text></View>
           <Text style={styles.successTitle}>{t("confirmation.confirmedTitle")}</Text>
-          <Text style={styles.successBannerText}>{t("confirmation.confirmedText")}</Text>
+          <Text style={styles.successBannerText}>
+            {t("confirmation.confirmedText", { store: order.restaurant.name })}
+          </Text>
+          <Text style={styles.orderNumberLabel}>{t("confirmation.orderNumberLabel")}</Text>
+          {/* Same derivation the business shell shows on its order ticket
+              (apps/admin BusinessOrderPage), so the number the customer reads
+              out is the number the store can look up. */}
+          <Text selectable style={styles.orderNumberValue}>{orderReference(order.id)}</Text>
         </View>
-        <OrderSummaryCard order={props.order} />
+
+        <View style={styles.nextStepsCard}>
+          <Text style={styles.sectionTitle}>{t("confirmation.nextStepsTitle")}</Text>
+          <NextStep index={1} label={t("confirmation.nextStepOne")} />
+          <NextStep index={2} label={t("confirmation.nextStepTwo")} />
+          <NextStep index={3} label={t("confirmation.nextStepThree", { total: formatPrice(order.totalMinor) })} />
+          <Text style={styles.footerNote}>{t("confirmation.trackHint")}</Text>
+        </View>
+
+        <OrderSummaryCard order={order} />
         <PrimaryButton label={t("confirmation.viewMyOrders")} onPress={props.onViewOrders} />
         <SecondaryButton label={t("confirmation.backToHome")} onPress={props.onDone} />
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function NextStep(props: { index: number; label: string }) {
+  return (
+    <View style={styles.nextStepRow}>
+      <View style={styles.nextStepBullet}><Text style={styles.nextStepBulletText}>{props.index}</Text></View>
+      <Text style={styles.nextStepLabel}>{props.label}</Text>
+    </View>
+  );
+}
+
+/** Short, readable handle for an order id — matches the business order ticket. */
+function orderReference(orderId: string): string {
+  return orderId.slice(0, 8).toUpperCase();
 }
 
 type OrderHistoryScreenProps = {
@@ -1061,6 +1092,28 @@ const styles = StyleSheet.create({
   successIconText: { color: colors.textInverse, fontSize: iconSize.xl, fontWeight: "900" },
   successTitle: { ...text("h2", "bold"), color: customerTheme.colors.text, marginTop: spacing[4] },
   successBannerText: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[2], textAlign: "center" },
+  orderNumberLabel: { ...text("label", "bold"), color: customerTheme.colors.textMuted, marginTop: spacing[4] },
+  orderNumberValue: { ...text("h2", "bold"), color: customerTheme.colors.text, letterSpacing: 1, marginTop: spacing[1] },
+  nextStepsCard: {
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    marginBottom: spacing[5],
+    padding: spacing[5]
+  },
+  nextStepRow: { alignItems: "flex-start", flexDirection: "row", marginBottom: spacing[3] },
+  nextStepBullet: {
+    alignItems: "center",
+    backgroundColor: customerTheme.colors.primarySoft,
+    borderRadius: radius.pill,
+    height: 24,
+    justifyContent: "center",
+    marginEnd: spacing[3],
+    width: 24
+  },
+  nextStepBulletText: { ...text("label", "bold"), color: customerTheme.colors.primary },
+  nextStepLabel: { ...text("bodySm"), color: customerTheme.colors.text, flex: 1 },
   primaryButton: {
     alignItems: "center",
     backgroundColor: customerTheme.colors.primary,

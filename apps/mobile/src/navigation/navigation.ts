@@ -22,8 +22,14 @@ export type AppScreen =
   | { name: "home"; user: PublicUser; notice?: string }
   | { name: "restaurants"; user: PublicUser }
   | { name: "restaurant-menu"; user: PublicUser; restaurantId: string; restaurantName: string }
-  | { name: "supermarkets"; user: PublicUser }
-  | { name: "supermarket-catalog"; user: PublicUser; supermarketId: string; supermarketName: string }
+  | {
+      name: "supermarket-catalog";
+      user: PublicUser;
+      supermarketId: string;
+      supermarketName: string;
+      departmentId?: string;
+      search?: string;
+    }
   | {
       name: "supermarket-product";
       user: PublicUser;
@@ -118,6 +124,15 @@ export function authResultToHome(result: AuthResult): AppScreen {
   return homeForUser(result.user);
 }
 
+/**
+ * Customer-facing restaurant browsing is deferred for the JOVO MARKET-only
+ * launch: nothing in the customer flow calls this or `goToRestaurantMenu` any
+ * more, and the home screen shows a "coming soon" card where restaurants used
+ * to be. Both routes, their screens and the whole restaurant domain are kept
+ * intact so re-enabling browsing is a matter of restoring the entry points —
+ * and so the restaurant *business* side (orders, workspace, staff) is
+ * completely untouched.
+ */
 export function goToRestaurants(user: PublicUser): Extract<AppScreen, { name: "restaurants" }> {
   return { name: "restaurants", user };
 }
@@ -167,19 +182,24 @@ export function goToAccount(user: PublicUser): Extract<AppScreen, { name: "accou
   return { name: "account", user };
 }
 
-export function goToSupermarkets(user: PublicUser): Extract<AppScreen, { name: "supermarkets" }> {
-  return { name: "supermarkets", user };
-}
-
+/**
+ * There is no supermarket *list* screen any more: JOVO MARKET is the only
+ * partner, so the customer goes straight to its catalogue. The store id is
+ * still carried here because the cart and every catalogue call are keyed by
+ * business id — see features/customer/market.ts for how it is resolved.
+ */
 export function goToSupermarketCatalog(
   user: PublicUser,
-  supermarket: Pick<RestaurantSummary, "id" | "name">
+  supermarket: Pick<RestaurantSummary, "id" | "name">,
+  filters: { departmentId?: string; search?: string } = {}
 ): Extract<AppScreen, { name: "supermarket-catalog" }> {
   return {
     name: "supermarket-catalog",
     user,
     supermarketId: supermarket.id,
-    supermarketName: supermarket.name
+    supermarketName: supermarket.name,
+    departmentId: filters.departmentId,
+    search: filters.search
   };
 }
 

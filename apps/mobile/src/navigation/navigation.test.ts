@@ -11,7 +11,6 @@ import {
   goToRestaurants,
   goToSupermarketCatalog,
   goToSupermarketProduct,
-  goToSupermarkets,
   goToSignup,
   homeForUser,
   resetOtpToNewPassword,
@@ -111,13 +110,25 @@ test("leaving restaurant browsing returns to Home for the same user", () => {
 });
 
 test("customers can navigate through supermarket catalog and product details", () => {
-  assert.deepEqual(goToSupermarkets(customer), { name: "supermarkets", user: customer });
-  const catalog = goToSupermarketCatalog(customer, { id: "s1", name: "Fresh Market" });
+  const catalog = goToSupermarketCatalog(customer, { id: "s1", name: "JOVO MARKET" });
   assert.equal(catalog.name, "supermarket-catalog");
   assert.equal(catalog.supermarketId, "s1");
-  const product = goToSupermarketProduct(customer, { id: "s1", name: "Fresh Market" }, "p1");
+  assert.equal(catalog.departmentId, undefined);
+  const product = goToSupermarketProduct(customer, { id: "s1", name: "JOVO MARKET" }, "p1");
   assert.equal(product.name, "supermarket-product");
   assert.equal(product.productId, "p1");
+});
+
+test("the catalogue can be opened already filtered to one department", () => {
+  const catalog = goToSupermarketCatalog(customer, { id: "s1", name: "JOVO MARKET" }, { departmentId: "d1" });
+  assert.equal(catalog.departmentId, "d1");
+  assert.equal(catalog.search, undefined);
+});
+
+test("the catalogue can be opened already carrying a search term", () => {
+  const catalog = goToSupermarketCatalog(customer, { id: "s1", name: "JOVO MARKET" }, { search: "rice" });
+  assert.equal(catalog.search, "rice");
+  assert.equal(catalog.departmentId, undefined);
 });
 
 test("restaurant owners can navigate to profile and menu management", () => {

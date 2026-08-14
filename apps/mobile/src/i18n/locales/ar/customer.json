@@ -26,7 +26,20 @@
     "percentOffDeliveryLabel": "خصم {{percent}}% على التوصيل",
     "percentOffItemLabel": "خصم {{percent}}% على {{item}}",
     "percentOffSelectedItemLabel": "خصم {{percent}}% على منتج مختار",
-    "percentOffOrderLabel": "خصم {{percent}}% على الطلب"
+    "percentOffOrderLabel": "خصم {{percent}}% على الطلب",
+    "marketFallbackName": "جوفو ماركت",
+    "marketEyebrow": "متجرك",
+    "greetingSubtitleMarket": "ما الذي تحتاجه من الماركت اليوم؟",
+    "searchProductsPlaceholder": "ابحث عن منتجات أو علامات تجارية أو أقسام",
+    "departmentsSectionTitle": "الأقسام",
+    "departmentProductCount": "المنتجات: {{total}}",
+    "marketProductsSectionTitle": "من جوفو ماركت",
+    "marketProductsEmpty": "ستظهر المنتجات هنا فور توفرها في المتجر.",
+    "marketUnavailableTitle": "تعذّر الوصول إلى المتجر حاليًا",
+    "marketUnavailableText": "تحقق من اتصالك ثم أعد المحاولة.",
+    "noOffersTextMarket": "ستظهر هنا عروض جوفو ماركت الجديدة فور نشرها.",
+    "restaurantsComingSoonTitle": "المطاعم — قريبًا",
+    "restaurantsComingSoonText": "نعمل على انضمام المطاعم المحلية. توصيل البقالة من جوفو ماركت متاح الآن."
   },
   "account": {
     "headerTitle": "حسابي وعناويني",

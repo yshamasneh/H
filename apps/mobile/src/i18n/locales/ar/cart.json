@@ -52,9 +52,15 @@
   "confirmation": {
     "title": "تم إرسال الطلب",
     "confirmedTitle": "تم تأكيد طلبك!",
-    "confirmedText": "استلم المطعم طلبك. سنُبقيك على اطلاع في كل خطوة.",
+    "confirmedText": "استلم {{store}} طلبك وسيبدأ بتجهيزه.",
     "viewMyOrders": "عرض طلباتي",
-    "backToHome": "العودة إلى الرئيسية"
+    "backToHome": "العودة إلى الرئيسية",
+    "orderNumberLabel": "رقم الطلب",
+    "nextStepsTitle": "ما الذي سيحدث الآن",
+    "nextStepOne": "يؤكّد المتجر طلبك ويجهّز المنتجات.",
+    "nextStepTwo": "يستلم السائق الطلب ويوصله إلى عنوانك.",
+    "nextStepThree": "ادفع {{total}} نقدًا عند الاستلام.",
+    "trackHint": "يمكنك متابعة الطلب في أي وقت من \"طلباتي\"."
   },
   "history": {
     "title": "طلباتي",

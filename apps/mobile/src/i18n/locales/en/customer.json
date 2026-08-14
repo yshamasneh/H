@@ -26,7 +26,20 @@
     "percentOffDeliveryLabel": "{{percent}}% off delivery",
     "percentOffItemLabel": "{{percent}}% off {{item}}",
     "percentOffSelectedItemLabel": "{{percent}}% off selected item",
-    "percentOffOrderLabel": "{{percent}}% off order"
+    "percentOffOrderLabel": "{{percent}}% off order",
+    "marketFallbackName": "JOVO MARKET",
+    "marketEyebrow": "YOUR STORE",
+    "greetingSubtitleMarket": "What do you need from the market today?",
+    "searchProductsPlaceholder": "Search products, brands or departments",
+    "departmentsSectionTitle": "Departments",
+    "departmentProductCount": "Products: {{total}}",
+    "marketProductsSectionTitle": "From JOVO MARKET",
+    "marketProductsEmpty": "Products will appear here as the store stocks them.",
+    "marketUnavailableTitle": "The store is not reachable right now",
+    "marketUnavailableText": "Check your connection and pull down to try again.",
+    "noOffersTextMarket": "New JOVO MARKET offers will appear here when they are published.",
+    "restaurantsComingSoonTitle": "Restaurants — coming soon",
+    "restaurantsComingSoonText": "We are onboarding local kitchens. Grocery delivery from JOVO MARKET is live now."
   },
   "account": {
     "headerTitle": "My Account & Addresses",

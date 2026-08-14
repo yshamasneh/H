@@ -52,9 +52,15 @@
   "confirmation": {
     "title": "Order Placed",
     "confirmedTitle": "Your order is confirmed!",
-    "confirmedText": "The restaurant has received your order. We’ll keep you updated at every step.",
+    "confirmedText": "{{store}} has received your order and will start preparing it.",
     "viewMyOrders": "View My Orders",
-    "backToHome": "Back to Home"
+    "backToHome": "Back to Home",
+    "orderNumberLabel": "Order number",
+    "nextStepsTitle": "What happens next",
+    "nextStepOne": "The store confirms your order and picks your items.",
+    "nextStepTwo": "A driver collects the order and brings it to your address.",
+    "nextStepThree": "Pay {{total}} in cash when it arrives.",
+    "trackHint": "Track the order any time from My Orders."
   },
   "history": {
     "title": "My Orders",

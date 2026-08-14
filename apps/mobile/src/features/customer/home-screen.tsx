@@ -12,15 +12,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  getSupermarketCatalog,
   listActiveRestaurantOffers,
-  listRestaurants,
-  listSupermarkets,
+  type MenuItemSummary,
   type PublicUser,
   type RestaurantOffer,
-  type RestaurantSummary
+  type SupermarketCatalog,
+  type SupermarketProduct
 } from "../../core/api";
 import { colors, iconSize, isRTL, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
+import { cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
+import { resolveMarketStore, type MarketStore } from "./market";
 import { customerTheme } from "./theme";
 
 /* On the dark hero/offer panels below (customerTheme.colors.secondary, which
@@ -36,36 +39,66 @@ const onDark = {
 
 const logo = require("../../../assets/logo/jovo-wordmark.png");
 
+const storefrontProductCount = 8;
+
+type CatalogFilters = { departmentId?: string; search?: string };
+
+/**
+ * The customer's landing screen *is* JOVO MARKET's storefront.
+ *
+ * JOVO MARKET is the only supermarket partner at launch, so there is no
+ * store-selection list anywhere in the customer flow: the store is resolved
+ * once (see ./market.ts) and its departments and products are rendered here
+ * directly, rather than behind a card you tap into. Everything on this screen
+ * is one hop from a product.
+ *
+ * Restaurant browsing is deferred for this launch. Where restaurants used to
+ * be listed there is now a "coming soon" card. The restaurant screens, routes
+ * and the entire restaurant domain are untouched and still work for restaurant
+ * owners and staff — only the customer's way in is gone.
+ */
 export function CustomerHomeScreen(props: {
   user: PublicUser;
+  cart: Cart | null;
   notice?: string;
-  onBrowseRestaurants: () => void;
-  onBrowseSupermarkets: () => void;
-  onOpenRestaurant: (restaurant: Pick<RestaurantSummary, "id" | "name">) => void;
-  onOpenSupermarket: (supermarket: Pick<RestaurantSummary, "id" | "name">) => void;
+  onOpenCatalog: (store: MarketStore, filters?: CatalogFilters) => void;
+  onOpenProduct: (store: MarketStore, productId: string) => void;
+  onAddItem: (store: MarketStore, item: MenuItemSummary) => void;
+  onViewCart: () => void;
   onViewOrders: () => void;
   onOpenNotifications: () => void;
   onOpenAccount: () => void;
   onLogout: () => Promise<void>;
 }) {
   const { t } = useTranslation(["customer", "common"]);
-  const [restaurants, setRestaurants] = useState<RestaurantSummary[] | null>(null);
-  const [supermarkets, setSupermarkets] = useState<RestaurantSummary[] | null>(null);
+  // undefined while resolving, null when no supermarket is reachable.
+  const [store, setStore] = useState<MarketStore | null | undefined>(undefined);
+  const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    Promise.all([listActiveRestaurantOffers(), listRestaurants(1, 20), listSupermarkets(1, 6)])
-      .then(([activeOffers, restaurantPage, supermarketPage]) => {
-        setOffers(activeOffers);
-        setRestaurants(restaurantPage.items);
-        setSupermarkets(supermarketPage.items);
+    let mounted = true;
+
+    void resolveMarketStore()
+      .then(async (resolved) => {
+        if (!mounted) return;
+        setStore(resolved);
+        if (!resolved) return;
+        const result = await getSupermarketCatalog(resolved.id, { pageSize: storefrontProductCount });
+        if (mounted) setCatalog(result);
       })
       .catch(() => {
-        setOffers([]);
-        setRestaurants([]);
-        setSupermarkets([]);
+        if (mounted) setCatalog(null);
       });
+
+    listActiveRestaurantOffers()
+      .then((activeOffers) => mounted && setOffers(activeOffers))
+      .catch(() => mounted && setOffers([]));
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   async function logout() {
@@ -77,14 +110,27 @@ export function CustomerHomeScreen(props: {
     }
   }
 
+  // A restaurant-scoped offer would send the customer into a vertical that is
+  // not open yet, so only supermarket-scoped and platform-wide offers are
+  // shown. Platform-wide offers apply to the market order anyway.
+  const visibleOffers = offers?.filter(
+    (offer) => !offer.restaurantId || offer.restaurantBusinessType === "SUPERMARKET"
+  );
+
+  const storeName = store?.name ?? t("home.marketFallbackName");
+  const showCartDock = props.cart !== null && cartItemCount(props.cart) > 0;
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, showCartDock && styles.contentWithCart]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.topBar}>
           <View>
             <Text style={styles.eyebrow}>JOVO</Text>
-            <Text style={styles.location}>{t("home.localRestaurants")}</Text>
+            <Text style={styles.location}>{storeName}</Text>
           </View>
           <Pressable onPress={props.onOpenNotifications} style={styles.iconButton}>
             <Text style={styles.iconText}>♢</Text>
@@ -95,53 +141,94 @@ export function CustomerHomeScreen(props: {
         <View style={styles.greetingRow}>
           <View style={styles.greetingText}>
             <Text style={styles.greeting}>{t("home.greeting", { name: firstName(props.user.fullName, t) })}</Text>
-            <Text style={styles.greetingSubtitle}>{t("home.greetingSubtitle")}</Text>
+            <Text style={styles.greetingSubtitle}>{t("home.greetingSubtitleMarket")}</Text>
           </View>
           <Image resizeMode="contain" source={logo} style={styles.logo} />
         </View>
 
         {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
 
-        <Pressable onPress={props.onBrowseRestaurants} style={styles.searchBar}>
+        <Pressable
+          disabled={!store}
+          onPress={() => store && props.onOpenCatalog(store)}
+          style={styles.searchBar}
+        >
           <Text style={styles.searchIcon}>⌕</Text>
-          <Text style={styles.searchText}>{t("home.searchRestaurantsPlaceholder")}</Text>
+          <Text style={styles.searchText}>{t("home.searchProductsPlaceholder")}</Text>
           <View style={styles.filterButton}><Text style={styles.filterText}>≡</Text></View>
         </Pressable>
 
-        <Pressable onPress={props.onBrowseSupermarkets} style={styles.marketHero}>
+        <Pressable
+          disabled={!store}
+          onPress={() => store && props.onOpenCatalog(store)}
+          style={styles.marketHero}
+        >
           <View style={styles.marketIcon}><Text style={styles.marketEmoji}>🛒</Text></View>
           <View style={styles.marketCopy}>
-            <Text style={styles.marketEyebrow}>{t("home.supermarketNewService")}</Text>
-            <Text style={styles.marketTitle}>{t("home.supermarketTitle")}</Text>
+            <Text style={styles.marketEyebrow}>{t("home.marketEyebrow")}</Text>
+            <Text style={styles.marketTitle}>{storeName}</Text>
             <Text style={styles.marketDescription}>{t("home.supermarketDescription")}</Text>
           </View>
           <Text style={styles.marketArrow}>{isRTL() ? "‹" : "›"}</Text>
         </Pressable>
 
+        {store === null ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>{t("home.marketUnavailableTitle")}</Text>
+            <Text style={styles.emptyText}>{t("home.marketUnavailableText")}</Text>
+          </View>
+        ) : null}
+
+        {catalog && catalog.departments.length > 0 ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t("home.departmentsSectionTitle")}</Text>
+              <Pressable onPress={() => store && props.onOpenCatalog(store)}>
+                <Text style={styles.seeAll}>{t("home.seeAll")}</Text>
+              </Pressable>
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.departmentStripContent}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.departmentStrip}
+            >
+              {catalog.departments.map((department) => (
+                <Pressable
+                  key={department.id}
+                  onPress={() => store && props.onOpenCatalog(store, { departmentId: department.id })}
+                  style={styles.departmentCard}
+                >
+                  <Text numberOfLines={2} style={styles.departmentName}>{department.name}</Text>
+                  {/* `total`, not `count`: `count` is i18next's plural
+                      trigger, and this project deliberately avoids anything
+                      that leans on Intl at runtime (no Intl.PluralRules
+                      guarantee on Hermes). A count-neutral string reads
+                      correctly at 1 and at 100 without plural machinery. */}
+                  <Text style={styles.departmentCount}>
+                    {t("home.departmentProductCount", { total: department.productCount })}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
         </View>
-        {offers === null ? (
+        {visibleOffers === undefined ? (
           <ActivityIndicator color={customerTheme.colors.primary} style={styles.loader} />
-        ) : offers.length === 0 ? (
+        ) : visibleOffers.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>{t("home.noOffersTitle")}</Text>
-            <Text style={styles.emptyText}>{t("home.noOffersText")}</Text>
+            <Text style={styles.emptyText}>{t("home.noOffersTextMarket")}</Text>
           </View>
         ) : (
-          offers.map((offer) => (
+          visibleOffers.map((offer) => (
             <Pressable
               key={offer.id}
-              onPress={() => {
-                if (offer.restaurantId && offer.restaurantName) {
-                  const target = { id: offer.restaurantId, name: offer.restaurantName };
-                  offer.restaurantBusinessType === "SUPERMARKET"
-                    ? props.onOpenSupermarket(target)
-                    : props.onOpenRestaurant(target);
-                } else {
-                  props.onBrowseRestaurants();
-                }
-              }}
+              onPress={() => store && props.onOpenCatalog(store)}
               style={styles.offerCard}
             >
               <View style={styles.offerVisual}>
@@ -165,50 +252,36 @@ export function CustomerHomeScreen(props: {
         )}
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("home.supermarketsSectionTitle")}</Text>
-          <Pressable onPress={props.onBrowseSupermarkets}><Text style={styles.seeAll}>{t("home.seeAll")}</Text></Pressable>
+          <Text style={styles.sectionTitle}>{t("home.marketProductsSectionTitle")}</Text>
+          <Pressable onPress={() => store && props.onOpenCatalog(store)}>
+            <Text style={styles.seeAll}>{t("home.seeAll")}</Text>
+          </Pressable>
         </View>
-        {supermarkets === null ? (
+        {store === undefined || (store !== null && catalog === null) ? (
           <ActivityIndicator color={customerTheme.colors.primary} style={styles.loader} />
-        ) : supermarkets.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.supermarketsEmpty")}</Text></View>
+        ) : catalog === null || catalog.products.length === 0 ? (
+          <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.marketProductsEmpty")}</Text></View>
         ) : (
-          supermarkets.map((store) => (
-            <Pressable key={store.id} onPress={() => props.onOpenSupermarket(store)} style={styles.marketStoreCard}>
-              <View style={styles.marketStoreIcon}><Text style={styles.marketStoreEmoji}>🛍️</Text></View>
-              <View style={styles.restaurantInfo}>
-                <Text numberOfLines={1} style={styles.restaurantName}>{store.name}</Text>
-                {store.description ? <Text numberOfLines={2} style={styles.restaurantMeta}>{store.description}</Text> : null}
-                <Text numberOfLines={1} style={styles.restaurantAddress}>{store.addressLine}</Text>
-                <Text style={styles.restaurantOpen}>{t("home.openNowCash")}</Text>
-              </View>
-            </Pressable>
-          ))
+          <View style={styles.productGrid}>
+            {catalog.products.map((product) => (
+              <StorefrontProductCard
+                key={product.id}
+                onAdd={() => store && props.onAddItem(store, product)}
+                onOpen={() => store && props.onOpenProduct(store, product.id)}
+                product={product}
+              />
+            ))}
+          </View>
         )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t("home.restaurantsSectionTitle")}</Text>
-          <Pressable onPress={props.onBrowseRestaurants}><Text style={styles.seeAll}>{t("home.seeAll")}</Text></Pressable>
         </View>
-        {restaurants === null ? (
-          <ActivityIndicator color={customerTheme.colors.primary} style={styles.loader} />
-        ) : restaurants.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.restaurantsEmpty")}</Text></View>
-        ) : (
-          restaurants.map((restaurant) => (
-            <Pressable key={restaurant.id} onPress={() => props.onOpenRestaurant(restaurant)} style={styles.restaurantCard}>
-              <View style={styles.restaurantVisual}>
-                {restaurant.logoUrl ? <Image resizeMode="cover" source={{ uri: restaurant.logoUrl }} style={styles.fullImage} /> : <Text style={styles.restaurantEmoji}>🍽️</Text>}
-              </View>
-              <View style={styles.restaurantInfo}>
-                <Text numberOfLines={1} style={styles.restaurantName}>{restaurant.name}</Text>
-                {restaurant.description ? <Text numberOfLines={2} style={styles.restaurantMeta}>{restaurant.description}</Text> : null}
-                <Text numberOfLines={1} style={styles.restaurantAddress}>{restaurant.addressLine}</Text>
-                <Text style={styles.restaurantOpen}>{t("home.openNow")}</Text>
-              </View>
-            </Pressable>
-          ))
-        )}
+        <View style={styles.comingSoonCard}>
+          <View style={styles.comingSoonIcon}><Text style={styles.comingSoonEmoji}>🍽️</Text></View>
+          <Text style={styles.comingSoonTitle}>{t("home.restaurantsComingSoonTitle")}</Text>
+          <Text style={styles.comingSoonText}>{t("home.restaurantsComingSoonText")}</Text>
+        </View>
 
         <View style={styles.quickActions}>
           <Pressable onPress={props.onOpenAccount} style={styles.quickButton}>
@@ -226,12 +299,58 @@ export function CustomerHomeScreen(props: {
           </Pressable>
         </View>
       </ScrollView>
+      {showCartDock && props.cart ? (
+        <View style={styles.cartDock}>
+          <Pressable onPress={props.onViewCart} style={styles.cartButton}>
+            <Text style={styles.cartCount}>{cartItemCount(props.cart)}</Text>
+            <Text style={styles.cartLabel}>{t("restaurants.viewBasket")}</Text>
+            <Text style={styles.cartPrice}>{formatPrice(cartSubtotalMinor(props.cart))}</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </SafeAreaView>
+  );
+}
+
+function StorefrontProductCard(props: {
+  product: SupermarketProduct;
+  onAdd: () => void;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation(["customer"]);
+  const { product } = props;
+  return (
+    <Pressable onPress={props.onOpen} style={styles.productCard}>
+      <View style={styles.productArtwork}>
+        {product.imageUrl ? (
+          <Image resizeMode="cover" source={{ uri: product.imageUrl }} style={styles.fullImage} />
+        ) : (
+          <Text style={styles.productEmoji}>🥫</Text>
+        )}
+      </View>
+      <Text style={styles.productDepartment}>{product.categoryName}</Text>
+      <Text numberOfLines={2} style={styles.productName}>{product.name}</Text>
+      <Text style={styles.productUnit}>{product.unitLabel}</Text>
+      <View style={styles.productPriceRow}>
+        <Text style={styles.productPrice}>{formatPrice(product.effectivePriceMinor)}</Text>
+        <Pressable
+          accessibilityLabel={t("supermarket.addProductAccessibility", { name: product.name })}
+          onPress={(event) => { event.stopPropagation(); props.onAdd(); }}
+          style={styles.addButton}
+        >
+          <Text style={styles.addButtonText}>+</Text>
+        </Pressable>
+      </View>
+    </Pressable>
   );
 }
 
 function firstName(fullName: string, t: (key: string) => string): string {
   return fullName.trim().split(/\s+/)[0] || t("home.defaultFirstName");
+}
+
+function formatPrice(priceMinor: number): string {
+  return `${(priceMinor / 100).toFixed(2)} ILS`;
 }
 
 function offerLabel(offer: RestaurantOffer, t: (key: string, options?: Record<string, unknown>) => string): string {
@@ -249,6 +368,7 @@ function offerLabel(offer: RestaurantOffer, t: (key: string, options?: Record<st
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
+  contentWithCart: { paddingBottom: spacing[10] + spacing[8] },
   topBar: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   eyebrow: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
   location: { ...text("bodySm", "bold"), color: customerTheme.colors.text, marginTop: spacing[1] },
@@ -278,13 +398,26 @@ const styles = StyleSheet.create({
   sectionTitle: { ...text("h2", "bold"), color: customerTheme.colors.text },
   seeAll: { ...text("caption", "bold"), color: customerTheme.colors.primary },
   loader: { marginVertical: spacing[8] },
-  emptyCard: { backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, padding: spacing[6] },
+  emptyCard: { backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, marginTop: spacing[4], padding: spacing[6] },
   emptyTitle: { ...text("body", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2], textAlign: "center" },
   emptyText: { ...text("bodySm"), color: customerTheme.colors.textMuted, textAlign: "center" },
+  departmentStrip: { marginBottom: spacing[1] },
+  departmentStripContent: { gap: spacing[3], paddingEnd: spacing[2] },
+  departmentCard: {
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 76,
+    minWidth: 132,
+    padding: spacing[4]
+  },
+  departmentName: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
+  departmentCount: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
   offerCard: { backgroundColor: customerTheme.colors.secondary, borderRadius: radius.lg, flexDirection: "row", marginBottom: spacing[4], minHeight: 150, overflow: "hidden", ...customerTheme.shadow },
   offerVisual: { alignItems: "center", backgroundColor: colors.neutralSubtle, justifyContent: "center", minHeight: 150, width: "38%" },
   fullImage: { height: "100%", width: "100%" },
-  offerLogo: { height: 86, width: 86 },
   offerEmoji: { color: customerTheme.colors.primary, fontSize: iconSize.xxxl, fontWeight: "900" },
   offerCopy: { flex: 1, justifyContent: "center", padding: spacing[4] },
   offerRestaurant: { ...text("label", "bold"), color: onDark.medium },
@@ -292,19 +425,86 @@ const styles = StyleSheet.create({
   offerDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
   offerDiscount: { ...text("bodySm", "bold"), color: customerTheme.colors.primary, marginTop: spacing[2] },
   offerExpiry: { ...text("label"), color: onDark.soft },
-  restaurantCard: { backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, marginBottom: spacing[4], overflow: "hidden", ...customerTheme.shadow },
-  marketStoreCard: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, flexDirection: "row", marginBottom: spacing[4], overflow: "hidden", ...customerTheme.shadow },
-  marketStoreIcon: { alignItems: "center", alignSelf: "stretch", backgroundColor: colors.neutralSubtle, justifyContent: "center", width: 105 },
-  marketStoreEmoji: { fontSize: iconSize.xxxl },
-  restaurantVisual: { alignItems: "center", height: 135, justifyContent: "center", position: "relative", backgroundColor: colors.neutralSubtle },
-  restaurantEmoji: { fontSize: iconSize.xxxl },
-  restaurantInfo: { padding: spacing[4] },
-  restaurantName: { ...text("h3", "bold"), color: customerTheme.colors.text, flex: 1, marginEnd: spacing[3] },
-  restaurantMeta: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
-  restaurantAddress: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[2] },
-  restaurantOpen: { ...text("label", "bold"), color: customerTheme.colors.success, marginTop: spacing[2] },
-  quickActions: { flexDirection: "row", gap: spacing[2], marginTop: spacing[4] },
+  productGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
+  productCard: {
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexGrow: 1,
+    flexBasis: 150,
+    maxWidth: 240,
+    overflow: "hidden",
+    padding: spacing[3]
+  },
+  productArtwork: {
+    alignItems: "center",
+    backgroundColor: colors.neutralSubtle,
+    borderRadius: radius.md,
+    height: 96,
+    justifyContent: "center",
+    marginBottom: spacing[3],
+    overflow: "hidden"
+  },
+  productEmoji: { fontSize: iconSize.xxl },
+  productDepartment: { ...text("label", "bold"), color: customerTheme.colors.primary },
+  productName: { ...text("bodySm", "bold"), color: customerTheme.colors.text, marginTop: spacing[1] },
+  productUnit: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
+  productPriceRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[3] },
+  productPrice: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
+  addButton: {
+    alignItems: "center",
+    backgroundColor: customerTheme.colors.primary,
+    borderRadius: radius.md,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  addButtonText: { ...text("body", "bold"), color: colors.textInverse },
+  comingSoonCard: {
+    alignItems: "center",
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: radius.lg,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    padding: spacing[6]
+  },
+  comingSoonIcon: {
+    alignItems: "center",
+    backgroundColor: colors.neutralSubtle,
+    borderRadius: radius.pill,
+    height: 64,
+    justifyContent: "center",
+    marginBottom: spacing[3],
+    width: 64
+  },
+  comingSoonEmoji: { fontSize: iconSize.xl },
+  comingSoonTitle: { ...text("body", "bold"), color: customerTheme.colors.text, textAlign: "center" },
+  comingSoonText: { ...text("bodySm"), color: customerTheme.colors.textMuted, marginTop: spacing[2], textAlign: "center" },
+  quickActions: { flexDirection: "row", gap: spacing[2], marginTop: spacing[7] },
   quickButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, minHeight: 80, justifyContent: "center", padding: spacing[3] },
   quickIcon: { color: customerTheme.colors.text, fontSize: iconSize.md, fontWeight: "900" },
-  quickLabel: { ...text("label", "medium"), color: customerTheme.colors.text, marginTop: spacing[1] }
+  quickLabel: { ...text("label", "medium"), color: customerTheme.colors.text, marginTop: spacing[1] },
+  cartDock: {
+    backgroundColor: customerTheme.colors.background,
+    borderTopColor: customerTheme.colors.border,
+    borderTopWidth: 1,
+    padding: spacing[4]
+  },
+  cartButton: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: customerTheme.colors.primary,
+    borderRadius: radius.lg,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    maxWidth: 900,
+    minHeight: 56,
+    paddingHorizontal: spacing[4],
+    width: "100%"
+  },
+  cartCount: { ...text("bodySm", "bold"), color: colors.textInverse },
+  cartLabel: { ...text("body", "bold"), color: colors.textInverse },
+  cartPrice: { ...text("bodySm", "bold"), color: colors.textInverse }
 });

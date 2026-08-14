@@ -5,7 +5,6 @@ import {
   FlatList,
   Image,
   Pressable,
-  RefreshControl,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -18,8 +17,6 @@ import {
   ApiError,
   getSupermarketCatalog,
   getSupermarketProduct,
-  listSupermarkets,
-  type RestaurantSummary,
   type SupermarketCatalog,
   type SupermarketProduct
 } from "../../core/api";
@@ -29,92 +26,19 @@ import { colors, iconSize, isRTL, radius, spacing, withAlpha } from "../../theme
 import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
 
-export function SupermarketListScreen(props: {
-  onBack: () => void;
-  onOpenSupermarket: (supermarket: RestaurantSummary) => void;
-}) {
-  const { t } = useTranslation(["customer"]);
-  const [stores, setStores] = useState<RestaurantSummary[] | null>(null);
-  const [search, setSearch] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-
-  async function load() {
-    setError(null);
-    try {
-      setStores((await listSupermarkets(1, 50)).items);
-    } catch (requestError) {
-      setError(readError(requestError));
-    }
-  }
-
-  useEffect(() => { void load(); }, []);
-
-  const query = search.trim().toLowerCase();
-  const visibleStores = stores?.filter((store) =>
-    !query || [store.name, store.description, store.addressLine].some((value) => value?.toLowerCase().includes(query))
-  );
-
-  async function refresh() {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }
-
-  return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.secondary} barStyle="light-content" />
-      <View style={styles.storeHeader}>
-        <BackButton onPress={props.onBack} />
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerEyebrow}>{t("supermarket.marketLabel")}</Text>
-          <Text style={styles.headerTitle}>{t("supermarket.title")}</Text>
-          <Text style={styles.headerSubtitle}>{t("supermarket.subtitle")}</Text>
-        </View>
-      </View>
-      <View style={styles.searchBox}>
-        <TextInput
-          onChangeText={setSearch}
-          placeholder={t("supermarket.searchPlaceholder")}
-          placeholderTextColor={customerTheme.colors.textMuted}
-          style={styles.searchInput}
-          value={search}
-        />
-        {search ? <Pressable onPress={() => setSearch("")}><Text style={styles.clearText}>×</Text></Pressable> : null}
-      </View>
-      {stores === null ? (
-        <Centered>{error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color={customerTheme.colors.primary} size="large" />}</Centered>
-      ) : visibleStores?.length === 0 ? (
-        <Centered><Text style={styles.emptyText}>{t("supermarket.noMatch")}</Text></Centered>
-      ) : (
-        <FlatList
-          contentContainerStyle={styles.storeList}
-          data={visibleStores}
-          keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor={customerTheme.colors.primary} />}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => props.onOpenSupermarket(item)} style={({ pressed }) => [styles.storeCard, pressed && styles.pressed]}>
-              <View style={styles.storeArtwork}>
-                {item.logoUrl ? <Image resizeMode="cover" source={{ uri: item.logoUrl }} style={styles.image} /> : <Text style={styles.storeEmoji}>🛒</Text>}
-              </View>
-              <View style={styles.storeCopy}>
-                <Text style={styles.storeName}>{item.name}</Text>
-                {item.description ? <Text numberOfLines={2} style={styles.muted}>{item.description}</Text> : null}
-                <Text numberOfLines={1} style={styles.address}>⌖ {item.addressLine}</Text>
-                <Text style={styles.open}>{t("home.openNowCash")}</Text>
-              </View>
-            </Pressable>
-          )}
-        />
-      )}
-    </SafeAreaView>
-  );
-}
-
+/**
+ * JOVO MARKET is the only supermarket partner at launch, so the customer lands
+ * on this catalogue directly — there is no store-selection screen in front of
+ * it any more. `initialDepartmentId` / `initialSearch` let the home screen open
+ * this already filtered, which is what makes a department tile on home a
+ * single hop into the aisle rather than a hop into a picker.
+ */
 export function SupermarketCatalogScreen(props: {
   supermarketId: string;
   supermarketName: string;
   cart: Cart | null;
+  initialDepartmentId?: string;
+  initialSearch?: string;
   onBack: () => void;
   onAddItem: (item: SupermarketProduct) => void;
   onOpenProduct: (productId: string) => void;
@@ -122,9 +46,9 @@ export function SupermarketCatalogScreen(props: {
 }) {
   const { t } = useTranslation(["customer", "common"]);
   const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [departmentId, setDepartmentId] = useState<string | undefined>();
+  const [searchInput, setSearchInput] = useState(props.initialSearch ?? "");
+  const [search, setSearch] = useState(props.initialSearch ?? "");
+  const [departmentId, setDepartmentId] = useState<string | undefined>(props.initialDepartmentId);
   const [featured, setFeatured] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -330,30 +254,17 @@ function readError(error: unknown) { return error instanceof ApiError || error i
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
-  storeHeader: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, flexDirection: "row", padding: spacing[5] },
   catalogHeader: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, flexDirection: "row", minHeight: 86, padding: spacing[4] },
   headerCopy: { flex: 1, marginStart: spacing[4] },
   headerEyebrow: { ...text("label", "bold"), color: customerTheme.colors.primary },
-  headerTitle: { ...text("display", "bold"), color: colors.textInverse, marginTop: spacing[1] },
   catalogTitle: { ...text("h2", "bold"), color: colors.textInverse, marginTop: spacing[1] },
-  headerSubtitle: { ...text("caption"), color: withAlpha(colors.textInverse, 0.72), marginTop: spacing[1] },
   backButton: { alignItems: "center", backgroundColor: withAlpha(colors.textInverse, 0.16), borderRadius: radius.lg, height: 44, justifyContent: "center", width: 44 },
   backText: { color: colors.textInverse, fontSize: iconSize.xl, marginTop: -4 },
-  searchBox: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", margin: spacing[5], minHeight: 54, paddingHorizontal: spacing[4] },
   searchInput: { ...text("bodySm"), color: customerTheme.colors.text, flex: 1, outlineStyle: "none" } as never,
-  clearText: { color: customerTheme.colors.textMuted, fontSize: iconSize.md, padding: spacing[1] },
   centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[7] },
   emptyText: { ...text("bodySm"), color: customerTheme.colors.textMuted, textAlign: "center" },
-  storeList: { alignSelf: "center", maxWidth: 900, padding: spacing[4], width: "100%" },
-  storeCard: { backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, marginBottom: spacing[4], overflow: "hidden", ...customerTheme.shadow },
-  storeArtwork: { alignItems: "center", backgroundColor: colors.neutralSubtle, height: 145, justifyContent: "center" },
   image: { height: "100%", width: "100%" },
-  storeEmoji: { fontSize: iconSize.xxxl },
-  storeCopy: { padding: spacing[4] },
-  storeName: { ...text("h3", "bold"), color: customerTheme.colors.text },
   muted: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
-  address: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[2] },
-  open: { ...text("label", "bold"), color: customerTheme.colors.success, marginTop: spacing[2] },
   catalogSearchRow: { flexDirection: "row", gap: spacing[2], padding: spacing[3] },
   catalogSearchInput: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, minHeight: 48, paddingHorizontal: spacing[3] },
   searchButton: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.lg, justifyContent: "center", paddingHorizontal: spacing[4] },
