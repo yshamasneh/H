@@ -67,7 +67,7 @@ export function CartScreen(props: CartScreenProps) {
   const { t } = useTranslation(["cart"]);
   const isEmpty = !props.cart || props.cart.items.length === 0;
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? t("cart.emptySubtitle")} title={t("cart.title")} />
       {isEmpty ? (
@@ -549,7 +549,7 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={t("history.subtitle")} title={t("history.title")} />
       {orders === null ? (

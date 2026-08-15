@@ -4,7 +4,6 @@ import {
   FlatList,
   Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -12,6 +11,9 @@ import {
   TextInput,
   View
 } from "react-native";
+// Expo's safe-area module, not React Native's deprecated built-in `SafeAreaView`
+// (iOS-only, a no-op on Android) — matching every other screen in this app.
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   getSupermarketCatalog,
   getSupermarketProduct,
@@ -64,7 +66,7 @@ export function SupermarketCatalogScreen(props: {
   const showCart = props.cart !== null && cartBelongsToRestaurant(props.cart, props.supermarketId);
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.secondary} barStyle="light-content" />
       <View style={styles.catalogHeader}>
         <BackButton onPress={props.onBack} />

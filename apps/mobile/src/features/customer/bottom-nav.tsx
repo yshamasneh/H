@@ -71,7 +71,17 @@ function Badge(props: { count: number }) {
   );
 }
 
-/** Pins `children` above the persistent bottom nav on a customer tab-root screen. */
+/**
+ * Pins `children` above the persistent bottom nav on a customer tab-root screen.
+ *
+ * The nav owns the bottom safe-area inset (see `CustomerBottomNav`'s
+ * `edges={["bottom"]}`), so a tab-root screen rendered inside this shell is
+ * never at the physical bottom of the display. Those screens must therefore
+ * declare `edges={["top", "left", "right"]}` on their own `SafeAreaView` —
+ * leaving `edges` unset defaults to all four and reserves the bottom inset a
+ * second time, producing a visible dead strip above the nav on any device with
+ * a home indicator or gesture bar (invisible on web, where the inset is 0).
+ */
 export function CustomerTabShell(props: {
   active: CustomerTab;
   cartCount: number;

@@ -191,7 +191,7 @@ export function AccountScreen(props: {
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <View style={styles.header}>
         <Pressable onPress={props.onBack} style={styles.back}><Icon name={backIconName()} size="md" /></Pressable>

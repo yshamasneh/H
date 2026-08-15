@@ -129,7 +129,7 @@ export function CustomerHomeScreen(props: {
   const showCartDock = props.cart !== null && cartItemCount(props.cart) > 0;
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <ScrollView
         contentContainerStyle={[styles.content, showCartDock && styles.contentWithCart]}
