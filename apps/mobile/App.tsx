@@ -37,12 +37,15 @@ import {
 } from "./src/features/auth/role-registration-screens";
 import {
   addCartItem,
+  cartItemCount,
   removeCartItem,
   setCartItemSubstitution,
   setCartItemQuantity,
   startCart,
   type Cart
 } from "./src/features/customer/cart";
+import { CustomerTabShell, type CustomerTab } from "./src/features/customer/bottom-nav";
+import { resolveMarketStore } from "./src/features/customer/market";
 import {
   CartScreen,
   CheckoutScreen,
@@ -79,6 +82,7 @@ import {
   goToRestaurantOrders,
   goToRestaurantSignup,
   goToRestaurants,
+  goToSettings,
   goToSupermarketCatalog,
   goToSupermarketProduct,
   goToSignup,
@@ -105,6 +109,7 @@ import { AdminAuditLogScreen } from "./src/features/admin/audit-log-screen";
 import { AdminOffersScreen } from "./src/features/admin/offers-screen";
 import { CustomerHomeScreen } from "./src/features/customer/home-screen";
 import { AccountScreen } from "./src/features/customer/account-screen";
+import { SettingsScreen } from "./src/features/shared/settings-screen";
 import { RestaurantManagementScreen } from "./src/features/restaurant/management-screen";
 import {
   SupermarketCatalogScreen,
@@ -233,6 +238,28 @@ function TasawaQApp() {
     disconnectSocket();
     setCart(null);
     setScreen(goToLogin());
+  }
+
+  async function handleCustomerTabNavigate(tab: CustomerTab, user: AuthResult["user"]) {
+    switch (tab) {
+      case "home":
+        setScreen(homeForUser(user));
+        return;
+      case "browse": {
+        const store = await resolveMarketStore();
+        if (store) setScreen(goToSupermarketCatalog(user, store));
+        return;
+      }
+      case "cart":
+        setScreen(goToCart(user));
+        return;
+      case "orders":
+        setScreen(goToOrderHistory(user));
+        return;
+      case "account":
+        setScreen(goToAccount(user));
+        return;
+    }
   }
 
   function handleAddToCart(
@@ -395,19 +422,22 @@ function TasawaQApp() {
       if (screen.user.role === "CUSTOMER") {
         const user = screen.user;
         return (
-          <CustomerHomeScreen
-            notice={screen.notice}
-            onAddItem={(store, item) => handleAddToCart(store, item)}
-            onLogout={handleLogout}
-            onOpenAccount={() => setScreen(goToAccount(user))}
-            onOpenCatalog={(store, filters) => setScreen(goToSupermarketCatalog(user, store, filters))}
-            onOpenNotifications={() => setScreen(goToNotifications(user))}
-            onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(user, store, productId))}
-            onViewCart={() => setScreen(goToCart(user))}
-            onViewOrders={() => setScreen(goToOrderHistory(user))}
-            cart={cart}
-            user={user}
-          />
+          <CustomerTabShell
+            active="home"
+            cartCount={cart ? cartItemCount(cart) : 0}
+            onNavigate={(tab) => void handleCustomerTabNavigate(tab, user)}
+          >
+            <CustomerHomeScreen
+              notice={screen.notice}
+              onAddItem={(store, item) => handleAddToCart(store, item)}
+              onOpenCatalog={(store, filters) => setScreen(goToSupermarketCatalog(user, store, filters))}
+              onOpenNotifications={() => setScreen(goToNotifications(user))}
+              onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(user, store, productId))}
+              onViewCart={() => setScreen(goToCart(user))}
+              cart={cart}
+              user={user}
+            />
+          </CustomerTabShell>
         );
       }
       return (
@@ -426,15 +456,34 @@ function TasawaQApp() {
             screen.user.role === "DRIVER" ? () => setScreen(goToDriverHome(screen.user)) : undefined
           }
           onOpenNotifications={() => setScreen(goToNotifications(screen.user))}
+          onOpenSettings={() => setScreen(goToSettings(screen.user))}
           user={screen.user}
         />
       );
     case "account":
       return (
-        <AccountScreen
+        <CustomerTabShell
+          active="account"
+          cartCount={cart ? cartItemCount(cart) : 0}
+          onNavigate={(tab) => void handleCustomerTabNavigate(tab, screen.user)}
+        >
+          <AccountScreen
+            onBack={() => setScreen(homeForUser(screen.user))}
+            onDeleted={handleLogout}
+            onOpenSettings={() => setScreen(goToSettings(screen.user))}
+            onProfileUpdated={(user) => setScreen(goToAccount(user))}
+            user={screen.user}
+          />
+        </CustomerTabShell>
+      );
+    case "settings":
+      return (
+        <SettingsScreen
           onBack={() => setScreen(homeForUser(screen.user))}
-          onDeleted={handleLogout}
-          onProfileUpdated={(user) => setScreen(goToAccount(user))}
+          onLogout={handleLogout}
+          onManageAccount={
+            screen.user.role === "CUSTOMER" ? () => setScreen(goToAccount(screen.user)) : undefined
+          }
           user={screen.user}
         />
       );
@@ -460,21 +509,27 @@ function TasawaQApp() {
       );
     case "supermarket-catalog":
       return (
-        <SupermarketCatalogScreen
-          cart={cart}
-          initialDepartmentId={screen.departmentId}
-          initialSearch={screen.search}
-          onAddItem={(item) => handleAddToCart({ id: screen.supermarketId, name: screen.supermarketName }, item)}
-          onBack={() => setScreen(homeForUser(screen.user))}
-          onOpenProduct={(productId) => setScreen(goToSupermarketProduct(
-            screen.user,
-            { id: screen.supermarketId, name: screen.supermarketName },
-            productId
-          ))}
-          onViewCart={() => setScreen(goToCart(screen.user))}
-          supermarketId={screen.supermarketId}
-          supermarketName={screen.supermarketName}
-        />
+        <CustomerTabShell
+          active="browse"
+          cartCount={cart ? cartItemCount(cart) : 0}
+          onNavigate={(tab) => void handleCustomerTabNavigate(tab, screen.user)}
+        >
+          <SupermarketCatalogScreen
+            cart={cart}
+            initialDepartmentId={screen.departmentId}
+            initialSearch={screen.search}
+            onAddItem={(item) => handleAddToCart({ id: screen.supermarketId, name: screen.supermarketName }, item)}
+            onBack={() => setScreen(homeForUser(screen.user))}
+            onOpenProduct={(productId) => setScreen(goToSupermarketProduct(
+              screen.user,
+              { id: screen.supermarketId, name: screen.supermarketName },
+              productId
+            ))}
+            onViewCart={() => setScreen(goToCart(screen.user))}
+            supermarketId={screen.supermarketId}
+            supermarketName={screen.supermarketName}
+          />
+        </CustomerTabShell>
       );
     case "supermarket-product":
       return (
@@ -492,15 +547,21 @@ function TasawaQApp() {
       );
     case "cart":
       return (
-        <CartScreen
-          cart={cart}
-          onBack={() => setScreen(homeForUser(screen.user))}
-          onCheckout={() => setScreen(goToCheckout(screen.user))}
-          onDecrement={handleDecrementCartItem}
-          onIncrement={handleIncrementCartItem}
-          onRemove={handleRemoveCartItem}
-          onToggleSubstitution={handleToggleCartItemSubstitution}
-        />
+        <CustomerTabShell
+          active="cart"
+          cartCount={cart ? cartItemCount(cart) : 0}
+          onNavigate={(tab) => void handleCustomerTabNavigate(tab, screen.user)}
+        >
+          <CartScreen
+            cart={cart}
+            onBack={() => setScreen(homeForUser(screen.user))}
+            onCheckout={() => setScreen(goToCheckout(screen.user))}
+            onDecrement={handleDecrementCartItem}
+            onIncrement={handleIncrementCartItem}
+            onRemove={handleRemoveCartItem}
+            onToggleSubstitution={handleToggleCartItemSubstitution}
+          />
+        </CustomerTabShell>
       );
     case "checkout":
       return (
@@ -523,10 +584,16 @@ function TasawaQApp() {
       );
     case "order-history":
       return (
-        <OrderHistoryScreen
-          onBack={() => setScreen(homeForUser(screen.user))}
-          onOpenOrder={(orderId) => setScreen(goToOrderDetail(screen.user, orderId))}
-        />
+        <CustomerTabShell
+          active="orders"
+          cartCount={cart ? cartItemCount(cart) : 0}
+          onNavigate={(tab) => void handleCustomerTabNavigate(tab, screen.user)}
+        >
+          <OrderHistoryScreen
+            onBack={() => setScreen(homeForUser(screen.user))}
+            onOpenOrder={(orderId) => setScreen(goToOrderDetail(screen.user, orderId))}
+          />
+        </CustomerTabShell>
       );
     case "order-detail":
       return (
@@ -540,7 +607,12 @@ function TasawaQApp() {
         />
       );
     case "restaurant-management":
-      return <RestaurantManagementScreen onBack={() => setScreen(homeForUser(screen.user))} />;
+      return (
+        <RestaurantManagementScreen
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onOpenSettings={() => setScreen(goToSettings(screen.user))}
+        />
+      );
     case "restaurant-order-detail":
       return (
         <RestaurantOrderDetailScreen
@@ -553,6 +625,7 @@ function TasawaQApp() {
         <DriverHomeScreen
           onBack={() => setScreen(homeForUser(screen.user))}
           onOpenDelivery={(deliveryId) => setScreen(goToDeliveryDetail(screen.user, deliveryId))}
+          onOpenSettings={() => setScreen(goToSettings(screen.user))}
         />
       );
     case "delivery-detail":
@@ -567,6 +640,7 @@ function TasawaQApp() {
           onLogout={handleLogout}
           onNotifications={() => setScreen(goToNotifications(screen.user))}
           onOffers={() => setScreen(goToAdminOffers(screen.user))}
+          onOpenSettings={() => setScreen(goToSettings(screen.user))}
           onOrders={() => setScreen(goToAdminOrders(screen.user))}
           onRestaurants={() => setScreen(goToAdminRestaurants(screen.user))}
           onUsers={() => setScreen(goToAdminUsers(screen.user))}

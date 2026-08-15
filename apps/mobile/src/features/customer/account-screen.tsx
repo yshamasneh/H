@@ -16,31 +16,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LocationMap } from "../../components/location-map";
 import type { MapCoordinate } from "../../components/location-map.types";
 import {
-  ApiError,
   createMyAddress,
   deleteMyAccount,
   deleteMyAddress,
   getMyProfile,
   listMyAddresses,
-  registerMyPushToken,
-  unregisterMyPushToken,
   updateMyAddress,
   updateMyProfile,
   type MyProfile,
   type PublicUser,
   type SavedAddress
 } from "../../core/api";
+import { readError } from "../../core/errors";
 import { getCurrentCoordinates, reverseGeocode } from "../../core/location";
-import {
-  clearStoredPushToken,
-  getPushToken,
-  getStoredPushToken,
-  storePushToken
-} from "../../core/push-notifications";
+import { clearStoredPushToken } from "../../core/push-notifications";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
-import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
-import { colors, iconSize, isRTL, radius, spacing } from "../../theme/tokens";
+import { Icon, backIconName } from "../../theme/icon";
+import { colors, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
 
@@ -49,6 +42,7 @@ const defaultCoordinate: MapCoordinate = { latitude: 31.9038, longitude: 35.2034
 export function AccountScreen(props: {
   user: PublicUser;
   onBack: () => void;
+  onOpenSettings: () => void;
   onDeleted: () => Promise<void>;
   onProfileUpdated: (user: PublicUser) => void;
 }) {
@@ -60,7 +54,6 @@ export function AccountScreen(props: {
   const [label, setLabel] = useState(() => t("account.defaultAddressLabel"));
   const [addressLine, setAddressLine] = useState("");
   const [coordinate, setCoordinate] = useState(defaultCoordinate);
-  const [pushEnabled, setPushEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -79,16 +72,14 @@ export function AccountScreen(props: {
     setError(null);
     try {
       const accessToken = await token();
-      const [nextProfile, nextAddresses, storedPushToken] = await Promise.all([
+      const [nextProfile, nextAddresses] = await Promise.all([
         getMyProfile(accessToken),
-        listMyAddresses(accessToken),
-        getStoredPushToken()
+        listMyAddresses(accessToken)
       ]);
       setProfile(nextProfile);
       setFullName(nextProfile.fullName);
       setEmail(nextProfile.email ?? "");
       setAddresses(nextAddresses);
-      setPushEnabled(Boolean(storedPushToken));
       const preferred = nextAddresses.find((item) => item.isDefault) ?? nextAddresses[0];
       if (preferred) setCoordinate(preferred);
     } catch (requestError) {
@@ -186,32 +177,6 @@ export function AccountScreen(props: {
     }
   }
 
-  async function togglePush() {
-    setBusy(true);
-    setError(null);
-    try {
-      const accessToken = await token();
-      const existing = await getStoredPushToken();
-      if (existing) {
-        await unregisterMyPushToken(accessToken, existing);
-        await clearStoredPushToken();
-        setPushEnabled(false);
-        setNotice(t("account.notificationsDisabledNotice"));
-      } else {
-        const next = await getPushToken();
-        const platform = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
-        await registerMyPushToken(accessToken, next, platform);
-        await storePushToken(next);
-        setPushEnabled(true);
-        setNotice(t("account.notificationsEnabledNotice"));
-      }
-    } catch (requestError) {
-      setError(readError(requestError));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function removeAccount() {
     if (!(await confirmAction(t("account.deleteAccountConfirm")))) return;
     setBusy(true);
@@ -229,9 +194,11 @@ export function AccountScreen(props: {
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <View style={styles.header}>
-        <Pressable onPress={props.onBack} style={styles.back}><Text style={styles.backText}>{isRTL() ? "›" : "‹"}</Text></Pressable>
+        <Pressable onPress={props.onBack} style={styles.back}><Icon name={backIconName()} size="md" /></Pressable>
         <Text style={styles.headerTitle}>{t("account.headerTitle")}</Text>
-        <View style={styles.headerSpacer} />
+        <Pressable accessibilityLabel={t("common:settings")} onPress={props.onOpenSettings} style={styles.back}>
+          <Icon name="settings" size="md" />
+        </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {!profile && !error ? <ActivityIndicator color={customerTheme.colors.primary} /> : null}
@@ -244,9 +211,8 @@ export function AccountScreen(props: {
           <TextInput onChangeText={setFullName} style={styles.input} value={fullName} />
           <Text style={styles.label}>{t("account.emailLabel")}</Text>
           <TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={setEmail} style={styles.input} value={email} />
-          <Text style={styles.helper}>{profile?.phone}</Text>
+          <Text style={[styles.helper, styles.ltrText]}>{profile?.phone}</Text>
           <Button disabled={busy} label={t("account.saveProfileButton")} onPress={() => void saveProfile()} />
-          <LanguageSwitcher />
         </View>
 
         <View style={styles.card}>
@@ -267,16 +233,6 @@ export function AccountScreen(props: {
           <LocationMap coordinate={coordinate} onCoordinateChange={(value) => void selectCoordinate(value)} />
           <SmallButton label={t("account.useCurrentLocationButton")} onPress={() => void useCurrentLocation()} />
           <Button disabled={busy} label={t("account.saveAddressButton")} onPress={() => void saveAddress()} />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.title}>{t("account.notificationsTitle")}</Text>
-          <Text style={styles.helper}>{t("account.notificationsHelper")}</Text>
-          <Button
-            disabled={busy}
-            label={pushEnabled ? t("account.disableNotificationsButton") : t("account.enableNotificationsButton")}
-            onPress={() => void togglePush()}
-          />
         </View>
 
         <View style={[styles.card, styles.dangerCard]}>
@@ -307,17 +263,11 @@ async function confirmAction(message: string): Promise<boolean> {
   ], { cancelable: true, onDismiss: () => resolve(false) }));
 }
 
-function readError(error: unknown): string {
-  return error instanceof ApiError || error instanceof Error ? error.message : i18n.t("common:genericError");
-}
-
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   header: { alignItems: "center", borderBottomColor: customerTheme.colors.border, borderBottomWidth: 1, flexDirection: "row", padding: spacing[4] },
   back: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 42, justifyContent: "center", width: 42 },
-  backText: { color: customerTheme.colors.text, fontSize: iconSize.lg },
   headerTitle: { ...text("h2", "bold"), color: customerTheme.colors.text, flex: 1, textAlign: "center" },
-  headerSpacer: { width: 42 },
   content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
   card: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[4], padding: spacing[5] },
   title: { ...text("h3", "bold"), color: customerTheme.colors.text, marginBottom: spacing[3], textAlign: "auto" },
@@ -326,6 +276,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: customerTheme.colors.surfaceMuted, borderColor: customerTheme.colors.border, borderRadius: radius.md, borderWidth: 1, color: customerTheme.colors.text, marginBottom: spacing[3], padding: spacing[3], textAlign: "auto" },
   multiline: { minHeight: 78, textAlignVertical: "top" },
   helper: { ...text("caption"), color: customerTheme.colors.textMuted, textAlign: "auto" },
+  ltrText: { writingDirection: "ltr" },
   button: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.md, marginTop: spacing[4], padding: spacing[4] },
   buttonText: { ...text("bodySm", "bold"), color: colors.textInverse },
   addressCard: { borderBottomColor: customerTheme.colors.border, borderBottomWidth: 1, paddingVertical: spacing[3] },

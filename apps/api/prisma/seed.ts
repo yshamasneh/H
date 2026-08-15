@@ -249,7 +249,7 @@ async function main(): Promise<void> {
     where: { ownerUserId: supermarketOwner.id },
     create: {
       ownerUserId: supermarketOwner.id,
-      name: "TasawaQ Fresh Market",
+      name: "JOVO MARKET",
       businessType: BusinessType.SUPERMARKET,
       description: "Everyday groceries, fresh produce and home essentials.",
       phone: "+970590000004",
@@ -260,7 +260,7 @@ async function main(): Promise<void> {
       longitude: 35.2042
     },
     update: {
-      name: "TasawaQ Fresh Market",
+      name: "JOVO MARKET",
       businessType: BusinessType.SUPERMARKET,
       description: "Everyday groceries, fresh produce and home essentials.",
       status: RestaurantStatus.APPROVED,

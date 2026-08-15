@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  ApiError,
   acceptDelivery,
   listAvailableDeliveries,
   listMyDeliveries,
@@ -24,9 +23,9 @@ import {
   type DeliveryView,
   type DriverDeliveryStatusAction
 } from "../../core/api";
+import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
-import i18n from "../../i18n";
-import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
+import { Icon } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { activeDeliveryStatuses, nextDriverActionByStatus } from "./delivery.rules";
@@ -36,6 +35,7 @@ const currencyCode = "ILS";
 type DriverHomeScreenProps = {
   onBack: () => void;
   onOpenDelivery: (deliveryId: string) => void;
+  onOpenSettings: () => void;
 };
 
 export function DriverHomeScreen(props: DriverHomeScreenProps) {
@@ -178,9 +178,12 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
                 </View>
               ))
             )}
-            <LanguageSwitcher />
           </>
         )}
+        <Pressable onPress={props.onOpenSettings} style={styles.settingsLink}>
+          <Icon color={colors.textMuted} name="settings" size="sm" />
+          <Text style={styles.settingsLinkText}>{t("common:settings")}</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -363,12 +366,6 @@ function formatPrice(priceMinor: number): string {
   return `${(priceMinor / 100).toFixed(2)} ${currencyCode}`;
 }
 
-function readError(error: unknown): string {
-  if (error instanceof ApiError || error instanceof Error) {
-    return error.message;
-  }
-  return i18n.t("common:requestFailed");
-}
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
@@ -396,6 +393,8 @@ const styles = StyleSheet.create({
   onlineLabel: { ...text("body", "bold"), color: colors.text },
   centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[6] },
   emptyText: { ...text("bodySm"), color: colors.textMuted, marginBottom: spacing[4] },
+  settingsLink: { alignItems: "center", flexDirection: "row", gap: spacing[2], justifyContent: "center", marginTop: spacing[6], paddingVertical: spacing[3] },
+  settingsLinkText: { ...text("bodySm", "medium"), color: colors.textMuted },
   listContent: { padding: spacing[4], paddingBottom: spacing[8] },
   formContent: { padding: spacing[4], paddingBottom: spacing[8] },
   sectionTitle: { ...text("h3", "bold"), color: colors.text, marginBottom: spacing[2], marginTop: spacing[1] },

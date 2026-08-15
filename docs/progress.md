@@ -1487,3 +1487,211 @@ amount due, and a pointer to My Orders for tracking.
 
 Settings screen, persistent bottom navigation, and the broader B4-B8
 design/polish pass. None of it was started.
+
+## 2026-08-15: Settings screen, persistent bottom nav, and a first B4 pass (icons, error/status translation, bidi)
+
+Branch `agent/phase-15-and-jovo-brand`. Started from the user's statement that
+the checkout crash is fixed and verified on a real device — this session did
+not re-touch checkout logic, only its screen content (see below), and the
+full web checkout flow was re-run end to end afterward with no regression.
+
+### 1. Settings screen — done
+
+New `src/features/shared/settings-screen.tsx`, one component for every role.
+Sections: Account (signed-in name/phone; customer gets a link into the
+existing Account screen for profile/address editing), Language (reuses the
+existing `LanguageSwitcher`), Notifications (push toggle, now self-contained
+— reads/writes its own token, no longer threaded through Account's props),
+About (app name blurb + live `Constants.expoConfig.version`), Logout (with a
+confirm dialog). New `{ name: "settings" }` route in `navigation.ts`.
+
+The duplicated `LanguageSwitcher` named in the brief across five screens —
+`customer/account-screen.tsx`, `auth/screens.tsx` (the shared RESTAURANT/
+DRIVER home), `driver/screens.tsx`, `admin/dashboard-screen.tsx`,
+`restaurant/management-screen.tsx` — is gone from all five; each now links to
+the shared Settings screen instead (a gear icon in Account's and the
+restaurant workspace's header, a text link on the driver dashboard, an extra
+action button on the admin dashboard and the shared auth home). This is the
+one place this session touched restaurant/driver/admin screens, and only to
+swap that one floating widget for a nav link — no business logic changed.
+Account screen's own notifications card and inline language switcher were
+removed in favour of Settings; its profile/address CRUD is untouched.
+
+### 2. Persistent bottom navigation — done
+
+New `src/features/customer/bottom-nav.tsx`: `CustomerBottomNav` (5 tabs —
+Home / Browse / Cart / Orders / Account, Ionicons filled+orange when active,
+outline+grey otherwise, a badge on Cart from live cart count) and
+`CustomerTabShell`, a thin wrapper (`flex:1` content + the nav as a fixed
+sibling below it, not `position: absolute`) applied in `App.tsx` around the
+five tab-root screens (`home`, `supermarket-catalog`, `cart`, `order-history`,
+`account`). Deep-flow screens (product detail, checkout, order detail,
+settings, notifications) deliberately have no tab bar, matching the reference
+apps named in the brief. Confirmed genuinely fixed by scrolling a
+department/offers/product-grid-length page in the browser — the bar stayed
+pinned while content scrolled behind it, screenshotted before and after.
+Logout moved out of Home's quick-actions row entirely (that row is deleted)
+into Settings, reachable in one tap from the Account tab without scrolling.
+
+**Known gap, not fixable from here:** the tab-root screens keep their own
+`SafeAreaView` (default edges, including bottom) *inside* the shell, so on a
+real device with a bottom inset (home indicator) that inset is reserved once
+inside the screen's content *and* again by the nav bar's own
+`SafeAreaView(edges:["bottom"])`, which would show as a few extra pixels of
+blank space above the nav on iOS/notched Android. Web has no safe-area inset
+so this was invisible in every verification this session could run. Fixing
+it means passing `edges={["top","left","right"]}` on those five screens'
+`SafeAreaView` — a one-line change per file, deliberately deferred rather
+than made unverified.
+
+### 3. B4 pass: icons, error/status translation, one bidi bug, one debug-text bug — substantial, not exhaustive
+
+- **New `src/theme/icon.tsx`**: one icon family (Ionicons via
+  `@expo/vector-icons`) for the whole customer surface, wrapping an
+  outline/filled pair per semantic name so "active differs from inactive" and
+  "orange only when active" are structural, not per-screen convention.
+  `backIconName()`/`disclosureIconName()` centralize the RTL-mirroring
+  decision that used to be a hand-written `isRTL() ? "›" : "‹"` ternary
+  repeated in five files. Not a new *kind* of dependency — `@expo/vector-icons`
+  was already an installed transitive dependency of `expo` itself (confirmed
+  in the lockfile) and is the standard Expo icon solution; it is now also an
+  explicit `package.json` dependency.
+  - **Caught before it shipped**: importing `{ Ionicons } from "@expo/vector-icons"`
+    (the package barrel) pulled in all ~18 icon families' font files through
+    Metro's bundler — confirmed via `expo export --platform web`, which listed
+    27 font assets including a 1.31 MB `MaterialCommunityIcons.ttf` never used
+    anywhere in this app. Importing the documented direct submodule
+    (`@expo/vector-icons/Ionicons`) instead dropped that to the one Ionicons
+    font (390 KB) and cut the exported JS bundle from 2.03 MB to 1.6 MB.
+  - Replaced with `Icon` everywhere a raw glyph character, emoji-as-UI-control,
+    or `isRTL() ? … : …` chevron ternary was standing in for a functional icon:
+    `home-screen.tsx` (search, filter, notification bell — now driven by a
+    real unread count instead of an always-on dot, market-hero disclosure
+    chevron, product-card add button), `cart-screens.tsx` (the shared
+    `Header`'s back button, used by Cart/Checkout/Confirmation/History/Detail;
+    the remove-line and quantity-stepper buttons), `supermarket-screens.tsx`
+    (back button, product-card add button), `account-screen.tsx` (back
+    button, new settings button). Decorative placeholder emoji standing in for
+    product photography (🥫, 🛒, 🍽️) were deliberately left alone — that's
+    the documented convention in `theme/tokens.ts`, not an inconsistency.
+- **API errors no longer surface in English inside the Arabic UI** — the
+  concrete finding named in this session's brief and diagnosed with a full
+  root-cause in the 2026-08-12 entry. New `src/i18n/locales/{en,ar}/errors.json`
+  (~95 entries, one per `ApiException` code enumerated by grepping
+  `apps/api/src` for `new ApiException(`) and a new shared
+  `src/core/errors.ts::readError()` that looks up `error.code` in that table
+  and falls back to the server's own message only for a code not yet
+  catalogued. Replaced 9 near-duplicate local `readError`/`readAdminError`-
+  style functions with it: every customer screen
+  (`account-screen.tsx`, `cart-screens.tsx`, `restaurant-screens.tsx`,
+  `supermarket-screens.tsx`, `notification-screens.tsx`) plus
+  `driver/screens.tsx`, `restaurant/management-screen.tsx`,
+  `restaurant/order-screens.tsx`, `restaurant/inventory-screen.tsx`. Left
+  `auth/screens.tsx`'s and `role-registration-screens.tsx`'s own versions
+  alone — they also handle `PhoneValidationError`, a case the shared helper
+  doesn't cover, and `admin/ui.tsx`'s `readAdminError` alone as out of scope.
+- **Missing status translations**: `DELIVERY_FAILED`, `FAILED`, and
+  `PREPARING_SUPERMARKET` existed in `theme/tokens.ts`'s status-family sets
+  (so the *colour* was already right) but had no `status.*` entry in either
+  locale, so they fell through to an English default inside Arabic — added to
+  both `common.json` files.
+- **A real bidi bug, found and fixed**: a customer's phone number
+  (`+970590000000`) rendered as `970590000000+` — the leading `+` drifting to
+  the visual end — on Settings' and Account's own signed-in-phone line,
+  because RTL paragraph direction reorders bidi-neutral digit/symbol runs.
+  Fixed with a `writingDirection: "ltr"` style on just those two `Text`
+  elements; not audited beyond the two screens this session actually wrote.
+- **A stale-translation bug on checkout, investigated, not fully root-caused,
+  resolved by removing the content instead**: the raw delivery-pin coordinate
+  line (`"Delivery pin selected: 31.90380, 35.20340"`) rendered in *Arabic*
+  while every other string on the same checkout screen — including the
+  adjacent line built the same way, from the same `t()`, in the same render —
+  was correctly English. Confirmed via the actual DOM text (not a screenshot
+  read) and reproduced across a full hard reload, so it isn't a Fast Refresh
+  artifact. The bundled JS was checked directly and both locale strings are
+  present and correct at their expected `pinSelectedNote` key, so the
+  resource data itself isn't corrupted; the mechanism that made *this specific*
+  interpolated call return the Arabic resource while its English-only
+  neighbour didn't remains unexplained. **Do not mark this mechanism as
+  understood.** It was made moot rather than fixed: showing a customer raw
+  decimal coordinates never helped them "understand or act faster" (the
+  brief's own ease-of-use test) when the address text field and the map pin
+  already show the same information — so the line was deleted from
+  `cart-screens.tsx` outright, which also removes the bug's only known
+  reproduction. If mixed-language text is ever seen again on an interpolated
+  `t()` call elsewhere, this entry is the place to start.
+
+### 4. Seed rename — done
+
+`apps/api/prisma/seed.ts`'s supermarket `name` (both the `create` and
+`update` branches of the upsert) changed from `"TasawaQ Fresh Market"` to
+`"JOVO MARKET"`. Re-ran `npm run prisma:seed`; confirmed via
+`GET /api/v1/supermarkets` against the live local database that the one
+supermarket row now reports `"JOVO MARKET"` — the upsert's `update` branch
+means this took effect on the *existing* seeded row, not just future ones.
+
+### Verified
+
+- `npm run typecheck` clean across all three workspaces (API, admin, mobile).
+- `npm test`: mobile 25/25 (unchanged count — no screen this session added or
+  removed test-covered behaviour), API 201/202 (1 skipped by design,
+  unchanged from before this session).
+- `npx expo export --platform web` succeeds; bundle-size finding above.
+- Real browser (Expo web dev server, live local API + PostgreSQL), **both
+  languages, logged in as the seeded customer** (`+970590000000` /
+  `Test@12345`): home storefront (search/filter/notification icons, real
+  unread badge, department strip, product grid, coming-soon restaurants
+  card), add-to-cart from home (cart dock + nav badge both update live),
+  product detail, Browse tab (department filter chips, brand names), Cart
+  (line items, stepper, remove, running subtotal, checkout button — all
+  pinned, all scrollable content behind them), full Checkout (distinct
+  address/payment/notes sections, a live delivery quote from the real pricing
+  endpoint, 10.00 ILS minimum fee matching the Phase 15.0 change), **a real
+  order placed end-to-end** (confirmation screen with a real order number,
+  three next steps, exact cash-due total), Order History (PLACED orange /
+  DELIVERED green, matching the
+  five-family system), Order Detail (full status timeline, red Cancel
+  action), Settings (all four sections, language switch round-trip, phone
+  bidi fix), Account (gear icon into Settings, saved-address map). Confirmed
+  RTL mirroring is still correct after this session's edits: search/filter
+  icons, back buttons, and the market-hero disclosure chevron all flip with
+  language; the product/offer emoji correctly do not.
+- Persistent-nav scrolling behaviour specifically verified by screenshot
+  before/after a mid-page scroll, not assumed from the flex layout alone.
+
+### Not started / explicitly out of scope this session
+
+- **The wider B4 states pass** (skeletons over spinners; a genuinely
+  guiding empty-cart illustration; toasts) — this session's B4 work was
+  scoped to what the brief named concretely (icon audit, the API-error and
+  status-translation gaps) plus what verification surfaced (the bidi bug, the
+  checkout debug-text bug), not a full component-by-component skeleton pass.
+- **B5–B8** (deeper hierarchy/spacing audit, product-detail and checkout
+  visual weight pass beyond what already existed from B1–B3, order-tracking
+  layout beyond the colour system, account/settings final polish) — not
+  started as a distinct pass; today's changes were bug- and
+  consistency-driven, not a ground-up redesign of any screen's layout.
+- **Tap count, golden path** (home already open, logged in, item already in
+  cart's target restaurant/store) — add item (1) → open basket (2) → proceed
+  to checkout (3) → calculate delivery price (4) → place order (5) **for a
+  customer with a saved default address** (checkout pre-fills it, confirmed
+  in the browser — no location/address tap needed). **6 taps** for a
+  first-time customer with no saved address, who also taps "use my current
+  location" (or types the address by hand, which isn't a "tap"). A delivery
+  quote is mandatory before `Place Order` is enabled either way — confirmed
+  in `cart-screens.tsx`'s `submit()`, which refuses without one.
+- **Restaurant vertical**: untouched, as instructed — no restaurant business
+  screen's layout, only the one settings-link swap in `management-screen.tsx`
+  and `order-screens.tsx`'s/`inventory-screen.tsx`'s `readError` consolidation
+  (behavior-preserving, see above).
+
+### Could not verify without a real device
+
+- The persistent-nav safe-area double-inset gap noted in section 2.
+- Whether the Settings push-notification toggle actually delivers a device
+  push — registration/token round-trip only, matching the standing
+  "sending pushes is a separate integration" boundary from Phase 7/14.
+- Everything about the *native* checkout crash the user reports as fixed:
+  this session never built or ran an APK, only re-verified the web target
+  end-to-end (which never reproduced the crash in any session, including
+  this one).

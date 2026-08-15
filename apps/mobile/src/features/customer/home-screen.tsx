@@ -14,13 +14,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   getSupermarketCatalog,
   listActiveRestaurantOffers,
+  listMyNotifications,
   type MenuItemSummary,
   type PublicUser,
   type RestaurantOffer,
   type SupermarketCatalog,
   type SupermarketProduct
 } from "../../core/api";
-import { colors, iconSize, isRTL, radius, spacing } from "../../theme/tokens";
+import { getAccessToken } from "../../core/session";
+import { Icon, disclosureIconName } from "../../theme/icon";
+import { colors, iconSize, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
 import { resolveMarketStore, type MarketStore } from "./market";
@@ -65,17 +68,14 @@ export function CustomerHomeScreen(props: {
   onOpenProduct: (store: MarketStore, productId: string) => void;
   onAddItem: (store: MarketStore, item: MenuItemSummary) => void;
   onViewCart: () => void;
-  onViewOrders: () => void;
   onOpenNotifications: () => void;
-  onOpenAccount: () => void;
-  onLogout: () => Promise<void>;
 }) {
   const { t } = useTranslation(["customer", "common"]);
   // undefined while resolving, null when no supermarket is reachable.
   const [store, setStore] = useState<MarketStore | null | undefined>(undefined);
   const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
-  const [loggingOut, setLoggingOut] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -96,19 +96,17 @@ export function CustomerHomeScreen(props: {
       .then((activeOffers) => mounted && setOffers(activeOffers))
       .catch(() => mounted && setOffers([]));
 
+    getAccessToken()
+      .then((accessToken) => (accessToken ? listMyNotifications(accessToken, 1, 1) : null))
+      .then((page) => mounted && page && setUnreadCount(page.unreadCount))
+      .catch(() => {
+        // A failed unread-count fetch just leaves the badge hidden — not worth surfacing an error for.
+      });
+
     return () => {
       mounted = false;
     };
   }, []);
-
-  async function logout() {
-    setLoggingOut(true);
-    try {
-      await props.onLogout();
-    } finally {
-      setLoggingOut(false);
-    }
-  }
 
   // A restaurant-scoped offer would send the customer into a vertical that is
   // not open yet, so only supermarket-scoped and platform-wide offers are
@@ -132,9 +130,13 @@ export function CustomerHomeScreen(props: {
             <Text style={styles.eyebrow}>JOVO</Text>
             <Text style={styles.location}>{storeName}</Text>
           </View>
-          <Pressable onPress={props.onOpenNotifications} style={styles.iconButton}>
-            <Text style={styles.iconText}>♢</Text>
-            <View style={styles.notificationDot} />
+          <Pressable
+            accessibilityLabel={t("common:notifications")}
+            onPress={props.onOpenNotifications}
+            style={styles.iconButton}
+          >
+            <Icon color={customerTheme.colors.text} name="notifications" size="md" />
+            {unreadCount > 0 ? <View style={styles.notificationDot} /> : null}
           </Pressable>
         </View>
 
@@ -153,9 +155,9 @@ export function CustomerHomeScreen(props: {
           onPress={() => store && props.onOpenCatalog(store)}
           style={styles.searchBar}
         >
-          <Text style={styles.searchIcon}>⌕</Text>
+          <View style={styles.searchIconSlot}><Icon color={customerTheme.colors.text} name="search" size="md" /></View>
           <Text style={styles.searchText}>{t("home.searchProductsPlaceholder")}</Text>
-          <View style={styles.filterButton}><Text style={styles.filterText}>≡</Text></View>
+          <View style={styles.filterButton}><Icon color={customerTheme.colors.primary} name="filter" size="sm" /></View>
         </Pressable>
 
         <Pressable
@@ -169,7 +171,7 @@ export function CustomerHomeScreen(props: {
             <Text style={styles.marketTitle}>{storeName}</Text>
             <Text style={styles.marketDescription}>{t("home.supermarketDescription")}</Text>
           </View>
-          <Text style={styles.marketArrow}>{isRTL() ? "‹" : "›"}</Text>
+          <Icon color={onDark.strong} name={disclosureIconName()} size="lg" />
         </Pressable>
 
         {store === null ? (
@@ -283,21 +285,6 @@ export function CustomerHomeScreen(props: {
           <Text style={styles.comingSoonText}>{t("home.restaurantsComingSoonText")}</Text>
         </View>
 
-        <View style={styles.quickActions}>
-          <Pressable onPress={props.onOpenAccount} style={styles.quickButton}>
-            <Text style={styles.quickIcon}>◎</Text><Text style={styles.quickLabel}>{t("home.myAccount")}</Text>
-          </Pressable>
-          <Pressable onPress={props.onViewOrders} style={styles.quickButton}>
-            <Text style={styles.quickIcon}>▤</Text><Text style={styles.quickLabel}>{t("home.myOrders")}</Text>
-          </Pressable>
-          <Pressable onPress={props.onOpenNotifications} style={styles.quickButton}>
-            <Text style={styles.quickIcon}>♢</Text><Text style={styles.quickLabel}>{t("common:notifications")}</Text>
-          </Pressable>
-          <Pressable disabled={loggingOut} onPress={() => void logout()} style={styles.quickButton}>
-            {loggingOut ? <ActivityIndicator color={customerTheme.colors.primary} /> : <Text style={styles.quickIcon}>↗</Text>}
-            <Text style={styles.quickLabel}>{t("common:logout")}</Text>
-          </Pressable>
-        </View>
       </ScrollView>
       {showCartDock && props.cart ? (
         <View style={styles.cartDock}>
@@ -338,7 +325,7 @@ function StorefrontProductCard(props: {
           onPress={(event) => { event.stopPropagation(); props.onAdd(); }}
           style={styles.addButton}
         >
-          <Text style={styles.addButtonText}>+</Text>
+          <Icon color={colors.textInverse} name="add" size="sm" />
         </Pressable>
       </View>
     </Pressable>
@@ -373,7 +360,6 @@ const styles = StyleSheet.create({
   eyebrow: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
   location: { ...text("bodySm", "bold"), color: customerTheme.colors.text, marginTop: spacing[1] },
   iconButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 46, justifyContent: "center", position: "relative", width: 46, ...customerTheme.shadow },
-  iconText: { color: customerTheme.colors.secondary, fontSize: iconSize.md },
   notificationDot: { backgroundColor: customerTheme.colors.primary, borderColor: colors.surface, borderRadius: 6, borderWidth: 2, height: 10, position: "absolute", end: 7, top: 7, width: 10 },
   greetingRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[6] },
   greetingText: { flex: 1 },
@@ -382,10 +368,9 @@ const styles = StyleSheet.create({
   logo: { height: 34, width: 110 },
   notice: { ...text("bodySm"), backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.md, color: customerTheme.colors.success, marginTop: spacing[4], padding: spacing[3] },
   searchBar: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", marginTop: spacing[6], minHeight: 56, paddingHorizontal: spacing[4] },
-  searchIcon: { color: customerTheme.colors.text, fontSize: iconSize.md, marginEnd: spacing[3] },
+  searchIconSlot: { marginEnd: spacing[3] },
   searchText: { ...text("bodySm"), color: customerTheme.colors.textMuted, flex: 1 },
   filterButton: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
-  filterText: { color: customerTheme.colors.primary, fontSize: iconSize.sm, fontWeight: "900", transform: [{ rotate: "90deg" }] },
   marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, borderRadius: radius.lg, flexDirection: "row", marginTop: spacing[5], minHeight: 112, padding: spacing[4], ...customerTheme.shadow },
   marketIcon: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, height: 70, justifyContent: "center", width: 70 },
   marketEmoji: { fontSize: iconSize.xl },
@@ -393,7 +378,6 @@ const styles = StyleSheet.create({
   marketEyebrow: { ...text("label", "bold"), color: customerTheme.colors.primary },
   marketTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
   marketDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
-  marketArrow: { color: onDark.strong, fontSize: iconSize.xl, marginStart: spacing[2] },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[4], marginTop: spacing[7] },
   sectionTitle: { ...text("h2", "bold"), color: customerTheme.colors.text },
   seeAll: { ...text("caption", "bold"), color: customerTheme.colors.primary },
@@ -460,7 +444,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 32
   },
-  addButtonText: { ...text("body", "bold"), color: colors.textInverse },
   comingSoonCard: {
     alignItems: "center",
     backgroundColor: customerTheme.colors.surface,
@@ -482,10 +465,6 @@ const styles = StyleSheet.create({
   comingSoonEmoji: { fontSize: iconSize.xl },
   comingSoonTitle: { ...text("body", "bold"), color: customerTheme.colors.text, textAlign: "center" },
   comingSoonText: { ...text("bodySm"), color: customerTheme.colors.textMuted, marginTop: spacing[2], textAlign: "center" },
-  quickActions: { flexDirection: "row", gap: spacing[2], marginTop: spacing[7] },
-  quickButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, minHeight: 80, justifyContent: "center", padding: spacing[3] },
-  quickIcon: { color: customerTheme.colors.text, fontSize: iconSize.md, fontWeight: "900" },
-  quickLabel: { ...text("label", "medium"), color: customerTheme.colors.text, marginTop: spacing[1] },
   cartDock: {
     backgroundColor: customerTheme.colors.background,
     borderTopColor: customerTheme.colors.border,

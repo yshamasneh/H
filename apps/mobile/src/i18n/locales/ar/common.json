@@ -63,7 +63,10 @@
     "OFFLINE": "غير متصل",
     "INACTIVE": "غير نشط",
     "DRAFT": "مسودة",
-    "RECEIVED": "تم الاستلام في المخزون"
+    "RECEIVED": "تم الاستلام في المخزون",
+    "DELIVERY_FAILED": "فشل التوصيل",
+    "FAILED": "فشل",
+    "PREPARING_SUPERMARKET": "قيد التجهيز"
   },
   "role": {
     "CUSTOMER": "زبون",

@@ -43,6 +43,7 @@ export type AppScreen =
   | { name: "order-history"; user: PublicUser }
   | { name: "order-detail"; user: PublicUser; orderId: string }
   | { name: "account"; user: PublicUser }
+  | { name: "settings"; user: PublicUser }
   | { name: "restaurant-orders"; user: PublicUser }
   | { name: "restaurant-management"; user: PublicUser }
   | { name: "restaurant-order-detail"; user: PublicUser; orderId: string }
@@ -180,6 +181,10 @@ export function goToRestaurantOrders(user: PublicUser): Extract<AppScreen, { nam
 
 export function goToAccount(user: PublicUser): Extract<AppScreen, { name: "account" }> {
   return { name: "account", user };
+}
+
+export function goToSettings(user: PublicUser): Extract<AppScreen, { name: "settings" }> {
+  return { name: "settings", user };
 }
 
 /**

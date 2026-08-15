@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ApiError, listMyNotifications, markNotificationRead, type NotificationView } from "../../core/api";
+import { listMyNotifications, markNotificationRead, type NotificationView } from "../../core/api";
+import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
-import i18n from "../../i18n";
 import { useRealtimeEvent } from "../../core/socket";
 import { colors, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
@@ -114,13 +114,6 @@ function formatDate(iso: string): string {
   const date = new Date(iso);
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function readError(error: unknown): string {
-  if (error instanceof ApiError || error instanceof Error) {
-    return error.message;
-  }
-  return i18n.t("common:requestFailed");
 }
 
 const styles = StyleSheet.create({

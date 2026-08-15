@@ -41,7 +41,6 @@ import {
 import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
 import i18n from "../../i18n";
-import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { colors, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { strongPasswordPattern } from "./auth.rules";
@@ -410,6 +409,7 @@ export function HomeScreen(props: {
   onManageRestaurant?: () => void;
   onOpenDriverDashboard?: () => void;
   onOpenNotifications: () => void;
+  onOpenSettings: () => void;
 }) {
   const { t } = useTranslation(["auth", "common"]);
   const [loading, setLoading] = useState(false);
@@ -475,8 +475,8 @@ export function HomeScreen(props: {
         }
         onPress={props.onOpenNotifications}
       />
+      <SecondaryButton label={t("common:settings")} onPress={props.onOpenSettings} />
       <SecondaryButton label={t("common:logout")} loading={loading} onPress={submitLogout} />
-      <LanguageSwitcher />
     </AuthLayout>
   );
 }

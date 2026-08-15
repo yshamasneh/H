@@ -112,5 +112,28 @@
     "addToBasket": "أضف إلى السلة · {{price}}",
     "addProductAccessibility": "إضافة {{name}}",
     "goBackAccessibility": "رجوع"
+  },
+  "settings": {
+    "headerTitle": "الإعدادات",
+    "accountSectionTitle": "الحساب",
+    "signedInAs": "تم تسجيل الدخول باسم",
+    "manageAccountRow": "البيانات الشخصية والعناوين",
+    "languageSectionTitle": "اللغة",
+    "notificationsSectionTitle": "الإشعارات",
+    "pushNotificationsLabel": "إشعارات الطلبات",
+    "pushNotificationsHelper": "احصل على إشعار بحالة طلبك.",
+    "aboutSectionTitle": "حول التطبيق",
+    "aboutBlurb": "JOVO MARKET يوصل مشترياتك اليومية إلى باب منزلك.",
+    "versionLabel": "إصدار التطبيق",
+    "logoutButton": "تسجيل الخروج",
+    "logoutConfirmTitle": "تسجيل الخروج؟",
+    "logoutConfirmBody": "ستحتاج إلى تسجيل الدخول مرة أخرى لتقديم الطلبات."
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "browse": "تصفح",
+    "cart": "السلة",
+    "orders": "الطلبات",
+    "account": "حسابي"
   }
 }

@@ -7,6 +7,7 @@ import arCart from "./locales/ar/cart.json";
 import arCommon from "./locales/ar/common.json";
 import arCustomer from "./locales/ar/customer.json";
 import arDriver from "./locales/ar/driver.json";
+import arErrors from "./locales/ar/errors.json";
 import arNotifications from "./locales/ar/notifications.json";
 import arRestaurantOps from "./locales/ar/restaurantOps.json";
 import enAdmin from "./locales/en/admin.json";
@@ -15,6 +16,7 @@ import enCart from "./locales/en/cart.json";
 import enCommon from "./locales/en/common.json";
 import enCustomer from "./locales/en/customer.json";
 import enDriver from "./locales/en/driver.json";
+import enErrors from "./locales/en/errors.json";
 import enNotifications from "./locales/en/notifications.json";
 import enRestaurantOps from "./locales/en/restaurantOps.json";
 
@@ -32,7 +34,8 @@ void i18n.use(initReactI18next).init({
       cart: arCart,
       restaurantOps: arRestaurantOps,
       driver: arDriver,
-      notifications: arNotifications
+      notifications: arNotifications,
+      errors: arErrors
     },
     en: {
       common: enCommon,
@@ -42,7 +45,8 @@ void i18n.use(initReactI18next).init({
       cart: enCart,
       restaurantOps: enRestaurantOps,
       driver: enDriver,
-      notifications: enNotifications
+      notifications: enNotifications,
+      errors: enErrors
     }
   },
   lng: defaultLanguage,

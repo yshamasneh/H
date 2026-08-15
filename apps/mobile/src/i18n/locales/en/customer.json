@@ -112,5 +112,28 @@
     "addToBasket": "Add to basket · {{price}}",
     "addProductAccessibility": "Add {{name}}",
     "goBackAccessibility": "Go back"
+  },
+  "settings": {
+    "headerTitle": "Settings",
+    "accountSectionTitle": "Account",
+    "signedInAs": "Signed in as",
+    "manageAccountRow": "Personal info & addresses",
+    "languageSectionTitle": "Language",
+    "notificationsSectionTitle": "Notifications",
+    "pushNotificationsLabel": "Push notifications",
+    "pushNotificationsHelper": "Get notified about your order status.",
+    "aboutSectionTitle": "About",
+    "aboutBlurb": "JOVO MARKET brings your everyday groceries to your door.",
+    "versionLabel": "App version",
+    "logoutButton": "Log out",
+    "logoutConfirmTitle": "Log out?",
+    "logoutConfirmBody": "You will need to log in again to place orders."
+  },
+  "nav": {
+    "home": "Home",
+    "browse": "Browse",
+    "cart": "Cart",
+    "orders": "Orders",
+    "account": "Account"
   }
 }

@@ -15,7 +15,6 @@ import {
   View
 } from "react-native";
 import {
-  ApiError,
   getRestaurantMenu,
   listRestaurants,
   type MenuCategorySummary,
@@ -24,7 +23,7 @@ import {
   type RestaurantSummary
 } from "../../core/api";
 import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
-import i18n from "../../i18n";
+import { readError } from "../../core/errors";
 import { colors, iconSize, isRTL, radius, spacing, withAlpha } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
@@ -283,9 +282,6 @@ function formatPrice(priceMinor: number): string {
   return `${(priceMinor / 100).toFixed(2)} ILS`;
 }
 
-function readError(error: unknown): string {
-  return error instanceof ApiError || error instanceof Error ? error.message : i18n.t("common:requestFailed");
-}
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },

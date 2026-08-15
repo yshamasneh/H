@@ -15,7 +15,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useOrderRealtime, useRealtimeEvent } from "../../core/socket";
 import {
-  ApiError,
   getRestaurantOrder,
   listRestaurantMenuItems,
   listRestaurantOrders,
@@ -27,8 +26,8 @@ import {
   type OrderStatusValue,
   type RestaurantOrderStatusAction
 } from "../../core/api";
+import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
-import i18n from "../../i18n";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { nextRestaurantActionsByStatus } from "./order.rules";
@@ -454,12 +453,6 @@ function formatDate(iso: string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function readError(error: unknown): string {
-  if (error instanceof ApiError || error instanceof Error) {
-    return error.message;
-  }
-  return i18n.t("common:requestFailed");
-}
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.surfaceSunk, flex: 1 },

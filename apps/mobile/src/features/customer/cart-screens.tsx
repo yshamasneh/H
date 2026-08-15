@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  ApiError,
   cancelMyOrder,
   createOrder,
   decideOrderFulfillment,
@@ -34,11 +33,13 @@ import {
   cartSubtotalMinor,
   type Cart
 } from "./cart";
+import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
 import { customerTheme } from "./theme";
-import { colors, iconSize, isRTL, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
+import { Icon, backIconName } from "../../theme/icon";
+import { colors, iconSize, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import i18n from "../../i18n";
 import { LocationMap } from "../../components/location-map";
@@ -99,7 +100,7 @@ export function CartScreen(props: CartScreenProps) {
                     onPress={() => props.onRemove(item.menuItemId)}
                     style={styles.removeButton}
                   >
-                    <Text style={styles.removeButtonText}>×</Text>
+                    <Icon color={customerTheme.colors.danger} name="close" size="sm" />
                   </Pressable>
                 </View>
                 <View style={styles.quantityStepper}>
@@ -108,7 +109,7 @@ export function CartScreen(props: CartScreenProps) {
                     onPress={() => props.onDecrement(item.menuItemId)}
                     style={styles.stepperButton}
                   >
-                    <Text style={styles.stepperButtonText}>-</Text>
+                    <Icon color={customerTheme.colors.primary} name="remove" size="sm" />
                   </Pressable>
                   <Text style={styles.stepperValue}>{item.quantity}</Text>
                   <Pressable
@@ -116,7 +117,7 @@ export function CartScreen(props: CartScreenProps) {
                     onPress={() => props.onIncrement(item.menuItemId)}
                     style={styles.stepperButton}
                   >
-                    <Text style={styles.stepperButtonText}>+</Text>
+                    <Icon color={customerTheme.colors.primary} name="add" size="sm" />
                   </Pressable>
                 </View>
               </View>
@@ -370,9 +371,6 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           onPress={() => void chooseCurrentLocation()}
         />
         <SecondaryButton label={locating ? t("checkout.calculating") : t("checkout.calculateDeliveryPrice")} onPress={() => void calculateQuote()} />
-        <Text style={styles.locationNote}>
-          {t("checkout.pinSelectedNote", { lat: coordinates.latitude.toFixed(5), lng: coordinates.longitude.toFixed(5) })}
-        </Text>
         {quote ? (
           <View style={styles.summaryCard}>
             <Text style={styles.sectionTitle}>{t("checkout.confirmedPriceTitle")}</Text>
@@ -835,7 +833,7 @@ function Header(props: { title: string; subtitle: string; onBack: () => void }) 
   return (
     <View style={styles.header}>
       <Pressable accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
-        <Text style={styles.backButtonText}>{isRTL() ? "›" : "‹"}</Text>
+        <Icon name={backIconName()} size="md" />
       </Pressable>
       <View style={styles.headerCopy}>
         <Text style={styles.headerTitle}>{props.title}</Text>
@@ -915,12 +913,6 @@ function formatDate(iso: string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function readError(error: unknown): string {
-  if (error instanceof ApiError || error instanceof Error) {
-    return error.message;
-  }
-  return i18n.t("common:requestFailed");
-}
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },

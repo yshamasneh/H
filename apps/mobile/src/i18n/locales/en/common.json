@@ -63,7 +63,10 @@
     "OFFLINE": "Offline",
     "INACTIVE": "Inactive",
     "DRAFT": "Draft",
-    "RECEIVED": "Received into stock"
+    "RECEIVED": "Received into stock",
+    "DELIVERY_FAILED": "Delivery failed",
+    "FAILED": "Failed",
+    "PREPARING_SUPERMARKET": "Picking"
   },
   "role": {
     "CUSTOMER": "Customer",

@@ -4,7 +4,6 @@ import { Text, View } from "react-native";
 import { getAdminDashboard, type AdminDashboard, type PublicUser } from "../../core/api";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
-import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { useRealtimeEvent } from "../../core/socket";
 import {
   ActionButton,
@@ -33,6 +32,7 @@ export function AdminDashboardScreen(props: {
   onUsers: () => void;
   onAuditLog: () => void;
   onNotifications: () => void;
+  onOpenSettings: () => void;
 }) {
   const { t } = useTranslation(["admin", "common"]);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
@@ -105,9 +105,9 @@ export function AdminDashboardScreen(props: {
       ) : error ? null : <LoadingState />}
       <ActionRow>
         <ActionButton label={t("common:notifications")} onPress={props.onNotifications} variant="secondary" />
+        <ActionButton label={t("common:settings")} onPress={props.onOpenSettings} variant="secondary" />
         <ActionButton label={t("common:logout")} loading={loggingOut} onPress={() => void logOut()} variant="danger" />
       </ActionRow>
-      <LanguageSwitcher />
     </AdminPage>
   );
 }

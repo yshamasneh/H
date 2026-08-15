@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
-  ApiError,
   adjustStoreInventory,
   cancelStorePurchaseOrder,
   createStorePurchaseOrder,
@@ -19,6 +18,7 @@ import {
   type PurchaseOrder,
   type Supplier
 } from "../../core/api";
+import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
 import { colors, radius, spacing } from "../../theme/tokens";
@@ -271,7 +271,6 @@ function Button(props: { label: string; onPress: () => void; disabled?: boolean;
 }
 
 async function requireToken() { const token = await getAccessToken(); if (!token) throw new Error(i18n.t("common:sessionExpired")); return token; }
-function readError(error: unknown) { return error instanceof ApiError || error instanceof Error ? error.message : i18n.t("common:requestFailed"); }
 function formatMoney(minor: number) { return `${(minor / 100).toFixed(2)} ILS`; }
 
 const styles = StyleSheet.create({

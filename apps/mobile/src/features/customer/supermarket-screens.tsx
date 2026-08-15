@@ -14,15 +14,15 @@ import {
   View
 } from "react-native";
 import {
-  ApiError,
   getSupermarketCatalog,
   getSupermarketProduct,
   type SupermarketCatalog,
   type SupermarketProduct
 } from "../../core/api";
 import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
-import i18n from "../../i18n";
-import { colors, iconSize, isRTL, radius, spacing, withAlpha } from "../../theme/tokens";
+import { readError } from "../../core/errors";
+import { Icon, backIconName } from "../../theme/icon";
+import { colors, iconSize, radius, spacing, withAlpha } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { customerTheme } from "./theme";
 
@@ -210,7 +210,7 @@ function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpe
           onPress={(event) => { event.stopPropagation(); props.onAdd(); }}
           style={styles.addButton}
         >
-          <Text style={styles.addButtonText}>+</Text>
+          <Icon color={colors.textInverse} name="add" size="sm" />
         </Pressable>
       </View>
     </Pressable>
@@ -236,7 +236,7 @@ function CartDock(props: { cart: Cart; onPress: () => void }) {
 
 function BackButton({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation(["customer"]);
-  return <Pressable accessibilityLabel={t("supermarket.goBackAccessibility")} onPress={onPress} style={styles.backButton}><Text style={styles.backText}>{isRTL() ? "›" : "‹"}</Text></Pressable>;
+  return <Pressable accessibilityLabel={t("supermarket.goBackAccessibility")} onPress={onPress} style={styles.backButton}><Icon name={backIconName()} size="md" /></Pressable>;
 }
 
 function Centered({ children }: { children: React.ReactNode }) { return <View style={styles.centered}>{children}</View>; }
@@ -250,7 +250,6 @@ function ErrorState(props: { message: string; onRetry?: () => void }) {
   );
 }
 function formatPrice(value: number) { return `${(value / 100).toFixed(2)} ILS`; }
-function readError(error: unknown) { return error instanceof ApiError || error instanceof Error ? error.message : i18n.t("common:requestFailed"); }
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },

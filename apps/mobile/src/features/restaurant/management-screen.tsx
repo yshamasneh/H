@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  ApiError,
   createRestaurantMenuCategory,
   createRestaurantMenuItem,
   getRestaurantOwnerProfile,
@@ -27,10 +26,11 @@ import {
   type MenuItemOwner,
   type RestaurantOwnerProfile
 } from "../../core/api";
+import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates } from "../../core/location";
 import i18n from "../../i18n";
-import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
+import { Icon } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { InventoryWorkspace } from "./inventory-screen";
@@ -44,7 +44,7 @@ const tabLabelKeys: Record<Section, string> = {
   inventory: "management.tabInventory"
 };
 
-export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
+export function RestaurantManagementScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpenSettings: () => void }) {
   const { t } = useTranslation(["restaurantOps", "common"]);
   const [profile, setProfile] = useState<RestaurantOwnerProfile | null>(null);
   const [categories, setCategories] = useState<MenuCategoryOwner[]>([]);
@@ -105,6 +105,9 @@ export function RestaurantManagementScreen({ onBack }: { onBack: () => void }) {
             {profile?.businessType === "SUPERMARKET" ? t("management.supermarketWorkspaceSubtitle") : t("management.restaurantWorkspaceSubtitle")}
           </Text>
         </View>
+        <Pressable accessibilityLabel={t("common:settings")} onPress={onOpenSettings} style={styles.backButton}>
+          <Icon name="settings" size="sm" />
+        </Pressable>
       </View>
       <View style={styles.tabs}>
         {(profile?.businessType === "SUPERMARKET"
@@ -275,7 +278,6 @@ function ProfileSection(props: {
         onPress={props.onToggleOpen}
         secondary
       />
-      <LanguageSwitcher />
     </View>
   );
 }
@@ -578,9 +580,6 @@ async function requireToken(): Promise<string> {
   return token;
 }
 
-function readError(error: unknown): string {
-  return error instanceof ApiError || error instanceof Error ? error.message : i18n.t("common:requestFailed");
-}
 
 function formatPrice(minor: number): string {
   return `${(minor / 100).toFixed(2)} ILS`;
