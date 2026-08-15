@@ -1916,3 +1916,118 @@ entry is real, not a false alarm:
   database, so it renders untranslated inside the English UI. This is
   seed data, not application code — same category as the previously-flagged
   "TasawaQ Fresh Market" seed-name mismatch — and was left alone.
+
+## 2026-08-15: The safe-area fix, and the first APK built from this branch
+
+Branch `agent/phase-15-and-jovo-brand`, continuing from the B5-B8 session
+above. Scope: apply the safe-area double-inset fix that session analyzed but
+deliberately left unapplied, then produce an installable Android APK for
+real-device testing.
+
+### 1. The bottom safe-area double-inset — applied
+
+Applied exactly the fix the prior entry's section 5 identified:
+`edges={["top", "left", "right"]}` on the five tab-root screens'
+outer `SafeAreaView` (`home-screen.tsx`, `cart-screens.tsx`'s `CartScreen`
+and `OrderHistoryScreen`, `supermarket-screens.tsx`'s
+`SupermarketCatalogScreen`, `account-screen.tsx`), since `CustomerBottomNav`
+already owns the bottom edge. Also documented the contract on
+`CustomerTabShell`'s doc comment, so the bottom edge doesn't get silently
+added back by someone reading only the screen file.
+
+**A second, previously unnoticed bug surfaced by the typecheck.** Adding the
+`edges` prop made `tsc` fail on `supermarket-screens.tsx` only —
+`Property 'edges' does not exist`. The cause: that file imports
+`SafeAreaView` from **`react-native`**, the deprecated built-in, not from
+`react-native-safe-area-context` like every other screen. The built-in is
+iOS-only and a **no-op on Android**, so both screens in that file (the Browse
+tab and the product-detail screen) were applying no safe-area insets at all
+on Android — independent of, and predating, the double-inset issue. Switched
+the import to the context version. `restaurant-screens.tsx` has the same
+stale import; it was left alone deliberately, since the restaurant vertical
+is deferred and unreachable in the customer flow — noted here as a known
+remaining instance rather than fixed out of scope.
+
+Verified: `npm run typecheck` clean, `npm test` 25/25 in the mobile
+workspace. Committed as `e45bf5d`.
+
+### 2. API + tunnel
+
+The ngrok tunnel was **dead** at the start of this session (public URL
+returned ngrok's 404 "tunnel not found"; no `ngrok.exe` process running).
+The API itself was healthy — a `node dist/main` process on port 3000, started
+2026-08-14, independent of any agent session.
+
+Restarted ngrok on the reserved hostname
+`impaired-villain-itinerary.ngrok-free.dev` and verified end to end rather
+than by process existence: `/api/v1/health/ready` returns 200 with
+`database: connected`, `GET /api/v1/supermarkets` returns the real JOVO
+MARKET row, and a real `POST /api/v1/auth/login` as the seeded customer
+returns 201 with a valid CUSTOMER JWT. (The login DTO takes
+`countryCode` + `phoneNumber`, not a combined `phone` field — a flat `phone`
+body returns `VALIDATION_ERROR`.)
+
+The tunnel was then **restarted as a detached process** (`Start-Process`,
+hidden window) rather than as a child of the agent session, and re-verified,
+so on-device testing does not depend on an agent session staying open.
+
+### 3. The APK build
+
+`eas build --platform android --profile preview`, build
+`3649829a-2e1e-4333-9dfc-ce6ce407d8b9`, from commit `e45bf5d` — finished,
+signed, universal (all four ABIs), 78 MB, versionCode 13 / 0.13.0.
+
+Config confirmed before building: the `preview` profile's `env` and the
+EAS-hosted `preview` environment **both** hold
+`https://impaired-villain-itinerary.ngrok-free.dev`, matching the live
+tunnel. EAS logs that the build-profile value wins where the two overlap;
+they are identical, so the precedence is moot here — but worth knowing if
+they ever diverge.
+
+### 4. Verifying the URL is genuinely in the shipped bundle
+
+This branch has shipped "successful" builds that crashed on launch, so build
+status was not treated as evidence. `assets/index.android.bundle` was
+extracted from the downloaded APK (confirmed Hermes bytecode by its
+`c61fbc03` magic) and grepped directly:
+
+- `https://impaired-villain-itinerary.ngrok-free.dev` is present as a literal
+  in the Hermes string table (once; Hermes suffix-packs strings, so it shares
+  storage with the adjacent `deviceName` — the contiguous bytes are still an
+  exact match).
+- `http://localhost:3000` is **absent**. This matters: the repo's gitignored
+  local `.env` contains exactly that value, and a stale `apps/mobile/dist/`
+  web bundle in the working tree has it baked in. Neither reached this build.
+  The only dev-fallback literal left is `http://10.0.2.2:3000`, Metro having
+  eliminated the other `Platform.select` branches for the Android target.
+- `EXPO_PUBLIC_API_URL` appears **exactly once** — as part of the error
+  message string. Had babel's inline-env-vars plugin failed to substitute it,
+  Hermes would also need that same text as a property-name string for a
+  runtime `process.env` lookup, giving two occurrences. One occurrence is
+  positive evidence the inlining actually happened, not just that a matching
+  string exists somewhere.
+
+**Why this specific check.** `api.ts:360` throws at **module load** —
+`if (!__DEV__ && (!configuredApiUrl || !configuredApiUrl.startsWith("https://")))` —
+so an un-inlined env var produces a build that succeeds and then dies
+immediately on launch, before any screen renders. Confirmed by grep that this
+is the *only* module-load-time throw in the app; every other `throw` in
+`src/core/` sits inside a function body. That makes it the highest-value
+single thing to verify in a shipped bundle, and it is now verified clean.
+
+### Not verified
+
+- **The APK was never launched.** No device was connected and no AVD exists
+  on this machine (the `emulator` binary is installed, but
+  `~/.android/avd/` is empty), so nothing here proves the app runs. What is
+  proven is narrower and worth stating precisely: the one known crash
+  mechanism — an un-inlined API URL tripping the module-load guard — is not
+  present in this bundle.
+- **The safe-area fix itself remains device-only to confirm.** Web has a zero
+  bottom inset, which is why the double-inset was invisible in every prior
+  session; only a device with a home indicator or Android gesture navigation
+  will show whether the gap is actually gone.
+- The native `android/` directory means this is a bare workflow: EAS logs
+  that `android.package` in `app.json` is ignored in favour of the native
+  value. Both say `com.jovo.app`, so they agree today — but `app.json`'s
+  Android block is not the source of truth for this build.
