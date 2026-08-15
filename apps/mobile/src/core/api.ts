@@ -635,6 +635,8 @@ export type MenuCategoryOwner = {
 export type MenuItemOwner = Omit<MenuItemSummary, "effectivePriceMinor" | "offer"> & {
   categoryId: string;
   isAvailable: boolean;
+  /** What the store paid per unit. Owner/admin-only; never present on a customer-facing view. */
+  costPriceMinor: number | null;
 };
 
 export type InventoryItem = {
@@ -840,6 +842,7 @@ export function createRestaurantMenuItem(
     name: string;
     description?: string;
     priceMinor: number;
+    costPriceMinor?: number;
     imageUrl?: string;
     sku?: string;
     brand?: string;
@@ -862,6 +865,7 @@ export function updateRestaurantMenuItem(
     name?: string;
     description?: string;
     priceMinor?: number;
+    costPriceMinor?: number | null;
     imageUrl?: string;
     sku?: string;
     brand?: string;

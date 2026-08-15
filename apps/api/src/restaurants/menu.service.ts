@@ -65,6 +65,7 @@ export class MenuService {
         name: input.name.trim(),
         description: input.description?.trim() || null,
         priceMinor: input.priceMinor,
+        costPriceMinor: input.costPriceMinor ?? null,
         imageUrl: input.imageUrl || null,
         sku: input.sku?.trim() || null,
         brand: input.brand?.trim() || null,
@@ -86,10 +87,13 @@ export class MenuService {
     capabilities: { canManagePrices: boolean }
   ): Promise<MenuItemOwnerView> {
     const item = await this.requireOwnItem(restaurantId, itemId);
-    // MANAGE_PRODUCTS lets someone edit a product; changing what it costs is a separate
-    // permission. Compared against the stored value so resending an unchanged price is not
-    // treated as a price change — a full edit form may always include the field.
-    if (input.priceMinor !== undefined && input.priceMinor !== item.priceMinor && !capabilities.canManagePrices) {
+    // MANAGE_PRODUCTS lets someone edit a product; changing what it costs — either the sale price
+    // or the store's own cost price, which reveals margin — is a separate permission. Compared
+    // against the stored value so resending an unchanged price is not treated as a price change —
+    // a full edit form may always include the field.
+    const changesPrice = input.priceMinor !== undefined && input.priceMinor !== item.priceMinor;
+    const changesCostPrice = input.costPriceMinor !== undefined && input.costPriceMinor !== item.costPriceMinor;
+    if ((changesPrice || changesCostPrice) && !capabilities.canManagePrices) {
       throw new ApiException(
         403,
         "FORBIDDEN_PERMISSION",
@@ -109,6 +113,7 @@ export class MenuService {
         name: input.name?.trim(),
         description: input.description !== undefined ? input.description.trim() || null : undefined,
         priceMinor: input.priceMinor,
+        costPriceMinor: input.costPriceMinor,
         imageUrl: input.imageUrl !== undefined ? input.imageUrl || null : undefined,
         sku: input.sku !== undefined ? input.sku.trim() || null : undefined,
         brand: input.brand !== undefined ? input.brand.trim() || null : undefined,
@@ -221,6 +226,7 @@ function toItemView(item: MenuItem): MenuItemOwnerView {
     name: item.name,
     description: item.description,
     priceMinor: item.priceMinor,
+    costPriceMinor: item.costPriceMinor,
     imageUrl: item.imageUrl,
     sku: item.sku,
     brand: item.brand,

@@ -49,12 +49,16 @@ type MenuItemRecord = {
   name: string;
   description: string | null;
   priceMinor: number;
+  costPriceMinor: number | null;
   imageUrl: string | null;
   sku: string | null;
   brand: string | null;
   unitLabel: string;
   stockQuantity: number | null;
   isFeatured: boolean;
+  isVariableWeight: boolean;
+  barcode: string | null;
+  reorderLevel: number | null;
   isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -332,12 +336,16 @@ export class FakeRestaurantPrisma {
         name: data.name,
         description: data.description ?? null,
         priceMinor: data.priceMinor,
+        costPriceMinor: data.costPriceMinor ?? null,
         imageUrl: data.imageUrl ?? null,
         sku: data.sku ?? null,
         brand: data.brand ?? null,
         unitLabel: data.unitLabel ?? "item",
         stockQuantity: data.stockQuantity ?? null,
         isFeatured: data.isFeatured ?? false,
+        isVariableWeight: data.isVariableWeight ?? false,
+        barcode: data.barcode ?? null,
+        reorderLevel: data.reorderLevel ?? null,
         isAvailable: data.isAvailable ?? true,
         createdAt: now,
         updatedAt: now
@@ -352,12 +360,16 @@ export class FakeRestaurantPrisma {
       if (data.name !== undefined) item.name = data.name;
       if (data.description !== undefined) item.description = data.description;
       if (data.priceMinor !== undefined) item.priceMinor = data.priceMinor;
+      if (data.costPriceMinor !== undefined) item.costPriceMinor = data.costPriceMinor;
       if (data.imageUrl !== undefined) item.imageUrl = data.imageUrl;
       if (data.sku !== undefined) item.sku = data.sku;
       if (data.brand !== undefined) item.brand = data.brand;
       if (data.unitLabel !== undefined) item.unitLabel = data.unitLabel;
       if (data.stockQuantity !== undefined) item.stockQuantity = data.stockQuantity;
       if (data.isFeatured !== undefined) item.isFeatured = data.isFeatured;
+      if (data.isVariableWeight !== undefined) item.isVariableWeight = data.isVariableWeight;
+      if (data.barcode !== undefined) item.barcode = data.barcode;
+      if (data.reorderLevel !== undefined) item.reorderLevel = data.reorderLevel;
       if (data.isAvailable !== undefined) item.isAvailable = data.isAvailable;
       item.updatedAt = new Date();
       return item;

@@ -124,6 +124,8 @@ export type MenuItemOwner = {
   name: string;
   description: string | null;
   priceMinor: number;
+  /** What the store paid per unit. Owner/admin-only; never present on a customer-facing view. */
+  costPriceMinor: number | null;
   imageUrl: string | null;
   sku: string | null;
   brand: string | null;

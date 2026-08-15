@@ -14,6 +14,7 @@ import {
   type MenuCategoryOwner,
   type MenuItemOwner
 } from "../../api.business";
+import { ConfirmModal } from "../../components/ConfirmModal";
 import { useAuth } from "../../auth";
 
 const currencyCode = "ILS";
@@ -23,11 +24,16 @@ type ItemDraft = {
   name: string;
   description: string;
   price: string;
+  costPrice: string;
   imageUrl: string;
+  brand: string;
   sku: string;
   barcode: string;
   unitLabel: string;
   stockQuantity: string;
+  reorderLevel: string;
+  isFeatured: boolean;
+  isVariableWeight: boolean;
 };
 
 const emptyDraft: ItemDraft = {
@@ -35,11 +41,16 @@ const emptyDraft: ItemDraft = {
   name: "",
   description: "",
   price: "",
+  costPrice: "",
   imageUrl: "",
+  brand: "",
   sku: "",
   barcode: "",
   unitLabel: "item",
-  stockQuantity: ""
+  stockQuantity: "",
+  reorderLevel: "",
+  isFeatured: false,
+  isVariableWeight: false
 };
 
 export function CataloguePage() {
@@ -51,6 +62,7 @@ export function CataloguePage() {
   const [categoryName, setCategoryName] = useState("");
   const [draft, setDraft] = useState<ItemDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<MenuItemOwner | null>(null);
 
   const isSupermarket = access?.business?.businessType === "SUPERMARKET";
   const canManagePrices = can("MANAGE_PRICES");
@@ -73,32 +85,67 @@ export function CataloguePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function run(action: () => Promise<unknown>) {
+  async function run(action: () => Promise<unknown>): Promise<boolean> {
     try {
       await action();
       await load();
       setError(null);
+      return true;
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      return false;
     }
   }
 
   function startEdit(item: MenuItemOwner) {
     setEditingId(item.id);
+    setError(null);
     setDraft({
       categoryId: item.categoryId,
       name: item.name,
       description: item.description ?? "",
-      price: String(item.priceMinor),
+      price: (item.priceMinor / 100).toFixed(2),
+      costPrice: item.costPriceMinor === null ? "" : (item.costPriceMinor / 100).toFixed(2),
       imageUrl: item.imageUrl ?? "",
+      brand: item.brand ?? "",
       sku: item.sku ?? "",
       barcode: item.barcode ?? "",
       unitLabel: item.unitLabel,
-      stockQuantity: item.stockQuantity === null ? "" : String(item.stockQuantity)
+      stockQuantity: item.stockQuantity === null ? "" : String(item.stockQuantity),
+      reorderLevel: item.reorderLevel === null ? "" : String(item.reorderLevel),
+      isFeatured: item.isFeatured,
+      isVariableWeight: item.isVariableWeight
     });
   }
 
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft(emptyDraft);
+    setError(null);
+  }
+
+  function validateDraft(): string | null {
+    if (!draft.name.trim()) return t("catalogue.errorNameRequired");
+    if (canManagePrices) {
+      const priceMinor = Math.round(Number(draft.price.replace(",", ".")) * 100);
+      if (!draft.price.trim() || !Number.isFinite(priceMinor) || priceMinor < 0) {
+        return t("catalogue.errorPriceInvalid");
+      }
+      if (draft.costPrice.trim()) {
+        const costPriceMinor = Math.round(Number(draft.costPrice.replace(",", ".")) * 100);
+        if (!Number.isFinite(costPriceMinor) || costPriceMinor < 0) return t("catalogue.errorCostPriceInvalid");
+      }
+    }
+    return null;
+  }
+
   function submitItem() {
+    const validationError = validateDraft();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     const body: Record<string, unknown> = {
       categoryId: draft.categoryId || categories[0]?.id,
       name: draft.name.trim(),
@@ -106,21 +153,49 @@ export function CataloguePage() {
       imageUrl: draft.imageUrl.trim() || undefined,
       unitLabel: draft.unitLabel.trim() || "item"
     };
-    // The price field is only ever sent by someone allowed to set prices, and the API enforces the
-    // same rule independently.
-    if (canManagePrices && draft.price) body.priceMinor = Number(draft.price);
+    // Price and cost price are only ever sent by someone allowed to set prices, and the API
+    // enforces the same rule independently.
+    if (canManagePrices && draft.price) {
+      body.priceMinor = Math.round(Number(draft.price.replace(",", ".")) * 100);
+      body.costPriceMinor = draft.costPrice.trim()
+        ? Math.round(Number(draft.costPrice.replace(",", ".")) * 100)
+        : editingId
+          ? null
+          : undefined;
+    }
     if (isSupermarket) {
+      if (draft.brand.trim()) body.brand = draft.brand.trim();
       if (draft.sku.trim()) body.sku = draft.sku.trim();
       if (draft.barcode.trim()) body.barcode = draft.barcode.trim();
-      if (draft.stockQuantity !== "") body.stockQuantity = Number(draft.stockQuantity);
+      body.stockQuantity = draft.stockQuantity.trim()
+        ? Math.max(0, Number.parseInt(draft.stockQuantity, 10) || 0)
+        : editingId
+          ? null
+          : undefined;
+      body.reorderLevel = draft.reorderLevel.trim()
+        ? Math.max(0, Number.parseInt(draft.reorderLevel, 10) || 0)
+        : editingId
+          ? null
+          : undefined;
+      body.isFeatured = draft.isFeatured;
+      body.isVariableWeight = draft.isVariableWeight;
     }
 
-    void run(async () => {
-      if (editingId) await updateBusinessItem(editingId, body);
-      else await createBusinessItem({ ...body, priceMinor: Number(draft.price || 0) });
-      setDraft(emptyDraft);
-      setEditingId(null);
-    });
+    void (async () => {
+      const success = await run(async () => {
+        if (editingId) await updateBusinessItem(editingId, body);
+        else {
+          await createBusinessItem({
+            ...body,
+            priceMinor: Math.round(Number(draft.price.replace(",", ".") || 0) * 100)
+          });
+        }
+      });
+      if (success) {
+        setDraft(emptyDraft);
+        setEditingId(null);
+      }
+    })();
   }
 
   return (
@@ -214,6 +289,12 @@ export function CataloguePage() {
         <div className="card">
           <h2 className="card-title">{editingId ? t("catalogue.editProduct") : t("catalogue.addProduct")}</h2>
           <div className="filters-row">
+            <input
+              className="text-input"
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              placeholder={isSupermarket ? t("catalogue.productName") : t("catalogue.itemName")}
+              value={draft.name}
+            />
             <select
               className="select"
               onChange={(event) => setDraft({ ...draft, categoryId: event.target.value })}
@@ -225,19 +306,21 @@ export function CataloguePage() {
                 </option>
               ))}
             </select>
-            <input
-              className="text-input"
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-              placeholder={t("catalogue.productName")}
-              value={draft.name}
-            />
+          </div>
+          <div className="filters-row">
             <input
               className="text-input"
               disabled={!canManagePrices}
               onChange={(event) => setDraft({ ...draft, price: event.target.value })}
               placeholder={canManagePrices ? t("catalogue.priceMinor") : t("catalogue.priceLocked")}
-              type="number"
               value={draft.price}
+            />
+            <input
+              className="text-input"
+              disabled={!canManagePrices}
+              onChange={(event) => setDraft({ ...draft, costPrice: event.target.value })}
+              placeholder={canManagePrices ? t("catalogue.costPriceMinor") : t("catalogue.costPriceLocked")}
+              value={draft.costPrice}
             />
             <input
               className="text-input"
@@ -259,8 +342,16 @@ export function CataloguePage() {
               placeholder={t("catalogue.imageUrl")}
               value={draft.imageUrl}
             />
-            {isSupermarket ? (
-              <>
+          </div>
+          {isSupermarket ? (
+            <>
+              <div className="filters-row">
+                <input
+                  className="text-input"
+                  onChange={(event) => setDraft({ ...draft, brand: event.target.value })}
+                  placeholder={t("catalogue.brand")}
+                  value={draft.brand}
+                />
                 <input
                   className="text-input"
                   onChange={(event) => setDraft({ ...draft, sku: event.target.value })}
@@ -273,6 +364,8 @@ export function CataloguePage() {
                   placeholder={t("catalogue.barcode")}
                   value={draft.barcode}
                 />
+              </div>
+              <div className="filters-row">
                 <input
                   className="text-input"
                   onChange={(event) => setDraft({ ...draft, stockQuantity: event.target.value })}
@@ -280,22 +373,36 @@ export function CataloguePage() {
                   type="number"
                   value={draft.stockQuantity}
                 />
-              </>
-            ) : null}
-          </div>
+                <input
+                  className="text-input"
+                  onChange={(event) => setDraft({ ...draft, reorderLevel: event.target.value })}
+                  placeholder={t("catalogue.reorderLevel")}
+                  type="number"
+                  value={draft.reorderLevel}
+                />
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setDraft({ ...draft, isFeatured: !draft.isFeatured })}
+                  type="button"
+                >
+                  {draft.isFeatured ? t("catalogue.featuredActive") : t("catalogue.markFeatured")}
+                </button>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setDraft({ ...draft, isVariableWeight: !draft.isVariableWeight })}
+                  type="button"
+                >
+                  {draft.isVariableWeight ? t("catalogue.variableWeightActive") : t("catalogue.fixedQuantity")}
+                </button>
+              </div>
+            </>
+          ) : null}
           <div className="filters-row">
-            <button className="btn btn-primary btn-sm" disabled={!draft.name.trim()} onClick={submitItem} type="button">
+            <button className="btn btn-primary btn-sm" onClick={submitItem} type="button">
               {editingId ? t("common.save") : t("catalogue.addProduct")}
             </button>
             {editingId ? (
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={() => {
-                  setEditingId(null);
-                  setDraft(emptyDraft);
-                }}
-                type="button"
-              >
+              <button className="btn btn-outline btn-sm" onClick={cancelEdit} type="button">
                 {t("common.cancel")}
               </button>
             ) : null}
@@ -316,6 +423,7 @@ export function CataloguePage() {
                   <th>{t("common.name")}</th>
                   <th>{t("catalogue.category")}</th>
                   <th>{t("catalogue.price")}</th>
+                  <th>{t("catalogue.cost")}</th>
                   {isSupermarket ? <th>{t("catalogue.stock")}</th> : null}
                   <th>{t("common.status")}</th>
                   <th>{t("common.actions")}</th>
@@ -327,6 +435,7 @@ export function CataloguePage() {
                     <td>{item.name}</td>
                     <td>{categories.find((category) => category.id === item.categoryId)?.name ?? "—"}</td>
                     <td className="num">{formatPrice(item.priceMinor)}</td>
+                    <td className="num">{item.costPriceMinor === null ? t("common.dash") : formatPrice(item.costPriceMinor)}</td>
                     {isSupermarket ? <td className="num">{item.stockQuantity ?? t("common.dash")}</td> : null}
                     <td>{item.isAvailable ? t("catalogue.available") : t("catalogue.soldOut")}</td>
                     <td>
@@ -348,7 +457,7 @@ export function CataloguePage() {
                         {canManageProducts ? (
                           <button
                             className="btn btn-danger btn-sm"
-                            onClick={() => void run(() => deleteBusinessItem(item.id))}
+                            onClick={() => setPendingDelete(item)}
                             type="button"
                           >
                             {t("common.delete")}
@@ -363,6 +472,20 @@ export function CataloguePage() {
           </div>
         )}
       </div>
+
+      {pendingDelete ? (
+        <ConfirmModal
+          confirmLabel={t("common.delete")}
+          description={t("catalogue.deleteConfirmDescription", { name: pendingDelete.name })}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={async () => {
+            await deleteBusinessItem(pendingDelete.id);
+            setPendingDelete(null);
+            await load();
+          }}
+          title={t("catalogue.deleteConfirmTitle")}
+        />
+      ) : null}
     </div>
   );
 }

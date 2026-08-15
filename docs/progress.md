@@ -2031,3 +2031,291 @@ single thing to verify in a shipped bundle, and it is now verified clean.
   that `android.package` in `app.json` is ignored in favour of the native
   value. Both say `com.jovo.app`, so they agree today — but `app.json`'s
   Android block is not the source of truth for this build.
+
+## 2026-08-16: Getting the supermarket catalogue entry form ready for real JOVO MARKET data entry
+
+Branch `agent/phase-15-and-jovo-brand`. Scope: an audit of the mobile
+Restaurant/Supermarket Workspace's product form (`management-screen.tsx`)
+against the `MenuItem` Prisma model, then closing every real gap found,
+ahead of the user entering JOVO MARKET's actual inventory. Image upload was
+explicitly out of scope; `imageUrl` stays a plain URL field.
+
+### Audit findings
+
+- Every existing schema field — `sku`, `barcode`, `brand`, `unitLabel`,
+  `stockQuantity`, `reorderLevel`, `isVariableWeight`, `isFeatured` — was
+  already wired end-to-end (DTO, service, mobile form) for supermarkets.
+  Confirmed live, not just read: creating a product with each of these set
+  round-tripped correctly through the real API and database (see
+  Verification below).
+- **`costPriceMinor` did not exist anywhere** — not in the schema, not in
+  any DTO, not in either mobile or admin-web form. The user asked for it
+  specifically because the margin/accounting work is still ahead and
+  wanted to avoid revisiting every product later. Added as a new nullable
+  column (see below) — this is a real schema change, not just UI wiring,
+  but stayed within "what's needed for these fields": no accounting/margin
+  *calculation* was added, only the ability to record and retrieve the raw
+  number.
+- **A second, separate, less-complete catalogue form exists**:
+  `apps/admin/src/pages/business/CataloguePage.tsx`, part of a full
+  self-service business portal in the `apps/admin` web app (Catalogue,
+  Inventory, Live Orders, Staff pages, gated by the Phase 15
+  `BusinessMember`/permission system). It is missing `brand`,
+  `isFeatured`, `isVariableWeight`, and `reorderLevel` entirely, and was
+  **not** touched this session. `docs/progress.md`'s own history
+  (2026-08-15 entry) confirms the mobile Workspace is the tool that has
+  actually been exercised and verified end-to-end across many prior
+  sessions, and "verify via the web export" matches this project's
+  established term for running the mobile app through Expo's web build —
+  not the separate admin app. Flagged here in case the user is actually
+  using `apps/admin` for data entry, since that form would need the same
+  pass if so.
+- The "silently disabled save button" trap: the no-category-yet case was
+  already handled (an `Empty` state with explicit copy replaces the whole
+  form). The undocumented trap was different — **both the item form and
+  the category form cleared themselves immediately on submit, before
+  knowing whether the save actually succeeded.** A duplicate SKU/barcode,
+  a permission error, or a dropped connection would wipe the form's
+  contents out from under the user while the real error appeared above it,
+  silently discarding whatever they had typed. Fixed by making `run()`
+  return success/failure and only clearing the form when it resolves true.
+
+### Changes made
+
+- **Schema**: `MenuItem.costPriceMinor Int?` (migration
+  `20260815223840_phase15b_menu_item_cost_price`, applied to the live
+  local database), with a `CHECK (costPriceMinor IS NULL OR
+  costPriceMinor >= 0)` constraint matching the existing `priceMinor`
+  constraint's style.
+- **API**: `costPriceMinor` added to `CreateMenuItemDto`/`UpdateMenuItemDto`,
+  `MenuItemOwnerView` (owner/admin-only — deliberately kept off
+  `MenuItemPublicView` so it can never reach a customer-facing response;
+  verified by a test asserting the key is absent from a public menu
+  payload), `menu.service.ts`'s create/update/view mapping, and the admin
+  restaurant-menu mapping. Changing it now requires `MANAGE_PRICES`, the
+  same permission that already gates `priceMinor` — reusing, not
+  duplicating, Phase 15's existing "changing what something costs is a
+  separate permission from editing it" rule. Also fixed a latent gap in
+  `testing/fake-prisma.ts`: the unit-test fake's `menuItem.create`/`update`
+  never wired `isVariableWeight`, `barcode`, or `reorderLevel` at all
+  (silently `undefined` in every test), even though the real Prisma
+  columns and the mobile form both already used them — fixed alongside
+  adding `costPriceMinor`'s own wiring, since it's the same class of gap
+  the audit was specifically asked to rule out.
+- **Mobile form** (`management-screen.tsx`): added the cost-price field;
+  reordered fields to name → category → price → cost price → description
+  → image URL → the grocery-specific fields, per the requested "sensible
+  field order"; replaced the price/category disabled-button validation
+  with explicit inline error messages (empty name, no category, invalid
+  or negative price, invalid or negative cost price) using new
+  `restaurantOps` locale keys in both languages; fixed the reset-on-submit
+  bug described above for both the item and category forms so a failed
+  save no longer erases the form; the product list row now shows the cost
+  price (`· Cost 5.00 ILS`) alongside price/stock/featured when one is
+  recorded, for a quick sanity check while entering data.
+- Category creation already leaves the form ready for the next item
+  without navigation (the category picker keeps its selection across a
+  successful save) — confirmed already true, not changed.
+
+### Verified
+
+- `npm run typecheck` and `npm test` clean across all three workspaces:
+  **204/205 API tests pass (1 skipped by design)**, up from 201 (2 new
+  cost-price service tests, plus the existing public-menu test extended
+  with a "cost price never appears on a public view" assertion); **25/25
+  mobile tests unchanged**; `apps/admin` typechecks clean against the
+  updated shared owner-view type.
+- Rebuilt and restarted the live local API (it was running a pre-session
+  build) so the new column/DTOs were actually live, then, against the
+  real running API/PostgreSQL and the real JOVO MARKET account
+  (`+970590000004`) through the mobile app's Expo web export in a real
+  browser: added four real test products through the actual form — a
+  simple item, a variable-weight item (also incidentally exercised
+  `isFeatured`), one with SKU + barcode, and one built specifically to
+  round-trip `costPriceMinor` (2000/1375 minor units in, confirmed exactly
+  2000/1375 back via a direct authenticated API read) — then deleted all
+  four (via the API — see gap below) and confirmed the product count
+  returned to exactly the pre-existing 6.
+
+### Known gaps, not fixed this session (flagged, not silently skipped)
+
+- **No delete action exists anywhere in the mobile catalogue UI**, despite
+  a working `DELETE /restaurant/me/menu/items/:itemId` backend endpoint
+  that refuses only once an item has been ordered. Today a mis-entered
+  product can only be "paused" (marked unavailable), never removed. This
+  session's own test-product cleanup had to go through the API directly
+  for exactly this reason. Worth a follow-up if fat-fingered entries turn
+  out to be common during the real data-entry pass.
+- The `apps/admin` business self-service `CataloguePage` (see audit
+  findings above) does not have `costPriceMinor`, `brand`, `isFeatured`,
+  `isVariableWeight`, or `reorderLevel` — left alone since the mobile
+  Workspace is the tool with the established track record, but flagged in
+  case the user actually enters data there instead.
+- `isAvailable` (pause/resume) remains a list-row action, not a form
+  field — unchanged, since a freshly created product should default to
+  available, matching every existing product's behavior.
+
+## 2026-08-16 (follow-up): Completing the admin web CataloguePage, and adding guarded delete
+
+Branch `agent/phase-15-and-jovo-brand`. The user is switching to keyboard
+data entry on a computer for the hundreds of real JOVO MARKET products, so
+this closes the two gaps flagged at the end of the mobile-form session
+above: `apps/admin`'s business self-service catalogue form was missing
+fields the mobile form already had, and neither surface could delete a
+mis-entered product.
+
+### 1. `apps/admin/src/pages/business/CataloguePage.tsx` — completeness pass
+
+- Added `costPriceMinor` (new field, mirrors the mobile session's schema
+  work — `apps/admin`'s `MenuItemOwner` type just needed the field added,
+  the backend already supports it), `brand`, `reorderLevel`, and toggle
+  buttons for `isFeatured`/`isVariableWeight` — the same four fields
+  flagged as missing in the prior audit.
+- **Found and fixed a real unit-mismatch bug while doing this, not asked
+  for but directly in scope**: the price input's own placeholder read
+  "Price (agorot)" — this form took `priceMinor` as a raw integer typed
+  directly into the field (`body.priceMinor = Number(draft.price)`), unlike
+  the mobile form, which always took shekels and multiplied by 100. Typing
+  "12.50" here silently became 1250 *agorot* = 12.50 ILS by coincidence
+  only for whole numbers — a decimal price like "12.50" would have produced
+  12 (rounded) instead of 1250. Converted both the create/update path and
+  `startEdit`'s pre-fill to shekels-in/shekels-out, exactly like the mobile
+  form, with the same "what the customer pays" / "what you paid for it"
+  label wording so the two tools read identically.
+- Field order: name, category, price, cost price, unit, description, image
+  URL, then (supermarket only) brand/SKU/barcode, stock/reorder level,
+  featured/variable-weight toggles — same ordering rationale as the mobile
+  pass.
+- Replaced the disabled-button-only validation with explicit inline errors
+  (empty name, invalid/negative price, invalid/negative cost price),
+  surfaced through the page's existing `error-banner` — no new UI pattern
+  needed, this page already had one.
+- **Checked for the mobile session's reset-before-confirm bug and it does
+  not exist here**: `submitItem`'s `setDraft(emptyDraft)` was already
+  sequenced *after* the awaited `create`/`updateBusinessItem` call inside
+  the same try block `run()` wraps, so a thrown error already skips past
+  the reset and lands in `run()`'s `catch`. Verified live (see below) by
+  triggering a validation error mid-edit and confirming every field —
+  including brand/SKU/barcode/toggles — was still populated.
+- Product table gained a "Cost" column (dash when unset), next to Price.
+
+### 2. Guarded delete, both business types
+
+- `apps/admin`'s delete button already called the existing guarded
+  `DELETE /restaurant/me/menu/items/:itemId` (unmodified this session —
+  `menu.service.ts`'s `deleteItem` already refuses with `409
+  MENU_ITEM_IN_USE` once any `OrderItem` references the product, exactly
+  as the user asked to reuse), but fired with no confirmation at all.
+  Added `apps/admin/src/components/ConfirmModal.tsx` — a new, generic
+  yes/no confirmation dialog reusing the existing `ReasonModal`'s visual
+  shell (`.reason-modal-*` CSS classes) without requiring a written reason,
+  since a delete needs a decision, not a text field. Wired it into both the
+  product delete button (with the product's name interpolated into the
+  prompt) — category delete was left on its plain click, unchanged, since
+  it was out of the fields/products scope this pass covered.
+- No backend or mobile changes were needed for the guard itself; only the
+  new confirmation step is new code.
+
+### Verified
+
+- `npm run typecheck` and `npm test` clean across all three workspaces —
+  same counts as the prior session (204/205 API, 25/25 mobile) plus
+  `apps/admin`'s own clean `tsc --noEmit` and `vite build`.
+- Against the live local API/PostgreSQL and the real JOVO MARKET account,
+  through the actual running `apps/admin` dev server in a real browser:
+  - Added a simple product (name, price, cost price) — round-tripped
+    exactly (9.50 / 6.00 ILS) via the products table's new Cost column.
+  - Added a fully-loaded product (all fields: brand, SKU, barcode, unit,
+    stock, reorder level, both toggles, description, cost price) —
+    confirmed every single field round-tripped exactly via a direct
+    authenticated API read (`priceMinor: 2275`, `costPriceMinor: 1540`,
+    `brand: "Test Brand"`, `sku`, `barcode`, `stockQuantity: 40`,
+    `isFeatured: true`, `isVariableWeight: true`, `reorderLevel: 5`).
+  - Edited that product with the name cleared: the inline "Enter a name
+    before saving" error appeared and **every other field — price, cost,
+    brand, SKU, barcode, stock, both toggles — was still exactly as
+    entered**, confirming no reset-before-confirm bug. Fixed the name and
+    saved successfully on the next attempt.
+  - Deleted the simple product via the new confirm dialog (cancel-by-
+    backdrop-click and the confirm button both worked); confirmed removed
+    from the table.
+  - **Guard test, not just the happy path**: placed a real customer order
+    against the full-field product (`POST /orders`, seeded customer
+    `+970590000000`), confirmed the delete confirmation dialog surfaced
+    the backend's exact guard message — "This product appears on past
+    orders and cannot be deleted. Mark it unavailable instead." — and the
+    product stayed in the table. Removed the test order directly in
+    PostgreSQL afterward (no API path un-places an order; this was purely
+    to un-block cleanup of a product created only for this test), then
+    deleted the product successfully through the same UI flow.
+  - Final count confirmed via both the UI and a direct API read: exactly
+    the original 6 seeded products, nothing extra, nothing missing.
+
+### Handoff notes for whoever picks this branch up next
+
+**State: both catalogue-entry surfaces are done, committed, and pushed to
+`agent/phase-15-and-jovo-brand`.** The user (JOVO MARKET's owner) is about
+to start real bulk data entry through the `apps/admin` web portal
+(`/business/catalogue`, logged in as a `RESTAURANT`-role/`SUPERMARKET`-
+business-type account — same login as the mobile app). Nothing here should
+need follow-up unless real data entry turns up a field or edge case this
+session didn't anticipate.
+
+**What changed, in one paragraph:** `MenuItem.costPriceMinor` is a new
+nullable column (migration `20260815223840_phase15b_menu_item_cost_price`,
+already applied to the local database — a fresh clone/deploy still needs
+`prisma migrate deploy`). It's owner/admin-only, gated by the same
+`MANAGE_PRICES` permission as the sale price, and deliberately excluded
+from every customer-facing view. Both the mobile Restaurant/Supermarket
+Workspace (`apps/mobile/src/features/restaurant/management-screen.tsx`)
+and the admin web business portal (`apps/admin/src/pages/business/
+CataloguePage.tsx`) now expose every `MenuItem` field except `imageUrl`'s
+upload (still a plain URL field, by explicit request — no image upload
+exists anywhere in this codebase), have matching shekels-in/shekels-out
+price and cost-price entry with clear labels, inline validation instead of
+silently-disabled buttons, and a guarded delete (refuses once an item has
+been ordered, same backend rule reused by both surfaces) with a
+confirm-before-delete step on the web portal specifically (mobile still has
+no delete UI at all — see gap below).
+
+**Known gaps, deliberately not fixed — read before assuming something is
+broken:**
+- **Mobile still has no delete UI**, only pause/resume. This was flagged
+  after the first (mobile-only) session and intentionally not built,
+  because the second session's follow-up request scoped delete to the web
+  portal specifically ("I'll be entering data from my computer, not my
+  phone"). If mobile data entry becomes relevant again, port the same
+  `ConfirmModal` pattern (or the mobile app's own toast/dialog convention)
+  and wire it to the same already-guarded `DELETE
+  /restaurant/me/menu/items/:itemId` endpoint — no backend work needed.
+- **Category delete has no confirmation** on either surface — only product
+  delete got the confirm-modal treatment this session, since that's what
+  was asked for. Category delete is already guarded server-side (refuses
+  while the category still holds products), so the risk is lower, but it's
+  inconsistent UX now that products have a confirm step and categories
+  don't.
+- The seeded product **"حمص" has an Arabic-only name** and shows
+  untranslated in the English UI — this is pre-existing seed data, not
+  application code, flagged repeatedly across sessions so it isn't
+  mistaken for a new bug.
+- **Nothing about margin/profit calculation exists yet.** `costPriceMinor`
+  is stored and displayed (both catalogue forms show a "Cost" column/value
+  next to price), but no screen computes a margin, markup percentage, or
+  profit report from it. That's real future work, not an oversight — the
+  original request was explicitly "store it now so I don't have to revisit
+  every product later," not "build the margin report."
+
+**Local environment, as left at the end of this session** (useful if you
+pick this up on the same machine): the API is running as a detached
+`node --enable-source-maps dist/main` process on port 3000 (rebuilt with
+this session's schema/DTO changes — if you change `schema.prisma` again,
+rebuild and restart it the same way, since a running process doesn't pick
+up a new Prisma client on its own), PostgreSQL is the `tasawaq-postgres`
+Docker container, and the `impaired-villain-itinerary.ngrok-free.dev`
+tunnel is still pointed at the local API for device testing. The admin
+web (`apps/admin`, port 5173) and mobile Expo web (port 8088) dev servers
+used for this session's browser verification were both stopped afterward
+— start either with `npm run dev`/`npx expo start --web` from the
+respective `apps/` directory when next needed. Seeded test accounts used
+throughout: JOVO MARKET owner `+970590000004`, customer
+`+970590000000`, both password `Test@12345`.

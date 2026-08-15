@@ -439,6 +439,7 @@ export class RestaurantsService {
           name: item.name,
           description: item.description,
           priceMinor: item.priceMinor,
+          costPriceMinor: item.costPriceMinor,
           imageUrl: item.imageUrl,
           sku: item.sku,
           brand: item.brand,

@@ -52,7 +52,8 @@
     "categoryLabel": "Category",
     "productNameLabel": "Product name",
     "itemNameLabel": "Item name",
-    "priceLabel": "Price (ILS)",
+    "priceLabel": "Price (ILS) — what the customer pays",
+    "costPriceLabel": "Cost price (ILS, optional) — what you paid for it",
     "imageUrlLabel": "Image URL (optional)",
     "brandLabel": "Brand (optional)",
     "skuLabel": "SKU (optional, unique in this store)",
@@ -72,11 +73,16 @@
     "noMenuItemsYet": "No menu items yet.",
     "availableLabel": "Available",
     "unavailableLabel": "Unavailable",
+    "costSuffix": " · Cost {{amount}}",
     "stockSuffix": " · Stock {{count}}",
     "featuredSuffix": " · Featured",
     "editButton": "Edit",
     "pauseButton": "Pause",
-    "resumeButton": "Resume"
+    "resumeButton": "Resume",
+    "errorNameRequired": "Enter a name before saving.",
+    "errorCategoryRequired": "Choose a category or department before saving.",
+    "errorPriceInvalid": "Enter a valid price of 0 or more (for example 12.50).",
+    "errorCostPriceInvalid": "Enter a valid cost price of 0 or more, or leave it blank."
   },
   "inventory": {
     "productsLabel": "Products",

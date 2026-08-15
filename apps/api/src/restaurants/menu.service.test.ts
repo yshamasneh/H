@@ -90,7 +90,8 @@ test("public menu only includes active categories and available items", async ()
   const availableItem = await menu.createItem(restaurant.id, {
     categoryId: visibleCategory.id,
     name: "Shawarma",
-    priceMinor: 2000
+    priceMinor: 2000,
+    costPriceMinor: 1200
   });
   const soldOutItem = await menu.createItem(restaurant.id, {
     categoryId: visibleCategory.id,
@@ -109,6 +110,8 @@ test("public menu only includes active categories and available items", async ()
   assert.equal(publicMenu.categories[0].id, visibleCategory.id);
   assert.equal(publicMenu.categories[0].items.length, 1);
   assert.equal(publicMenu.categories[0].items[0].id, availableItem.id);
+  // Cost price is owner/admin-only bookkeeping and must never reach a customer-facing view.
+  assert.equal("costPriceMinor" in publicMenu.categories[0].items[0], false);
 });
 
 test("a role without MANAGE_PRICES cannot change a price through the product update", async () => {
@@ -166,6 +169,36 @@ test("resending the same price is not treated as a price change", async () => {
     { canManagePrices: false }
   );
   assert.equal(updated.name, "Shawarma Plate");
+});
+
+test("cost price round-trips through create and update, and is gated the same as the sale price", async () => {
+  const { menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Mains" });
+  const item = await menu.createItem("restaurant-a", {
+    categoryId: category.id,
+    name: "Shawarma",
+    priceMinor: 2000,
+    costPriceMinor: 1200
+  });
+  assert.equal(item.costPriceMinor, 1200);
+
+  await assert.rejects(
+    menu.updateItem("restaurant-a", item.id, { costPriceMinor: 1300 }, { canManagePrices: false }),
+    hasCode("FORBIDDEN_PERMISSION")
+  );
+
+  const updated = await menu.updateItem("restaurant-a", item.id, { costPriceMinor: 1300 }, { canManagePrices: true });
+  assert.equal(updated.costPriceMinor, 1300);
+
+  const cleared = await menu.updateItem("restaurant-a", item.id, { costPriceMinor: null }, { canManagePrices: true });
+  assert.equal(cleared.costPriceMinor, null);
+});
+
+test("cost price is optional and defaults to null when never entered", async () => {
+  const { menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Mains" });
+  const item = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Shawarma", priceMinor: 2000 });
+  assert.equal(item.costPriceMinor, null);
 });
 
 test("a product that has never been ordered can be deleted", async () => {

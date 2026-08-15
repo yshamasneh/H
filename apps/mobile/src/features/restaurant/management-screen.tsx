@@ -78,15 +78,17 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings }: { onBack:
     void load();
   }, []);
 
-  async function run(action: (token: string) => Promise<void>, successMessage: string) {
+  async function run(action: (token: string) => Promise<void>, successMessage: string): Promise<boolean> {
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       await action(await requireToken());
       setNotice(successMessage);
+      return true;
     } catch (requestError) {
       setError(readError(requestError));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -174,7 +176,7 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings }: { onBack:
                 run(async (token) => {
                   const saved = editingId
                     ? await updateRestaurantMenuItem(token, editingId, draft)
-                    : await createRestaurantMenuItem(token, draft);
+                    : await createRestaurantMenuItem(token, { ...draft, costPriceMinor: draft.costPriceMinor ?? undefined });
                   setItems((current) => {
                     const exists = current.some((item) => item.id === saved.id);
                     return (exists ? current.map((item) => item.id === saved.id ? saved : item) : [...current, saved])
@@ -285,25 +287,36 @@ function ProfileSection(props: {
 function CategoriesSection(props: {
   categories: MenuCategoryOwner[];
   busy: boolean;
-  onCreate: (name: string, sortOrder: number) => void;
+  onCreate: (name: string, sortOrder: number) => Promise<boolean>;
   onToggle: (category: MenuCategoryOwner) => void;
 }) {
   const { t } = useTranslation(["restaurantOps"]);
   const [name, setName] = useState("");
   const [sortOrder, setSortOrder] = useState("0");
+  const [localError, setLocalError] = useState<string | null>(null);
   return (
     <>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("management.newCategoryTitle")}</Text>
         <Field label={t("management.categoryNameLabel")} value={name} onChangeText={setName} />
         <Field label={t("management.sortOrderLabel")} value={sortOrder} onChangeText={setSortOrder} keyboardType="number-pad" />
+        {localError ? <Message tone="error" text={localError} /> : null}
         <ActionButton
-          disabled={props.busy || name.trim().length < 1}
+          disabled={props.busy}
           label={t("management.addCategoryButton")}
           onPress={() => {
-            props.onCreate(name.trim(), Math.max(0, Number.parseInt(sortOrder, 10) || 0));
-            setName("");
-            setSortOrder("0");
+            if (name.trim().length < 1) {
+              setLocalError(t("management.errorNameRequired"));
+              return;
+            }
+            setLocalError(null);
+            void (async () => {
+              const success = await props.onCreate(name.trim(), Math.max(0, Number.parseInt(sortOrder, 10) || 0));
+              if (success) {
+                setName("");
+                setSortOrder("0");
+              }
+            })();
           }}
         />
       </View>
@@ -335,6 +348,7 @@ type ItemDraft = {
   name: string;
   description?: string;
   priceMinor: number;
+  costPriceMinor?: number | null;
   imageUrl?: string;
   sku?: string;
   brand?: string;
@@ -351,7 +365,7 @@ function ItemsSection(props: {
   categories: MenuCategoryOwner[];
   items: MenuItemOwner[];
   busy: boolean;
-  onSave: (draft: ItemDraft, editingId: string | null) => void;
+  onSave: (draft: ItemDraft, editingId: string | null) => Promise<boolean>;
   onToggle: (item: MenuItemOwner) => void;
 }) {
   const { t } = useTranslation(["restaurantOps"]);
@@ -359,8 +373,9 @@ function ItemsSection(props: {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState(activeCategories[0]?.id ?? props.categories[0]?.id ?? "");
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [costPrice, setCostPrice] = useState("");
+  const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [sku, setSku] = useState("");
   const [brand, setBrand] = useState("");
@@ -370,13 +385,16 @@ function ItemsSection(props: {
   const [isVariableWeight, setIsVariableWeight] = useState(false);
   const [barcode, setBarcode] = useState("");
   const [reorderLevel, setReorderLevel] = useState("");
+  const [localError, setLocalError] = useState<string | null>(null);
   const priceMinor = Math.round(Number(price.replace(",", ".")) * 100);
+  const costPriceMinor = costPrice.trim() ? Math.round(Number(costPrice.replace(",", ".")) * 100) : undefined;
 
   function reset() {
     setEditingId(null);
     setName("");
-    setDescription("");
     setPrice("");
+    setCostPrice("");
+    setDescription("");
     setImageUrl("");
     setSku("");
     setBrand("");
@@ -386,14 +404,16 @@ function ItemsSection(props: {
     setIsVariableWeight(false);
     setBarcode("");
     setReorderLevel("");
+    setLocalError(null);
   }
 
   function edit(item: MenuItemOwner) {
     setEditingId(item.id);
     setCategoryId(item.categoryId);
     setName(item.name);
-    setDescription(item.description ?? "");
     setPrice((item.priceMinor / 100).toFixed(2));
+    setCostPrice(item.costPriceMinor === null ? "" : (item.costPriceMinor / 100).toFixed(2));
+    setDescription(item.description ?? "");
     setImageUrl(item.imageUrl ?? "");
     setSku(item.sku ?? "");
     setBrand(item.brand ?? "");
@@ -403,6 +423,17 @@ function ItemsSection(props: {
     setIsVariableWeight(item.isVariableWeight);
     setBarcode(item.barcode ?? "");
     setReorderLevel(item.reorderLevel === null ? "" : String(item.reorderLevel));
+    setLocalError(null);
+  }
+
+  function validate(): string | null {
+    if (!categoryId) return t("management.errorCategoryRequired");
+    if (name.trim().length < 1) return t("management.errorNameRequired");
+    if (!price.trim() || !Number.isFinite(priceMinor) || priceMinor < 0) return t("management.errorPriceInvalid");
+    if (costPrice.trim() && (!Number.isFinite(costPriceMinor) || (costPriceMinor ?? 0) < 0)) {
+      return t("management.errorCostPriceInvalid");
+    }
+    return null;
   }
 
   if (props.categories.length === 0) return <Empty text={t("management.createCategoryFirstEmpty")} />;
@@ -414,6 +445,7 @@ function ItemsSection(props: {
           {editingId ? t("management.editItemPrefix") : t("management.newItemPrefix")}{" "}
           {props.businessType === "SUPERMARKET" ? t("management.productWord") : t("management.menuItemWord")}
         </Text>
+        <Field label={props.businessType === "SUPERMARKET" ? t("management.productNameLabel") : t("management.itemNameLabel")} value={name} onChangeText={setName} />
         <Text style={styles.label}>{props.businessType === "SUPERMARKET" ? t("management.departmentLabel") : t("management.categoryLabel")}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryPicker}>
           {props.categories.map((category) => (
@@ -428,9 +460,9 @@ function ItemsSection(props: {
             </Pressable>
           ))}
         </ScrollView>
-        <Field label={props.businessType === "SUPERMARKET" ? t("management.productNameLabel") : t("management.itemNameLabel")} value={name} onChangeText={setName} />
-        <Field label={t("management.descriptionLabel")} value={description} onChangeText={setDescription} multiline />
         <Field label={t("management.priceLabel")} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+        <Field label={t("management.costPriceLabel")} value={costPrice} onChangeText={setCostPrice} keyboardType="decimal-pad" />
+        <Field label={t("management.descriptionLabel")} value={description} onChangeText={setDescription} multiline />
         <Field label={t("management.imageUrlLabel")} value={imageUrl} onChangeText={setImageUrl} />
         {props.businessType === "SUPERMARKET" ? (
           <>
@@ -458,32 +490,42 @@ function ItemsSection(props: {
             </Pressable>
           </>
         ) : null}
+        {localError ? <Message tone="error" text={localError} /> : null}
         <ActionButton
-          disabled={props.busy || !categoryId || name.trim().length < 1 || !Number.isFinite(priceMinor) || priceMinor < 0}
+          disabled={props.busy}
           label={editingId ? t("management.saveChangesButton") : t("management.addItemButton")}
           onPress={() => {
-            props.onSave({
-              categoryId,
-              name: name.trim(),
-              description: description.trim() || undefined,
-              priceMinor,
-              imageUrl: imageUrl.trim() || undefined,
-              sku: props.businessType === "SUPERMARKET" ? sku.trim() || undefined : undefined,
-              brand: props.businessType === "SUPERMARKET" ? brand.trim() || undefined : undefined,
-              unitLabel: props.businessType === "SUPERMARKET" ? unitLabel.trim() || "item" : undefined,
-              stockQuantity: props.businessType === "SUPERMARKET"
-                ? stockQuantity.trim()
-                  ? Math.max(0, Number.parseInt(stockQuantity, 10) || 0)
-                  : editingId ? null : undefined
-                : undefined,
-              isFeatured: props.businessType === "SUPERMARKET" ? isFeatured : undefined,
-              isVariableWeight: props.businessType === "SUPERMARKET" ? isVariableWeight : undefined,
-              barcode: props.businessType === "SUPERMARKET" ? barcode.trim() || undefined : undefined,
-              reorderLevel: props.businessType === "SUPERMARKET"
-                ? reorderLevel.trim() ? Math.max(0, Number.parseInt(reorderLevel, 10) || 0) : editingId ? null : undefined
-                : undefined
-            }, editingId);
-            reset();
+            const validationError = validate();
+            if (validationError) {
+              setLocalError(validationError);
+              return;
+            }
+            setLocalError(null);
+            void (async () => {
+              const success = await props.onSave({
+                categoryId,
+                name: name.trim(),
+                priceMinor,
+                costPriceMinor: costPrice.trim() ? costPriceMinor : editingId ? null : undefined,
+                description: description.trim() || undefined,
+                imageUrl: imageUrl.trim() || undefined,
+                sku: props.businessType === "SUPERMARKET" ? sku.trim() || undefined : undefined,
+                brand: props.businessType === "SUPERMARKET" ? brand.trim() || undefined : undefined,
+                unitLabel: props.businessType === "SUPERMARKET" ? unitLabel.trim() || "item" : undefined,
+                stockQuantity: props.businessType === "SUPERMARKET"
+                  ? stockQuantity.trim()
+                    ? Math.max(0, Number.parseInt(stockQuantity, 10) || 0)
+                    : editingId ? null : undefined
+                  : undefined,
+                isFeatured: props.businessType === "SUPERMARKET" ? isFeatured : undefined,
+                isVariableWeight: props.businessType === "SUPERMARKET" ? isVariableWeight : undefined,
+                barcode: props.businessType === "SUPERMARKET" ? barcode.trim() || undefined : undefined,
+                reorderLevel: props.businessType === "SUPERMARKET"
+                  ? reorderLevel.trim() ? Math.max(0, Number.parseInt(reorderLevel, 10) || 0) : editingId ? null : undefined
+                  : undefined
+              }, editingId);
+              if (success) reset();
+            })();
           }}
         />
         {editingId ? <ActionButton label={t("management.cancelEditingButton")} onPress={reset} secondary /> : null}
@@ -497,6 +539,7 @@ function ItemsSection(props: {
             <Text style={styles.listTitle}>{item.name}</Text>
             <Text style={styles.listMeta}>
               {formatPrice(item.priceMinor)} · {item.unitLabel} · {item.isAvailable ? t("management.availableLabel") : t("management.unavailableLabel")}
+              {item.costPriceMinor === null ? "" : t("management.costSuffix", { amount: formatPrice(item.costPriceMinor) })}
               {item.stockQuantity === null ? "" : t("management.stockSuffix", { count: item.stockQuantity })}
               {item.isFeatured ? t("management.featuredSuffix") : ""}
             </Text>

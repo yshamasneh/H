@@ -52,7 +52,8 @@
     "categoryLabel": "التصنيف",
     "productNameLabel": "اسم المنتج",
     "itemNameLabel": "اسم العنصر",
-    "priceLabel": "السعر (شيكل)",
+    "priceLabel": "السعر (شيكل) — ما يدفعه الزبون",
+    "costPriceLabel": "سعر التكلفة (شيكل، اختياري) — ما دفعته أنت",
     "imageUrlLabel": "رابط الصورة (اختياري)",
     "brandLabel": "العلامة التجارية (اختياري)",
     "skuLabel": "رمز المنتج (اختياري، فريد داخل هذا المتجر)",
@@ -72,11 +73,16 @@
     "noMenuItemsYet": "لا توجد عناصر في القائمة بعد.",
     "availableLabel": "متوفر",
     "unavailableLabel": "غير متوفر",
+    "costSuffix": " · التكلفة {{amount}}",
     "stockSuffix": " · المخزون {{count}}",
     "featuredSuffix": " · مميز",
     "editButton": "تعديل",
     "pauseButton": "إيقاف مؤقت",
-    "resumeButton": "استئناف"
+    "resumeButton": "استئناف",
+    "errorNameRequired": "أدخل اسمًا قبل الحفظ.",
+    "errorCategoryRequired": "اختر تصنيفًا أو قسمًا قبل الحفظ.",
+    "errorPriceInvalid": "أدخل سعرًا صحيحًا لا يقل عن 0 (مثال: 12.50).",
+    "errorCostPriceInvalid": "أدخل سعر تكلفة صحيحًا لا يقل عن 0، أو اتركه فارغًا."
   },
   "inventory": {
     "productsLabel": "المنتجات",

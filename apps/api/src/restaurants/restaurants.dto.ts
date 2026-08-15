@@ -170,6 +170,16 @@ export class CreateMenuItemDto {
   @Max(100_000_000)
   priceMinor!: number;
 
+  @ApiPropertyOptional({
+    example: 1000,
+    description: "What the store paid for one unit, in minor currency units. Optional; kept for future margin/accounting reporting and never shown to customers."
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100_000_000)
+  costPriceMinor?: number;
+
   @ApiPropertyOptional({ example: "https://example.com/falafel.jpg" })
   @IsOptional()
   @IsString()
@@ -253,6 +263,14 @@ export class UpdateMenuItemDto {
   @Min(0)
   @Max(100_000_000)
   priceMinor?: number;
+
+  @ApiPropertyOptional({ example: 1000, description: "Set to null to clear a previously recorded cost." })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100_000_000)
+  costPriceMinor?: number | null;
 
   @ApiPropertyOptional({ example: "https://example.com/falafel.jpg" })
   @IsOptional()

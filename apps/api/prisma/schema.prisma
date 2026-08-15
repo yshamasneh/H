@@ -372,6 +372,7 @@ model MenuItem {
   name                   String
   description            String?
   priceMinor             Int
+  costPriceMinor         Int?
   imageUrl               String?
   sku                    String?
   brand                  String?

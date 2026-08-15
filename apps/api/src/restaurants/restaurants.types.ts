@@ -58,6 +58,8 @@ export type MenuCategoryOwnerView = {
 export type MenuItemOwnerView = Omit<MenuItemPublicView, "effectivePriceMinor" | "offer"> & {
   categoryId: string;
   isAvailable: boolean;
+  /** What the store paid per unit. Owner/admin-only — never present on any customer-facing view. */
+  costPriceMinor: number | null;
 };
 
 export type Page<T> = {
