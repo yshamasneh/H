@@ -99,6 +99,8 @@
     "featuredChip": "Featured",
     "departmentWithCount": "{{name}} ({{count}})",
     "noProductsFound": "No products found for these filters.",
+    "noProductsFoundHint": "Try a different search term or department.",
+    "clearFiltersButton": "Clear filters",
     "productDetailsTitle": "Product details",
     "soldByLabel": "Sold by {{unit}}",
     "soldByLabelWithSku": "Sold by {{unit}} · SKU {{sku}}",

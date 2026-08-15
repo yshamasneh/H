@@ -43,6 +43,7 @@
   "startNewCartBody": "تحتوي سلتك على عناصر من {{restaurantName}}. إضافة عنصر من {{newRestaurantName}} سيؤدي إلى إفراغها وبدء طلب جديد.",
   "clearCart": "إفراغ السلة",
   "accountCreatedNotice": "تم إنشاء حساب الزبون بنجاح.",
+  "addedToCartToast": "تمت إضافة {{name}} إلى السلة",
   "status": {
     "PENDING": "قيد الانتظار",
     "PENDING_ASSIGNMENT": "بانتظار التعيين",

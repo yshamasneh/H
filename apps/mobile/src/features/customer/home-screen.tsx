@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
   Image,
   Pressable,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -22,11 +22,12 @@ import {
   type SupermarketProduct
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import { DepartmentStripSkeleton, OfferCardSkeleton, ProductGridSkeleton } from "../../components/skeleton";
 import { Icon, disclosureIconName } from "../../theme/icon";
 import { colors, iconSize, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
-import { resolveMarketStore, type MarketStore } from "./market";
+import { forgetMarketStore, resolveMarketStore, type MarketStore } from "./market";
 import { customerTheme } from "./theme";
 
 /* On the dark hero/offer panels below (customerTheme.colors.secondary, which
@@ -76,37 +77,46 @@ export function CustomerHomeScreen(props: {
   const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function load(forceStoreRefresh: boolean) {
+    if (forceStoreRefresh) forgetMarketStore();
+    try {
+      const resolved = await resolveMarketStore();
+      setStore(resolved);
+      setCatalog(resolved ? await getSupermarketCatalog(resolved.id, { pageSize: storefrontProductCount }) : null);
+    } catch {
+      setCatalog(null);
+    }
+
+    try {
+      setOffers(await listActiveRestaurantOffers());
+    } catch {
+      setOffers([]);
+    }
+
+    try {
+      const accessToken = await getAccessToken();
+      const page = accessToken ? await listMyNotifications(accessToken, 1, 1) : null;
+      if (page) setUnreadCount(page.unreadCount);
+    } catch {
+      // A failed unread-count fetch just leaves the badge hidden — not worth surfacing an error for.
+    }
+  }
 
   useEffect(() => {
-    let mounted = true;
-
-    void resolveMarketStore()
-      .then(async (resolved) => {
-        if (!mounted) return;
-        setStore(resolved);
-        if (!resolved) return;
-        const result = await getSupermarketCatalog(resolved.id, { pageSize: storefrontProductCount });
-        if (mounted) setCatalog(result);
-      })
-      .catch(() => {
-        if (mounted) setCatalog(null);
-      });
-
-    listActiveRestaurantOffers()
-      .then((activeOffers) => mounted && setOffers(activeOffers))
-      .catch(() => mounted && setOffers([]));
-
-    getAccessToken()
-      .then((accessToken) => (accessToken ? listMyNotifications(accessToken, 1, 1) : null))
-      .then((page) => mounted && page && setUnreadCount(page.unreadCount))
-      .catch(() => {
-        // A failed unread-count fetch just leaves the badge hidden — not worth surfacing an error for.
-      });
-
-    return () => {
-      mounted = false;
-    };
+    void load(false);
   }, []);
+
+  async function refresh() {
+    setRefreshing(true);
+    // The store not being reachable is exactly the case this pull-to-refresh
+    // exists for — home's own "pull down to try again" empty-state copy
+    // promises this action, so a failed store lookup must retry, not reuse
+    // the cached failure.
+    await load(store === null);
+    setRefreshing(false);
+  }
 
   // A restaurant-scoped offer would send the customer into a vertical that is
   // not open yet, so only supermarket-scoped and platform-wide offers are
@@ -123,6 +133,7 @@ export function CustomerHomeScreen(props: {
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <ScrollView
         contentContainerStyle={[styles.content, showCartDock && styles.contentWithCart]}
+        refreshControl={<RefreshControl onRefresh={() => void refresh()} refreshing={refreshing} tintColor={customerTheme.colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBar}>
@@ -176,12 +187,20 @@ export function CustomerHomeScreen(props: {
 
         {store === null ? (
           <View style={styles.emptyCard}>
+            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="alertCircle" size="lg" /></View>
             <Text style={styles.emptyTitle}>{t("home.marketUnavailableTitle")}</Text>
             <Text style={styles.emptyText}>{t("home.marketUnavailableText")}</Text>
           </View>
         ) : null}
 
-        {catalog && catalog.departments.length > 0 ? (
+        {store === undefined || (store !== null && catalog === null) ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t("home.departmentsSectionTitle")}</Text>
+            </View>
+            <DepartmentStripSkeleton />
+          </>
+        ) : catalog && catalog.departments.length > 0 ? (
           <>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t("home.departmentsSectionTitle")}</Text>
@@ -220,9 +239,13 @@ export function CustomerHomeScreen(props: {
           <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
         </View>
         {visibleOffers === undefined ? (
-          <ActivityIndicator color={customerTheme.colors.primary} style={styles.loader} />
+          <>
+            <OfferCardSkeleton />
+            <OfferCardSkeleton />
+          </>
         ) : visibleOffers.length === 0 ? (
           <View style={styles.emptyCard}>
+            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="star" size="lg" /></View>
             <Text style={styles.emptyTitle}>{t("home.noOffersTitle")}</Text>
             <Text style={styles.emptyText}>{t("home.noOffersTextMarket")}</Text>
           </View>
@@ -260,9 +283,12 @@ export function CustomerHomeScreen(props: {
           </Pressable>
         </View>
         {store === undefined || (store !== null && catalog === null) ? (
-          <ActivityIndicator color={customerTheme.colors.primary} style={styles.loader} />
+          <ProductGridSkeleton artworkHeight={96} count={storefrontProductCount} />
         ) : catalog === null || catalog.products.length === 0 ? (
-          <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.marketProductsEmpty")}</Text></View>
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="basket" size="lg" /></View>
+            <Text style={styles.emptyText}>{t("home.marketProductsEmpty")}</Text>
+          </View>
         ) : (
           <View style={styles.productGrid}>
             {catalog.products.map((product) => (
@@ -381,8 +407,16 @@ const styles = StyleSheet.create({
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[4], marginTop: spacing[7] },
   sectionTitle: { ...text("h2", "bold"), color: customerTheme.colors.text },
   seeAll: { ...text("caption", "bold"), color: customerTheme.colors.primary },
-  loader: { marginVertical: spacing[8] },
-  emptyCard: { backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, marginTop: spacing[4], padding: spacing[6] },
+  emptyCard: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, marginTop: spacing[4], padding: spacing[6] },
+  emptyCardIcon: {
+    alignItems: "center",
+    backgroundColor: colors.neutralSubtle,
+    borderRadius: radius.pill,
+    height: 56,
+    justifyContent: "center",
+    marginBottom: spacing[3],
+    width: 56
+  },
   emptyTitle: { ...text("body", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2], textAlign: "center" },
   emptyText: { ...text("bodySm"), color: customerTheme.colors.textMuted, textAlign: "center" },
   departmentStrip: { marginBottom: spacing[1] },

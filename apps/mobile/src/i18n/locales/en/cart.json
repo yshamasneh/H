@@ -4,7 +4,8 @@
     "emptySubtitle": "Your cart is empty",
     "title": "Your Cart",
     "emptyTitle": "Your basket is waiting",
-    "emptyText": "Add items from a restaurant menu to start an order.",
+    "emptyText": "Add products from JOVO MARKET to start an order.",
+    "emptyCta": "Start Shopping",
     "unitPriceLabel": "{{price}} / {{unit}}",
     "substitutionAllowed": "✓ Similar replacement allowed",
     "substitutionNotAllowed": "No replacement if unavailable",
@@ -66,7 +67,8 @@
     "title": "My Orders",
     "subtitle": "Most recent first",
     "emptyTitle": "No orders yet",
-    "emptyText": "You have not placed any orders yet."
+    "emptyText": "You have not placed any orders yet.",
+    "emptyCta": "Browse JOVO MARKET"
   },
   "detail": {
     "title": "Order Details",

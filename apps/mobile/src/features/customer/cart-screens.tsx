@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Pressable,
   RefreshControl,
@@ -23,6 +24,7 @@ import {
   listMyOrders,
   orderPaymentMethods,
   type CreateOrderInput,
+  type DeliveryStatusSummary,
   type OrderDetail,
   type OrderQuote,
   type OrderPaymentMethod,
@@ -37,8 +39,10 @@ import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
+import { OrderDetailSkeleton, OrderListSkeleton } from "../../components/skeleton";
 import { customerTheme } from "./theme";
 import { Icon, backIconName } from "../../theme/icon";
+import { motionDuration, motionEasing, useReducedMotion } from "../../theme/motion";
 import { colors, iconSize, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import i18n from "../../i18n";
@@ -51,6 +55,7 @@ const defaultMapCoordinate: MapCoordinate = { latitude: 31.9038, longitude: 35.2
 type CartScreenProps = {
   cart: Cart | null;
   onBack: () => void;
+  onBrowse: () => void;
   onIncrement: (menuItemId: string) => void;
   onDecrement: (menuItemId: string) => void;
   onRemove: (menuItemId: string) => void;
@@ -67,9 +72,10 @@ export function CartScreen(props: CartScreenProps) {
       <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? t("cart.emptySubtitle")} title={t("cart.title")} />
       {isEmpty ? (
         <View style={styles.centered}>
-          <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>🛒</Text></View>
+          <View style={styles.emptyIcon}><Icon color={customerTheme.colors.primary} name="cart" size="xl" /></View>
           <Text style={styles.emptyTitle}>{t("cart.emptyTitle")}</Text>
           <Text style={styles.emptyText}>{t("cart.emptyText")}</Text>
+          <PrimaryButton label={t("cart.emptyCta")} onPress={props.onBrowse} />
         </View>
       ) : (
         <>
@@ -80,7 +86,7 @@ export function CartScreen(props: CartScreenProps) {
             renderItem={({ item }) => (
               <View style={styles.cartRow}>
                 <View style={styles.cartItemTop}>
-                  <View style={styles.cartItemVisual}><Text style={styles.cartItemEmoji}>🍽️</Text></View>
+                  <View style={styles.cartItemVisual}><Text style={styles.cartItemEmoji}>🥫</Text></View>
                   <View style={styles.cartRowInfo}>
                     <Text style={styles.cartRowName}>{item.name}</Text>
                     <Text style={styles.cartRowUnitPrice}>{t("cart.unitPriceLabel", { price: formatPrice(item.priceMinor), unit: item.unitLabel })}</Text>
@@ -437,7 +443,7 @@ export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
       <Header onBack={props.onDone} subtitle={order.restaurant.name} title={t("confirmation.title")} />
       <ScrollView contentContainerStyle={styles.formContent}>
         <View style={styles.successBanner}>
-          <View style={styles.successIcon}><Text style={styles.successIconText}>✓</Text></View>
+          <SuccessCheckmark />
           <Text style={styles.successTitle}>{t("confirmation.confirmedTitle")}</Text>
           <Text style={styles.successBannerText}>
             {t("confirmation.confirmedText", { store: order.restaurant.name })}
@@ -465,6 +471,32 @@ export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
   );
 }
 
+/**
+ * The one deliberate "moment of delight" motion in this app: a scale+fade
+ * entrance on the single most important confirmation the customer sees. It
+ * plays once, on mount, and is skipped entirely under reduced motion rather
+ * than substituted with a faster version — the checkmark just appears.
+ */
+function SuccessCheckmark() {
+  const reducedMotion = useReducedMotion();
+  const scale = useRef(new Animated.Value(reducedMotion ? 1 : 0.4)).current;
+  const opacity = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 5, tension: 60 }),
+      Animated.timing(opacity, { toValue: 1, duration: motionDuration.base, easing: motionEasing, useNativeDriver: true })
+    ]).start();
+  }, [reducedMotion]);
+
+  return (
+    <Animated.View style={[styles.successIcon, { opacity, transform: [{ scale }] }]}>
+      <Icon color={colors.textInverse} name="checkmark" size="lg" />
+    </Animated.View>
+  );
+}
+
 function NextStep(props: { index: number; label: string }) {
   return (
     <View style={styles.nextStepRow}>
@@ -481,6 +513,7 @@ function orderReference(orderId: string): string {
 
 type OrderHistoryScreenProps = {
   onBack: () => void;
+  onBrowse: () => void;
   onOpenOrder: (orderId: string) => void;
 };
 
@@ -520,14 +553,13 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={t("history.subtitle")} title={t("history.title")} />
       {orders === null ? (
-        <View style={styles.centered}>
-          {error ? <ErrorState message={error} onRetry={load} /> : <ActivityIndicator color={customerTheme.colors.primary} size="large" />}
-        </View>
+        error ? <View style={styles.centered}><ErrorState message={error} onRetry={load} /></View> : <OrderListSkeleton />
       ) : orders.length === 0 ? (
         <View style={styles.centered}>
-          <View style={styles.emptyIcon}><Text style={styles.emptyIconText}>🧾</Text></View>
+          <View style={styles.emptyIcon}><Icon color={customerTheme.colors.primary} name="orders" size="xl" /></View>
           <Text style={styles.emptyTitle}>{t("history.emptyTitle")}</Text>
           <Text style={styles.emptyText}>{t("history.emptyText")}</Text>
+          <PrimaryButton label={t("history.emptyCta")} onPress={props.onBrowse} />
         </View>
       ) : (
         <FlatList
@@ -541,7 +573,7 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
               onPress={() => props.onOpenOrder(item.id)}
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
             >
-              <View style={styles.orderIcon}><Text style={styles.orderIconText}>▤</Text></View>
+              <View style={styles.orderIcon}><Icon color={customerTheme.colors.primary} name="orders" size="sm" /></View>
               <View style={styles.orderRowHeader}>
                 <Text style={styles.cardTitle}>{item.restaurant.name}</Text>
                 <StatusBadge status={item.status} />
@@ -631,9 +663,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
           <ErrorState message={error} onRetry={load} />
         </View>
       ) : order === null ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={customerTheme.colors.primary} size="large" />
-        </View>
+        <OrderDetailSkeleton />
       ) : (
         <ScrollView contentContainerStyle={styles.formContent}>
           <OrderSummaryCard order={order} />
@@ -774,7 +804,7 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
   );
 }
 
-function StatusBadge(props: { status: OrderDetail["status"] }) {
+function StatusBadge(props: { status: OrderDetail["status"] | DeliveryStatusSummary["status"] }) {
   const { t } = useTranslation(["common"]);
   const palette = tokenStatusPalette[statusFamily(props.status)];
   return (
@@ -790,18 +820,21 @@ function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
   return (
     <View style={styles.summaryCard}>
       <Text style={styles.sectionTitle}>{t("detail.statusHistoryTitle")}</Text>
-      {props.history.map((entry, index) => (
-        <View key={entry.id} style={styles.timelineRow}>
-          <View style={styles.timelineMarker}>
-            <View style={styles.timelineDot} />
-            {index < props.history.length - 1 ? <View style={styles.timelineLine} /> : null}
+      {props.history.map((entry, index) => {
+        const palette = tokenStatusPalette[statusFamily(entry.toStatus)];
+        return (
+          <View key={entry.id} style={styles.timelineRow}>
+            <View style={styles.timelineMarker}>
+              <View style={[styles.timelineDot, { backgroundColor: palette.foreground, borderColor: palette.background }]} />
+              {index < props.history.length - 1 ? <View style={styles.timelineLine} /> : null}
+            </View>
+            <View style={styles.timelineCopy}>
+              <Text style={styles.timelineStatus}>{t(`common:status.${entry.toStatus}`, entry.toStatus.replace(/_/g, " "))}</Text>
+              <Text style={styles.timelineDate}>{formatDate(entry.createdAt)}</Text>
+            </View>
           </View>
-          <View style={styles.timelineCopy}>
-            <Text style={styles.timelineStatus}>{t(`common:status.${entry.toStatus}`, entry.toStatus.replace(/_/g, " "))}</Text>
-            <Text style={styles.timelineDate}>{formatDate(entry.createdAt)}</Text>
-          </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 }
@@ -812,10 +845,13 @@ function DeliveryProgressCard(props: { delivery: NonNullable<OrderDetail["delive
   return (
     <View style={styles.summaryCard}>
       <View style={styles.deliveryHeading}>
-        <View style={styles.deliveryIcon}><Text style={styles.deliveryIconText}>⌖</Text></View>
-        <View><Text style={styles.sectionTitle}>{t("detail.deliveryProgress")}</Text><Text style={styles.footerNote}>{t("detail.liveUpdates")}</Text></View>
+        <View style={styles.deliveryIcon}><Icon color={customerTheme.colors.primary} name="bicycle" size="md" /></View>
+        <View style={styles.deliveryHeadingCopy}>
+          <Text style={styles.sectionTitle}>{t("detail.deliveryProgress")}</Text>
+          <Text style={styles.footerNote}>{t("detail.liveUpdates")}</Text>
+        </View>
+        <StatusBadge status={delivery.status} />
       </View>
-      <Text style={styles.addressText}>{t(`common:status.${delivery.status}`, delivery.status.replace(/_/g, " "))}</Text>
       {delivery.pickedUpAt ? (
         <Text style={styles.footerNote}>{t("detail.pickedUpAt", { date: formatDate(delivery.pickedUpAt) })}</Text>
       ) : null}
@@ -934,7 +970,6 @@ const styles = StyleSheet.create({
   headerSubtitle: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1], maxWidth: 250 },
   centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[6] },
   emptyIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: 42, height: 84, justifyContent: "center", marginBottom: spacing[5], width: 84 },
-  emptyIconText: { fontSize: iconSize.xxl },
   emptyTitle: { ...text("h1", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2] },
   emptyText: { ...text("bodySm"), color: customerTheme.colors.textMuted, maxWidth: 310, textAlign: "center" },
   listContent: { alignSelf: "center", maxWidth: 900, padding: spacing[4], paddingBottom: spacing[8], width: "100%" },
@@ -952,7 +987,6 @@ const styles = StyleSheet.create({
   cardTitle: { ...text("h3", "bold"), color: customerTheme.colors.text },
   cardSubtitle: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
   orderIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.md, height: 42, justifyContent: "center", marginBottom: spacing[3], width: 42 },
-  orderIconText: { color: customerTheme.colors.primary, fontSize: iconSize.sm, fontWeight: "900" },
   orderRowHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   orderRowTotal: { ...text("bodySm", "bold"), color: customerTheme.colors.primary, marginTop: spacing[2] },
   statusBadge: { borderRadius: radius.pill, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
@@ -965,8 +999,8 @@ const styles = StyleSheet.create({
   timelineStatus: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
   timelineDate: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
   deliveryHeading: { alignItems: "center", flexDirection: "row", gap: spacing[3], marginBottom: spacing[3] },
+  deliveryHeadingCopy: { flex: 1 },
   deliveryIcon: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.lg, height: 48, justifyContent: "center", width: 48 },
-  deliveryIconText: { color: customerTheme.colors.primary, fontSize: iconSize.md, fontWeight: "900" },
   cartRow: {
     backgroundColor: customerTheme.colors.surface,
     borderColor: customerTheme.colors.border,
@@ -1081,7 +1115,6 @@ const styles = StyleSheet.create({
   stepLabel: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
   successBanner: { alignItems: "center", backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.lg, marginBottom: spacing[5], padding: spacing[6] },
   successIcon: { alignItems: "center", backgroundColor: customerTheme.colors.success, borderRadius: 35, height: 70, justifyContent: "center", width: 70 },
-  successIconText: { color: colors.textInverse, fontSize: iconSize.xl, fontWeight: "900" },
   successTitle: { ...text("h2", "bold"), color: customerTheme.colors.text, marginTop: spacing[4] },
   successBannerText: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[2], textAlign: "center" },
   orderNumberLabel: { ...text("label", "bold"), color: customerTheme.colors.textMuted, marginTop: spacing[4] },
@@ -1113,6 +1146,7 @@ const styles = StyleSheet.create({
     marginTop: spacing[4],
     minHeight: 54,
     justifyContent: "center",
+    paddingHorizontal: spacing[6],
     paddingVertical: spacing[4],
     ...customerTheme.shadow
   },

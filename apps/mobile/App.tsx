@@ -10,6 +10,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { ToastProvider, useToast } from "./src/components/toast";
 import i18n, { resolveInitialLanguage } from "./src/i18n";
 import { isRTLLanguage, reconcileRTL, reloadApp } from "./src/i18n/rtl";
 import type { SupportedLanguage } from "./src/core/language";
@@ -123,9 +124,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <RTLRoot>
-        <ErrorBoundary>
-          <TasawaQApp />
-        </ErrorBoundary>
+        <ToastProvider>
+          <ErrorBoundary>
+            <TasawaQApp />
+          </ErrorBoundary>
+        </ToastProvider>
       </RTLRoot>
     </SafeAreaProvider>
   );
@@ -164,6 +167,7 @@ function RTLRoot({ children }: { children: ReactNode }) {
 
 function TasawaQApp() {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const { fontsReady, fontError } = useAppFonts();
   const [screen, setScreen] = useState<AppScreen>(initialScreen);
   const [isBooting, setIsBooting] = useState(true);
@@ -277,6 +281,7 @@ function TasawaQApp() {
           globalThis.confirm(`${t("common:startNewCartTitle")}\n\n${confirmationMessage}`)
         ) {
           setCart(startCart(restaurant, item));
+          showToast(t("common:addedToCartToast", { name: item.name }));
         }
         return;
       }
@@ -288,13 +293,17 @@ function TasawaQApp() {
           {
             text: t("common:clearCart"),
             style: "destructive",
-            onPress: () => setCart(startCart(restaurant, item))
+            onPress: () => {
+              setCart(startCart(restaurant, item));
+              showToast(t("common:addedToCartToast", { name: item.name }));
+            }
           }
         ]
       );
       return;
     }
     setCart((current) => (current ? addCartItem(current, item) : startCart(restaurant, item)));
+    showToast(t("common:addedToCartToast", { name: item.name }));
   }
 
   function handleIncrementCartItem(menuItemId: string) {
@@ -555,6 +564,7 @@ function TasawaQApp() {
           <CartScreen
             cart={cart}
             onBack={() => setScreen(homeForUser(screen.user))}
+            onBrowse={() => void handleCustomerTabNavigate("browse", screen.user)}
             onCheckout={() => setScreen(goToCheckout(screen.user))}
             onDecrement={handleDecrementCartItem}
             onIncrement={handleIncrementCartItem}
@@ -591,6 +601,7 @@ function TasawaQApp() {
         >
           <OrderHistoryScreen
             onBack={() => setScreen(homeForUser(screen.user))}
+            onBrowse={() => void handleCustomerTabNavigate("browse", screen.user)}
             onOpenOrder={(orderId) => setScreen(goToOrderDetail(screen.user, orderId))}
           />
         </CustomerTabShell>

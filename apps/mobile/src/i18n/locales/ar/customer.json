@@ -99,6 +99,8 @@
     "featuredChip": "مميز",
     "departmentWithCount": "{{name}} ({{count}})",
     "noProductsFound": "لا توجد منتجات مطابقة لهذه الفلاتر.",
+    "noProductsFoundHint": "جرّب كلمة بحث أو قسمًا مختلفًا.",
+    "clearFiltersButton": "مسح الفلاتر",
     "productDetailsTitle": "تفاصيل المنتج",
     "soldByLabel": "يُباع حسب {{unit}}",
     "soldByLabelWithSku": "يُباع حسب {{unit}} · رمز المنتج {{sku}}",

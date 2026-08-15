@@ -4,7 +4,8 @@
     "emptySubtitle": "سلتك فارغة",
     "title": "سلتك",
     "emptyTitle": "سلتك بانتظارك",
-    "emptyText": "أضف عناصر من قائمة مطعم لبدء طلب.",
+    "emptyText": "أضف منتجات من جوفو ماركت لبدء طلب.",
+    "emptyCta": "ابدأ التسوق",
     "unitPriceLabel": "{{price}} / {{unit}}",
     "substitutionAllowed": "✓ يُسمح باستبدال مشابه",
     "substitutionNotAllowed": "بدون استبدال في حال عدم التوفر",
@@ -66,7 +67,8 @@
     "title": "طلباتي",
     "subtitle": "الأحدث أولاً",
     "emptyTitle": "لا توجد طلبات بعد",
-    "emptyText": "لم تقم بإرسال أي طلب حتى الآن."
+    "emptyText": "لم تقم بإرسال أي طلب حتى الآن.",
+    "emptyCta": "تصفّح جوفو ماركت"
   },
   "detail": {
     "title": "تفاصيل الطلب",

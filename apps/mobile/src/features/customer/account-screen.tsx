@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LocationMap } from "../../components/location-map";
 import type { MapCoordinate } from "../../components/location-map.types";
+import { Skeleton } from "../../components/skeleton";
 import {
   createMyAddress,
   deleteMyAccount,
@@ -201,49 +201,76 @@ export function AccountScreen(props: {
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {!profile && !error ? <ActivityIndicator color={customerTheme.colors.primary} /> : null}
-        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {!profile && !error ? (
+          <>
+            <AccountCardSkeleton lines={3} />
+            <AccountCardSkeleton lines={2} />
+          </>
+        ) : !profile && error ? (
+          <View style={styles.card}>
+            <Text style={styles.error}>{error}</Text>
+            <Button label={t("common:retry")} onPress={() => void load()} />
+          </View>
+        ) : (
+          <>
+            {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <View style={styles.card}>
-          <Text style={styles.title}>{t("account.personalDataTitle")}</Text>
-          <Text style={styles.label}>{t("account.fullNameLabel")}</Text>
-          <TextInput onChangeText={setFullName} style={styles.input} value={fullName} />
-          <Text style={styles.label}>{t("account.emailLabel")}</Text>
-          <TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={setEmail} style={styles.input} value={email} />
-          <Text style={[styles.helper, styles.ltrText]}>{profile?.phone}</Text>
-          <Button disabled={busy} label={t("account.saveProfileButton")} onPress={() => void saveProfile()} />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.title}>{t("account.savedAddressesTitle")}</Text>
-          {addresses.map((address) => (
-            <View key={address.id} style={styles.addressCard}>
-              <Text style={styles.addressTitle}>{address.label}{address.isDefault ? t("account.defaultSuffix") : ""}</Text>
-              <Text style={styles.helper}>{address.addressLine}</Text>
-              <View style={styles.row}>
-                {!address.isDefault ? <SmallButton label={t("account.setDefaultButton")} onPress={() => void setDefault(address)} /> : null}
-                <SmallButton danger label={t("account.deleteButton")} onPress={() => void removeAddress(address)} />
-              </View>
+            <View style={styles.card}>
+              <Text style={styles.title}>{t("account.personalDataTitle")}</Text>
+              <Text style={styles.label}>{t("account.fullNameLabel")}</Text>
+              <TextInput onChangeText={setFullName} style={styles.input} value={fullName} />
+              <Text style={styles.label}>{t("account.emailLabel")}</Text>
+              <TextInput autoCapitalize="none" keyboardType="email-address" onChangeText={setEmail} style={styles.input} value={email} />
+              <Text style={[styles.helper, styles.ltrText]}>{profile?.phone}</Text>
+              <Button disabled={busy} label={t("account.saveProfileButton")} onPress={() => void saveProfile()} />
             </View>
-          ))}
-          <Text style={styles.subtitle}>{t("account.addNewAddressTitle")}</Text>
-          <TextInput onChangeText={setLabel} placeholder={t("account.labelPlaceholder")} style={styles.input} value={label} />
-          <TextInput multiline onChangeText={setAddressLine} placeholder={t("account.addressLinePlaceholder")} style={[styles.input, styles.multiline]} value={addressLine} />
-          <LocationMap coordinate={coordinate} onCoordinateChange={(value) => void selectCoordinate(value)} />
-          <SmallButton label={t("account.useCurrentLocationButton")} onPress={() => void useCurrentLocation()} />
-          <Button disabled={busy} label={t("account.saveAddressButton")} onPress={() => void saveAddress()} />
-        </View>
 
-        <View style={[styles.card, styles.dangerCard]}>
-          <Text style={styles.title}>{t("account.deleteAccountTitle")}</Text>
-          <Text style={styles.helper}>{t("account.deleteAccountHelper")}</Text>
-          <Pressable disabled={busy} onPress={() => void removeAccount()} style={styles.deleteButton}>
-            <Text style={styles.deleteText}>{t("account.deleteAccountButton")}</Text>
-          </Pressable>
-        </View>
+            <View style={styles.card}>
+              <Text style={styles.title}>{t("account.savedAddressesTitle")}</Text>
+              {addresses.map((address) => (
+                <View key={address.id} style={styles.addressCard}>
+                  <Text style={styles.addressTitle}>{address.label}{address.isDefault ? t("account.defaultSuffix") : ""}</Text>
+                  <Text style={styles.helper}>{address.addressLine}</Text>
+                  <View style={styles.row}>
+                    {!address.isDefault ? <SmallButton label={t("account.setDefaultButton")} onPress={() => void setDefault(address)} /> : null}
+                    <SmallButton danger label={t("account.deleteButton")} onPress={() => void removeAddress(address)} />
+                  </View>
+                </View>
+              ))}
+              <Text style={styles.subtitle}>{t("account.addNewAddressTitle")}</Text>
+              <TextInput onChangeText={setLabel} placeholder={t("account.labelPlaceholder")} style={styles.input} value={label} />
+              <TextInput multiline onChangeText={setAddressLine} placeholder={t("account.addressLinePlaceholder")} style={[styles.input, styles.multiline]} value={addressLine} />
+              <LocationMap coordinate={coordinate} onCoordinateChange={(value) => void selectCoordinate(value)} />
+              <SmallButton label={t("account.useCurrentLocationButton")} onPress={() => void useCurrentLocation()} />
+              <Button disabled={busy} label={t("account.saveAddressButton")} onPress={() => void saveAddress()} />
+            </View>
+
+            <View style={[styles.card, styles.dangerCard]}>
+              <Text style={styles.title}>{t("account.deleteAccountTitle")}</Text>
+              <Text style={styles.helper}>{t("account.deleteAccountHelper")}</Text>
+              <Pressable disabled={busy} onPress={() => void removeAccount()} style={styles.deleteButton}>
+                <Text style={styles.deleteText}>{t("account.deleteAccountButton")}</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function AccountCardSkeleton(props: { lines: number }) {
+  return (
+    <View style={styles.card}>
+      <Skeleton height={16} style={styles.skeletonTitle} width="45%" />
+      {Array.from({ length: props.lines }).map((_, index) => (
+        <View key={index} style={styles.skeletonFieldGroup}>
+          <Skeleton height={11} width="30%" />
+          <Skeleton height={44} radius={radius.md} style={styles.skeletonInput} />
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -270,6 +297,9 @@ const styles = StyleSheet.create({
   headerTitle: { ...text("h2", "bold"), color: customerTheme.colors.text, flex: 1, textAlign: "center" },
   content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
   card: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[4], padding: spacing[5] },
+  skeletonTitle: { marginBottom: spacing[4] },
+  skeletonFieldGroup: { marginBottom: spacing[3] },
+  skeletonInput: { marginTop: spacing[2] },
   title: { ...text("h3", "bold"), color: customerTheme.colors.text, marginBottom: spacing[3], textAlign: "auto" },
   subtitle: { ...text("body", "bold"), color: customerTheme.colors.text, marginBottom: spacing[3], marginTop: spacing[5], textAlign: "auto" },
   label: { ...text("caption", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2], textAlign: "auto" },

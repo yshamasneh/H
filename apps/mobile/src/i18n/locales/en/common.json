@@ -43,6 +43,7 @@
   "startNewCartBody": "Your cart has items from {{restaurantName}}. Adding an item from {{newRestaurantName}} will clear it and start a new order.",
   "clearCart": "Clear Cart",
   "accountCreatedNotice": "Your customer account was created successfully.",
+  "addedToCartToast": "{{name}} added to cart",
   "status": {
     "PENDING": "Pending",
     "PENDING_ASSIGNMENT": "Pending assignment",

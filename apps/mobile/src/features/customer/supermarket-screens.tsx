@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   Pressable,
@@ -21,6 +20,7 @@ import {
 } from "../../core/api";
 import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
 import { readError } from "../../core/errors";
+import { ProductDetailSkeleton, ProductGridSkeleton } from "../../components/skeleton";
 import { Icon, backIconName } from "../../theme/icon";
 import { colors, iconSize, radius, spacing, withAlpha } from "../../theme/tokens";
 import { text } from "../../theme/typography";
@@ -100,9 +100,21 @@ export function SupermarketCatalogScreen(props: {
         </ScrollView>
       ) : null}
       {error ? <Centered><ErrorState message={error} /></Centered> : catalog === null ? (
-        <Centered><ActivityIndicator color={customerTheme.colors.primary} size="large" /></Centered>
+        <ProductGridSkeleton artworkHeight={115} count={6} />
       ) : catalog.products.length === 0 ? (
-        <Centered><Text style={styles.emptyText}>{t("supermarket.noProductsFound")}</Text></Centered>
+        <Centered>
+          <View style={styles.emptyIcon}><Icon color={customerTheme.colors.textMuted} name="search" size="lg" /></View>
+          <Text style={styles.emptyText}>{t("supermarket.noProductsFound")}</Text>
+          <Text style={styles.emptyHint}>{t("supermarket.noProductsFoundHint")}</Text>
+          {search || departmentId || featured ? (
+            <Pressable
+              onPress={() => { setSearchInput(""); setSearch(""); setDepartmentId(undefined); setFeatured(false); }}
+              style={styles.clearFiltersButton}
+            >
+              <Text style={styles.clearFiltersText}>{t("supermarket.clearFiltersButton")}</Text>
+            </Pressable>
+          ) : null}
+        </Centered>
       ) : (
         <FlatList
           contentContainerStyle={[styles.productGrid, showCart && styles.productGridWithCart]}
@@ -147,10 +159,10 @@ export function SupermarketProductScreen(props: {
       <StatusBar backgroundColor={customerTheme.colors.secondary} barStyle="light-content" />
       <View style={styles.productDetailHeader}><BackButton onPress={props.onBack} /><Text style={styles.productDetailHeaderTitle}>{t("supermarket.productDetailsTitle")}</Text></View>
       {error ? <Centered><ErrorState message={error} /></Centered> : product === null ? (
-        <Centered><ActivityIndicator color={customerTheme.colors.primary} size="large" /></Centered>
+        <ProductDetailSkeleton />
       ) : (
         <ScrollView contentContainerStyle={[styles.detailContent, showCart && styles.productGridWithCart]}>
-          <View style={styles.detailArtwork}>{product.imageUrl ? <Image resizeMode="contain" source={{ uri: product.imageUrl }} style={styles.image} /> : <Text style={styles.detailEmoji}>🛍️</Text>}</View>
+          <View style={styles.detailArtwork}>{product.imageUrl ? <Image resizeMode="contain" source={{ uri: product.imageUrl }} style={styles.image} /> : <Text style={styles.detailEmoji}>🥫</Text>}</View>
           <Text style={styles.detailDepartment}>{product.categoryName}</Text>
           <Text style={styles.detailName}>{product.name}</Text>
           {product.brand ? <Text style={styles.detailBrand}>{product.brand}</Text> : null}
@@ -261,15 +273,33 @@ const styles = StyleSheet.create({
   backText: { color: colors.textInverse, fontSize: iconSize.xl, marginTop: -4 },
   searchInput: { ...text("bodySm"), color: customerTheme.colors.text, flex: 1, outlineStyle: "none" } as never,
   centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[7] },
-  emptyText: { ...text("bodySm"), color: customerTheme.colors.textMuted, textAlign: "center" },
+  emptyIcon: {
+    alignItems: "center",
+    backgroundColor: colors.neutralSubtle,
+    borderRadius: radius.pill,
+    height: 64,
+    justifyContent: "center",
+    marginBottom: spacing[4],
+    width: 64
+  },
+  emptyText: { ...text("bodySm", "bold"), color: customerTheme.colors.text, textAlign: "center" },
+  emptyHint: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1], textAlign: "center" },
+  clearFiltersButton: {
+    backgroundColor: customerTheme.colors.primarySoft,
+    borderRadius: radius.md,
+    marginTop: spacing[4],
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[3]
+  },
+  clearFiltersText: { ...text("bodySm", "bold"), color: customerTheme.colors.primaryDark },
   image: { height: "100%", width: "100%" },
   muted: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
   catalogSearchRow: { flexDirection: "row", gap: spacing[2], padding: spacing[3] },
   catalogSearchInput: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, minHeight: 48, paddingHorizontal: spacing[3] },
   searchButton: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.lg, justifyContent: "center", paddingHorizontal: spacing[4] },
   searchButtonText: { ...text("caption", "bold"), color: colors.textInverse },
-  departmentStrip: { flexGrow: 0, maxHeight: 54 },
-  departmentContent: { paddingHorizontal: spacing[3], paddingBottom: spacing[2] },
+  departmentStrip: { flexGrow: 0, flexShrink: 0, maxHeight: 54 },
+  departmentContent: { alignItems: "center", paddingHorizontal: spacing[3], paddingBottom: spacing[2] },
   chip: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.pill, borderWidth: 1, marginEnd: spacing[2], paddingHorizontal: spacing[4], paddingVertical: spacing[2] },
   chipActive: { backgroundColor: customerTheme.colors.secondary, borderColor: customerTheme.colors.secondary },
   chipText: { ...text("label", "bold"), color: customerTheme.colors.textMuted },

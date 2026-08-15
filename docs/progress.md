@@ -1695,3 +1695,224 @@ means this took effect on the *existing* seeded row, not just future ones.
   this session never built or ran an APK, only re-verified the web target
   end-to-end (which never reproduced the crash in any session, including
   this one).
+
+## 2026-08-15: The B5-B8 design/polish pass (states, layout audit, motion, safe-area analysis)
+
+Branch `agent/phase-15-and-jovo-brand`, continuing directly from the same-day
+B4 session above. Scope: real skeleton loaders in place of spinners, guiding
+empty states, deliberate success feedback, a deeper layout/hierarchy audit,
+confirming the order-tracking status-family system is fully applied, minimal
+motion, and a read-only assessment of the persistent-nav safe-area question
+flagged (not fixed) in the prior entry.
+
+### 1. Loading, empty, and success states — done
+
+- New `src/theme/motion.ts`: `useReducedMotion()` (backed by
+  `AccessibilityInfo.isReduceMotionEnabled`, which resolves to
+  `prefers-reduced-motion` on web and the OS accessibility setting on
+  native — one hook, both platforms) plus the shared easing/duration
+  constants `theme/tokens.ts` had already declared but nothing consumed yet.
+- New `src/components/skeleton.tsx`: one `Skeleton` primitive (a pulsing
+  block, frozen at a fixed opacity under reduced motion) plus
+  layout-matching composites — `ProductCardSkeleton`/`ProductGridSkeleton`,
+  `DepartmentStripSkeleton`, `OfferCardSkeleton`, `OrderCardSkeleton`/
+  `OrderListSkeleton`, `OrderDetailSkeleton`, `ProductDetailSkeleton` — each
+  shaped after the real card/screen it stands in for, not a generic bar.
+  Replaced every bare `ActivityIndicator` loading state on the customer
+  surface: home's department strip/offers/product grid, the supermarket
+  catalogue grid and product detail, order history and order detail,
+  the notification inbox, and the account screen's two form cards (which
+  previously flashed blank inputs before the profile loaded — now shows a
+  skeleton and gates the real form behind `profile` being loaded or errored,
+  with its own retry action on error).
+- New `src/components/toast.tsx`: a `ToastProvider`/`useToast()` pair — a
+  dark snackbar-style toast (checkmark icon + message, fades and slides in
+  from the top, auto-dismisses after ~2.2s, skips the slide under reduced
+  motion) mounted once at the app root above `ErrorBoundary`. Wired into
+  `App.tsx`'s single `handleAddToCart` handler (shared by every "Add"
+  button — home, catalogue, product detail) so adding an item now gives
+  explicit confirmation instead of a silent state change; the existing
+  cart-dock/nav-badge count-up is unaffected. Order placement deliberately
+  does **not** also get a toast — it already has its own full confirmation
+  screen, which is where the one "moment of delight" motion in this app
+  now lives: `SuccessCheckmark`, a scale+fade entrance on that screen's
+  checkmark (skipped outright, not just shortened, under reduced motion);
+  the raw `✓`/`⌖` glyph characters it and the delivery-progress heading were
+  standing in for are now real `Icon`s, closing a gap the B4 icon pass had
+  missed on this specific screen.
+- Guiding empty states, each now icon + message + (where a next action
+  actually exists) a real button: cart empty → "Start Shopping" into Browse;
+  order history empty → "Browse JOVO MARKET" into Browse; catalogue
+  zero-results → a hint line plus "Clear filters" (only shown when a
+  filter is actually active) that resets search/department/featured in one
+  tap; notification inbox empty → an added hint line. Home's own empty
+  states (no offers, store unreachable, no products) keep their existing
+  copy — there is no "elsewhere" to send the customer to from the screen
+  that already *is* the storefront — but gained the same icon treatment for
+  visual consistency with the rest.
+- **A real, functional bug fixed alongside this**: home's "store unreachable"
+  copy has said "pull down to try again" since it was written, but the
+  screen's `ScrollView` never had a `RefreshControl` — the instruction was
+  never actionable. Added pull-to-refresh to the whole home screen
+  (`refresh()`, wired to a new unified `load(forceStoreRefresh)` that also
+  re-fetches offers and the unread count), and made it call the existing
+  `forgetMarketStore()` when the store previously failed to resolve, so
+  the documented recovery path now actually recovers.
+- **A second stale-copy bug, found while touching the empty-cart string**:
+  it still read "Add items from a restaurant menu to start an order" — a
+  leftover from before the JOVO MARKET-only pivot (2026-08-14 entry above).
+  Changed to "Add products from JOVO MARKET…" in both locales.
+
+### 2. Layout/hierarchy audit — findings and fixes
+
+- **A real, visible bug found and fixed**: the supermarket catalogue's
+  department/filter chip row (`SupermarketCatalogScreen`) was rendering
+  with its pills clipped to roughly half their height, chip labels cut off
+  mid-glyph — confirmed via `getBoundingClientRect`/computed-style
+  inspection in the live browser, not just a screenshot guess: the
+  horizontal `ScrollView`'s host `<div>` computed to `13.6px` tall despite
+  its own `maxHeight: 54` and un-shrunk content needing ~34px, meaning the
+  flex algorithm was shrinking it below content because its style set
+  `flexGrow: 0` but never `flexShrink: 0` — React Native's own default,
+  which `react-native-web`'s compiled CSS doesn't reliably reproduce unless
+  the style says so explicitly. Fixed with one line
+  (`flexShrink: 0` on `departmentStrip`, `alignItems: "center"` on
+  `departmentContent`), reloaded, re-measured: pills render at full height,
+  fully legible, in both languages. This is exactly the class of bug the
+  brief asked this pass to go looking for.
+- **Product placeholder-emoji consistency, fixed**: the cart line-item row
+  used `🍽️` (a restaurant emoji, left over from before the JOVO
+  MARKET-only pivot) and the product-detail screen used `🛍️`, while home
+  and the catalogue grid both already used `🥫`. All three now use `🥫`, so
+  a customer sees one consistent "no photo" placeholder everywhere in the
+  order they'd actually encounter it — catalogue → detail → cart.
+- **Order-tracking status-color system: confirmed, and finished applying,
+  not just confirmed**. `StatusTimeline`'s dots were hardcoded to orange
+  regardless of the status they represented — so an order's full history
+  read as an unbroken orange line even after it reached `DELIVERED`. Each
+  dot now colors from `statusFamily(entry.toStatus)`, verified live against
+  a real delivered order: PLACED orange → ACCEPTED/PREPARING/
+  READY_FOR_PICKUP blue → DELIVERED green, readable in one glance exactly
+  as the five-family system intends. `DeliveryProgressCard` had the same
+  gap one level up — the delivery's own status (`PENDING_ASSIGNMENT`
+  through `DELIVERED`) rendered as plain uncolored text with a `⌖` glyph;
+  it now reuses the shared `StatusBadge` (color-coded, translated) and a
+  real `bicycle` icon, both already used by the order list/detail above it.
+- Spacing, weight hierarchy, and image aspect/corner-radius treatment were
+  audited screen by screen (home, catalogue, product detail, cart,
+  checkout, order history/detail, account/settings) against the existing
+  `spacing`/`radius` token scale and found already consistent — every
+  screen already reads off `theme/tokens.ts`, nothing hardcoded. The single
+  orange-accent rule holds: orange is scoped to primary CTAs, the active
+  nav tab, active/attention status badges, and small per-card "add"
+  buttons — never a background fill or a secondary action.
+
+### 3. Order-tracking five-status-family system — confirmed complete
+
+Between the color fixes in section 2 and the palette/`statusFamily()` work
+already in `theme/tokens.ts`, every place an order or delivery status is
+shown to the customer now draws from the same five-family palette:
+`OrderHistoryScreen`'s `StatusBadge`, `OrderDetailScreen`'s summary badge,
+`StatusTimeline`'s dots, and `DeliveryProgressCard`'s badge. Nothing left
+using an ad hoc color.
+
+### 4. Motion — minimal, as instructed
+
+Exactly three additions, all built on the new `theme/motion.ts` and all
+`useReducedMotion`-aware: the skeleton pulse (loading), the add-to-cart
+toast's slide+fade (state change confirmation), and the order-confirmation
+checkmark's scale+fade entrance (the one "moment of delight"). No animation
+library was added — everything uses React Native's built-in `Animated`.
+Full-screen transition animation between the state-machine-switched screens
+in `App.tsx` was deliberately **not** attempted: there is no navigation
+library here to hook a transition into, App.tsx swaps `screen.name`
+synchronously, and wrapping that swap in a cross-fade would mean touching
+the render path of every single screen for a purely decorative gain that
+the brief itself called "last, and minimal." Flagged here rather than
+silently skipped.
+
+### 5. The persistent-nav safe-area double-inset — analyzed, not fixed
+
+Re-read `bottom-nav.tsx` and the five tab-root screens
+(`home-screen.tsx`, `cart-screens.tsx`'s `CartScreen` and
+`OrderHistoryScreen`, `supermarket-screens.tsx`'s `SupermarketCatalogScreen`,
+`account-screen.tsx`) end to end, and confirmed the gap flagged in the prior
+entry is real, not a false alarm:
+
+- `CustomerBottomNav` wraps itself in
+  `<SafeAreaView edges={["bottom"]}>` — correct, it needs the bottom inset
+  since it sits at the physical bottom of the screen.
+- Every one of the five tab-root screens *also* wraps its own content in
+  `<SafeAreaView style={styles.screen}>` with **no `edges` prop**, which
+  defaults to all four edges — including bottom. But inside
+  `CustomerTabShell`, that screen is never at the physical bottom; the nav
+  bar is rendered below it as a sibling. So each screen reserves a
+  bottom-inset-sized strip of blank padding at the end of its own content,
+  immediately above a nav bar that reserves the *same* inset again for
+  itself — the inset gets paid for twice.
+- **This is a real risk**, not a false alarm — it only shows up on a device
+  with a nonzero bottom inset (an iPhone with a home indicator, or Android
+  gesture navigation), which is why it was invisible in every verification
+  this session could run: web has no safe-area inset at all, so
+  `insets.bottom` resolves to `0` and the double-reservation is `0 + 0`.
+  Nothing short of a real device (or an iOS/Android simulator with a
+  simulated inset) will show the actual gap.
+- **The correct fix**: change those five screens' outer `SafeAreaView` to
+  `edges={["top", "left", "right"]}` — dropping `"bottom"` — since
+  `CustomerBottomNav` already owns that edge. One line per file, five
+  files: `home-screen.tsx`, `cart-screens.tsx` (both `CartScreen` and
+  `OrderHistoryScreen` — same file, two separate `SafeAreaView`s),
+  `supermarket-screens.tsx`'s `SupermarketCatalogScreen`, and
+  `account-screen.tsx`. Deliberately **not applied** — per instruction, this
+  needed a second pair of eyes before touching five screens on the strength
+  of a read, not a device measurement. `SupermarketProductScreen` and the
+  deep-flow cart screens (`CheckoutScreen`, `OrderConfirmationScreen`,
+  `OrderDetailScreen`) are unaffected either way — they're not wrapped in
+  `CustomerTabShell`, so their own `SafeAreaView` is correctly the outermost
+  edge-owner as written.
+
+### Verified
+
+- `npm run typecheck` and `npm test` (25/25) clean in the mobile workspace;
+  `npx expo export --platform web` bundles cleanly at 754 modules, still
+  one Ionicons font (390 KB) and a 1.61 MB JS bundle — the new icons used
+  this session (`checkCircle`, `checkmark`, `star`, `basket`, `alertCircle`,
+  `bicycle`) were all already in the bundled Ionicons set from the B4 pass,
+  so no bundle-size regression.
+- Real browser (Expo web dev server against the live local API/PostgreSQL),
+  **both languages, logged in as the seeded customer**: home's pull-to-
+  refresh, the add-to-cart toast (screenshotted mid-animation via a batched
+  click+screenshot to beat the ~2.2s auto-dismiss, confirmed correct RTL
+  layout in Arabic — icon and text both flow right-to-left), the empty cart
+  state and its "Start Shopping" CTA routing into Browse, the catalogue's
+  zero-results state and working "Clear filters", the department-chip fix
+  (before/after, `zoom`-captured), a real order's status timeline showing
+  the orange→blue→green progression end to end, `DeliveryProgressCard`'s
+  new badge and icon, and the notification inbox's new header/skeleton.
+  Console read via `read_console_messages` showed no application errors
+  (only an unrelated Chrome-extension messaging warning).
+- Confirmed via `git status` that only the intended 14 files changed — no
+  incidental edits to `apps/api`, `apps/admin`, restaurant/driver/admin
+  screens, backend logic, database schema, auth, or routing.
+
+### Not verified / explicitly out of scope this session
+
+- The safe-area double-inset gap itself — see section 5; needs a real
+  device or simulator, not this session's tools.
+- Order placement's `SuccessCheckmark` animation specifically — the live
+  checkout run hit an expired access token late in this session (an
+  unrelated, pre-existing short-JWT-lifetime characteristic, not a
+  regression from anything touched here) before a fresh order could be
+  placed and screenshotted mid-animation. The component logic was
+  read-verified and follows the exact same `useReducedMotion` pattern
+  already proven working by the toast; low residual risk, but flagging
+  since it is the one motion addition not screenshotted in the browser.
+- Native builds: everything this session touched was verified against the
+  Expo web target only, matching this environment's standing constraint
+  (no device available this session either). No native-only code paths
+  (constants, permissions, native modules) were touched.
+- One pre-existing, out-of-scope data oddity noticed while browsing in
+  English: one seeded product ("حمص") has an Arabic-only name in the
+  database, so it renders untranslated inside the English UI. This is
+  seed data, not application code — same category as the previously-flagged
+  "TasawaQ Fresh Market" seed-name mismatch — and was left alone.

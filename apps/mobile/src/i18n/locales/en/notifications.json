@@ -2,6 +2,7 @@
   "inbox": {
     "title": "Notifications",
     "emptyText": "You have no notifications yet.",
+    "emptyHint": "Updates about your order status will show up here.",
     "tryAgain": "Try Again"
   }
 }
