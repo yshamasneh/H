@@ -8,7 +8,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Switch,
   Text,
   View
 } from "react-native";
@@ -17,24 +16,34 @@ import {
   acceptDelivery,
   listAvailableDeliveries,
   listMyDeliveries,
+  listMyNotifications,
   setDriverOnlineStatus,
   updateDeliveryStatus,
+  updateDriverLocation,
   type DeliveryStatusValue,
   type DeliveryView,
-  type DriverDeliveryStatusAction
+  type DriverDeliveryStatusAction,
+  type PublicUser
 } from "../../core/api";
+import { LocationMap } from "../../components/location-map";
+import type { MapCoordinate } from "../../components/location-map.types";
+import { Skeleton } from "../../components/skeleton";
 import { readError } from "../../core/errors";
+import { getCurrentCoordinates } from "../../core/location";
 import { getAccessToken } from "../../core/session";
-import { Icon } from "../../theme/icon";
+import { Icon, disclosureIconName } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { activeDeliveryStatuses, nextDriverActionByStatus } from "./delivery.rules";
 
 const currencyCode = "ILS";
+const defaultCoordinate: MapCoordinate = { latitude: 31.9038, longitude: 35.2034 };
 
 type DriverHomeScreenProps = {
-  onBack: () => void;
+  user: PublicUser;
   onOpenDelivery: (deliveryId: string) => void;
+  onOpenEarnings: () => void;
+  onOpenNotifications: () => void;
   onOpenSettings: () => void;
 };
 
@@ -47,6 +56,22 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const hasActiveDelivery = (mine?.length ?? 0) > 0;
+
+  // Read the device location, show it on the map, and report it to the server so dispatch/admin can
+  // see where the driver is. Location failures are non-fatal — the map falls back to a default pin.
+  async function refreshLocation() {
+    try {
+      const next = await getCurrentCoordinates();
+      setCoordinate(next);
+      const accessToken = await getAccessToken();
+      if (accessToken) await updateDriverLocation(accessToken, next.latitude, next.longitude);
+    } catch {
+      setCoordinate((current) => current ?? defaultCoordinate);
+    }
+  }
 
   async function load() {
     setError(null);
@@ -62,6 +87,12 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
       ]);
       setAvailable(availableDeliveries);
       setMine(ownDeliveries.items.filter((delivery) => activeDeliveryStatuses.includes(delivery.status)));
+      try {
+        const notifications = await listMyNotifications(accessToken, 1, 1);
+        setUnreadCount(notifications.unreadCount);
+      } catch {
+        // A failed unread-count lookup just leaves the badge hidden — not worth surfacing.
+      }
     } catch (requestError) {
       setError(readError(requestError));
     }
@@ -69,11 +100,12 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
 
   useEffect(() => {
     void load();
+    void refreshLocation();
   }, []);
 
   async function refresh() {
     setRefreshing(true);
-    await load();
+    await Promise.all([load(), refreshLocation()]);
     setRefreshing(false);
   }
 
@@ -89,6 +121,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
       const profile = await setDriverOnlineStatus(accessToken, next);
       setIsOnline(profile.isOnline);
       await load();
+      if (profile.isOnline) void refreshLocation();
     } catch (requestError) {
       setError(readError(requestError));
     } finally {
@@ -117,30 +150,74 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
-      <Header onBack={props.onBack} subtitle={t("home.dashboardSubtitle")} title={t("home.dashboardTitle")} />
-      <View style={styles.onlineRow}>
-        <Text style={styles.onlineLabel}>{isOnline ? t("home.onlineStatus") : t("home.offlineStatus")}</Text>
-        {togglingOnline ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : (
-          <Switch onValueChange={toggleOnline} thumbColor={colors.textInverse} trackColor={{ true: colors.primary }} value={isOnline} />
-        )}
+      <StatusBar backgroundColor={colors.background} barStyle="dark-content" />
+      <View style={styles.topBar}>
+        <View style={styles.topBarCopy}>
+          <Text style={styles.eyebrow}>JOVO</Text>
+          <Text numberOfLines={1} style={styles.greeting}>{t("home.greeting", { name: firstName(props.user.fullName) })}</Text>
+        </View>
+        <View style={styles.topBarActions}>
+          <Pressable accessibilityLabel={t("common:notifications")} onPress={props.onOpenNotifications} style={styles.iconButton}>
+            <Icon color={colors.text} name="notifications" size="md" />
+            {unreadCount > 0 ? <View style={styles.notificationDot} /> : null}
+          </Pressable>
+          <Pressable accessibilityLabel={t("common:settings")} onPress={props.onOpenSettings} style={styles.iconButton}>
+            <Icon color={colors.text} name="settings" size="md" />
+          </Pressable>
+        </View>
       </View>
       {error ? <ErrorText message={error} /> : null}
       <ScrollView
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor={colors.primary} />}
+        showsVerticalScrollIndicator={false}
       >
+        <Text style={styles.dashboardHeading}>{t("home.dashboardTitle")}</Text>
+        <View style={styles.mapCard}>
+          <LocationMap
+            coordinate={coordinate ?? defaultCoordinate}
+            height={190}
+            markers={coordinate ? [{ id: "me", latitude: coordinate.latitude, longitude: coordinate.longitude, title: t("home.youAreHere"), color: colors.primary }] : []}
+          />
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={togglingOnline}
+          onPress={() => toggleOnline(!isOnline)}
+          style={[styles.onlineButton, isOnline ? styles.onlineButtonOn : styles.onlineButtonOff]}
+        >
+          {togglingOnline ? (
+            <ActivityIndicator color={isOnline ? colors.textInverse : colors.primary} />
+          ) : (
+            <>
+              <View style={[styles.onlineDot, isOnline ? styles.onlineDotOn : styles.onlineDotOff]} />
+              <Text style={[styles.onlineButtonText, isOnline ? styles.onlineButtonTextOn : styles.onlineButtonTextOff]}>
+                {isOnline ? t("home.goOfflineButton") : t("home.goOnlineButton")}
+              </Text>
+            </>
+          )}
+        </Pressable>
+
+        <Pressable accessibilityRole="button" onPress={props.onOpenEarnings} style={styles.earningsLink}>
+          <View style={styles.earningsIcon}><Icon color={colors.primary} name="orders" size="sm" /></View>
+          <Text style={styles.earningsLinkText}>{t("home.viewEarnings")}</Text>
+          <Icon color={colors.textMuted} name={disclosureIconName()} size="sm" />
+        </Pressable>
+
         {mine === null || available === null ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color={colors.primary} size="large" />
-          </View>
+          <>
+            <Text style={styles.sectionTitle}>{t("home.yourActiveDeliveries")}</Text>
+            <DeliveryCardSkeleton />
+            <Text style={styles.sectionTitle}>{t("home.availableDeliveries")}</Text>
+            <DeliveryCardSkeleton />
+            <DeliveryCardSkeleton />
+          </>
         ) : (
           <>
             <Text style={styles.sectionTitle}>{t("home.yourActiveDeliveries")}</Text>
             {mine.length === 0 ? (
-              <Text style={styles.emptyText}>{t("home.noActiveDeliveries")}</Text>
+              <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.noActiveDeliveries")}</Text></View>
             ) : (
               mine.map((delivery) => (
                 <Pressable
@@ -160,9 +237,11 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
 
             <Text style={styles.sectionTitle}>{t("home.availableDeliveries")}</Text>
             {!isOnline ? (
-              <Text style={styles.emptyText}>{t("home.goOnlineToSee")}</Text>
+              <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.goOnlineToSee")}</Text></View>
+            ) : hasActiveDelivery ? (
+              <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.finishCurrentFirst")}</Text></View>
             ) : available.length === 0 ? (
-              <Text style={styles.emptyText}>{t("home.noDeliveriesWaiting")}</Text>
+              <View style={styles.emptyCard}><Text style={styles.emptyText}>{t("home.noDeliveriesWaiting")}</Text></View>
             ) : (
               available.map((delivery) => (
                 <View key={delivery.id} style={styles.card}>
@@ -180,13 +259,25 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
             )}
           </>
         )}
-        <Pressable onPress={props.onOpenSettings} style={styles.settingsLink}>
-          <Icon color={colors.textMuted} name="settings" size="sm" />
-          <Text style={styles.settingsLinkText}>{t("common:settings")}</Text>
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function DeliveryCardSkeleton() {
+  return (
+    <View style={styles.card}>
+      <View style={styles.orderRowHeader}>
+        <Skeleton height={14} width="45%" />
+        <Skeleton height={20} radius={radius.sm} width={64} />
+      </View>
+      <Skeleton height={11} style={styles.skeletonLine} width="70%" />
+    </View>
+  );
+}
+
+function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] || fullName;
 }
 
 type DeliveryDetailScreenProps = {
@@ -368,7 +459,27 @@ function formatPrice(priceMinor: number): string {
 
 
 const styles = StyleSheet.create({
-  screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
+  screen: { backgroundColor: colors.background, flex: 1 },
+  topBar: {
+    alignItems: "center",
+    backgroundColor: colors.background,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing[5],
+    paddingVertical: spacing[4]
+  },
+  topBarCopy: { flex: 1, paddingEnd: spacing[3] },
+  eyebrow: { ...text("caption", "bold"), color: colors.primary },
+  greeting: { ...text("h2", "bold"), color: colors.text, marginTop: spacing[1] },
+  topBarActions: { flexDirection: "row", gap: spacing[2] },
+  iconButton: { alignItems: "center", backgroundColor: colors.surfaceSunk, borderRadius: radius.lg, height: 44, justifyContent: "center", position: "relative", width: 44 },
+  notificationDot: { backgroundColor: colors.primary, borderRadius: radius.pill, height: 10, position: "absolute", right: 10, top: 10, width: 10 },
+  earningsIcon: { alignItems: "center", backgroundColor: colors.primarySubtle, borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
+  emptyCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[3], padding: spacing[5] },
+  skeletonLine: { marginTop: spacing[3] },
+  dashboardHeading: { ...text("h2", "bold"), color: colors.text, marginBottom: spacing[3] },
   header: {
     backgroundColor: colors.surface,
     borderBottomColor: colors.border,
@@ -391,8 +502,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[4]
   },
   onlineLabel: { ...text("body", "bold"), color: colors.text },
+  mapCard: { borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[4], overflow: "hidden" },
+  onlineButton: { alignItems: "center", borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", gap: spacing[2], justifyContent: "center", marginBottom: spacing[3], minHeight: 54 },
+  onlineButtonOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  onlineButtonOff: { backgroundColor: colors.surface, borderColor: colors.primary },
+  onlineDot: { borderRadius: radius.pill, height: 10, width: 10 },
+  onlineDotOn: { backgroundColor: colors.textInverse },
+  onlineDotOff: { backgroundColor: colors.primary },
+  onlineButtonText: { ...text("body", "bold") },
+  onlineButtonTextOn: { color: colors.textInverse },
+  onlineButtonTextOff: { color: colors.primary },
+  earningsLink: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", gap: spacing[3], marginBottom: spacing[5], paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
+  earningsLinkText: { ...text("bodySm", "bold"), color: colors.text, flex: 1 },
   centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[6] },
-  emptyText: { ...text("bodySm"), color: colors.textMuted, marginBottom: spacing[4] },
+  emptyText: { ...text("bodySm"), color: colors.textMuted, textAlign: "center" },
   settingsLink: { alignItems: "center", flexDirection: "row", gap: spacing[2], justifyContent: "center", marginTop: spacing[6], paddingVertical: spacing[3] },
   settingsLinkText: { ...text("bodySm", "medium"), color: colors.textMuted },
   listContent: { padding: spacing[4], paddingBottom: spacing[8] },

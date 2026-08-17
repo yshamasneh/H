@@ -33,6 +33,19 @@ export const terminalDeliveryStatuses: DeliveryStatus[] = [
   DeliveryStatus.FAILED
 ];
 
+/** Delivery states a driver is still committed to — one at a time, so a driver cannot hoard jobs. */
+export const activeDeliveryStatuses: DeliveryStatus[] = [
+  DeliveryStatus.ASSIGNED,
+  DeliveryStatus.PICKED_UP,
+  DeliveryStatus.ON_THE_WAY
+];
+
+/**
+ * Flat driver payout per completed delivery, in minor units (₪7.00). A starting figure, kept as a
+ * single constant so the earnings screen and any future payout logic read the same number.
+ */
+export const driverEarningPerDeliveryMinor = 700;
+
 /**
  * The default party a failure is attributed to, applied once and stored on the delivery.
  *

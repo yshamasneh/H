@@ -1,9 +1,24 @@
 {
+  "earnings": {
+    "headerTitle": "أرباحي",
+    "subtitle": "ملخّص توصيلاتك وأرباحك",
+    "totalLabel": "إجمالي الأرباح",
+    "rateHint": "{{rate}} لكل طلبية مكتملة",
+    "completedLabel": "طلبيات مكتملة",
+    "activeLabel": "قيد التوصيل الآن",
+    "footnote": "تُحتسب الأرباح من الطلبيات المكتملة (المُسلّمة) فقط."
+  },
   "home": {
     "dashboardTitle": "لوحة التوصيل",
     "dashboardSubtitle": "فعّل الاتصال لرؤية التوصيلات",
+    "greeting": "أهلًا، {{name}} 👋",
     "onlineStatus": "أنت متصل",
     "offlineStatus": "أنت غير متصل",
+    "goOnlineButton": "ابدأ الاتصال لاستقبال الطلبات",
+    "goOfflineButton": "أنت متصل — اضغط لإيقاف الاتصال",
+    "youAreHere": "موقعك الحالي",
+    "viewEarnings": "أرباحي وإحصائياتي",
+    "finishCurrentFirst": "أنهِ توصيلتك الحالية قبل قبول طلبية أخرى.",
     "yourActiveDeliveries": "توصيلاتك النشطة",
     "noActiveDeliveries": "لا توجد لديك توصيلات نشطة.",
     "deliverToLabel": "التوصيل إلى: {{address}}",

@@ -1,6 +1,6 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
-import { PaginationQueryDto, SupermarketCatalogQueryDto } from "./restaurants.dto";
+import { SupermarketCatalogQueryDto, SupermarketListQueryDto } from "./restaurants.dto";
 import { RestaurantsService } from "./restaurants.service";
 
 @ApiTags("supermarkets")
@@ -9,9 +9,9 @@ export class SupermarketsController {
   constructor(private readonly restaurants: RestaurantsService) {}
 
   @Get()
-  @ApiOperation({ summary: "List approved, open supermarkets" })
-  list(@Query() query: PaginationQueryDto) {
-    return this.restaurants.listPublicSupermarkets(query.page ?? 1, query.pageSize ?? 20);
+  @ApiOperation({ summary: "List approved supermarkets (open only unless includeClosed is set)" })
+  list(@Query() query: SupermarketListQueryDto) {
+    return this.restaurants.listPublicSupermarkets(query.page ?? 1, query.pageSize ?? 20, query.includeClosed ?? false);
   }
 
   @Get(":supermarketId/catalog")

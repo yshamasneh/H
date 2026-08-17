@@ -23,8 +23,15 @@ export class MenuService {
   }
 
   async createCategory(restaurantId: string, input: CreateMenuCategoryDto): Promise<MenuCategoryOwnerView> {
+    const name = input.name.trim();
+    await this.assertCategoryNameAvailable(restaurantId, name);
+    // An owner who does not care about ordering gets the next free slot, so two
+    // categories never silently share a position; an explicit value is honoured
+    // but must be unique.
+    const sortOrder = input.sortOrder ?? (await this.nextCategorySortOrder(restaurantId));
+    await this.assertCategorySortOrderAvailable(restaurantId, sortOrder);
     const category = await this.prisma.menuCategory.create({
-      data: { restaurantId, name: input.name.trim(), sortOrder: input.sortOrder ?? 0 }
+      data: { restaurantId, name, sortOrder }
     });
     return toCategoryView(category);
   }
@@ -35,6 +42,12 @@ export class MenuService {
     input: UpdateMenuCategoryDto
   ): Promise<MenuCategoryOwnerView> {
     const category = await this.requireOwnCategory(restaurantId, categoryId);
+    if (input.name !== undefined) {
+      await this.assertCategoryNameAvailable(restaurantId, input.name.trim(), category.id);
+    }
+    if (input.sortOrder !== undefined) {
+      await this.assertCategorySortOrderAvailable(restaurantId, input.sortOrder, category.id);
+    }
     const updated = await this.prisma.menuCategory.update({
       where: { id: category.id },
       data: {
@@ -190,6 +203,55 @@ export class MenuService {
       throw new ApiException(404, "MENU_ITEM_NOT_FOUND", "This menu item does not belong to your restaurant.");
     }
     return item;
+  }
+
+  private async nextCategorySortOrder(restaurantId: string): Promise<number> {
+    const categories = await this.prisma.menuCategory.findMany({ where: { restaurantId } });
+    return categories.reduce((max, category) => Math.max(max, category.sortOrder), -1) + 1;
+  }
+
+  private async assertCategoryNameAvailable(
+    restaurantId: string,
+    name: string,
+    excludedCategoryId?: string
+  ): Promise<void> {
+    const normalized = name.trim();
+    if (!normalized) return;
+    const existing = await this.prisma.menuCategory.findFirst({
+      where: {
+        restaurantId,
+        name: { equals: normalized, mode: "insensitive" },
+        id: excludedCategoryId ? { not: excludedCategoryId } : undefined
+      }
+    });
+    if (existing) {
+      throw new ApiException(
+        409,
+        "MENU_CATEGORY_NAME_EXISTS",
+        "A category with this name already exists in this store."
+      );
+    }
+  }
+
+  private async assertCategorySortOrderAvailable(
+    restaurantId: string,
+    sortOrder: number,
+    excludedCategoryId?: string
+  ): Promise<void> {
+    const existing = await this.prisma.menuCategory.findFirst({
+      where: {
+        restaurantId,
+        sortOrder,
+        id: excludedCategoryId ? { not: excludedCategoryId } : undefined
+      }
+    });
+    if (existing) {
+      throw new ApiException(
+        409,
+        "MENU_CATEGORY_SORT_ORDER_EXISTS",
+        "Another category already uses this display order."
+      );
+    }
   }
 
   private async assertSkuAvailable(restaurantId: string, sku: string | undefined, excludedItemId?: string): Promise<void> {

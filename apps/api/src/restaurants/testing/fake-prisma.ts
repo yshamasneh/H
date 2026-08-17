@@ -24,6 +24,8 @@ type RestaurantRecord = {
   phone: string;
   status: RestaurantStatus;
   isOpen: boolean;
+  opensAt: string | null;
+  closesAt: string | null;
   addressLine: string;
   latitude: number | null;
   longitude: number | null;
@@ -221,6 +223,8 @@ export class FakeRestaurantPrisma {
         phone: data.phone,
         status: data.status ?? RestaurantStatus.PENDING,
         isOpen: data.isOpen ?? false,
+        opensAt: data.opensAt ?? null,
+        closesAt: data.closesAt ?? null,
         addressLine: data.addressLine,
         latitude: data.latitude ?? null,
         longitude: data.longitude ?? null,
@@ -241,6 +245,8 @@ export class FakeRestaurantPrisma {
       if (data.latitude !== undefined) restaurant.latitude = data.latitude;
       if (data.longitude !== undefined) restaurant.longitude = data.longitude;
       if (data.isOpen !== undefined) restaurant.isOpen = data.isOpen;
+      if (data.opensAt !== undefined) restaurant.opensAt = data.opensAt;
+      if (data.closesAt !== undefined) restaurant.closesAt = data.closesAt;
       if (data.status !== undefined) restaurant.status = data.status;
       restaurant.updatedAt = new Date();
       return restaurant;
@@ -248,6 +254,22 @@ export class FakeRestaurantPrisma {
 
     this.menuCategory.findUnique = async ({ where }: any) =>
       this.menuCategories.find((category) => category.id === where.id) ?? null;
+    this.menuCategory.findFirst = async ({ where }: any) =>
+      this.menuCategories.find((category) => {
+        if (where.restaurantId && category.restaurantId !== where.restaurantId) return false;
+        if (where.name !== undefined) {
+          const target = typeof where.name === "object" ? where.name.equals : where.name;
+          const insensitive = typeof where.name === "object" && where.name.mode === "insensitive";
+          if (insensitive) {
+            if (category.name.toLowerCase() !== String(target).toLowerCase()) return false;
+          } else if (category.name !== target) {
+            return false;
+          }
+        }
+        if (where.sortOrder !== undefined && category.sortOrder !== where.sortOrder) return false;
+        if (where.id?.not && category.id === where.id.not) return false;
+        return true;
+      }) ?? null;
     this.menuCategory.findMany = async ({ where, include }: any) => {
       const categories = this.menuCategories
         .filter(
@@ -375,14 +397,14 @@ export class FakeRestaurantPrisma {
       return item;
     };
 
+    const orderMatchesWhere = (order: OrderRecord, where: any): boolean =>
+      (!where?.restaurantId || order.restaurantId === where.restaurantId) &&
+      (!where?.status || order.status === where.status) &&
+      (where?.createdAt?.gte === undefined || order.createdAt.getTime() >= where.createdAt.gte.getTime());
     this.order.count = async ({ where }: any) =>
-      this.orders.filter((order) => !where?.restaurantId || order.restaurantId === where.restaurantId).length;
+      this.orders.filter((order) => orderMatchesWhere(order, where)).length;
     this.order.findMany = async ({ where, select, skip = 0, take, orderBy }: any) => {
-      let matches = this.orders.filter(
-        (order) =>
-          (!where?.restaurantId || order.restaurantId === where.restaurantId) &&
-          (!where?.status || order.status === where.status)
-      );
+      let matches = this.orders.filter((order) => orderMatchesWhere(order, where));
       if (orderBy?.createdAt === "desc") {
         matches = [...matches].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
       }
@@ -470,6 +492,8 @@ export class FakeRestaurantPrisma {
       phone: "+970591234567",
       status: RestaurantStatus.APPROVED,
       isOpen: true,
+      opensAt: null,
+      closesAt: null,
       addressLine: "Al-Manara Square, Ramallah",
       latitude: 31.9038,
       longitude: 35.2034,

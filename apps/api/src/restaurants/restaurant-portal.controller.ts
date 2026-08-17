@@ -51,6 +51,13 @@ export class RestaurantPortalController {
     return this.restaurants.setOwnOpenStatus(request.user.id, input.isOpen);
   }
 
+  @Get("me/stats")
+  @RequirePermission("MANAGE_BUSINESS_SETTINGS")
+  @ApiOperation({ summary: "Sales and order-volume snapshot for today and the current month" })
+  getStats(@Req() request: AuthenticatedRequest) {
+    return this.restaurants.getOwnStats(request.user.id);
+  }
+
   @Get("me/menu/categories")
   @ApiOperation({ summary: "List the authenticated owner's menu categories" })
   async listCategories(@Req() request: AuthenticatedRequest) {

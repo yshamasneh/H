@@ -22,13 +22,15 @@ import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
 import {
+  activeDeliveryStatuses,
   allowedDeliveryTransitions,
   defaultFaultParty,
   deliveryStatusTransitions,
+  driverEarningPerDeliveryMinor,
   orderStatusesAllowingDeliveryProgress
 } from "./delivery.rules";
 import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
-import type { AdminDriverView, DeliveryView, DriverProfileView, Page } from "./drivers.types";
+import type { AdminDriverView, DeliveryView, DriverProfileView, DriverStatsView, Page } from "./drivers.types";
 
 type DeliveryWithRelations = Delivery & { order: Order & { restaurant: Restaurant } };
 type DriverWithUser = DriverProfile & { user: User };
@@ -105,6 +107,29 @@ export class DriversService {
     return toProfileView(updated);
   }
 
+  async updateLocation(driverUserId: string, latitude: number, longitude: number): Promise<DriverProfileView> {
+    const profile = await this.requireOwnProfile(driverUserId);
+    const updated = await this.prisma.driverProfile.update({
+      where: { userId: profile.userId },
+      data: { lastLatitude: latitude, lastLongitude: longitude, lastLocationAt: new Date() }
+    });
+    return toProfileView(updated);
+  }
+
+  async getOwnStats(driverUserId: string): Promise<DriverStatsView> {
+    await this.requireOwnProfile(driverUserId);
+    const [completedCount, activeCount] = await Promise.all([
+      this.prisma.delivery.count({ where: { driverId: driverUserId, status: DeliveryStatus.DELIVERED } }),
+      this.prisma.delivery.count({ where: { driverId: driverUserId, status: { in: activeDeliveryStatuses } } })
+    ]);
+    return {
+      completedCount,
+      activeCount,
+      earningsMinor: completedCount * driverEarningPerDeliveryMinor,
+      perDeliveryMinor: driverEarningPerDeliveryMinor
+    };
+  }
+
   async listAvailableDeliveries(): Promise<DeliveryView[]> {
     const deliveries = await this.prisma.delivery.findMany({
       where: { status: DeliveryStatus.PENDING_ASSIGNMENT },
@@ -137,6 +162,18 @@ export class DriversService {
 
     const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
+      // One delivery at a time: a driver committed to an active job cannot claim another (and, since
+      // there is no driver-facing cancel, cannot drop the current one to chase a better offer either).
+      const activeCount = await tx.delivery.count({
+        where: { driverId: driverUserId, status: { in: activeDeliveryStatuses } }
+      });
+      if (activeCount > 0) {
+        throw new ApiException(
+          409,
+          "DELIVERY_DRIVER_HAS_ACTIVE",
+          "Finish your current delivery before accepting another one."
+        );
+      }
       const existing = await tx.delivery.findUnique({ where: { id: deliveryId } });
       if (!existing) {
         throw deliveryNotFound();

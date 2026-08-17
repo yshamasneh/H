@@ -32,6 +32,55 @@ test("a restaurant owner can create and update their own category and item", asy
   assert.equal(updatedCategory.name, "Wraps");
 });
 
+test("a category name cannot repeat within one store, case-insensitively", async () => {
+  const { menu } = createServices();
+  await menu.createCategory("restaurant-a", { name: "Sandwiches", sortOrder: 0 });
+
+  await assert.rejects(
+    menu.createCategory("restaurant-a", { name: "sandwiches", sortOrder: 1 }),
+    hasCode("MENU_CATEGORY_NAME_EXISTS")
+  );
+
+  // A different store may reuse the same name.
+  const other = await menu.createCategory("restaurant-b", { name: "Sandwiches" });
+  assert.equal(other.name, "Sandwiches");
+});
+
+test("an explicit category sort order cannot repeat within one store", async () => {
+  const { menu } = createServices();
+  await menu.createCategory("restaurant-a", { name: "Sandwiches", sortOrder: 2 });
+
+  await assert.rejects(
+    menu.createCategory("restaurant-a", { name: "Drinks", sortOrder: 2 }),
+    hasCode("MENU_CATEGORY_SORT_ORDER_EXISTS")
+  );
+});
+
+test("omitting the sort order assigns the next free slot so positions never collide", async () => {
+  const { menu } = createServices();
+  const first = await menu.createCategory("restaurant-a", { name: "Sandwiches" });
+  const second = await menu.createCategory("restaurant-a", { name: "Drinks" });
+  const third = await menu.createCategory("restaurant-a", { name: "Desserts" });
+
+  assert.equal(first.sortOrder, 0);
+  assert.equal(second.sortOrder, 1);
+  assert.equal(third.sortOrder, 2);
+});
+
+test("renaming a category onto an existing name is refused, but keeping its own name is fine", async () => {
+  const { menu } = createServices();
+  await menu.createCategory("restaurant-a", { name: "Sandwiches" });
+  const drinks = await menu.createCategory("restaurant-a", { name: "Drinks" });
+
+  await assert.rejects(
+    menu.updateCategory("restaurant-a", drinks.id, { name: "Sandwiches" }),
+    hasCode("MENU_CATEGORY_NAME_EXISTS")
+  );
+
+  const renamed = await menu.updateCategory("restaurant-a", drinks.id, { name: "Cold Drinks" });
+  assert.equal(renamed.name, "Cold Drinks");
+});
+
 test("restaurant A cannot update restaurant B's menu category", async () => {
   const { menu } = createServices();
   const categoryB = await menu.createCategory("restaurant-b", { name: "Desserts" });

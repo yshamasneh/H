@@ -18,6 +18,7 @@ import { writeInventoryMovement } from "../inventory/inventory.util";
 import { createBusinessNotification, createNotification } from "../notifications/notification.util";
 import { calculatePromotionDiscounts } from "../offers/offers.service";
 import type { AppliedPromotion } from "../offers/offers.types";
+import { isWithinWeeklyHours } from "../restaurants/restaurant.rules";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
@@ -731,7 +732,7 @@ export class OrdersService {
     if (!restaurant || restaurant.status !== RestaurantStatus.APPROVED) {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant is not available.");
     }
-    if (!restaurant.isOpen) {
+    if (!restaurant.isOpen || !isWithinWeeklyHours(restaurant.opensAt, restaurant.closesAt, new Date())) {
       throw new ApiException(409, "RESTAURANT_CLOSED", "This restaurant is not accepting orders right now.");
     }
     if (restaurant.latitude === null || restaurant.longitude === null) {

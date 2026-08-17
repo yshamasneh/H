@@ -11,6 +11,11 @@ export type RestaurantPublicView = {
   longitude: number | null;
   logoUrl: string | null;
   isOpen: boolean;
+  /** Weekly opening/closing time as "HH:mm" (24h), or null when no schedule is set. */
+  opensAt: string | null;
+  closesAt: string | null;
+  /** Live openness: the manual `isOpen` switch AND (no schedule, or now within the weekly window). */
+  isOpenNow: boolean;
 };
 
 export type RestaurantProfileView = RestaurantPublicView & {
@@ -67,6 +72,20 @@ export type Page<T> = {
   page: number;
   pageSize: number;
   total: number;
+};
+
+export type RestaurantPeriodStats = {
+  /** Revenue (sum of order totals) from DELIVERED orders created in the period, in minor units. */
+  salesMinor: number;
+  /** Count of all orders created in the period, regardless of status. */
+  ordersCount: number;
+};
+
+export type RestaurantStatsView = {
+  today: RestaurantPeriodStats;
+  month: RestaurantPeriodStats;
+  /** Lifetime totals across every order the store has ever received. */
+  total: RestaurantPeriodStats;
 };
 
 export type AdminRestaurantView = RestaurantProfileView & {

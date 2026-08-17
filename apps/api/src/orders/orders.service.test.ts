@@ -67,6 +67,33 @@ test("order creation is rejected when the restaurant is closed", async () => {
   assert.equal(prisma.orders.length, 0);
 });
 
+test("order creation is rejected outside working hours even when the store switch is on", async () => {
+  const { prisma, service } = createService();
+  const now = new Date();
+  const current = now.getHours() * 60 + now.getMinutes();
+  // A one-hour window that starts an hour from now can never contain the current minute.
+  const restaurant = prisma.seedRestaurant({ isOpen: true, opensAt: hhmm(current + 60), closesAt: hhmm(current + 120) });
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+
+  await assert.rejects(
+    service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never),
+    hasCode("RESTAURANT_CLOSED")
+  );
+  assert.equal(prisma.orders.length, 0);
+});
+
+test("order creation succeeds inside working hours", async () => {
+  const { prisma, service } = createService();
+  const now = new Date();
+  const current = now.getHours() * 60 + now.getMinutes();
+  // A window centred on the current minute always contains it, wrap-around included.
+  const restaurant = prisma.seedRestaurant({ isOpen: true, opensAt: hhmm(current - 30), closesAt: hhmm(current + 30) });
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 1500 });
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  assert.equal(order.subtotalMinor, 3000);
+});
+
 test("order creation is rejected when a requested item is unavailable, with no partial order created", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();
@@ -880,4 +907,10 @@ test("customer-facing order views never expose the name of the staff member who 
 
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
+}
+
+/** Wraps a minute-of-day (which may be negative or over 1440) into an "HH:mm" string. */
+function hhmm(totalMinutes: number): string {
+  const wrapped = ((totalMinutes % 1440) + 1440) % 1440;
+  return `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`;
 }

@@ -101,6 +101,45 @@ test("a second driver cannot accept a delivery someone else already claimed", as
   assert.equal(prisma.deliveries[0].driverId, driverA.userId);
 });
 
+test("a driver holding an active delivery cannot accept a second one", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const firstOrder = prisma.seedOrder(restaurant.id);
+  const secondOrder = prisma.seedOrder(restaurant.id);
+  const firstDelivery = prisma.seedDelivery(firstOrder.id);
+  const secondDelivery = prisma.seedDelivery(secondOrder.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+
+  await service.acceptDelivery(driver.userId, firstDelivery.id);
+  await assert.rejects(
+    service.acceptDelivery(driver.userId, secondDelivery.id),
+    hasCode("DELIVERY_DRIVER_HAS_ACTIVE")
+  );
+  assert.equal(prisma.deliveries.find((delivery) => delivery.id === secondDelivery.id)?.driverId ?? null, null);
+});
+
+test("driver stats count completed deliveries and pay a flat 7 ILS each", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const driver = prisma.seedDriver({ isOnline: true });
+  // Three delivered, one in progress, one belonging to another driver (must be excluded).
+  for (let index = 0; index < 3; index += 1) {
+    const order = prisma.seedOrder(restaurant.id);
+    prisma.seedDelivery(order.id, { driverId: driver.userId, status: "DELIVERED" as never });
+  }
+  const activeOrder = prisma.seedOrder(restaurant.id);
+  prisma.seedDelivery(activeOrder.id, { driverId: driver.userId, status: "ON_THE_WAY" as never });
+  const other = prisma.seedDriver({ isOnline: true });
+  const otherOrder = prisma.seedOrder(restaurant.id);
+  prisma.seedDelivery(otherOrder.id, { driverId: other.userId, status: "DELIVERED" as never });
+
+  const stats = await service.getOwnStats(driver.userId);
+  assert.equal(stats.completedCount, 3);
+  assert.equal(stats.activeCount, 1);
+  assert.equal(stats.earningsMinor, 2100);
+  assert.equal(stats.perDeliveryMinor, 700);
+});
+
 test("two drivers accepting the same delivery simultaneously: exactly one succeeds", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();

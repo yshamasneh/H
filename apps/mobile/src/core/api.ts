@@ -96,6 +96,11 @@ export type RestaurantSummary = {
   longitude: number | null;
   logoUrl: string | null;
   isOpen: boolean;
+  /** Weekly opening/closing time as "HH:mm" (24h), or null when no schedule is set. */
+  opensAt: string | null;
+  closesAt: string | null;
+  /** Live openness: the manual switch AND (no schedule, or now within the weekly window). */
+  isOpenNow: boolean;
 };
 
 export type MenuItemSummary = {
@@ -489,8 +494,8 @@ export type SupermarketCatalog = {
   total: number;
 };
 
-export function listSupermarkets(page = 1, pageSize = 20): Promise<Page<RestaurantSummary>> {
-  return request(`/api/v1/supermarkets?page=${page}&pageSize=${pageSize}`);
+export function listSupermarkets(page = 1, pageSize = 20, includeClosed = false): Promise<Page<RestaurantSummary>> {
+  return request(`/api/v1/supermarkets?page=${page}&pageSize=${pageSize}${includeClosed ? "&includeClosed=true" : ""}`);
 }
 
 export function getSupermarketCatalog(
@@ -556,6 +561,16 @@ export function updateOrderStatus(
 
 export function setDriverOnlineStatus(accessToken: string, isOnline: boolean): Promise<DriverProfileView> {
   return request("/api/v1/driver/me/status", { method: "PATCH", body: { isOnline }, accessToken });
+}
+
+export type DriverStats = { completedCount: number; activeCount: number; earningsMinor: number; perDeliveryMinor: number };
+
+export function getDriverStats(accessToken: string): Promise<DriverStats> {
+  return request("/api/v1/driver/me/stats", { accessToken });
+}
+
+export function updateDriverLocation(accessToken: string, latitude: number, longitude: number): Promise<DriverProfileView> {
+  return request("/api/v1/driver/me/location", { method: "PATCH", body: { latitude, longitude }, accessToken });
 }
 
 export function listAvailableDeliveries(accessToken: string): Promise<DeliveryView[]> {
@@ -790,9 +805,16 @@ export function getRestaurantOwnerProfile(accessToken: string): Promise<Restaura
   return request("/api/v1/restaurant/me", { accessToken });
 }
 
+export type RestaurantPeriodStats = { salesMinor: number; ordersCount: number };
+export type RestaurantStats = { today: RestaurantPeriodStats; month: RestaurantPeriodStats; total: RestaurantPeriodStats };
+
+export function getRestaurantStats(accessToken: string): Promise<RestaurantStats> {
+  return request("/api/v1/restaurant/me/stats", { accessToken });
+}
+
 export function updateRestaurantOwnerProfile(
   accessToken: string,
-  input: { name?: string; description?: string; addressLine?: string; logoUrl?: string; latitude?: number; longitude?: number }
+  input: { name?: string; description?: string; addressLine?: string; logoUrl?: string; latitude?: number; longitude?: number; opensAt?: string; closesAt?: string }
 ): Promise<RestaurantOwnerProfile> {
   return request("/api/v1/restaurant/me", { method: "PATCH", body: input, accessToken });
 }

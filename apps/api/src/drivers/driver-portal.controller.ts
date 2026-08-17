@@ -5,7 +5,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../common/decorators/roles.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../generated/prisma/client";
-import { DeliveriesPaginationQueryDto, SetDriverOnlineStatusDto, UpdateDeliveryStatusDto } from "./drivers.dto";
+import { DeliveriesPaginationQueryDto, SetDriverOnlineStatusDto, UpdateDeliveryStatusDto, UpdateDriverLocationDto } from "./drivers.dto";
 import { DriversService } from "./drivers.service";
 
 @ApiTags("driver-portal")
@@ -20,6 +20,18 @@ export class DriverPortalController {
   @ApiOperation({ summary: "Toggle whether the driver is online and available for deliveries" })
   setStatus(@Req() request: AuthenticatedRequest, @Body() input: SetDriverOnlineStatusDto) {
     return this.drivers.setOnlineStatus(request.user.id, input.isOnline);
+  }
+
+  @Patch("me/location")
+  @ApiOperation({ summary: "Report the driver's current GPS location (shown to dispatch/admin)" })
+  updateLocation(@Req() request: AuthenticatedRequest, @Body() input: UpdateDriverLocationDto) {
+    return this.drivers.updateLocation(request.user.id, input.latitude, input.longitude);
+  }
+
+  @Get("me/stats")
+  @ApiOperation({ summary: "Completed-delivery count and earnings for the authenticated driver" })
+  getStats(@Req() request: AuthenticatedRequest) {
+    return this.drivers.getOwnStats(request.user.id);
   }
 
   @Get("me/deliveries/available")

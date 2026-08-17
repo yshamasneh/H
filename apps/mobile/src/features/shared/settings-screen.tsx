@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { registerMyPushToken, unregisterMyPushToken, type PublicUser } from "../../core/api";
+import { deleteMyAccount, registerMyPushToken, unregisterMyPushToken, type PublicUser } from "../../core/api";
 import { readError } from "../../core/errors";
 import { clearStoredPushToken, getPushToken, getStoredPushToken, storePushToken } from "../../core/push-notifications";
 import { getAccessToken } from "../../core/session";
@@ -29,12 +29,15 @@ export function SettingsScreen(props: {
   onBack: () => void;
   onLogout: () => Promise<void>;
   onManageAccount?: () => void;
+  onDeleted?: () => Promise<void>;
 }) {
   const { t } = useTranslation(["customer", "common"]);
   const [loggingOut, setLoggingOut] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [togglingPush, setTogglingPush] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     void getStoredPushToken().then((stored) => setPushEnabled(Boolean(stored)));
@@ -53,6 +56,29 @@ export function SettingsScreen(props: {
       await props.onLogout();
     } finally {
       setLoggingOut(false);
+    }
+  }
+
+  async function removeAccount() {
+    if (!props.onDeleted) return;
+    const proceed = await confirm(
+      t("account.confirmDialogTitle"),
+      t("account.deleteAccountConfirm"),
+      t("account.continueButton"),
+      t("common:cancel")
+    );
+    if (!proceed) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error(t("common:sessionExpired"));
+      await deleteMyAccount(accessToken);
+      await clearStoredPushToken();
+      await props.onDeleted();
+    } catch (requestError) {
+      setDeleteError(readError(requestError));
+      setDeleting(false);
     }
   }
 
@@ -141,16 +167,31 @@ export function SettingsScreen(props: {
           ) : null}
         </SectionCard>
 
-        <Pressable disabled={loggingOut} onPress={() => void confirmLogout()} style={styles.logoutButton}>
-          {loggingOut ? (
-            <ActivityIndicator color={colors.error} />
-          ) : (
-            <>
-              <Icon color={colors.error} name="logout" size="sm" />
-              <Text style={styles.logoutText}>{t("settings.logoutButton")}</Text>
-            </>
-          )}
-        </Pressable>
+        {props.onDeleted ? (
+          <View style={[styles.card, styles.dangerCard]}>
+            <Text style={styles.dangerTitle}>{t("account.deleteAccountTitle")}</Text>
+            <Text style={styles.dangerHelper}>{t("account.deleteAccountHelper")}</Text>
+            {deleteError ? <Text style={styles.deleteError}>{deleteError}</Text> : null}
+            <Pressable disabled={deleting} onPress={() => void removeAccount()} style={styles.deleteButton}>
+              {deleting ? (
+                <ActivityIndicator color={colors.error} />
+              ) : (
+                <Text style={styles.deleteText}>{t("account.deleteAccountButton")}</Text>
+              )}
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable disabled={loggingOut} onPress={() => void confirmLogout()} style={styles.logoutButton}>
+            {loggingOut ? (
+              <ActivityIndicator color={colors.error} />
+            ) : (
+              <>
+                <Icon color={colors.error} name="logout" size="sm" />
+                <Text style={styles.logoutText}>{t("settings.logoutButton")}</Text>
+              </>
+            )}
+          </Pressable>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -242,5 +283,19 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingVertical: spacing[3]
   },
-  logoutText: { ...text("bodySm", "bold"), color: colors.error }
+  logoutText: { ...text("bodySm", "bold"), color: colors.error },
+  dangerCard: { borderColor: colors.error },
+  dangerTitle: { ...text("h3", "bold"), color: colors.text, marginBottom: spacing[2] },
+  dangerHelper: { ...text("caption"), color: colors.textMuted, marginBottom: spacing[3] },
+  deleteError: { ...text("caption"), color: colors.error, marginBottom: spacing[3] },
+  deleteButton: {
+    alignItems: "center",
+    borderColor: colors.error,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    minHeight: 48,
+    justifyContent: "center",
+    padding: spacing[3]
+  },
+  deleteText: { ...text("bodySm", "bold"), color: colors.error }
 });

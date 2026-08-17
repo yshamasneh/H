@@ -20,6 +20,17 @@ export type AdminDriverView = {
   createdAt: Date;
 };
 
+export type DriverStatsView = {
+  /** Deliveries the driver completed (DELIVERED). */
+  completedCount: number;
+  /** Deliveries currently in progress (assigned, picked up, or on the way). */
+  activeCount: number;
+  /** Total earned so far: completedCount × the flat per-delivery payout, in minor units. */
+  earningsMinor: number;
+  /** The flat payout per completed delivery, in minor units, so the client can show the rate. */
+  perDeliveryMinor: number;
+};
+
 export type DeliveryOrderSummary = {
   id: string;
   deliveryLabel: string;

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PhoneDto, strongPasswordPattern } from "../auth/auth.dto";
 
 export class AdminActionReasonDto {
@@ -34,6 +34,20 @@ export class SetDriverOnlineStatusDto {
   @ApiProperty({ example: true })
   @IsBoolean()
   isOnline!: boolean;
+}
+
+export class UpdateDriverLocationDto {
+  @ApiProperty({ example: 31.9038 })
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude!: number;
+
+  @ApiProperty({ example: 35.2034 })
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude!: number;
 }
 
 export const driverDeliveryStatusActionValues = ["PICKED_UP", "ON_THE_WAY", "DELIVERED", "FAILED"] as const;

@@ -1,6 +1,6 @@
 import { listSupermarkets, type RestaurantSummary } from "../../core/api";
 
-export type MarketStore = Pick<RestaurantSummary, "id" | "name">;
+export type MarketStore = Pick<RestaurantSummary, "id" | "name" | "isOpenNow">;
 
 let pending: Promise<MarketStore | null> | null = null;
 
@@ -22,10 +22,12 @@ let pending: Promise<MarketStore | null> | null = null;
  */
 export function resolveMarketStore(): Promise<MarketStore | null> {
   if (!pending) {
-    pending = listSupermarkets(1, 1)
+    // Resolve the single launch store even when it is closed, so the home can show a clear "closed"
+    // state instead of mistaking a closed store for an unreachable one.
+    pending = listSupermarkets(1, 1, true)
       .then((page) => {
         const store = page.items[0];
-        return store ? { id: store.id, name: store.name } : null;
+        return store ? { id: store.id, name: store.name, isOpenNow: store.isOpenNow } : null;
       })
       .catch(() => {
         // A failed lookup must not be cached, or a single offline moment at

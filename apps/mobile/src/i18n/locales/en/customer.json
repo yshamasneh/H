@@ -37,6 +37,8 @@
     "marketProductsEmpty": "Products will appear here as the store stocks them.",
     "marketUnavailableTitle": "The store is not reachable right now",
     "marketUnavailableText": "Check your connection and pull down to try again.",
+    "marketClosedTitle": "The store is closed right now",
+    "marketClosedText": "JOVO MARKET is currently closed. Come back during opening hours to place your order.",
     "noOffersTextMarket": "New JOVO MARKET offers will appear here when they are published.",
     "restaurantsComingSoonTitle": "Restaurants — coming soon",
     "restaurantsComingSoonText": "We are onboarding local kitchens. Grocery delivery from JOVO MARKET is live now."

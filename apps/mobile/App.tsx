@@ -72,12 +72,14 @@ import {
   goToCheckout,
   goToDeliveryDetail,
   goToDriverHome,
+  goToDriverStats,
   goToDriverSignup,
   goToLogin,
   goToNotifications,
   goToOrderDetail,
   goToOrderHistory,
   goToRestaurantManagement,
+  goToRestaurantStats,
   goToRestaurantMenu,
   goToRestaurantOrderDetail,
   goToRestaurantOrders,
@@ -95,6 +97,7 @@ import {
   type AppScreen
 } from "./src/navigation/navigation";
 import { DeliveryDetailScreen, DriverHomeScreen } from "./src/features/driver/screens";
+import { DriverEarningsScreen } from "./src/features/driver/earnings-screen";
 import { NotificationInboxScreen } from "./src/features/shared/notification-screens";
 import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/features/restaurant/order-screens";
 import { RestaurantListScreen, RestaurantMenuScreen } from "./src/features/customer/restaurant-screens";
@@ -112,6 +115,8 @@ import { CustomerHomeScreen } from "./src/features/customer/home-screen";
 import { AccountScreen } from "./src/features/customer/account-screen";
 import { SettingsScreen } from "./src/features/shared/settings-screen";
 import { RestaurantManagementScreen } from "./src/features/restaurant/management-screen";
+import { RestaurantAnalyticsScreen } from "./src/features/restaurant/analytics-screen";
+import { RestaurantHomeScreen } from "./src/features/restaurant/home-screen";
 import {
   SupermarketCatalogScreen,
   SupermarketProductScreen
@@ -449,18 +454,26 @@ function TasawaQApp() {
           </CustomerTabShell>
         );
       }
+      if (screen.user.role === "RESTAURANT") {
+        const user = screen.user;
+        return (
+          <RestaurantHomeScreen
+            notice={screen.notice}
+            onManageOrders={() => setScreen(goToRestaurantOrders(user))}
+            onManageRestaurant={() => setScreen(goToRestaurantManagement(user))}
+            onEditItem={(itemId) => setScreen(goToRestaurantManagement(user, itemId))}
+            onOpenStats={() => setScreen(goToRestaurantStats(user))}
+            onOpenOrder={(orderId) => setScreen(goToRestaurantOrderDetail(user, orderId))}
+            onOpenNotifications={() => setScreen(goToNotifications(user))}
+            onOpenSettings={() => setScreen(goToSettings(user))}
+            user={user}
+          />
+        );
+      }
       return (
         <HomeScreen
           notice={screen.notice}
           onLogout={handleLogout}
-          onManageOrders={
-            screen.user.role === "RESTAURANT" ? () => setScreen(goToRestaurantOrders(screen.user)) : undefined
-          }
-          onManageRestaurant={
-            screen.user.role === "RESTAURANT"
-              ? () => setScreen(goToRestaurantManagement(screen.user))
-              : undefined
-          }
           onOpenDriverDashboard={
             screen.user.role === "DRIVER" ? () => setScreen(goToDriverHome(screen.user)) : undefined
           }
@@ -478,7 +491,7 @@ function TasawaQApp() {
         >
           <AccountScreen
             onBack={() => setScreen(homeForUser(screen.user))}
-            onDeleted={handleLogout}
+            onLogout={handleLogout}
             onOpenSettings={() => setScreen(goToSettings(screen.user))}
             onProfileUpdated={(user) => setScreen(goToAccount(user))}
             user={screen.user}
@@ -489,6 +502,7 @@ function TasawaQApp() {
       return (
         <SettingsScreen
           onBack={() => setScreen(homeForUser(screen.user))}
+          onDeleted={screen.user.role === "CUSTOMER" ? handleLogout : undefined}
           onLogout={handleLogout}
           onManageAccount={
             screen.user.role === "CUSTOMER" ? () => setScreen(goToAccount(screen.user)) : undefined
@@ -620,10 +634,13 @@ function TasawaQApp() {
     case "restaurant-management":
       return (
         <RestaurantManagementScreen
+          initialEditItemId={screen.editItemId}
           onBack={() => setScreen(homeForUser(screen.user))}
           onOpenSettings={() => setScreen(goToSettings(screen.user))}
         />
       );
+    case "restaurant-stats":
+      return <RestaurantAnalyticsScreen onBack={() => setScreen(homeForUser(screen.user))} />;
     case "restaurant-order-detail":
       return (
         <RestaurantOrderDetailScreen
@@ -634,11 +651,15 @@ function TasawaQApp() {
     case "driver-home":
       return (
         <DriverHomeScreen
-          onBack={() => setScreen(homeForUser(screen.user))}
+          user={screen.user}
           onOpenDelivery={(deliveryId) => setScreen(goToDeliveryDetail(screen.user, deliveryId))}
+          onOpenEarnings={() => setScreen(goToDriverStats(screen.user))}
+          onOpenNotifications={() => setScreen(goToNotifications(screen.user))}
           onOpenSettings={() => setScreen(goToSettings(screen.user))}
         />
       );
+    case "driver-stats":
+      return <DriverEarningsScreen onBack={() => setScreen(goToDriverHome(screen.user))} />;
     case "delivery-detail":
       return (
         <DeliveryDetailScreen deliveryId={screen.deliveryId} onBack={() => setScreen(goToDriverHome(screen.user))} />

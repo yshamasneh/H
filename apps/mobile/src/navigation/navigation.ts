@@ -45,9 +45,11 @@ export type AppScreen =
   | { name: "account"; user: PublicUser }
   | { name: "settings"; user: PublicUser }
   | { name: "restaurant-orders"; user: PublicUser }
-  | { name: "restaurant-management"; user: PublicUser }
+  | { name: "restaurant-management"; user: PublicUser; editItemId?: string }
+  | { name: "restaurant-stats"; user: PublicUser }
   | { name: "restaurant-order-detail"; user: PublicUser; orderId: string }
   | { name: "driver-home"; user: PublicUser }
+  | { name: "driver-stats"; user: PublicUser }
   | { name: "delivery-detail"; user: PublicUser; deliveryId: string }
   | { name: "notifications"; user: PublicUser }
   | { name: "admin-dashboard"; user: PublicUser }
@@ -146,7 +148,9 @@ export function goToRestaurantMenu(
 }
 
 export function homeForUser(user: PublicUser): AppScreen {
-  return user.role === "ADMIN" ? { name: "admin-dashboard", user } : { name: "home", user };
+  if (user.role === "ADMIN") return { name: "admin-dashboard", user };
+  if (user.role === "DRIVER") return { name: "driver-home", user };
+  return { name: "home", user };
 }
 
 export function goToCart(user: PublicUser): Extract<AppScreen, { name: "cart" }> {
@@ -223,9 +227,14 @@ export function goToSupermarketProduct(
 }
 
 export function goToRestaurantManagement(
-  user: PublicUser
+  user: PublicUser,
+  editItemId?: string
 ): Extract<AppScreen, { name: "restaurant-management" }> {
-  return { name: "restaurant-management", user };
+  return { name: "restaurant-management", user, ...(editItemId !== undefined ? { editItemId } : {}) };
+}
+
+export function goToRestaurantStats(user: PublicUser): Extract<AppScreen, { name: "restaurant-stats" }> {
+  return { name: "restaurant-stats", user };
 }
 
 export function goToRestaurantOrderDetail(
@@ -237,6 +246,10 @@ export function goToRestaurantOrderDetail(
 
 export function goToDriverHome(user: PublicUser): Extract<AppScreen, { name: "driver-home" }> {
   return { name: "driver-home", user };
+}
+
+export function goToDriverStats(user: PublicUser): Extract<AppScreen, { name: "driver-stats" }> {
+  return { name: "driver-stats", user };
 }
 
 export function goToDeliveryDetail(

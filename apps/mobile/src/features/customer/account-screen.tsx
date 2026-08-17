@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   Pressable,
@@ -17,7 +18,6 @@ import type { MapCoordinate } from "../../components/location-map.types";
 import { Skeleton } from "../../components/skeleton";
 import {
   createMyAddress,
-  deleteMyAccount,
   deleteMyAddress,
   getMyProfile,
   listMyAddresses,
@@ -29,7 +29,6 @@ import {
 } from "../../core/api";
 import { readError } from "../../core/errors";
 import { getCurrentCoordinates, reverseGeocode } from "../../core/location";
-import { clearStoredPushToken } from "../../core/push-notifications";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
 import { Icon, backIconName } from "../../theme/icon";
@@ -43,7 +42,7 @@ export function AccountScreen(props: {
   user: PublicUser;
   onBack: () => void;
   onOpenSettings: () => void;
-  onDeleted: () => Promise<void>;
+  onLogout: () => Promise<void>;
   onProfileUpdated: (user: PublicUser) => void;
 }) {
   const { t } = useTranslation(["customer", "common"]);
@@ -57,6 +56,7 @@ export function AccountScreen(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     void load();
@@ -165,7 +165,7 @@ export function AccountScreen(props: {
   }
 
   async function removeAddress(address: SavedAddress) {
-    if (!(await confirmAction(t("account.deleteAddressConfirm", { label: address.label })))) return;
+    if (!(await confirmDialog(t("account.confirmDialogTitle"), t("account.deleteAddressConfirm", { label: address.label }), t("account.continueButton")))) return;
     setBusy(true);
     try {
       await deleteMyAddress(await token(), address.id);
@@ -177,16 +177,15 @@ export function AccountScreen(props: {
     }
   }
 
-  async function removeAccount() {
-    if (!(await confirmAction(t("account.deleteAccountConfirm")))) return;
-    setBusy(true);
+  async function confirmLogout() {
+    if (!(await confirmDialog(t("settings.logoutConfirmTitle"), t("settings.logoutConfirmBody"), t("settings.logoutButton")))) {
+      return;
+    }
+    setLoggingOut(true);
     try {
-      await deleteMyAccount(await token());
-      await clearStoredPushToken();
-      await props.onDeleted();
-    } catch (requestError) {
-      setError(readError(requestError));
-      setBusy(false);
+      await props.onLogout();
+    } finally {
+      setLoggingOut(false);
     }
   }
 
@@ -246,13 +245,16 @@ export function AccountScreen(props: {
               <Button disabled={busy} label={t("account.saveAddressButton")} onPress={() => void saveAddress()} />
             </View>
 
-            <View style={[styles.card, styles.dangerCard]}>
-              <Text style={styles.title}>{t("account.deleteAccountTitle")}</Text>
-              <Text style={styles.helper}>{t("account.deleteAccountHelper")}</Text>
-              <Pressable disabled={busy} onPress={() => void removeAccount()} style={styles.deleteButton}>
-                <Text style={styles.deleteText}>{t("account.deleteAccountButton")}</Text>
-              </Pressable>
-            </View>
+            <Pressable disabled={loggingOut} onPress={() => void confirmLogout()} style={styles.logoutButton}>
+              {loggingOut ? (
+                <ActivityIndicator color={colors.error} />
+              ) : (
+                <>
+                  <Icon color={colors.error} name="logout" size="sm" />
+                  <Text style={styles.logoutText}>{t("settings.logoutButton")}</Text>
+                </>
+              )}
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -282,11 +284,13 @@ function SmallButton(props: { label: string; danger?: boolean; onPress: () => vo
   return <Pressable onPress={props.onPress} style={[styles.smallButton, props.danger && styles.smallDanger]}><Text style={[styles.smallText, props.danger && styles.smallDangerText]}>{props.label}</Text></Pressable>;
 }
 
-async function confirmAction(message: string): Promise<boolean> {
-  if (Platform.OS === "web") return typeof globalThis.confirm === "function" ? globalThis.confirm(message) : false;
-  return new Promise((resolve) => Alert.alert(i18n.t("customer:account.confirmDialogTitle"), message, [
+async function confirmDialog(title: string, body: string, confirmLabel: string): Promise<boolean> {
+  if (Platform.OS === "web") {
+    return typeof globalThis.confirm === "function" ? globalThis.confirm(`${title}\n\n${body}`) : false;
+  }
+  return new Promise((resolve) => Alert.alert(title, body, [
     { text: i18n.t("common:cancel"), style: "cancel", onPress: () => resolve(false) },
-    { text: i18n.t("customer:account.continueButton"), style: "destructive", onPress: () => resolve(true) }
+    { text: confirmLabel, style: "destructive", onPress: () => resolve(true) }
   ], { cancelable: true, onDismiss: () => resolve(false) }));
 }
 
@@ -318,7 +322,15 @@ const styles = StyleSheet.create({
   smallDangerText: { color: customerTheme.colors.danger },
   notice: { ...text("bodySm"), backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.md, color: customerTheme.colors.success, marginBottom: spacing[3], padding: spacing[3], textAlign: "auto" },
   error: { ...text("bodySm"), backgroundColor: colors.errorSubtle, borderRadius: radius.md, color: customerTheme.colors.danger, marginBottom: spacing[3], padding: spacing[3], textAlign: "auto" },
-  dangerCard: { borderColor: customerTheme.colors.danger },
-  deleteButton: { alignItems: "center", borderColor: customerTheme.colors.danger, borderRadius: radius.md, borderWidth: 1, marginTop: spacing[4], padding: spacing[3] },
-  deleteText: { ...text("bodySm", "bold"), color: customerTheme.colors.danger }
+  logoutButton: {
+    alignItems: "center",
+    backgroundColor: colors.errorSubtle,
+    borderRadius: radius.lg,
+    flexDirection: "row",
+    gap: spacing[2],
+    justifyContent: "center",
+    minHeight: 52,
+    paddingVertical: spacing[3]
+  },
+  logoutText: { ...text("bodySm", "bold"), color: colors.error }
 });

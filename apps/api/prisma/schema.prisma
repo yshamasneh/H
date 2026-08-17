@@ -304,6 +304,11 @@ model Restaurant {
   phone              String
   status             RestaurantStatus    @default(PENDING)
   isOpen             Boolean             @default(false)
+  /// Weekly opening/closing time as "HH:mm" (24h), applied to every day. Both null means no
+  /// schedule, so openness follows the manual `isOpen` switch only. When set, the store is
+  /// considered open for orders only inside this window (see isWithinWeeklyHours).
+  opensAt            String?
+  closesAt           String?
   addressLine        String
   latitude           Float?
   longitude          Float?

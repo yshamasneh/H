@@ -15,6 +15,8 @@ type RestaurantRecord = {
   businessType: BusinessType;
   status: RestaurantStatus;
   isOpen: boolean;
+  opensAt: string | null;
+  closesAt: string | null;
   latitude: number | null;
   longitude: number | null;
 };
@@ -536,6 +538,8 @@ export class FakeOrdersPrisma {
       businessType: BusinessType.RESTAURANT,
       status: RestaurantStatus.APPROVED,
       isOpen: true,
+      opensAt: null,
+      closesAt: null,
       latitude: 31.9038,
       longitude: 35.2034,
       ...overrides

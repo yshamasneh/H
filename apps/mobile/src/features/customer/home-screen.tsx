@@ -84,7 +84,9 @@ export function CustomerHomeScreen(props: {
     try {
       const resolved = await resolveMarketStore();
       setStore(resolved);
-      setCatalog(resolved ? await getSupermarketCatalog(resolved.id, { pageSize: storefrontProductCount }) : null);
+      // A closed store is resolvable but not shoppable — skip its catalog so the home shows a clear
+      // "closed" state rather than products the customer cannot order.
+      setCatalog(resolved && resolved.isOpenNow ? await getSupermarketCatalog(resolved.id, { pageSize: storefrontProductCount }) : null);
     } catch {
       setCatalog(null);
     }
@@ -126,6 +128,7 @@ export function CustomerHomeScreen(props: {
   );
 
   const storeName = store?.name ?? t("home.marketFallbackName");
+  const marketClosed = store != null && !store.isOpenNow;
   const showCartDock = props.cart !== null && cartItemCount(props.cart) > 0;
 
   return (
@@ -162,7 +165,7 @@ export function CustomerHomeScreen(props: {
         {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
 
         <Pressable
-          disabled={!store}
+          disabled={!store || marketClosed}
           onPress={() => store && props.onOpenCatalog(store)}
           style={styles.searchBar}
         >
@@ -172,7 +175,7 @@ export function CustomerHomeScreen(props: {
         </Pressable>
 
         <Pressable
-          disabled={!store}
+          disabled={!store || marketClosed}
           onPress={() => store && props.onOpenCatalog(store)}
           style={styles.marketHero}
         >
@@ -191,9 +194,15 @@ export function CustomerHomeScreen(props: {
             <Text style={styles.emptyTitle}>{t("home.marketUnavailableTitle")}</Text>
             <Text style={styles.emptyText}>{t("home.marketUnavailableText")}</Text>
           </View>
+        ) : marketClosed ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="time" size="lg" /></View>
+            <Text style={styles.emptyTitle}>{t("home.marketClosedTitle")}</Text>
+            <Text style={styles.emptyText}>{t("home.marketClosedText")}</Text>
+          </View>
         ) : null}
 
-        {store === undefined || (store !== null && catalog === null) ? (
+        {marketClosed ? null : store === undefined || (store !== null && catalog === null) ? (
           <>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t("home.departmentsSectionTitle")}</Text>
@@ -276,13 +285,15 @@ export function CustomerHomeScreen(props: {
           ))
         )}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("home.marketProductsSectionTitle")}</Text>
-          <Pressable onPress={() => store && props.onOpenCatalog(store)}>
-            <Text style={styles.seeAll}>{t("home.seeAll")}</Text>
-          </Pressable>
-        </View>
-        {store === undefined || (store !== null && catalog === null) ? (
+        {marketClosed ? null : (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t("home.marketProductsSectionTitle")}</Text>
+            <Pressable onPress={() => store && props.onOpenCatalog(store)}>
+              <Text style={styles.seeAll}>{t("home.seeAll")}</Text>
+            </Pressable>
+          </View>
+        )}
+        {marketClosed ? null : store === undefined || (store !== null && catalog === null) ? (
           <ProductGridSkeleton artworkHeight={96} count={storefrontProductCount} />
         ) : catalog === null || catalog.products.length === 0 ? (
           <View style={styles.emptyCard}>

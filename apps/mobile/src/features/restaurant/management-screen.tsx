@@ -44,12 +44,12 @@ const tabLabelKeys: Record<Section, string> = {
   inventory: "management.tabInventory"
 };
 
-export function RestaurantManagementScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpenSettings: () => void }) {
+export function RestaurantManagementScreen({ onBack, onOpenSettings, initialEditItemId }: { onBack: () => void; onOpenSettings: () => void; initialEditItemId?: string }) {
   const { t } = useTranslation(["restaurantOps", "common"]);
   const [profile, setProfile] = useState<RestaurantOwnerProfile | null>(null);
   const [categories, setCategories] = useState<MenuCategoryOwner[]>([]);
   const [items, setItems] = useState<MenuItemOwner[]>([]);
-  const [section, setSection] = useState<Section>("profile");
+  const [section, setSection] = useState<Section>(initialEditItemId ? "items" : "profile");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,6 +172,7 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings }: { onBack:
               busy={busy}
               categories={categories}
               items={items}
+              initialEditItemId={initialEditItemId}
               onSave={(draft, editingId) =>
                 run(async (token) => {
                   const saved = editingId
@@ -204,7 +205,7 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings }: { onBack:
 function ProfileSection(props: {
   profile: RestaurantOwnerProfile;
   busy: boolean;
-  onSave: (input: { name: string; description: string; addressLine: string; logoUrl: string; latitude?: number; longitude?: number }) => void;
+  onSave: (input: { name: string; description: string; addressLine: string; logoUrl: string; latitude?: number; longitude?: number; opensAt: string; closesAt: string }) => void;
   onToggleOpen: () => void;
 }) {
   const { t } = useTranslation(["restaurantOps"]);
@@ -212,6 +213,8 @@ function ProfileSection(props: {
   const [description, setDescription] = useState(props.profile.description ?? "");
   const [addressLine, setAddressLine] = useState(props.profile.addressLine);
   const [logoUrl, setLogoUrl] = useState(props.profile.logoUrl ?? "");
+  const [opensAt, setOpensAt] = useState(props.profile.opensAt ?? "");
+  const [closesAt, setClosesAt] = useState(props.profile.closesAt ?? "");
   const [latitude, setLatitude] = useState<number | null>(props.profile.latitude);
   const [longitude, setLongitude] = useState<number | null>(props.profile.longitude);
   const [locating, setLocating] = useState(false);
@@ -250,6 +253,21 @@ function ProfileSection(props: {
       <Field label={t("management.descriptionLabel")} value={description} onChangeText={setDescription} multiline />
       <Field label={t("management.addressLabel")} value={addressLine} onChangeText={setAddressLine} multiline />
       <Field label={t("management.logoUrlLabel")} value={logoUrl} onChangeText={setLogoUrl} />
+      <Text style={styles.label}>{t("management.workingHoursTitle")}</Text>
+      <View style={styles.hoursRow}>
+        <View style={styles.hoursField}>
+          <Field label={t("management.opensAtLabel")} value={opensAt} onChangeText={setOpensAt} keyboardType="number-pad" />
+        </View>
+        <View style={styles.hoursField}>
+          <Field label={t("management.closesAtLabel")} value={closesAt} onChangeText={setClosesAt} keyboardType="number-pad" />
+        </View>
+      </View>
+      <Text style={styles.hint}>{t("management.workingHoursHint")}</Text>
+      {opensAt.trim() && closesAt.trim() && props.profile.isOpen ? (
+        <Text style={[styles.hint, props.profile.isOpenNow ? styles.openNow : styles.closedNow]}>
+          {props.profile.isOpenNow ? t("management.openNowLabel") : t("management.closedByHoursLabel")}
+        </Text>
+      ) : null}
       <Text style={styles.locationNote}>
         {latitude !== null && longitude !== null
           ? t("management.deliveryOriginNote", { lat: latitude.toFixed(5), lng: longitude.toFixed(5) })
@@ -271,7 +289,9 @@ function ProfileSection(props: {
           addressLine: addressLine.trim(),
           logoUrl: logoUrl.trim(),
           latitude: latitude ?? undefined,
-          longitude: longitude ?? undefined
+          longitude: longitude ?? undefined,
+          opensAt: opensAt.trim(),
+          closesAt: closesAt.trim()
         })}
       />
       <ActionButton
@@ -287,19 +307,21 @@ function ProfileSection(props: {
 function CategoriesSection(props: {
   categories: MenuCategoryOwner[];
   busy: boolean;
-  onCreate: (name: string, sortOrder: number) => Promise<boolean>;
+  onCreate: (name: string, sortOrder: number | undefined) => Promise<boolean>;
   onToggle: (category: MenuCategoryOwner) => void;
 }) {
   const { t } = useTranslation(["restaurantOps"]);
   const [name, setName] = useState("");
-  const [sortOrder, setSortOrder] = useState("0");
+  const [sortOrder, setSortOrder] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const nextSortOrder = props.categories.reduce((max, category) => Math.max(max, category.sortOrder), -1) + 1;
   return (
     <>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("management.newCategoryTitle")}</Text>
         <Field label={t("management.categoryNameLabel")} value={name} onChangeText={setName} />
         <Field label={t("management.sortOrderLabel")} value={sortOrder} onChangeText={setSortOrder} keyboardType="number-pad" />
+        <Text style={styles.hint}>{t("management.sortOrderAutoHint", { next: nextSortOrder })}</Text>
         {localError ? <Message tone="error" text={localError} /> : null}
         <ActionButton
           disabled={props.busy}
@@ -310,11 +332,13 @@ function CategoriesSection(props: {
               return;
             }
             setLocalError(null);
+            const trimmedOrder = sortOrder.trim();
+            const parsedOrder = trimmedOrder === "" ? undefined : Math.max(0, Number.parseInt(trimmedOrder, 10) || 0);
             void (async () => {
-              const success = await props.onCreate(name.trim(), Math.max(0, Number.parseInt(sortOrder, 10) || 0));
+              const success = await props.onCreate(name.trim(), parsedOrder);
               if (success) {
                 setName("");
-                setSortOrder("0");
+                setSortOrder("");
               }
             })();
           }}
@@ -365,12 +389,14 @@ function ItemsSection(props: {
   categories: MenuCategoryOwner[];
   items: MenuItemOwner[];
   busy: boolean;
+  initialEditItemId?: string;
   onSave: (draft: ItemDraft, editingId: string | null) => Promise<boolean>;
   onToggle: (item: MenuItemOwner) => void;
 }) {
   const { t } = useTranslation(["restaurantOps"]);
   const activeCategories = useMemo(() => props.categories.filter((category) => category.isActive), [props.categories]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [handledInitialEdit, setHandledInitialEdit] = useState(false);
   const [categoryId, setCategoryId] = useState(activeCategories[0]?.id ?? props.categories[0]?.id ?? "");
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
@@ -425,6 +451,18 @@ function ItemsSection(props: {
     setReorderLevel(item.reorderLevel === null ? "" : String(item.reorderLevel));
     setLocalError(null);
   }
+
+  // When arriving from the home dashboard's "edit" action, open that item's form
+  // as soon as it is available — but only once, so the owner can still cancel out.
+  useEffect(() => {
+    if (handledInitialEdit || !props.initialEditItemId) return;
+    const target = props.items.find((item) => item.id === props.initialEditItemId);
+    if (target) {
+      edit(target);
+      setHandledInitialEdit(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.initialEditItemId, props.items, handledInitialEdit]);
 
   function validate(): string | null {
     if (!categoryId) return t("management.errorCategoryRequired");
@@ -655,6 +693,11 @@ const styles = StyleSheet.create({
   locationError: { ...text("caption"), color: colors.error, marginTop: spacing[2] },
   field: { marginBottom: spacing[4] },
   label: { ...text("caption", "bold"), color: colors.text, marginBottom: spacing[2] },
+  hint: { ...text("caption"), color: colors.textMuted, marginBottom: spacing[3], marginTop: -spacing[2] },
+  hoursRow: { flexDirection: "row", gap: spacing[3] },
+  hoursField: { flex: 1 },
+  openNow: { ...text("caption", "bold"), color: colors.success },
+  closedNow: { ...text("caption", "bold"), color: colors.error },
   input: { backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, color: colors.text, minHeight: 48, paddingHorizontal: spacing[3] },
   multilineInput: { minHeight: 78, paddingTop: spacing[3], textAlignVertical: "top" },
   actionButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.md, justifyContent: "center", marginTop: spacing[1], minHeight: 48, paddingHorizontal: spacing[4] },

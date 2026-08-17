@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsBoolean,
   IsIn,
@@ -103,6 +103,18 @@ export class UpdateRestaurantProfileDto {
   @Min(-180)
   @Max(180)
   longitude?: number;
+
+  @ApiPropertyOptional({ example: "09:00", description: "Weekly opening time (HH:mm, 24h). Empty string clears the schedule." })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(([01]\d|2[0-3]):[0-5]\d)?$/, { message: "opensAt must be HH:mm (24h) or empty" })
+  opensAt?: string;
+
+  @ApiPropertyOptional({ example: "22:00", description: "Weekly closing time (HH:mm, 24h). Empty string clears the schedule." })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(([01]\d|2[0-3]):[0-5]\d)?$/, { message: "closesAt must be HH:mm (24h) or empty" })
+  closesAt?: string;
 }
 
 export class SetOpenStatusDto {
@@ -351,6 +363,15 @@ export class PaginationQueryDto {
   @Min(1)
   @Max(50)
   pageSize?: number;
+}
+
+export class SupermarketListQueryDto extends PaginationQueryDto {
+  /** When true, approved-but-closed supermarkets are included (used to resolve the single launch store). */
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === "true")
+  @IsBoolean()
+  includeClosed?: boolean;
 }
 
 export class AdminRestaurantsQueryDto extends PaginationQueryDto {

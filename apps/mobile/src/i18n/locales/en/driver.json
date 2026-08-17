@@ -1,9 +1,24 @@
 {
+  "earnings": {
+    "headerTitle": "My earnings",
+    "subtitle": "A summary of your deliveries and pay",
+    "totalLabel": "Total earnings",
+    "rateHint": "{{rate}} per completed delivery",
+    "completedLabel": "Completed deliveries",
+    "activeLabel": "In progress now",
+    "footnote": "Earnings count completed (delivered) deliveries only."
+  },
   "home": {
     "dashboardTitle": "Delivery Dashboard",
     "dashboardSubtitle": "Toggle online to see deliveries",
+    "greeting": "Hi, {{name}} 👋",
     "onlineStatus": "You are online",
     "offlineStatus": "You are offline",
+    "goOnlineButton": "Go online to receive orders",
+    "goOfflineButton": "You're online — tap to go offline",
+    "youAreHere": "Your location",
+    "viewEarnings": "My earnings & stats",
+    "finishCurrentFirst": "Finish your current delivery before accepting another one.",
     "yourActiveDeliveries": "Your active deliveries",
     "noActiveDeliveries": "You have no active deliveries.",
     "deliverToLabel": "Deliver to: {{address}}",

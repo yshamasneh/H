@@ -220,6 +220,60 @@ test("adminGetRestaurant reports total order count and revenue from delivered or
   assert.equal(view.revenueMinor, 2500);
 });
 
+test("working hours round-trip and are validated as a pair", async () => {
+  const { prisma, service } = createService();
+  await service.register(registerInput);
+  const ownerId = prisma.users[0].id;
+
+  const withHours = await service.updateOwnProfile(ownerId, { opensAt: "09:00", closesAt: "22:00" });
+  assert.equal(withHours.opensAt, "09:00");
+  assert.equal(withHours.closesAt, "22:00");
+
+  // Only one bound set (the other cleared) is refused.
+  await assert.rejects(
+    service.updateOwnProfile(ownerId, { closesAt: "" }),
+    hasCode("RESTAURANT_HOURS_INCOMPLETE")
+  );
+
+  // A zero-length window is refused.
+  await assert.rejects(
+    service.updateOwnProfile(ownerId, { opensAt: "10:00", closesAt: "10:00" }),
+    hasCode("RESTAURANT_HOURS_INVALID")
+  );
+
+  // Clearing both bounds removes the schedule.
+  const cleared = await service.updateOwnProfile(ownerId, { opensAt: "", closesAt: "" });
+  assert.equal(cleared.opensAt, null);
+  assert.equal(cleared.closesAt, null);
+});
+
+test("owner stats sum delivered revenue and count every order in each period", async () => {
+  const { prisma, service } = createService();
+  await service.register(registerInput);
+  const ownerId = prisma.users[0].id;
+  const restaurantId = prisma.restaurants[0].id;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 1, 0);
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15, 12, 0);
+
+  prisma.seedOrder(restaurantId, { status: "DELIVERED", totalMinor: 2000, createdAt: today });
+  prisma.seedOrder(restaurantId, { status: "DELIVERED", totalMinor: 3000, createdAt: today });
+  // Placed-but-not-delivered counts toward volume, not revenue.
+  prisma.seedOrder(restaurantId, { status: "PLACED", totalMinor: 1500, createdAt: today });
+  // Last month is excluded from both today and this month.
+  prisma.seedOrder(restaurantId, { status: "DELIVERED", totalMinor: 9999, createdAt: lastMonth });
+
+  const stats = await service.getOwnStats(ownerId);
+  assert.equal(stats.today.salesMinor, 5000);
+  assert.equal(stats.today.ordersCount, 3);
+  assert.equal(stats.month.salesMinor, 5000);
+  assert.equal(stats.month.ordersCount, 3);
+  // All-time also folds in the delivered order from last month.
+  assert.equal(stats.total.salesMinor, 14999);
+  assert.equal(stats.total.ordersCount, 4);
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

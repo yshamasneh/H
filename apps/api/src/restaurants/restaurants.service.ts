@@ -18,9 +18,9 @@ import { createBusinessNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
-import { restaurantModerationTransitions } from "./restaurant.rules";
+import { isValidTimeOfDay, isWithinWeeklyHours, restaurantModerationTransitions } from "./restaurant.rules";
 import type { AdminCreateBusinessDto, AdminRestaurantsQueryDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
-import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantProfileView, RestaurantPublicView, SupermarketCatalogView, SupermarketProductView } from "./restaurants.types";
+import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantPeriodStats, RestaurantProfileView, RestaurantPublicView, RestaurantStatsView, SupermarketCatalogView, SupermarketProductView } from "./restaurants.types";
 
 @Injectable()
 export class RestaurantsService {
@@ -157,6 +157,38 @@ export class RestaurantsService {
     return toProfileView(await this.requireOwnRestaurant(ownerUserId));
   }
 
+  /**
+   * Owner-facing business snapshot: revenue (from delivered orders) and order volume for today
+   * and the current calendar month. Boundaries are server-local so "today" matches the owner's day.
+   */
+  async getOwnStats(ownerUserId: string): Promise<RestaurantStatsView> {
+    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const [today, month, total] = await Promise.all([
+      this.periodStats(restaurant.id, startOfToday),
+      this.periodStats(restaurant.id, startOfMonth),
+      this.periodStats(restaurant.id)
+    ]);
+    return { today, month, total };
+  }
+
+  private async periodStats(restaurantId: string, since?: Date): Promise<RestaurantPeriodStats> {
+    const createdAt = since ? { gte: since } : undefined;
+    const [ordersCount, deliveredOrders] = await Promise.all([
+      this.prisma.order.count({ where: { restaurantId, createdAt } }),
+      this.prisma.order.findMany({
+        where: { restaurantId, status: OrderStatus.DELIVERED, createdAt },
+        select: { totalMinor: true }
+      })
+    ]);
+    return {
+      salesMinor: deliveredOrders.reduce((sum, order) => sum + order.totalMinor, 0),
+      ordersCount
+    };
+  }
+
   async updateOwnProfile(ownerUserId: string, input: UpdateRestaurantProfileDto): Promise<RestaurantProfileView> {
     const restaurant = await this.requireOwnRestaurant(ownerUserId);
     if ((input.latitude === undefined) !== (input.longitude === undefined)) {
@@ -166,6 +198,7 @@ export class RestaurantsService {
         "Latitude and longitude must be updated together."
       );
     }
+    const { opensAt, closesAt } = this.resolveWorkingHours(restaurant, input);
     const updated = await this.prisma.restaurant.update({
       where: { id: restaurant.id },
       data: {
@@ -174,10 +207,48 @@ export class RestaurantsService {
         addressLine: input.addressLine?.trim(),
         logoUrl: input.logoUrl !== undefined ? input.logoUrl || null : undefined,
         latitude: input.latitude,
-        longitude: input.longitude
+        longitude: input.longitude,
+        opensAt,
+        closesAt
       }
     });
     return toProfileView(updated);
+  }
+
+  /**
+   * Normalises the incoming opening hours to what should be written, validating the
+   * pair as a whole. A blank string clears a bound; the two bounds must always be
+   * both set or both cleared, and a set window must be two valid, different times.
+   * Returns `undefined` for a bound the caller did not touch (Prisma leaves it alone).
+   */
+  private resolveWorkingHours(
+    restaurant: Restaurant,
+    input: UpdateRestaurantProfileDto
+  ): { opensAt: string | null | undefined; closesAt: string | null | undefined } {
+    const normalise = (value: string | undefined): string | null | undefined =>
+      value === undefined ? undefined : value.trim() || null;
+    const opensAt = normalise(input.opensAt);
+    const closesAt = normalise(input.closesAt);
+    if (opensAt === undefined && closesAt === undefined) return { opensAt, closesAt };
+
+    const nextOpensAt = opensAt === undefined ? restaurant.opensAt : opensAt;
+    const nextClosesAt = closesAt === undefined ? restaurant.closesAt : closesAt;
+    if ((nextOpensAt === null) !== (nextClosesAt === null)) {
+      throw new ApiException(
+        400,
+        "RESTAURANT_HOURS_INCOMPLETE",
+        "Set both the opening and closing time, or clear both."
+      );
+    }
+    if (nextOpensAt !== null && nextClosesAt !== null) {
+      if (!isValidTimeOfDay(nextOpensAt) || !isValidTimeOfDay(nextClosesAt)) {
+        throw new ApiException(400, "RESTAURANT_HOURS_INVALID", "Working hours must be valid times in HH:mm format.");
+      }
+      if (nextOpensAt === nextClosesAt) {
+        throw new ApiException(400, "RESTAURANT_HOURS_INVALID", "The opening and closing time cannot be the same.");
+      }
+    }
+    return { opensAt, closesAt };
   }
 
   async setOwnOpenStatus(ownerUserId: string, isOpen: boolean): Promise<RestaurantProfileView> {
@@ -255,8 +326,12 @@ export class RestaurantsService {
     };
   }
 
-  async listPublicSupermarkets(page: number, pageSize: number): Promise<Page<RestaurantPublicView>> {
-    const where = { businessType: BusinessType.SUPERMARKET, status: RestaurantStatus.APPROVED, isOpen: true };
+  async listPublicSupermarkets(page: number, pageSize: number, includeClosed = false): Promise<Page<RestaurantPublicView>> {
+    const where = {
+      businessType: BusinessType.SUPERMARKET,
+      status: RestaurantStatus.APPROVED,
+      ...(includeClosed ? {} : { isOpen: true })
+    };
     const [supermarkets, total] = await Promise.all([
       this.prisma.restaurant.findMany({
         where,
@@ -618,7 +693,10 @@ function toPublicView(restaurant: Restaurant): RestaurantPublicView {
     latitude: restaurant.latitude,
     longitude: restaurant.longitude,
     logoUrl: restaurant.logoUrl,
-    isOpen: restaurant.isOpen
+    isOpen: restaurant.isOpen,
+    opensAt: restaurant.opensAt,
+    closesAt: restaurant.closesAt,
+    isOpenNow: restaurant.isOpen && isWithinWeeklyHours(restaurant.opensAt, restaurant.closesAt, new Date())
   };
 }
 

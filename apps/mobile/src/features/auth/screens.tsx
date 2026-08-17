@@ -101,10 +101,6 @@ export function LoginScreen(props: LoginScreenProps) {
       <ErrorText message={error} />
       <PrimaryButton label={t("login.submit")} loading={loading} onPress={submit} />
       <LinkButton label={t("login.createAccount")} onPress={() => props.onSignup(prefill)} />
-      <View style={styles.inlineActions}>
-        <SecondaryButton label={t("login.registerRestaurant")} onPress={() => props.onRestaurantSignup(prefill)} />
-        <SecondaryButton label={t("login.registerDriver")} onPress={() => props.onDriverSignup(prefill)} />
-      </View>
       <LinkButton label={t("login.forgotPassword")} onPress={() => props.onForgotPassword(prefill)} />
       <DeveloperApiLabel />
     </AuthLayout>
@@ -407,6 +403,7 @@ export function HomeScreen(props: {
   onViewOrders?: () => void;
   onManageOrders?: () => void;
   onManageRestaurant?: () => void;
+  onOpenStats?: () => void;
   onOpenDriverDashboard?: () => void;
   onOpenNotifications: () => void;
   onOpenSettings: () => void;
@@ -463,6 +460,9 @@ export function HomeScreen(props: {
       ) : null}
       {props.onManageRestaurant ? (
         <SecondaryButton label={t("home.manageRestaurant")} onPress={props.onManageRestaurant} />
+      ) : null}
+      {props.onOpenStats ? (
+        <SecondaryButton label={t("home.viewStats")} onPress={props.onOpenStats} />
       ) : null}
       {props.onOpenDriverDashboard ? (
         <PrimaryButton label={t("home.driverDashboard")} onPress={props.onOpenDriverDashboard} />
