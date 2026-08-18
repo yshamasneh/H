@@ -25,9 +25,10 @@ export type DriverStatsView = {
   completedCount: number;
   /** Deliveries currently in progress (assigned, picked up, or on the way). */
   activeCount: number;
-  /** Total earned so far: completedCount × the flat per-delivery payout, in minor units. */
+  /** Total earned so far: the sum of the driver's 70% share of each completed delivery's fee. */
   earningsMinor: number;
-  /** The flat payout per completed delivery, in minor units, so the client can show the rate. */
+  /** Average payout per completed delivery, in minor units (earningsMinor / completedCount, since
+   *  the payout scales with each delivery's actual fee and is no longer a flat rate). */
   perDeliveryMinor: number;
 };
 

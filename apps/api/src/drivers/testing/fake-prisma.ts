@@ -37,6 +37,7 @@ type OrderRecord = {
   deliveryLabel: string;
   deliveryAddressLine: string;
   totalMinor: number;
+  deliveryFeeMinor: number;
   paymentMethod: "CASH";
 };
 
@@ -337,6 +338,7 @@ export class FakeDriversPrisma {
       deliveryLabel: "Home",
       deliveryAddressLine: "Al-Manara Square, Ramallah",
       totalMinor: 3200,
+      deliveryFeeMinor: 1000,
       paymentMethod: "CASH",
       ...overrides
     };

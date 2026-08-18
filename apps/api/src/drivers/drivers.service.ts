@@ -24,9 +24,9 @@ import { RealtimeGateway } from "../realtime/realtime.gateway";
 import {
   activeDeliveryStatuses,
   allowedDeliveryTransitions,
+  calculateDriverShareMinor,
   defaultFaultParty,
   deliveryStatusTransitions,
-  driverEarningPerDeliveryMinor,
   orderStatusesAllowingDeliveryProgress
 } from "./delivery.rules";
 import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
@@ -118,15 +118,23 @@ export class DriversService {
 
   async getOwnStats(driverUserId: string): Promise<DriverStatsView> {
     await this.requireOwnProfile(driverUserId);
-    const [completedCount, activeCount] = await Promise.all([
-      this.prisma.delivery.count({ where: { driverId: driverUserId, status: DeliveryStatus.DELIVERED } }),
+    const [deliveredDeliveries, activeCount] = await Promise.all([
+      this.prisma.delivery.findMany({
+        where: { driverId: driverUserId, status: DeliveryStatus.DELIVERED },
+        include: { order: { select: { deliveryFeeMinor: true } } }
+      }),
       this.prisma.delivery.count({ where: { driverId: driverUserId, status: { in: activeDeliveryStatuses } } })
     ]);
+    const completedCount = deliveredDeliveries.length;
+    const earningsMinor = deliveredDeliveries.reduce(
+      (sum, delivery) => sum + calculateDriverShareMinor(delivery.order.deliveryFeeMinor),
+      0
+    );
     return {
       completedCount,
       activeCount,
-      earningsMinor: completedCount * driverEarningPerDeliveryMinor,
-      perDeliveryMinor: driverEarningPerDeliveryMinor
+      earningsMinor,
+      perDeliveryMinor: completedCount > 0 ? Math.round(earningsMinor / completedCount) : 0
     };
   }
 

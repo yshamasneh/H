@@ -118,13 +118,14 @@ test("a driver holding an active delivery cannot accept a second one", async () 
   assert.equal(prisma.deliveries.find((delivery) => delivery.id === secondDelivery.id)?.driverId ?? null, null);
 });
 
-test("driver stats count completed deliveries and pay a flat 7 ILS each", async () => {
+test("driver stats count completed deliveries and pay 70% of each order's delivery fee, at the minimum fee this is 7 ILS each", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();
   const driver = prisma.seedDriver({ isOnline: true });
-  // Three delivered, one in progress, one belonging to another driver (must be excluded).
+  // Three delivered at the minimum 10 ILS fee, one in progress, one belonging to another driver
+  // (must be excluded).
   for (let index = 0; index < 3; index += 1) {
-    const order = prisma.seedOrder(restaurant.id);
+    const order = prisma.seedOrder(restaurant.id, { deliveryFeeMinor: 1000 });
     prisma.seedDelivery(order.id, { driverId: driver.userId, status: "DELIVERED" as never });
   }
   const activeOrder = prisma.seedOrder(restaurant.id);
@@ -138,6 +139,23 @@ test("driver stats count completed deliveries and pay a flat 7 ILS each", async 
   assert.equal(stats.activeCount, 1);
   assert.equal(stats.earningsMinor, 2100);
   assert.equal(stats.perDeliveryMinor, 700);
+});
+
+test("driver earnings scale with a longer delivery's fee instead of staying flat", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const driver = prisma.seedDriver({ isOnline: true });
+  // Minimum-fee delivery (10 ILS -> 7 ILS share) plus a longer one priced above the minimum
+  // (13 ILS -> 9.10 ILS share), per pricing.ts's distance-based fee.
+  const nearOrder = prisma.seedOrder(restaurant.id, { deliveryFeeMinor: 1000 });
+  prisma.seedDelivery(nearOrder.id, { driverId: driver.userId, status: "DELIVERED" as never });
+  const farOrder = prisma.seedOrder(restaurant.id, { deliveryFeeMinor: 1300 });
+  prisma.seedDelivery(farOrder.id, { driverId: driver.userId, status: "DELIVERED" as never });
+
+  const stats = await service.getOwnStats(driver.userId);
+  assert.equal(stats.completedCount, 2);
+  assert.equal(stats.earningsMinor, 700 + 910);
+  assert.equal(stats.perDeliveryMinor, Math.round((700 + 910) / 2));
 });
 
 test("two drivers accepting the same delivery simultaneously: exactly one succeeds", async () => {

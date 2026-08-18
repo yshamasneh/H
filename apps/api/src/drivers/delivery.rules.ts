@@ -41,10 +41,19 @@ export const activeDeliveryStatuses: DeliveryStatus[] = [
 ];
 
 /**
- * Flat driver payout per completed delivery, in minor units (₪7.00). A starting figure, kept as a
- * single constant so the earnings screen and any future payout logic read the same number.
+ * The driver's share of a delivery's fee, per the resolved revenue model: a percentage, not a flat
+ * amount. A flat amount breaks at the minimum fee (it can exceed the whole fee collected), so the
+ * payout scales with `deliveryFeeMinor` (see orders/pricing.ts) instead of staying fixed.
+ *
+ * TODO(revenue-model): the remaining 30% (delivery-ops partner / owner A / owner B, three-way
+ * split) is not computed anywhere yet — only the driver's own share exists so far.
  */
-export const driverEarningPerDeliveryMinor = 700;
+export const driverSharePercent = 0.7;
+
+/** The driver's payout for one delivery, in minor units, given that order's actual delivery fee. */
+export function calculateDriverShareMinor(deliveryFeeMinor: number): number {
+  return Math.round(deliveryFeeMinor * driverSharePercent);
+}
 
 /**
  * The default party a failure is attributed to, applied once and stored on the delivery.

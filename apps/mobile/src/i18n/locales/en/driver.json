@@ -3,7 +3,7 @@
     "headerTitle": "My earnings",
     "subtitle": "A summary of your deliveries and pay",
     "totalLabel": "Total earnings",
-    "rateHint": "{{rate}} per completed delivery",
+    "rateHint": "Avg {{rate}} per completed delivery",
     "completedLabel": "Completed deliveries",
     "activeLabel": "In progress now",
     "footnote": "Earnings count completed (delivered) deliveries only."
