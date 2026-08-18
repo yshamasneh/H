@@ -5,6 +5,12 @@ import { BusinessType, DriverApprovalStatus, PrismaClient, RestaurantStatus, Use
 
 dotenv.config({ path: "../../.env" });
 
+// The upsert below resets the seeded admin's password to a known value on every run. Refuse to
+// run against production so this can never reset a real admin's credentials to something public.
+if (process.env.NODE_ENV === "production") {
+  throw new Error("Refusing to seed in production");
+}
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to seed the database");

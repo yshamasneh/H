@@ -14,6 +14,13 @@ const runDatabaseE2e = process.env.RUN_DATABASE_E2E === "true";
 if (runDatabaseE2e && process.env.NODE_ENV === "production") {
   throw new Error("Phase 13 E2E refuses to run with NODE_ENV=production.");
 }
+// This suite exercises the restaurant vertical's full order lifecycle end-to-end (menu, offers,
+// delivery, driver assignment) against the real AppModule config, not the "coming soon" launch
+// gate (see orders/coming-soon-restaurant-gap.test.ts for that) — so it opts into the flag
+// explicitly rather than relying on RESTAURANT_ORDERING_ENABLED's real (off) default.
+if (runDatabaseE2e) {
+  process.env.RESTAURANT_ORDERING_ENABLED = "true";
+}
 const password = "Phase11@12345";
 const phones = {
   admin: "+970594000001",

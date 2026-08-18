@@ -90,6 +90,10 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     "PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES",
     10
   );
+  // The restaurant vertical is built and tested but not launched yet (customers see a "coming
+  // soon" card). This gates both public restaurant browsing and restaurant order creation
+  // server-side, so launch is a config flip, not a rebuild. Supermarket ordering is unaffected.
+  environment.RESTAURANT_ORDERING_ENABLED = readBoolean(environment, "RESTAURANT_ORDERING_ENABLED", false);
   return environment;
 }
 

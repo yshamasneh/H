@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
+import { ConfigService } from "@nestjs/config";
 import { ApiException } from "../common/api.exception";
 import { BusinessType, RestaurantStatus, UserRole } from "../generated/prisma/client";
 import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
@@ -20,7 +21,11 @@ const registerInput = {
 function createService() {
   const prisma = new FakeRestaurantPrisma();
   const realtime = new FakeRealtimeGateway();
-  const service = new RestaurantsService(prisma as never, realtime as never);
+  // This file exercises restaurant registration/moderation/listing logic itself, not the
+  // RESTAURANT_ORDERING_ENABLED launch gate (see restaurants.public-gate.test.ts for that), so
+  // the flag is turned on explicitly here rather than relying on its real (off) default.
+  const config = new ConfigService({ RESTAURANT_ORDERING_ENABLED: true });
+  const service = new RestaurantsService(prisma as never, realtime as never, config);
   return { prisma, realtime, service };
 }
 

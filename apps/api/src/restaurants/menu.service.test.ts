@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { ConfigService } from "@nestjs/config";
 import { ApiException } from "../common/api.exception";
 import { RestaurantStatus } from "../generated/prisma/client";
 import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
@@ -10,7 +11,9 @@ import { FakeRestaurantPrisma } from "./testing/fake-prisma";
 function createServices() {
   const prisma = new FakeRestaurantPrisma();
   const menu = new MenuService(prisma as never);
-  const restaurants = new RestaurantsService(prisma as never, new FakeRealtimeGateway() as never);
+  // Flag on: this file tests menu visibility rules, not the RESTAURANT_ORDERING_ENABLED gate.
+  const config = new ConfigService({ RESTAURANT_ORDERING_ENABLED: true });
+  const restaurants = new RestaurantsService(prisma as never, new FakeRealtimeGateway() as never, config);
   return { prisma, menu, restaurants };
 }
 

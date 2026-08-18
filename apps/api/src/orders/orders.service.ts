@@ -724,6 +724,10 @@ export class OrdersService {
     return restaurant;
   }
 
+  private isRestaurantOrderingEnabled(): boolean {
+    return this.config?.get<boolean>("RESTAURANT_ORDERING_ENABLED") ?? false;
+  }
+
   private async calculateOrderQuote(
     client: Pick<Prisma.TransactionClient, "restaurant" | "menuItem" | "offer">,
     input: CreateOrderDto
@@ -731,6 +735,9 @@ export class OrdersService {
     const restaurant = await client.restaurant.findUnique({ where: { id: input.restaurantId } });
     if (!restaurant || restaurant.status !== RestaurantStatus.APPROVED) {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant is not available.");
+    }
+    if (restaurant.businessType === BusinessType.RESTAURANT && !this.isRestaurantOrderingEnabled()) {
+      throw new ApiException(409, "RESTAURANT_ORDERING_DISABLED", "Restaurant ordering is not available yet.");
     }
     if (!restaurant.isOpen || !isWithinWeeklyHours(restaurant.opensAt, restaurant.closesAt, new Date())) {
       throw new ApiException(409, "RESTAURANT_CLOSED", "This restaurant is not accepting orders right now.");

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
+import { ConfigService } from "@nestjs/config";
 import { ApiException } from "../common/api.exception";
 import { BusinessType, RestaurantStatus } from "../generated/prisma/client";
 import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
@@ -10,7 +11,13 @@ import { OrdersService } from "./orders.service";
 function createService() {
   const prisma = new FakeOrdersPrisma();
   const realtime = new FakeRealtimeGateway();
-  const service = new OrdersService(prisma as never, realtime as never);
+  // This file exercises general order-lifecycle behaviour (pricing, promotions, inventory,
+  // status transitions, cancellation, refunds...) against the fake prisma's default
+  // businessType: RESTAURANT seed, not the RESTAURANT_ORDERING_ENABLED launch gate itself — that
+  // gate has its own dedicated coverage in coming-soon-restaurant-gap.test.ts. Turn it on
+  // explicitly here rather than silently depending on a flag default that doesn't match reality.
+  const config = new ConfigService({ RESTAURANT_ORDERING_ENABLED: true });
+  const service = new OrdersService(prisma as never, realtime as never, config);
   return { prisma, realtime, service };
 }
 

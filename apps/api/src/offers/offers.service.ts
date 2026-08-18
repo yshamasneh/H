@@ -1,7 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { writeAuditLog } from "../common/audit-log.util";
 import { ApiException } from "../common/api.exception";
-import { OfferType, type Offer, type Prisma } from "../generated/prisma/client";
+import { BusinessType, OfferType, type Offer, type Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import type { CreateOfferDto, UpdateOfferDto } from "./offers.dto";
 import type { AppliedPromotion, OfferView, PromotionCalculation } from "./offers.types";
@@ -11,9 +12,13 @@ type OfferWithRelations = Prisma.OfferGetPayload<{ include: typeof offerInclude 
 
 @Injectable()
 export class OffersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly config?: ConfigService
+  ) {}
 
   async listPublicOffers(): Promise<OfferView[]> {
+    const restaurantOrderingEnabled = this.config?.get<boolean>("RESTAURANT_ORDERING_ENABLED") ?? false;
     const now = new Date();
     const offers = await this.prisma.offer.findMany({
       where: {
@@ -29,7 +34,13 @@ export class OffersService {
               { restaurantId: null },
               { restaurant: { status: "APPROVED", isOpen: true } }
             ]
-          }
+          },
+          // Platform-wide offers (restaurantId: null) and supermarket offers stay visible even
+          // while the restaurant vertical's launch gate is closed; only RESTAURANT-scoped offers
+          // are hidden, matching the same RESTAURANT_ORDERING_ENABLED flag as browsing/ordering.
+          ...(restaurantOrderingEnabled
+            ? []
+            : [{ OR: [{ restaurantId: null }, { restaurant: { businessType: BusinessType.SUPERMARKET } }] }])
         ]
       },
       include: offerInclude,

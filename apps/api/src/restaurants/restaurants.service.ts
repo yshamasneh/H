@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { writeAuditLog } from "../common/audit-log.util";
@@ -26,8 +27,14 @@ import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantPeriodStat
 export class RestaurantsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly realtime: RealtimeGateway
+    private readonly realtime: RealtimeGateway,
+    @Optional() private readonly config?: ConfigService
   ) {}
+
+  /** The restaurant vertical's own public launch gate; see orders.service.ts's copy of the same flag. */
+  private isRestaurantOrderingEnabled(): boolean {
+    return this.config?.get<boolean>("RESTAURANT_ORDERING_ENABLED") ?? false;
+  }
 
   async register(input: RestaurantRegisterDto): Promise<{ message: string; restaurantId: string; status: RestaurantStatus }> {
     this.assertPasswordsMatch(input.password, input.confirmPassword);
@@ -268,6 +275,9 @@ export class RestaurantsService {
   }
 
   async listPublicRestaurants(page: number, pageSize: number): Promise<Page<RestaurantPublicView>> {
+    if (!this.isRestaurantOrderingEnabled()) {
+      return { items: [], page, pageSize, total: 0 };
+    }
     const where = { businessType: BusinessType.RESTAURANT, status: RestaurantStatus.APPROVED, isOpen: true };
     const [restaurants, total] = await Promise.all([
       this.prisma.restaurant.findMany({
@@ -282,11 +292,13 @@ export class RestaurantsService {
   }
 
   async getPublicRestaurant(restaurantId: string): Promise<RestaurantPublicView> {
+    this.requireRestaurantOrderingEnabled();
     const restaurant = await this.requireApprovedRestaurant(restaurantId, BusinessType.RESTAURANT);
     return toPublicView(restaurant);
   }
 
   async getPublicMenu(restaurantId: string) {
+    this.requireRestaurantOrderingEnabled();
     const restaurant = await this.requireApprovedRestaurant(restaurantId, BusinessType.RESTAURANT);
     const now = new Date();
     const [categories, offers] = await Promise.all([
@@ -649,6 +661,15 @@ export class RestaurantsService {
     });
     emitter.flush();
     return toProfileView(updated);
+  }
+
+  /** Structured, deliberate rejection for a single-resource restaurant lookup while the vertical
+   *  is not launched — distinct from RESTAURANT_NOT_FOUND, so a client can tell "not open yet"
+   *  apart from "this id doesn't exist". */
+  private requireRestaurantOrderingEnabled(): void {
+    if (!this.isRestaurantOrderingEnabled()) {
+      throw new ApiException(404, "RESTAURANT_ORDERING_DISABLED", "Restaurant ordering is not available yet.");
+    }
   }
 
   private async requireApprovedRestaurant(restaurantId: string, businessType?: BusinessType): Promise<Restaurant> {
