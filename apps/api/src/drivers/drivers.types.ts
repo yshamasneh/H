@@ -25,8 +25,15 @@ export type DriverStatsView = {
   completedCount: number;
   /** Deliveries currently in progress (assigned, picked up, or on the way). */
   activeCount: number;
-  /** Total earned so far: the sum of the driver's 70% share of each completed delivery's fee. */
+  /** Total earned so far, summed from the driver's own ledger rows. */
   earningsMinor: number;
+  /** Of that, how much has actually been paid out. */
+  earningsPaidMinor: number;
+  /** What the platform still owes the driver: earned minus paid. */
+  earningsOutstandingMinor: number;
+  /** Customers' cash the driver is currently holding and has not yet handed over. Deliberately
+   *  never netted against earnings: owing the platform cash and being owed pay are two facts. */
+  cashOutstandingMinor: number;
   /** Average payout per completed delivery, in minor units (earningsMinor / completedCount, since
    *  the payout scales with each delivery's actual fee and is no longer a flat rate). */
   perDeliveryMinor: number;

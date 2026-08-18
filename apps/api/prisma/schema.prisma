@@ -135,38 +135,162 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+/// Which side of the business a financial record belongs to. Restaurant and supermarket
+/// entitlements are computed by structurally different formulas (commission on merchandise versus
+/// cost price plus a margin share) and are deliberately never forced through one shared shape.
+enum OrderFinancialVertical {
+  RESTAURANT
+  SUPERMARKET
+}
+
+/// The terminal order outcomes that move money. Cancelled and rejected orders move none and
+/// therefore never produce a financial record at all.
+enum OrderFinancialOutcome {
+  DELIVERED
+  DELIVERY_FAILED
+}
+
+/// Who carries the shortfall on a delivery that collected no cash. Resolved from the delivery's
+/// recorded fault party through a configurable policy, never from one blanket rule.
+enum LossAbsorber {
+  NONE
+  PLATFORM
+  BUSINESS
+  DRIVER
+}
+
+/// A fixed party in the revenue model, as opposed to a business or a driver, which are per-order.
+enum PartnerAccountKind {
+  PLATFORM_OWNER
+  DELIVERY_OPS
+  SUPERMARKET_PARTNER
+}
+
+/// Whether a ledger row is owed to a fixed partner, to a business, or to a driver. Exactly one of
+/// the three foreign keys is set, enforced by a CHECK constraint rather than by convention.
+enum FinancialPayeeType {
+  PARTNER
+  BUSINESS
+  DRIVER
+}
+
+/// What produced a ledger row. `sourceId` denormalises whichever source foreign key is set, so the
+/// idempotency key (sourceType, sourceId, payeeKey, component) can be a real unique index.
+enum FinancialSourceType {
+  ORDER
+  OPERATING_COST
+  SUBSCRIPTION
+  ADJUSTMENT
+}
+
+/// The economic reason for one ledger row. Amounts are signed: a component that costs a party
+/// money is stored negative, so a party's balance is always a plain SUM.
+enum EarningComponent {
+  /// Restaurant vertical: merchandise value owed to the business, already net of commission.
+  BUSINESS_MERCHANDISE_NET
+  /// Supermarket vertical: what the partner is owed for the goods themselves, at cost.
+  SUPERMARKET_GOODS_COST
+  /// Supermarket vertical: a party's share of retail minus cost.
+  SUPERMARKET_MARGIN_SHARE
+  /// A platform owner's share of the restaurant commission.
+  PLATFORM_COMMISSION_SHARE
+  /// Negative. A business-scoped offer, absorbed by the business that funded it.
+  BUSINESS_DISCOUNT_ABSORBED
+  /// Negative. A platform-scoped offer, absorbed by the platform owners.
+  PLATFORM_DISCOUNT_ABSORBED
+  DRIVER_DELIVERY_SHARE
+  DELIVERY_OPS_SHARE
+  PLATFORM_DELIVERY_SHARE
+  /// Negative. The whole uncollected order value, charged to whoever absorbs a failed delivery.
+  FAILED_DELIVERY_LOSS
+  /// Negative. A party's share of an approved supermarket operating cost.
+  OPERATING_COST_SHARE
+  /// Negative, on the business: the monthly subscription it owes.
+  SUBSCRIPTION_CHARGE
+  /// Positive, on the platform owners: their share of that subscription.
+  SUBSCRIPTION_SHARE
+  /// A correction. Never an in-place edit of an existing row.
+  ADJUSTMENT
+}
+
+/// Supermarket operating costs are reported by the supermarket side and decided by the platform.
+enum OperatingCostStatus {
+  PROPOSED
+  APPROVED
+  REJECTED
+}
+
+enum OperatingCostCategory {
+  WAREHOUSE_RENT
+  STAFF_SALARY
+  UTILITIES
+  MAINTENANCE
+  OTHER
+}
+
+enum CashCustodyStatus {
+  OUTSTANDING
+  PARTIALLY_SETTLED
+  SETTLED
+}
+
+/// GROSS: the driver hands over the full amount collected and is paid their earnings separately.
+/// NET_OF_EARNINGS exists so the alternative can be switched on later without a rebuild.
+enum CashSettlementMode {
+  GROSS
+  NET_OF_EARNINGS
+}
+
+enum PartnerSettlementMethod {
+  CASH
+  BANK_TRANSFER
+  OFFSET
+}
+
 model User {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  fullName              String
-  phone                 String                  @unique
-  email                 String?                 @unique
-  passwordHash          String
-  role                  UserRole
-  platformRoleId        String?                 @db.Uuid
-  phoneVerifiedAt       DateTime?
-  isActive              Boolean                 @default(true)
-  tokenVersion          Int                     @default(0)
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  refreshSessions       RefreshSession[]
-  passwordResetTokens   PasswordResetToken[]
-  restaurant            Restaurant?
-  orders                Order[]
-  ordersAccepted        Order[]                 @relation("OrderAcceptedBy")
-  orderStatusChanges    OrderStatusHistory[]
-  driverProfile         DriverProfile?
-  deliveriesAsDriver    Delivery[]
-  auditLogs             AuditLog[]
-  notifications         Notification[]
-  offersCreated         Offer[]                 @relation("OfferCreatedBy")
-  fulfillmentProposals  FulfillmentAdjustment[] @relation("FulfillmentProposedBy")
-  inventoryMovements    InventoryMovement[]     @relation("InventoryMovementActor")
-  purchaseOrdersCreated PurchaseOrder[]         @relation("PurchaseOrderCreatedBy")
-  addresses             Address[]
-  pushTokens            PushToken[]
-  platformRole          Role?                   @relation("UserPlatformRole", fields: [platformRoleId], references: [id], onDelete: SetNull)
-  businessMemberships   BusinessMember[]        @relation("BusinessMemberUser")
-  businessInvitesSent   BusinessMember[]        @relation("BusinessMemberInvitedBy")
+  id                        String                  @id @default(uuid()) @db.Uuid
+  fullName                  String
+  phone                     String                  @unique
+  email                     String?                 @unique
+  passwordHash              String
+  role                      UserRole
+  platformRoleId            String?                 @db.Uuid
+  phoneVerifiedAt           DateTime?
+  isActive                  Boolean                 @default(true)
+  tokenVersion              Int                     @default(0)
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+  refreshSessions           RefreshSession[]
+  passwordResetTokens       PasswordResetToken[]
+  restaurant                Restaurant?
+  orders                    Order[]
+  ordersAccepted            Order[]                 @relation("OrderAcceptedBy")
+  orderStatusChanges        OrderStatusHistory[]
+  driverProfile             DriverProfile?
+  deliveriesAsDriver        Delivery[]
+  auditLogs                 AuditLog[]
+  notifications             Notification[]
+  offersCreated             Offer[]                 @relation("OfferCreatedBy")
+  fulfillmentProposals      FulfillmentAdjustment[] @relation("FulfillmentProposedBy")
+  inventoryMovements        InventoryMovement[]     @relation("InventoryMovementActor")
+  purchaseOrdersCreated     PurchaseOrder[]         @relation("PurchaseOrderCreatedBy")
+  addresses                 Address[]
+  pushTokens                PushToken[]
+  platformRole              Role?                   @relation("UserPlatformRole", fields: [platformRoleId], references: [id], onDelete: SetNull)
+  businessMemberships       BusinessMember[]        @relation("BusinessMemberUser")
+  businessInvitesSent       BusinessMember[]        @relation("BusinessMemberInvitedBy")
+  partnerAccount            PartnerAccount?
+  driverEarnings            PartnerEarning[]        @relation("PartnerEarningDriver")
+  cashCustodies             DriverCashCustody[]     @relation("DriverCashCustodyDriver")
+  cashHandovers             CashSettlement[]        @relation("CashSettlementDriver")
+  cashReceipts              CashSettlement[]        @relation("CashSettlementReceiver")
+  driverPayouts             PartnerSettlement[]     @relation("PartnerSettlementDriver")
+  partnerSettlementsPaid    PartnerSettlement[]     @relation("PartnerSettlementPaidBy")
+  operatingCostsProposed    OperatingCostEntry[]    @relation("OperatingCostProposedBy")
+  operatingCostsDecided     OperatingCostEntry[]    @relation("OperatingCostApprovedBy")
+  subscriptionChargesRaised SubscriptionCharge[]    @relation("SubscriptionChargeCreatedBy")
+  financialAdjustments      FinancialAdjustment[]   @relation("FinancialAdjustmentCreatedBy")
+  financialRateSets         FinancialRateSet[]      @relation("FinancialRateSetCreatedBy")
 
   @@index([role, isActive])
   @@index([platformRoleId])
@@ -296,35 +420,44 @@ model PushToken {
 }
 
 model Restaurant {
-  id                 String              @id @default(uuid()) @db.Uuid
-  ownerUserId        String              @unique @db.Uuid
-  name               String
-  businessType       BusinessType        @default(RESTAURANT)
-  description        String?
-  phone              String
-  status             RestaurantStatus    @default(PENDING)
-  isOpen             Boolean             @default(false)
+  id                   String                 @id @default(uuid()) @db.Uuid
+  ownerUserId          String                 @unique @db.Uuid
+  name                 String
+  businessType         BusinessType           @default(RESTAURANT)
+  description          String?
+  phone                String
+  status               RestaurantStatus       @default(PENDING)
+  isOpen               Boolean                @default(false)
   /// Weekly opening/closing time as "HH:mm" (24h), applied to every day. Both null means no
   /// schedule, so openness follows the manual `isOpen` switch only. When set, the store is
   /// considered open for orders only inside this window (see isWithinWeeklyHours).
-  opensAt            String?
-  closesAt           String?
-  addressLine        String
-  latitude           Float?
-  longitude          Float?
-  logoUrl            String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  owner              User                @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  categories         MenuCategory[]
-  items              MenuItem[]
-  offers             Offer[]
-  orders             Order[]
-  suppliers          Supplier[]
-  purchaseOrders     PurchaseOrder[]
-  inventoryMovements InventoryMovement[]
-  members            BusinessMember[]
-  notifications      Notification[]
+  opensAt              String?
+  closesAt             String?
+  addressLine          String
+  latitude             Float?
+  longitude            Float?
+  logoUrl              String?
+  /// A promotional partner pays the reduced commission rate and is not billed the monthly
+  /// subscription. Stored on the business rather than inferred, and snapshotted onto every order.
+  isPromotionalPartner Boolean                @default(false)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  owner                User                   @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  categories           MenuCategory[]
+  items                MenuItem[]
+  offers               Offer[]
+  orders               Order[]
+  suppliers            Supplier[]
+  purchaseOrders       PurchaseOrder[]
+  inventoryMovements   InventoryMovement[]
+  members              BusinessMember[]
+  notifications        Notification[]
+  financialRecords     OrderFinancialRecord[]
+  earnings             PartnerEarning[]       @relation("PartnerEarningBusiness")
+  operatingCosts       OperatingCostEntry[]
+  subscriptionCharges  SubscriptionCharge[]
+  partnerSettlements   PartnerSettlement[]    @relation("PartnerSettlementBusiness")
+  partnerAccounts      PartnerAccount[]
 
   @@index([businessType, status, isOpen])
 }
@@ -406,42 +539,49 @@ model MenuItem {
 }
 
 model Order {
-  id                     String               @id @default(uuid()) @db.Uuid
-  customerId             String               @db.Uuid
-  restaurantId           String               @db.Uuid
-  status                 OrderStatus          @default(PLACED)
-  paymentMethod          OrderPaymentMethod
-  deliveryLabel          String
-  deliveryAddressLine    String
-  deliveryLatitude       Float?
-  deliveryLongitude      Float?
-  deliveryDistanceMeters Int?
-  subtotalMinor          Int
-  deliveryFeeMinor       Int
+  id                       String                @id @default(uuid()) @db.Uuid
+  customerId               String                @db.Uuid
+  restaurantId             String                @db.Uuid
+  status                   OrderStatus           @default(PLACED)
+  paymentMethod            OrderPaymentMethod
+  deliveryLabel            String
+  deliveryAddressLine      String
+  deliveryLatitude         Float?
+  deliveryLongitude        Float?
+  deliveryDistanceMeters   Int?
+  subtotalMinor            Int
+  deliveryFeeMinor         Int
   /// Retained for orders placed before the service fee was removed from the business model, so
   /// what those customers actually paid is never rewritten. Always 0 for new orders.
-  serviceFeeMinor        Int                  @default(0)
-  discountMinor          Int                  @default(0)
+  serviceFeeMinor          Int                   @default(0)
+  discountMinor            Int                   @default(0)
   /// The discount split, persisted because the commission base is item subtotal after merchandise
   /// discounts only — a delivery-fee promotion must never reduce it. `discountMinor` stays the total.
-  merchandiseDiscountMinor Int                @default(0)
-  deliveryDiscountMinor    Int                @default(0)
-  promotionSnapshot      Json?
-  customerNote           String?
-  totalMinor             Int
-  acceptedByUserId       String?              @db.Uuid
-  acceptedAt             DateTime?
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+  merchandiseDiscountMinor Int                   @default(0)
+  deliveryDiscountMinor    Int                   @default(0)
+  promotionSnapshot        Json?
+  /// The rate set and the resolved commission rate as they stood when the order was placed. Frozen
+  /// here so a rate changed tomorrow can never recompute an order taken today.
+  financialRateSetId       String?               @db.Uuid
+  commissionBpSnapshot     Int?
+  customerNote             String?
+  totalMinor               Int
+  acceptedByUserId         String?               @db.Uuid
+  acceptedAt               DateTime?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
   /// Restrict, not Cascade: an order is a financial record of what someone paid, and deleting a
   /// person or a business must never erase it. Account closure anonymises the user instead.
-  customer               User                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  restaurant             Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
-  acceptedBy             User?                @relation("OrderAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
-  items                  OrderItem[]
-  statusHistory          OrderStatusHistory[]
-  delivery               Delivery?
-  inventoryMovements     InventoryMovement[]
+  customer                 User                  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  restaurant               Restaurant            @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  acceptedBy               User?                 @relation("OrderAcceptedBy", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  items                    OrderItem[]
+  statusHistory            OrderStatusHistory[]
+  delivery                 Delivery?
+  inventoryMovements       InventoryMovement[]
+  financialRateSet         FinancialRateSet?     @relation(fields: [financialRateSetId], references: [id], onDelete: Restrict)
+  financialRecord          OrderFinancialRecord?
+  cashCustody              DriverCashCustody?
 
   @@index([customerId, createdAt])
   @@index([restaurantId, createdAt])
@@ -472,6 +612,10 @@ model OrderItem {
   priceMinorSnapshot       Int
   quantity                 Int
   unitLabelSnapshot        String                 @default("item")
+  /// What the platform paid for this line's goods, frozen at order time. Null on lines whose
+  /// product had no cost price recorded, and on every line placed before this column existed —
+  /// the financial record flags those rather than silently treating the cost as zero.
+  costPriceMinorSnapshot   Int?
   allowSubstitution        Boolean                @default(false)
   isVariableWeightSnapshot Boolean                @default(false)
   order                    Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -574,15 +718,15 @@ model PurchaseOrderItem {
 }
 
 model DriverProfile {
-  userId        String               @id @db.Uuid
-  status        DriverApprovalStatus @default(PENDING)
-  isOnline      Boolean              @default(false)
-  lastLatitude  Float?
-  lastLongitude Float?
+  userId         String               @id @db.Uuid
+  status         DriverApprovalStatus @default(PENDING)
+  isOnline       Boolean              @default(false)
+  lastLatitude   Float?
+  lastLongitude  Float?
   lastLocationAt DateTime?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status, isOnline])
 }
@@ -591,7 +735,7 @@ model Delivery {
   id            String                 @id @default(uuid()) @db.Uuid
   orderId       String                 @unique @db.Uuid
   driverId      String?                @db.Uuid
-  status        DeliveryStatus          @default(PENDING_ASSIGNMENT)
+  status        DeliveryStatus         @default(PENDING_ASSIGNMENT)
   assignedAt    DateTime?
   pickedUpAt    DateTime?
   onTheWayAt    DateTime?
@@ -601,10 +745,10 @@ model Delivery {
   faultParty    DeliveryFaultParty?
   failureNote   String?
   cancelledAt   DateTime?
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
-  order         Order                   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  driver        User?                   @relation(fields: [driverId], references: [id])
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  order         Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driver        User?                  @relation(fields: [driverId], references: [id])
 
   @@index([status, driverId])
   @@index([failureReason, failedAt])
@@ -646,4 +790,392 @@ model Notification {
 
   @@index([userId, isRead, createdAt])
   @@index([businessId, isRead, createdAt])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 15.6 — the accounting layer.
+//
+// Two things are tracked side by side and never conflated:
+//   * entitlement — who is owed what (OrderFinancialRecord, PartnerEarning, PartnerSettlement);
+//   * cash custody — who is physically holding money and whether it has been handed over
+//     (DriverCashCustody, CashSettlement).
+// A driver holding 87.50 in cash and being owed 7.00 in earnings are two separate facts.
+// ---------------------------------------------------------------------------------------------
+
+/// Every rate in the revenue model, versioned and effective-dated. A rate is never edited in
+/// place: changing one means inserting a new version, so an order already computed against an
+/// older version keeps its numbers forever. Percentages are basis points (2000 = 20.00%).
+model FinancialRateSet {
+  id              String   @id @default(uuid()) @db.Uuid
+  version         Int      @unique
+  effectiveFrom   DateTime
+  note            String?
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+
+  /// Restaurant commission on the item subtotal after merchandise discounts.
+  restaurantCommissionBp   Int @default(2000)
+  /// The reduced rate a promotional partner pays instead.
+  promotionalCommissionBp  Int @default(1500)
+  /// Billed monthly per restaurant; promotional partners are not billed at all.
+  monthlySubscriptionMinor Int @default(15000)
+  /// How the commission divides between the two platform owners. Weights, not percentages, so a
+  /// change of split never has to keep two numbers summing to a hundred.
+  commissionOwnerAWeight   Int @default(1)
+  commissionOwnerBWeight   Int @default(1)
+
+  /// Supermarket margin (retail minus cost) split three ways. Must total 10000.
+  supermarketPartnerMarginBp Int @default(4000)
+  ownerAMarginBp             Int @default(3000)
+  ownerBMarginBp             Int @default(3000)
+
+  /// Supermarket operating costs (warehouse, staff) split three ways. Deliberately its own set of
+  /// fields rather than reusing the margin split: each party's cost share happens to equal their
+  /// profit share today, and nothing in the model forces that to stay true.
+  supermarketPartnerCostBp Int @default(4000)
+  ownerACostBp             Int @default(3000)
+  ownerBCostBp             Int @default(3000)
+
+  /// The driver's cut of the delivery fee. What is left over divides by the three weights below.
+  driverDeliveryShareBp         Int @default(7000)
+  deliveryOpsRemainderWeight    Int @default(1)
+  ownerADeliveryRemainderWeight Int @default(1)
+  ownerBDeliveryRemainderWeight Int @default(1)
+
+  createdBy             User?                  @relation("FinancialRateSetCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  orders                Order[]
+  orderFinancialRecords OrderFinancialRecord[]
+  operatingCostEntries  OperatingCostEntry[]
+  subscriptionCharges   SubscriptionCharge[]
+
+  @@index([effectiveFrom])
+}
+
+/// A fixed party in the revenue model. The three owners are rows here rather than names in code,
+/// so "Abdullah's share" is a configurable account and not a hardcoded person.
+model PartnerAccount {
+  id         String             @id @default(uuid()) @db.Uuid
+  key        String             @unique
+  name       String
+  kind       PartnerAccountKind
+  /// The login this partner uses, when they have one. Optional: a partner is an accounting
+  /// identity first and a user account second.
+  userId     String?            @unique @db.Uuid
+  /// Set when the partner is the supermarket side of a business rather than an individual.
+  businessId String?            @db.Uuid
+  isActive   Boolean            @default(true)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  business    Restaurant?         @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  earnings    PartnerEarning[]    @relation("PartnerEarningPartner")
+  settlements PartnerSettlement[] @relation("PartnerSettlementPartner")
+
+  @@index([kind, isActive])
+}
+
+/// One order's money, frozen at the moment it reached a terminal outcome. Written once and never
+/// updated: a correction is a FinancialAdjustment, not an edit. `orderId` is unique, which is what
+/// makes double-computation impossible at the database level rather than only in the service.
+model OrderFinancialRecord {
+  id         String                 @id @default(uuid()) @db.Uuid
+  orderId    String                 @unique @db.Uuid
+  businessId String                 @db.Uuid
+  rateSetId  String                 @db.Uuid
+  vertical   OrderFinancialVertical
+  outcome    OrderFinancialOutcome
+
+  /// Snapshots of the terms in force, so this row is readable without joining anything.
+  isPromotionalBusiness Boolean
+  commissionBp          Int?
+
+  /// Inputs, copied from the order.
+  itemSubtotalMinor                      Int
+  merchandiseDiscountMinor               Int @default(0)
+  deliveryDiscountMinor                  Int @default(0)
+  /// The discount split by who funded it. A business-scoped offer is absorbed by the business, a
+  /// platform-scoped one by the platform owners. Scope comes from the promotion snapshot.
+  businessFundedMerchandiseDiscountMinor Int @default(0)
+  platformFundedMerchandiseDiscountMinor Int @default(0)
+  businessFundedDeliveryDiscountMinor    Int @default(0)
+  platformFundedDeliveryDiscountMinor    Int @default(0)
+  /// Discount from a promotion snapshot written before scope was recorded. Charged to the
+  /// platform, because a business must never be billed for a discount nobody can attribute.
+  unattributedDiscountMinor              Int @default(0)
+  deliveryFeeMinor                       Int
+  /// What the driver actually had to collect at the door. Zero on a failed delivery.
+  cashCollectedMinor                     Int
+
+  /// Outputs.
+  goodsCostMinor         Int                 @default(0)
+  /// False when any line had no cost price recorded, so a supermarket margin can be read as
+  /// provisional rather than trusted as exact.
+  costDataComplete       Boolean             @default(true)
+  marginMinor            Int                 @default(0)
+  commissionMinor        Int                 @default(0)
+  driverShareMinor       Int                 @default(0)
+  deliveryRemainderMinor Int                 @default(0)
+  lossAbsorber           LossAbsorber        @default(NONE)
+  absorbedLossMinor      Int                 @default(0)
+  faultParty             DeliveryFaultParty?
+
+  computedAt DateTime @default(now())
+
+  order       Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  business    Restaurant            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  rateSet     FinancialRateSet      @relation(fields: [rateSetId], references: [id], onDelete: Restrict)
+  earnings    PartnerEarning[]
+  adjustments FinancialAdjustment[]
+  cashCustody DriverCashCustody?
+
+  @@index([businessId, computedAt])
+  @@index([vertical, computedAt])
+  @@index([outcome, computedAt])
+}
+
+/// One party's entitlement from one source, signed. This is the ledger: a party's balance is
+/// SUM(amountMinor) over their rows, and nothing else. Rows are append-only.
+///
+/// Entitlement only — being owed money is not the same as having been paid, which is
+/// PartnerSettlement, and neither is the same as holding cash, which is DriverCashCustody.
+model PartnerEarning {
+  id         String              @id @default(uuid()) @db.Uuid
+  sourceType FinancialSourceType
+  /// Whichever of the four source ids below is set, denormalised so the idempotency key can be a
+  /// real unique index rather than a partial one over nullable columns.
+  sourceId   String              @db.Uuid
+
+  orderFinancialRecordId String? @db.Uuid
+  operatingCostEntryId   String? @db.Uuid
+  subscriptionChargeId   String? @db.Uuid
+  adjustmentId           String? @db.Uuid
+
+  payeeType        FinancialPayeeType
+  /// "PARTNER:<id>", "BUSINESS:<id>" or "DRIVER:<id>". Denormalised for the same reason as
+  /// sourceId, and it makes a running balance a single indexed scan.
+  payeeKey         String
+  partnerAccountId String?            @db.Uuid
+  businessId       String?            @db.Uuid
+  driverUserId     String?            @db.Uuid
+
+  component   EarningComponent
+  amountMinor Int
+  occurredAt  DateTime
+  createdAt   DateTime         @default(now())
+
+  orderFinancialRecord OrderFinancialRecord?        @relation(fields: [orderFinancialRecordId], references: [id], onDelete: Restrict)
+  operatingCostEntry   OperatingCostEntry?          @relation(fields: [operatingCostEntryId], references: [id], onDelete: Restrict)
+  subscriptionCharge   SubscriptionCharge?          @relation(fields: [subscriptionChargeId], references: [id], onDelete: Restrict)
+  adjustment           FinancialAdjustment?         @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+  partnerAccount       PartnerAccount?              @relation("PartnerEarningPartner", fields: [partnerAccountId], references: [id], onDelete: Restrict)
+  business             Restaurant?                  @relation("PartnerEarningBusiness", fields: [businessId], references: [id], onDelete: Restrict)
+  driver               User?                        @relation("PartnerEarningDriver", fields: [driverUserId], references: [id], onDelete: Restrict)
+  settlementAllocation PartnerSettlementAllocation?
+
+  /// The double-counting guard: one source can credit one payee one component exactly once.
+  @@unique([sourceType, sourceId, payeeKey, component])
+  @@index([payeeKey, occurredAt])
+  @@index([orderFinancialRecordId])
+  @@index([component, occurredAt])
+}
+
+/// Cash the driver physically took at the door, and how much of it has come back. Distinct from
+/// the driver's earnings in every way: different amount, different direction, different event.
+model DriverCashCustody {
+  id                     String            @id @default(uuid()) @db.Uuid
+  orderId                String            @unique @db.Uuid
+  orderFinancialRecordId String            @unique @db.Uuid
+  driverUserId           String            @db.Uuid
+  /// What the order said was due.
+  expectedAmountMinor    Int
+  /// What the driver reports having taken. Equal to expected unless someone records otherwise;
+  /// a difference between the two is a fact to investigate, not something to normalise away.
+  collectedAmountMinor   Int
+  /// Raised by settlement allocations only, and never past collectedAmountMinor — a CHECK
+  /// constraint, not a service-layer comparison, is what makes double-settlement impossible.
+  settledAmountMinor     Int               @default(0)
+  status                 CashCustodyStatus @default(OUTSTANDING)
+  collectedAt            DateTime
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  order                Order                      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderFinancialRecord OrderFinancialRecord       @relation(fields: [orderFinancialRecordId], references: [id], onDelete: Restrict)
+  driver               User                       @relation("DriverCashCustodyDriver", fields: [driverUserId], references: [id], onDelete: Restrict)
+  allocations          CashSettlementAllocation[]
+
+  @@index([driverUserId, status])
+  @@index([status, collectedAt])
+}
+
+/// One handover event: a driver gives cash to whoever holds the cash-receiving role, and that
+/// person counts it. Expected and counted are both kept — a discrepancy is recorded, never
+/// silently written over the expected figure.
+model CashSettlement {
+  id                  String             @id @default(uuid()) @db.Uuid
+  driverUserId        String             @db.Uuid
+  /// The authorised receiver. A role holder, resolved by permission at the API, not a fixed person.
+  receivedByUserId    String             @db.Uuid
+  /// Caller-supplied idempotency key. Unique, so a retried handover cannot post twice.
+  reference           String             @unique
+  mode                CashSettlementMode @default(GROSS)
+  /// The sum of the outstanding balances of the orders this handover covers.
+  expectedAmountMinor Int
+  /// What was actually counted.
+  countedAmountMinor  Int
+  /// counted - expected. Negative is a shortfall.
+  discrepancyMinor    Int
+  discrepancyNote     String?
+  note                String?
+  settledAt           DateTime           @default(now())
+  createdAt           DateTime           @default(now())
+
+  driver      User                       @relation("CashSettlementDriver", fields: [driverUserId], references: [id], onDelete: Restrict)
+  receivedBy  User                       @relation("CashSettlementReceiver", fields: [receivedByUserId], references: [id], onDelete: Restrict)
+  allocations CashSettlementAllocation[]
+
+  @@index([driverUserId, settledAt])
+  @@index([settledAt])
+}
+
+/// How much of one handover cleared one order's custody. Partial amounts are the normal case, so
+/// an order is never marked fully settled because a handover happened to mention it.
+model CashSettlementAllocation {
+  id           String   @id @default(uuid()) @db.Uuid
+  settlementId String   @db.Uuid
+  custodyId    String   @db.Uuid
+  amountMinor  Int
+  createdAt    DateTime @default(now())
+
+  settlement CashSettlement    @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  custody    DriverCashCustody @relation(fields: [custodyId], references: [id], onDelete: Restrict)
+
+  @@unique([settlementId, custodyId])
+  @@index([custodyId])
+}
+
+/// A real-world supermarket expense — rent, salaries — entered by hand, because it happens outside
+/// the order flow entirely. Proposed by the supermarket side, and only split three ways once an
+/// approver has said so: the supermarket partner reports and requests, it does not decide.
+model OperatingCostEntry {
+  id          String                @id @default(uuid()) @db.Uuid
+  businessId  String                @db.Uuid
+  category    OperatingCostCategory
+  description String
+  amountMinor Int
+  incurredOn  DateTime              @db.Date
+  /// "YYYY-MM" for a recurring monthly cost. Combined with category and business it is unique,
+  /// so the same month's rent cannot be entered twice.
+  periodLabel String?
+  isRecurring Boolean               @default(false)
+
+  status           OperatingCostStatus @default(PROPOSED)
+  proposedByUserId String              @db.Uuid
+  approverUserId   String?             @db.Uuid
+  decidedAt        DateTime?
+  decisionNote     String?
+  /// Frozen at approval, so a later change to the cost split cannot rewrite this one.
+  rateSetId        String?             @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business   Restaurant        @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  proposedBy User              @relation("OperatingCostProposedBy", fields: [proposedByUserId], references: [id], onDelete: Restrict)
+  approver   User?             @relation("OperatingCostApprovedBy", fields: [approverUserId], references: [id], onDelete: SetNull)
+  rateSet    FinancialRateSet? @relation(fields: [rateSetId], references: [id], onDelete: Restrict)
+  shares     PartnerEarning[]
+
+  @@unique([businessId, category, periodLabel])
+  @@index([status, createdAt])
+  @@index([businessId, incurredOn])
+}
+
+/// One month's platform subscription for one restaurant. Unique per business per month, so a
+/// re-run of the billing job cannot charge twice.
+model SubscriptionCharge {
+  id              String   @id @default(uuid()) @db.Uuid
+  businessId      String   @db.Uuid
+  periodYear      Int
+  periodMonth     Int
+  amountMinor     Int
+  isWaived        Boolean  @default(false)
+  waivedReason    String?
+  rateSetId       String   @db.Uuid
+  createdByUserId String   @db.Uuid
+  createdAt       DateTime @default(now())
+
+  business  Restaurant       @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  rateSet   FinancialRateSet @relation(fields: [rateSetId], references: [id], onDelete: Restrict)
+  createdBy User             @relation("SubscriptionChargeCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  earnings  PartnerEarning[]
+
+  @@unique([businessId, periodYear, periodMonth])
+  @@index([periodYear, periodMonth])
+}
+
+/// Money actually handed to a party, as opposed to money they were owed. Kept apart from
+/// PartnerEarning on purpose: "earned 1,200" and "was paid 1,200" are different questions and a
+/// system that answers only one of them cannot say who is still owed anything.
+model PartnerSettlement {
+  id               String                  @id @default(uuid()) @db.Uuid
+  payeeType        FinancialPayeeType
+  payeeKey         String
+  partnerAccountId String?                 @db.Uuid
+  businessId       String?                 @db.Uuid
+  driverUserId     String?                 @db.Uuid
+  amountMinor      Int
+  method           PartnerSettlementMethod
+  /// Caller-supplied idempotency key, unique so a retry cannot pay twice.
+  reference        String                  @unique
+  paidByUserId     String                  @db.Uuid
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  note             String?
+  paidAt           DateTime                @default(now())
+  createdAt        DateTime                @default(now())
+
+  partnerAccount PartnerAccount?               @relation("PartnerSettlementPartner", fields: [partnerAccountId], references: [id], onDelete: Restrict)
+  business       Restaurant?                   @relation("PartnerSettlementBusiness", fields: [businessId], references: [id], onDelete: Restrict)
+  driver         User?                         @relation("PartnerSettlementDriver", fields: [driverUserId], references: [id], onDelete: Restrict)
+  paidBy         User                          @relation("PartnerSettlementPaidBy", fields: [paidByUserId], references: [id], onDelete: Restrict)
+  allocations    PartnerSettlementAllocation[]
+
+  @@index([payeeKey, paidAt])
+  @@index([paidAt])
+}
+
+/// Which earnings a payout cleared. `earningId` is unique, so one entitlement can be cleared by
+/// exactly one payout and never counted against two.
+model PartnerSettlementAllocation {
+  id           String   @id @default(uuid()) @db.Uuid
+  settlementId String   @db.Uuid
+  earningId    String   @unique @db.Uuid
+  amountMinor  Int
+  createdAt    DateTime @default(now())
+
+  settlement PartnerSettlement @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  earning    PartnerEarning    @relation(fields: [earningId], references: [id], onDelete: Restrict)
+
+  @@index([settlementId])
+}
+
+/// A correction. Financial history is never edited: getting a number wrong produces a new
+/// adjustment carrying its own ledger rows, with a reason, an actor and a timestamp, and the
+/// original rows stay exactly as they were written.
+model FinancialAdjustment {
+  id                     String   @id @default(uuid()) @db.Uuid
+  orderFinancialRecordId String?  @db.Uuid
+  reason                 String
+  note                   String?
+  createdByUserId        String   @db.Uuid
+  createdAt              DateTime @default(now())
+
+  orderFinancialRecord OrderFinancialRecord? @relation(fields: [orderFinancialRecordId], references: [id], onDelete: Restrict)
+  createdBy            User                  @relation("FinancialAdjustmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  entries              PartnerEarning[]
+
+  @@index([orderFinancialRecordId])
+  @@index([createdAt])
 }

@@ -45,8 +45,9 @@ export const activeDeliveryStatuses: DeliveryStatus[] = [
  * amount. A flat amount breaks at the minimum fee (it can exceed the whole fee collected), so the
  * payout scales with `deliveryFeeMinor` (see orders/pricing.ts) instead of staying fixed.
  *
- * TODO(revenue-model): the remaining 30% (delivery-ops partner / owner A / owner B, three-way
- * split) is not computed anywhere yet — only the driver's own share exists so far.
+ * This constant is now a default and a reference point only. What a driver is actually paid comes
+ * from the rate set frozen on the order and is computed in accounting/accounting.rules.ts, which
+ * also divides the remaining 30% between delivery operations and the two platform owners.
  */
 export const driverSharePercent = 0.7;
 

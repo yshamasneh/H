@@ -16,6 +16,11 @@ export const platformPermissions = [
   "MANAGE_OFFERS",
   "VIEW_ACCOUNTING",
   "MANAGE_ACCOUNTING_SETTINGS",
+  // Deciding a supermarket spend, taking a driver's cash, and paying a partner are three
+  // different authorities. They are separate permissions so they can be held by different people.
+  "APPROVE_OPERATING_COSTS",
+  "RECEIVE_DRIVER_CASH",
+  "MANAGE_SETTLEMENTS",
   // Cross-business order monitoring, distinct from a business's own VIEW_ORDERS/MANAGE_ORDERS.
   "VIEW_ALL_ORDERS",
   "MANAGE_ALL_ORDERS"
@@ -32,7 +37,10 @@ export const businessPermissions = [
   "VIEW_SALES",
   "VIEW_REPORTS",
   "MANAGE_BUSINESS_SETTINGS",
-  "MANAGE_BUSINESS_STAFF"
+  "MANAGE_BUSINESS_STAFF",
+  // The supermarket side reports what it has spent. It does not decide: an entry stays PROPOSED
+  // until someone holding APPROVE_OPERATING_COSTS acts on it.
+  "PROPOSE_OPERATING_COSTS"
 ] as const;
 
 /** Meaningful in both scopes: the platform sees every entry, a business sees only its own. */
@@ -73,6 +81,7 @@ export const systemRolePermissions: Record<
     "VIEW_REPORTS",
     "MANAGE_BUSINESS_SETTINGS",
     "MANAGE_BUSINESS_STAFF",
+    "PROPOSE_OPERATING_COSTS",
     "VIEW_AUDIT_LOG"
   ],
   // Daily operations only: no pricing, no catalogue, no settings.

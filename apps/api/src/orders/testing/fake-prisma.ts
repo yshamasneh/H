@@ -7,6 +7,7 @@ import {
   OrderStatus,
   RestaurantStatus
 } from "../../generated/prisma/client";
+import { FakeAccountingStore } from "../../accounting/testing/fake-accounting-prisma";
 
 type RestaurantRecord = {
   id: string;
@@ -19,6 +20,7 @@ type RestaurantRecord = {
   closesAt: string | null;
   latitude: number | null;
   longitude: number | null;
+  isPromotionalPartner: boolean;
 };
 
 type MenuItemRecord = {
@@ -160,6 +162,12 @@ export class FakeOrdersPrisma {
   private transactionTail: Promise<void> = Promise.resolve();
 
   readonly restaurant = {} as any;
+  /** The accounting tables, so order creation really does stamp the rates it was taken under. */
+  readonly accounting = new FakeAccountingStore();
+  readonly financialRateSet = this.accounting.financialRateSet;
+  readonly partnerAccount = this.accounting.partnerAccount;
+  readonly orderFinancialRecord = this.accounting.orderFinancialRecord;
+  readonly partnerEarning = this.accounting.partnerEarning;
   readonly menuItem = {} as any;
   readonly order = {} as any;
   readonly orderStatusHistory = {} as any;
@@ -542,6 +550,7 @@ export class FakeOrdersPrisma {
       closesAt: null,
       latitude: 31.9038,
       longitude: 35.2034,
+      isPromotionalPartner: false,
       ...overrides
     };
     this.restaurants.push(restaurant);

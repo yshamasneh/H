@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DeliveryStatus, DriverApprovalStatus, OrderStatus, UserRole } from "../../generated/prisma/client";
+import { FakeAccountingStore } from "../../accounting/testing/fake-accounting-prisma";
 
 type UserRecord = {
   id: string;
@@ -27,6 +28,18 @@ type RestaurantRecord = {
   id: string;
   name: string;
   addressLine: string;
+  businessType: "RESTAURANT" | "SUPERMARKET";
+  isPromotionalPartner: boolean;
+};
+
+type OrderItemRecord = {
+  id: string;
+  orderId: string;
+  menuItemId: string;
+  nameSnapshot: string;
+  priceMinorSnapshot: number;
+  costPriceMinorSnapshot: number | null;
+  quantity: number;
 };
 
 type OrderRecord = {
@@ -36,8 +49,16 @@ type OrderRecord = {
   status: OrderStatus;
   deliveryLabel: string;
   deliveryAddressLine: string;
+  subtotalMinor: number;
   totalMinor: number;
   deliveryFeeMinor: number;
+  discountMinor: number;
+  merchandiseDiscountMinor: number;
+  deliveryDiscountMinor: number;
+  promotionSnapshot: unknown;
+  financialRateSetId: string | null;
+  commissionBpSnapshot: number | null;
+  createdAt: Date;
   paymentMethod: "CASH";
 };
 
@@ -107,6 +128,13 @@ export class FakeDriversPrisma {
   readonly orderStatusHistories: OrderStatusHistoryRecord[] = [];
   readonly deliveries: DeliveryRecord[] = [];
   readonly businessMembers: { businessId: string; userId: string; isActive: boolean }[] = [];
+  readonly orderItems: OrderItemRecord[] = [];
+  /**
+   * The accounting tables, so a delivery reaching DELIVERED in these tests really does produce a
+   * financial record and its ledger rows. Stubbing them out would leave the money path untested
+   * in exactly the suite that drives it.
+   */
+  readonly accounting = new FakeAccountingStore();
   readonly notifications: NotificationRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
@@ -119,6 +147,12 @@ export class FakeDriversPrisma {
   readonly delivery = {} as any;
   readonly notification = {} as any;
   readonly auditLog = {} as any;
+  readonly financialRateSet = this.accounting.financialRateSet;
+  readonly partnerAccount = this.accounting.partnerAccount;
+  readonly orderFinancialRecord = this.accounting.orderFinancialRecord;
+  readonly partnerEarning = this.accounting.partnerEarning;
+  readonly driverCashCustody = this.accounting.driverCashCustody;
+  readonly partnerSettlement = this.accounting.partnerSettlement;
 
   constructor() {
     this.user.findUnique = async ({ where }: any) =>
@@ -190,7 +224,20 @@ export class FakeDriversPrisma {
           (where?.isActive === undefined || member.isActive === where.isActive)
       );
 
-    this.order.findUnique = async ({ where }: any) => this.orders.find((order) => order.id === where.id) ?? null;
+    this.order.findUnique = async ({ where, include }: any) => {
+      const order = this.orders.find((candidate) => candidate.id === where.id) ?? null;
+      if (!order || !include) return order;
+      return {
+        ...order,
+        ...(include.items ? { items: this.orderItems.filter((item) => item.orderId === order.id) } : {}),
+        ...(include.restaurant
+          ? { restaurant: this.restaurants.find((restaurant) => restaurant.id === order.restaurantId)! }
+          : {}),
+        ...(include.delivery
+          ? { delivery: this.deliveries.find((delivery) => delivery.orderId === order.id) ?? null }
+          : {})
+      };
+    };
     this.order.updateMany = async ({ where, data }: any) => {
       const matches = this.orders.filter(
         (order) => order.id === where.id && (!where.status || order.status === where.status)
@@ -321,6 +368,8 @@ export class FakeDriversPrisma {
       id: randomUUID(),
       name: "Falafel House",
       addressLine: "Al-Manara Square, Ramallah",
+      businessType: "RESTAURANT",
+      isPromotionalPartner: false,
       ...overrides
     };
     this.restaurants.push(restaurant);
@@ -337,13 +386,37 @@ export class FakeDriversPrisma {
       status: OrderStatus.READY_FOR_PICKUP,
       deliveryLabel: "Home",
       deliveryAddressLine: "Al-Manara Square, Ramallah",
+      // 22.00 of food plus a 10.00 delivery fee is the 32.00 the customer pays in cash.
+      subtotalMinor: 2200,
       totalMinor: 3200,
       deliveryFeeMinor: 1000,
+      discountMinor: 0,
+      merchandiseDiscountMinor: 0,
+      deliveryDiscountMinor: 0,
+      promotionSnapshot: null,
+      financialRateSetId: null,
+      commissionBpSnapshot: null,
+      createdAt: new Date(),
       paymentMethod: "CASH",
       ...overrides
     };
     this.orders.push(order);
     return order;
+  }
+
+  seedOrderItem(orderId: string, overrides: Partial<OrderItemRecord> = {}): OrderItemRecord {
+    const item: OrderItemRecord = {
+      id: randomUUID(),
+      orderId,
+      menuItemId: randomUUID(),
+      nameSnapshot: "Item",
+      priceMinorSnapshot: 1100,
+      costPriceMinorSnapshot: null,
+      quantity: 2,
+      ...overrides
+    };
+    this.orderItems.push(item);
+    return item;
   }
 
   seedDelivery(orderId: string, overrides: Partial<DeliveryRecord> = {}): DeliveryRecord {

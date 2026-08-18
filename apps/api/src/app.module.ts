@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { AccountingModule } from "./accounting/accounting.module";
 import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
 import { AuthorizationModule } from "./common/authorization/authorization.module";
@@ -47,6 +48,7 @@ import { RestaurantsModule } from "./restaurants/restaurants.module";
     DriversModule,
     NotificationsModule,
     OffersModule,
+    AccountingModule,
     AdminModule
   ],
   providers: [

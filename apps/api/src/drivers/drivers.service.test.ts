@@ -118,6 +118,30 @@ test("a driver holding an active delivery cannot accept a second one", async () 
   assert.equal(prisma.deliveries.find((delivery) => delivery.id === secondDelivery.id)?.driverId ?? null, null);
 });
 
+/** Walk one delivery all the way to DELIVERED through the real service, so the ledger rows the
+ *  driver's figures are read from are produced the same way they are in production. */
+async function completeDelivery(
+  prisma: FakeDriversPrisma,
+  service: DriversService,
+  restaurantId: string,
+  driverUserId: string,
+  deliveryFeeMinor: number
+): Promise<void> {
+  const order = prisma.seedOrder(restaurantId, {
+    deliveryFeeMinor,
+    subtotalMinor: 2200,
+    totalMinor: 2200 + deliveryFeeMinor
+  });
+  prisma.seedOrderItem(order.id);
+  const delivery = prisma.seedDelivery(order.id, {
+    driverId: driverUserId,
+    status: "ASSIGNED" as never
+  });
+  await service.updateDeliveryStatus(driverUserId, delivery.id, "PICKED_UP");
+  await service.updateDeliveryStatus(driverUserId, delivery.id, "ON_THE_WAY");
+  await service.updateDeliveryStatus(driverUserId, delivery.id, "DELIVERED");
+}
+
 test("driver stats count completed deliveries and pay 70% of each order's delivery fee, at the minimum fee this is 7 ILS each", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();
@@ -125,20 +149,35 @@ test("driver stats count completed deliveries and pay 70% of each order's delive
   // Three delivered at the minimum 10 ILS fee, one in progress, one belonging to another driver
   // (must be excluded).
   for (let index = 0; index < 3; index += 1) {
-    const order = prisma.seedOrder(restaurant.id, { deliveryFeeMinor: 1000 });
-    prisma.seedDelivery(order.id, { driverId: driver.userId, status: "DELIVERED" as never });
+    await completeDelivery(prisma, service, restaurant.id, driver.userId, 1000);
   }
   const activeOrder = prisma.seedOrder(restaurant.id);
   prisma.seedDelivery(activeOrder.id, { driverId: driver.userId, status: "ON_THE_WAY" as never });
   const other = prisma.seedDriver({ isOnline: true });
-  const otherOrder = prisma.seedOrder(restaurant.id);
-  prisma.seedDelivery(otherOrder.id, { driverId: other.userId, status: "DELIVERED" as never });
+  await completeDelivery(prisma, service, restaurant.id, other.userId, 1000);
 
   const stats = await service.getOwnStats(driver.userId);
   assert.equal(stats.completedCount, 3);
   assert.equal(stats.activeCount, 1);
   assert.equal(stats.earningsMinor, 2100);
   assert.equal(stats.perDeliveryMinor, 700);
+  // Nothing has been paid out yet, so the whole amount is still owed.
+  assert.equal(stats.earningsPaidMinor, 0);
+  assert.equal(stats.earningsOutstandingMinor, 2100);
+});
+
+test("a driver's cash in hand is reported apart from what the driver has earned", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const driver = prisma.seedDriver({ isOnline: true });
+  // Two orders of 22.00 of food plus a 10.00 fee: the driver collected 64.00 in cash and earned
+  // 14.00 of it. Netting those two together is exactly what this separation prevents.
+  await completeDelivery(prisma, service, restaurant.id, driver.userId, 1000);
+  await completeDelivery(prisma, service, restaurant.id, driver.userId, 1000);
+
+  const stats = await service.getOwnStats(driver.userId);
+  assert.equal(stats.earningsMinor, 1400);
+  assert.equal(stats.cashOutstandingMinor, 6400);
 });
 
 test("driver earnings scale with a longer delivery's fee instead of staying flat", async () => {
@@ -147,15 +186,73 @@ test("driver earnings scale with a longer delivery's fee instead of staying flat
   const driver = prisma.seedDriver({ isOnline: true });
   // Minimum-fee delivery (10 ILS -> 7 ILS share) plus a longer one priced above the minimum
   // (13 ILS -> 9.10 ILS share), per pricing.ts's distance-based fee.
-  const nearOrder = prisma.seedOrder(restaurant.id, { deliveryFeeMinor: 1000 });
-  prisma.seedDelivery(nearOrder.id, { driverId: driver.userId, status: "DELIVERED" as never });
-  const farOrder = prisma.seedOrder(restaurant.id, { deliveryFeeMinor: 1300 });
-  prisma.seedDelivery(farOrder.id, { driverId: driver.userId, status: "DELIVERED" as never });
+  await completeDelivery(prisma, service, restaurant.id, driver.userId, 1000);
+  await completeDelivery(prisma, service, restaurant.id, driver.userId, 1300);
 
   const stats = await service.getOwnStats(driver.userId);
   assert.equal(stats.completedCount, 2);
   assert.equal(stats.earningsMinor, 700 + 910);
   assert.equal(stats.perDeliveryMinor, Math.round((700 + 910) / 2));
+});
+
+test("the remaining 30% of a delivery fee reaches delivery operations and the two owners", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const driver = prisma.seedDriver({ isOnline: true });
+  await completeDelivery(prisma, service, restaurant.id, driver.userId, 1000);
+
+  const order = prisma.orders.find((candidate) => candidate.status === "DELIVERED")!;
+  const earnings = prisma.accounting.earningsForOrderRecord(order.id);
+  const amountFor = (component: string) =>
+    earnings.filter((row) => row.component === component).reduce((sum, row) => sum + row.amountMinor, 0);
+
+  assert.equal(amountFor("DRIVER_DELIVERY_SHARE"), 700);
+  assert.equal(amountFor("DELIVERY_OPS_SHARE"), 100);
+  assert.equal(amountFor("PLATFORM_DELIVERY_SHARE"), 200, "1.00 each to the two owners");
+  // And the whole order still reconciles to the 32.00 the customer handed over.
+  assert.equal(earnings.reduce((sum, row) => sum + row.amountMinor, 0), 3200);
+});
+
+test("a delivered order produces exactly one financial record and one cash custody row", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const driver = prisma.seedDriver({ isOnline: true });
+  await completeDelivery(prisma, service, restaurant.id, driver.userId, 1000);
+
+  assert.equal(prisma.accounting.orderFinancialRecords.length, 1);
+  assert.equal(prisma.accounting.driverCashCustodies.length, 1);
+  const custody = prisma.accounting.driverCashCustodies[0]!;
+  assert.equal(custody.expectedAmountMinor, 3200);
+  assert.equal(custody.collectedAmountMinor, 3200);
+  assert.equal(custody.settledAmountMinor, 0, "collected is not settled");
+  assert.equal(custody.status, "OUTSTANDING");
+});
+
+test("a failed delivery produces a financial record but no cash custody, because no cash was taken", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const driver = prisma.seedDriver({ isOnline: true });
+  const order = prisma.seedOrder(restaurant.id, { deliveryFeeMinor: 1000, subtotalMinor: 2200, totalMinor: 3200 });
+  prisma.seedOrderItem(order.id);
+  const delivery = prisma.seedDelivery(order.id, { driverId: driver.userId, status: "ASSIGNED" as never });
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "PICKED_UP");
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "FAILED", {
+    failureReason: "CUSTOMER_UNREACHABLE" as never
+  });
+
+  assert.equal(prisma.accounting.orderFinancialRecords.length, 1);
+  assert.equal(prisma.accounting.driverCashCustodies.length, 0);
+  const record = prisma.accounting.orderFinancialRecords[0]! as Record<string, unknown>;
+  assert.equal(record.cashCollectedMinor, 0);
+  assert.equal(record.lossAbsorber, "PLATFORM");
+  assert.equal(record.absorbedLossMinor, 3200);
+  // The driver is still paid for the attempt.
+  const earnings = prisma.accounting.earningsForOrderRecord(order.id);
+  assert.equal(
+    earnings.find((row) => row.component === "DRIVER_DELIVERY_SHARE")?.amountMinor,
+    700
+  );
+  assert.equal(earnings.reduce((sum, row) => sum + row.amountMinor, 0), 0);
 });
 
 test("two drivers accepting the same delivery simultaneously: exactly one succeeds", async () => {

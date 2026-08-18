@@ -17,6 +17,11 @@ import {
   type Restaurant,
   type User
 } from "../generated/prisma/client";
+import {
+  financialOutcomeByOrderStatus,
+  recordOrderFinancials,
+  type FinancialOutcome
+} from "../accounting/order-financials.util";
 import { createBusinessNotification, createNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
@@ -24,7 +29,6 @@ import { RealtimeGateway } from "../realtime/realtime.gateway";
 import {
   activeDeliveryStatuses,
   allowedDeliveryTransitions,
-  calculateDriverShareMinor,
   defaultFaultParty,
   deliveryStatusTransitions,
   orderStatusesAllowingDeliveryProgress
@@ -116,24 +120,43 @@ export class DriversService {
     return toProfileView(updated);
   }
 
+  /**
+   * A driver's own figures, read from the ledger rather than recomputed from deliveries.
+   *
+   * Recomputing would be a second source of truth for money that has already been recorded, and
+   * the two would drift the first time a rate changed. Two separate facts are reported side by
+   * side and never added together: what the driver has *earned*, and what cash the driver is
+   * currently *holding* on the platform's behalf.
+   */
   async getOwnStats(driverUserId: string): Promise<DriverStatsView> {
     await this.requireOwnProfile(driverUserId);
-    const [deliveredDeliveries, activeCount] = await Promise.all([
-      this.prisma.delivery.findMany({
-        where: { driverId: driverUserId, status: DeliveryStatus.DELIVERED },
-        include: { order: { select: { deliveryFeeMinor: true } } }
+    const [completedCount, activeCount, earnings, payouts, custody] = await Promise.all([
+      this.prisma.delivery.count({ where: { driverId: driverUserId, status: DeliveryStatus.DELIVERED } }),
+      this.prisma.delivery.count({ where: { driverId: driverUserId, status: { in: activeDeliveryStatuses } } }),
+      this.prisma.partnerEarning.aggregate({
+        where: { driverUserId },
+        _sum: { amountMinor: true }
       }),
-      this.prisma.delivery.count({ where: { driverId: driverUserId, status: { in: activeDeliveryStatuses } } })
+      this.prisma.partnerSettlement.aggregate({
+        where: { driverUserId },
+        _sum: { amountMinor: true }
+      }),
+      this.prisma.driverCashCustody.aggregate({
+        where: { driverUserId, status: { in: ["OUTSTANDING", "PARTIALLY_SETTLED"] } },
+        _sum: { collectedAmountMinor: true, settledAmountMinor: true }
+      })
     ]);
-    const completedCount = deliveredDeliveries.length;
-    const earningsMinor = deliveredDeliveries.reduce(
-      (sum, delivery) => sum + calculateDriverShareMinor(delivery.order.deliveryFeeMinor),
-      0
-    );
+    const earningsMinor = earnings._sum.amountMinor ?? 0;
+    const earningsPaidMinor = payouts._sum.amountMinor ?? 0;
+    const cashOutstandingMinor =
+      (custody._sum.collectedAmountMinor ?? 0) - (custody._sum.settledAmountMinor ?? 0);
     return {
       completedCount,
       activeCount,
       earningsMinor,
+      earningsPaidMinor,
+      earningsOutstandingMinor: earningsMinor - earningsPaidMinor,
+      cashOutstandingMinor,
       perDeliveryMinor: completedCount > 0 ? Math.round(earningsMinor / completedCount) : 0
     };
   }
@@ -310,6 +333,14 @@ export class DriversService {
           }
         });
       }
+      // The money and the delivery are one transaction. An order that reached a terminal outcome
+      // without its financial record — or a record without the order having moved — would leave
+      // cash in a driver's pocket that nothing in the system explains.
+      const financialOutcome = financialOutcomeForOrderStatus(finalOrderStatus);
+      if (financialOutcome) {
+        await recordOrderFinancials(tx, order.id, financialOutcome);
+      }
+
       await createNotification(tx, emitter, {
         userId: order.customerId,
         type: NotificationType.DELIVERY_STATUS_CHANGED,
@@ -457,6 +488,16 @@ export class DriversService {
       throw new ApiException(400, "PASSWORDS_DO_NOT_MATCH", "The passwords do not match.");
     }
   }
+}
+
+/**
+ * Which terminal order statuses move money. Cancelled and rejected orders move none, and an order
+ * still in flight has nothing to value yet.
+ */
+function financialOutcomeForOrderStatus(status: OrderStatus | null): FinancialOutcome | null {
+  if (status === OrderStatus.DELIVERED) return financialOutcomeByOrderStatus.DELIVERED;
+  if (status === OrderStatus.DELIVERY_FAILED) return financialOutcomeByOrderStatus.DELIVERY_FAILED;
+  return null;
 }
 
 function deliveryTimestampField(

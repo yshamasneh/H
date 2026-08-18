@@ -36,6 +36,8 @@ import type {
 } from "./orders.dto";
 import type { LiveOrderQueueView, OrderQuoteView, Page } from "./orders.types";
 import type { OrderDetailView } from "./orders.types";
+import { resolveCommissionBp } from "../accounting/accounting.rules";
+import { resolveCurrentRateSet } from "../accounting/order-financials.util";
 import { calculateOrderFees, defaultDeliveryPricing, type DeliveryPricingConfig } from "./pricing";
 
 const orderInclude = {
@@ -65,6 +67,10 @@ export class OrdersService {
       const quote = await this.calculateOrderQuote(tx, input);
       const { restaurant, itemsData } = quote;
       const inventoryReservations = await this.reserveTrackedInventory(tx, quote.inventoryReservations);
+      // The commercial terms are stamped on the order as it is taken. Everything the accounting
+      // layer computes later reads these, so a rate changed next month can never restate what this
+      // order was worth.
+      const rateSet = await resolveCurrentRateSet(tx);
 
       const created = await tx.order.create({
         data: {
@@ -84,6 +90,8 @@ export class OrdersService {
           merchandiseDiscountMinor: quote.merchandiseDiscountMinor,
           deliveryDiscountMinor: quote.deliveryDiscountMinor,
           promotionSnapshot: quote.appliedPromotions as unknown as Prisma.InputJsonValue,
+          financialRateSetId: rateSet.id,
+          commissionBpSnapshot: resolveCommissionBp(rateSet, restaurant.isPromotionalPartner),
           totalMinor: quote.totalMinor,
           items: { create: itemsData }
         },
@@ -787,6 +795,9 @@ export class OrdersService {
         menuItemId: menuItem.id,
         nameSnapshot: menuItem.name,
         priceMinorSnapshot: menuItem.priceMinor,
+        // What the platform paid for these goods, frozen here rather than read back from the
+        // product later: a cost price corrected next week must not restate last week's margin.
+        costPriceMinorSnapshot: menuItem.costPriceMinor,
         quantity: line.quantity,
         unitLabelSnapshot: menuItem.unitLabel,
         allowSubstitution: line.allowSubstitution ?? false,
