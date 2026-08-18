@@ -19,10 +19,19 @@ if (build.status !== 0) {
 } else {
   const result = spawnSync(
     process.execPath,
-    ["--test", "--test-concurrency=1", "dist/integration/phase11.e2e.test.js"],
+    [
+      "--test",
+      "--test-concurrency=1",
+      "dist/integration/phase11.e2e.test.js",
+      "dist/integration/accounting.e2e.test.js"
+    ],
     {
       cwd: apiDirectory,
-      env: { ...process.env, RUN_DATABASE_E2E: "true" },
+      // RESTAURANT_ORDERING_ENABLED has to be set here rather than inside a suite. A test file's
+      // imports are hoisted above its statements, and ConfigModule.forRoot() reads and validates
+      // the environment as AppModule is imported — so a flag set in the file body arrives too late
+      // and the restaurant vertical silently stays behind its launch gate.
+      env: { ...process.env, RUN_DATABASE_E2E: "true", RESTAURANT_ORDERING_ENABLED: "true" },
       stdio: "inherit",
       shell: false
     }

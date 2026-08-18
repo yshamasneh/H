@@ -284,26 +284,38 @@ export class AccountingService {
     }
 
     const settlementId = await this.prisma.$transaction(async (tx) => {
-      const custodies = await tx.driverCashCustody.findMany({
+      // Named orders are looked up regardless of status, so an order that is already settled can
+      // be reported as exactly that rather than disappearing into "nothing outstanding".
+      const requested = input.custodyIds?.length ? [...new Set(input.custodyIds)] : null;
+      const found = await tx.driverCashCustody.findMany({
         where: {
           driverUserId: input.driverUserId,
-          status: { in: ["OUTSTANDING", "PARTIALLY_SETTLED"] },
-          ...(input.custodyIds?.length ? { id: { in: input.custodyIds } } : {})
+          ...(requested ? { id: { in: requested } } : { status: { in: ["OUTSTANDING", "PARTIALLY_SETTLED"] } })
         },
         orderBy: { collectedAt: "asc" }
       });
+      if (requested) {
+        if (found.length !== requested.length) {
+          throw new ApiException(
+            404,
+            "CASH_SETTLEMENT_ORDER_NOT_FOUND",
+            "One or more of the selected orders does not belong to this driver."
+          );
+        }
+        if (found.some((custody) => custody.status === "SETTLED")) {
+          throw new ApiException(
+            409,
+            "CASH_SETTLEMENT_ORDER_ALREADY_SETTLED",
+            "One or more of the selected orders has already been settled in full."
+          );
+        }
+      }
+      const custodies = found.filter((custody) => custody.status !== "SETTLED");
       if (custodies.length === 0) {
         throw new ApiException(
           409,
           "CASH_SETTLEMENT_NOTHING_OUTSTANDING",
           "This driver has no outstanding cash to hand over."
-        );
-      }
-      if (input.custodyIds?.length && custodies.length !== new Set(input.custodyIds).size) {
-        throw new ApiException(
-          409,
-          "CASH_SETTLEMENT_ORDER_ALREADY_SETTLED",
-          "One or more of the selected orders is already fully settled or belongs to another driver."
         );
       }
 

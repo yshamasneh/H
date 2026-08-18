@@ -842,7 +842,11 @@ model FinancialRateSet {
   ownerADeliveryRemainderWeight Int @default(1)
   ownerBDeliveryRemainderWeight Int @default(1)
 
-  createdBy             User?                  @relation("FinancialRateSetCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  /// Restrict, like every other actor reference in the accounting layer. Who published a rate is
+  /// part of the financial record, and the row is immutable anyway — a SET NULL on account
+  /// deletion would be an UPDATE the append-only trigger refuses, failing confusingly rather than
+  /// clearly.
+  createdBy             User?                  @relation("FinancialRateSetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   orders                Order[]
   orderFinancialRecords OrderFinancialRecord[]
   operatingCostEntries  OperatingCostEntry[]

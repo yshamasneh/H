@@ -9,6 +9,7 @@ import { AppModule } from "../app.module";
 import { hashPassword } from "../auth/crypto.util";
 import { UserRole } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { withFinancialTriggersDisabled } from "./financial-triggers.util";
 
 const runDatabaseE2e = process.env.RUN_DATABASE_E2E === "true";
 if (runDatabaseE2e && process.env.NODE_ENV === "production") {
@@ -18,7 +19,10 @@ if (runDatabaseE2e && process.env.NODE_ENV === "production") {
 // delivery, driver assignment) against the real AppModule config, not the "coming soon" launch
 // gate (see orders/coming-soon-restaurant-gap.test.ts for that) — so it opts into the flag
 // explicitly rather than relying on RESTAURANT_ORDERING_ENABLED's real (off) default.
-if (runDatabaseE2e) {
+// Belt and braces. The value that actually takes effect is set by scripts/run-api-e2e.mjs before
+// this process starts, because imports are hoisted above this statement and ConfigModule reads the
+// environment as AppModule is imported. This line only helps a run started some other way.
+if (runDatabaseE2e && process.env.RESTAURANT_ORDERING_ENABLED === undefined) {
   process.env.RESTAURANT_ORDERING_ENABLED = "true";
 }
 const password = "Phase11@12345";
@@ -486,14 +490,50 @@ async function cleanupTestActors(prisma: PrismaService): Promise<void> {
   const userIds = users.map((user) => user.id);
   const restaurantIds = users.flatMap((user) => user.restaurant ? [user.restaurant.id] : []);
 
-  await prisma.order.deleteMany({
-    where: {
-      OR: [
-        { customerId: { in: userIds } },
-        ...(restaurantIds.length > 0 ? [{ restaurantId: { in: restaurantIds } }] : [])
-      ]
+  const orderFilter = {
+    OR: [
+      { customerId: { in: userIds } },
+      ...(restaurantIds.length > 0 ? [{ restaurantId: { in: restaurantIds } }] : [])
+    ]
+  };
+  // A delivered order now owns a financial record, and that record references the order with
+  // RESTRICT — deliberately, so history cannot be erased by deleting an order. The suite's own
+  // fixtures therefore have to be unwound in order, with the ledger's append-only triggers lifted
+  // for the duration and put straight back.
+  await withFinancialTriggersDisabled(prisma, async () => {
+    const recordIds = (
+      await prisma.orderFinancialRecord.findMany({ where: { order: orderFilter }, select: { id: true } })
+    ).map((record) => record.id);
+    if (recordIds.length > 0) {
+      await prisma.cashSettlementAllocation.deleteMany({
+        where: { custody: { orderFinancialRecordId: { in: recordIds } } }
+      });
+      await prisma.driverCashCustody.deleteMany({ where: { orderFinancialRecordId: { in: recordIds } } });
+      await prisma.partnerSettlementAllocation.deleteMany({
+        where: { earning: { orderFinancialRecordId: { in: recordIds } } }
+      });
+      await prisma.partnerEarning.deleteMany({ where: { orderFinancialRecordId: { in: recordIds } } });
+      await prisma.financialAdjustment.deleteMany({ where: { orderFinancialRecordId: { in: recordIds } } });
+      await prisma.orderFinancialRecord.deleteMany({ where: { id: { in: recordIds } } });
     }
+    await prisma.cashSettlement.deleteMany({ where: { driverUserId: { in: userIds } } });
+    if (restaurantIds.length > 0) {
+      const costIds = (
+        await prisma.operatingCostEntry.findMany({ where: { businessId: { in: restaurantIds } }, select: { id: true } })
+      ).map((entry) => entry.id);
+      const subscriptionIds = (
+        await prisma.subscriptionCharge.findMany({ where: { businessId: { in: restaurantIds } }, select: { id: true } })
+      ).map((charge) => charge.id);
+      await prisma.partnerEarning.deleteMany({
+        where: { OR: [{ operatingCostEntryId: { in: costIds } }, { subscriptionChargeId: { in: subscriptionIds } }] }
+      });
+      await prisma.operatingCostEntry.deleteMany({ where: { id: { in: costIds } } });
+      await prisma.subscriptionCharge.deleteMany({ where: { id: { in: subscriptionIds } } });
+      await prisma.partnerSettlement.deleteMany({ where: { businessId: { in: restaurantIds } } });
+    }
+    await prisma.partnerSettlement.deleteMany({ where: { driverUserId: { in: userIds } } });
   });
+  await prisma.order.deleteMany({ where: orderFilter });
   await prisma.delivery.updateMany({ where: { driverId: { in: userIds } }, data: { driverId: null } });
   await prisma.orderStatusHistory.deleteMany({ where: { changedByUserId: { in: userIds } } });
   await prisma.offer.deleteMany({
