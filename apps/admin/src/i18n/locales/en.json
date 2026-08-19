@@ -68,7 +68,9 @@
       "liveOrders": "Live orders",
       "catalogue": "Products",
       "inventory": "Inventory",
-      "staff": "Staff"
+      "staff": "Staff",
+      "accounting": "Accounting",
+      "operatingCosts": "Operating costs"
     },
     "signedInAs": "Signed in as",
     "signOut": "Sign out",
@@ -390,5 +392,142 @@
     "owner": "Owner",
     "revoke": "Revoke access",
     "restore": "Restore access"
+  },
+  "accounting": {
+    "title": "Accounting",
+    "subtitle": "Who holds the cash, who is owed what, and what has actually been paid",
+    "loadError": "Could not load the accounting figures.",
+    "tabs": {
+      "balances": "Balances",
+      "cash": "Driver cash",
+      "costs": "Operating costs",
+      "rates": "Rates"
+    },
+    "overview": {
+      "orders": "Orders valued",
+      "delivered": "delivered",
+      "failed": "failed",
+      "cashCollected": "Cash collected",
+      "cashSettled": "Cash handed over",
+      "cashOutstanding": "Cash still with drivers",
+      "totalEarned": "Total entitlements",
+      "totalOutstanding": "Still owed to partners",
+      "operatingCosts": "Approved operating costs",
+      "pendingCosts": "Costs awaiting a decision",
+      "imbalance": "Ledger check",
+      "balanced": "Balanced"
+    },
+    "payeeType": {
+      "PARTNER": "Partner",
+      "BUSINESS": "Business",
+      "DRIVER": "Driver"
+    },
+    "method": {
+      "CASH": "Cash",
+      "BANK_TRANSFER": "Bank transfer",
+      "OFFSET": "Offset"
+    },
+    "custodyStatus": {
+      "OUTSTANDING": "Outstanding",
+      "PARTIALLY_SETTLED": "Partly settled",
+      "SETTLED": "Settled"
+    },
+    "costStatus": {
+      "PROPOSED": "Awaiting decision",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "costCategory": {
+      "WAREHOUSE_RENT": "Warehouse rent",
+      "STAFF_SALARY": "Staff salary",
+      "UTILITIES": "Utilities",
+      "MAINTENANCE": "Maintenance",
+      "OTHER": "Other"
+    },
+    "component": {
+      "BUSINESS_MERCHANDISE_NET": "Merchandise, net of commission",
+      "SUPERMARKET_GOODS_COST": "Cost of goods",
+      "SUPERMARKET_MARGIN_SHARE": "Share of margin",
+      "PLATFORM_COMMISSION_SHARE": "Share of commission",
+      "BUSINESS_DISCOUNT_ABSORBED": "Own promotion absorbed",
+      "PLATFORM_DISCOUNT_ABSORBED": "Platform promotion absorbed",
+      "DRIVER_DELIVERY_SHARE": "Delivery share",
+      "DELIVERY_OPS_SHARE": "Delivery operations share",
+      "PLATFORM_DELIVERY_SHARE": "Share of delivery fee",
+      "FAILED_DELIVERY_LOSS": "Failed delivery absorbed",
+      "OPERATING_COST_SHARE": "Share of operating costs",
+      "SUBSCRIPTION_CHARGE": "Monthly subscription",
+      "SUBSCRIPTION_SHARE": "Share of subscriptions",
+      "ADJUSTMENT": "Correction"
+    },
+    "balances": {
+      "empty": "No entitlements have been recorded yet.",
+      "party": "Party",
+      "kind": "Kind",
+      "earned": "Earned",
+      "paid": "Paid",
+      "outstanding": "Outstanding",
+      "breakdown": "Breakdown",
+      "hide": "Hide",
+      "pay": "Record payout",
+      "payTitle": "Record a payout to {{name}}",
+      "recordPayout": "Record payout",
+      "referencePlaceholder": "Reference, e.g. PAYOUT-2026-08",
+      "referenceRequired": "Enter a reference so a repeated payout can be refused.",
+      "invalidAmount": "Enter an amount greater than zero."
+    },
+    "cash": {
+      "empty": "No driver has collected any cash yet.",
+      "collected": "Collected",
+      "settled": "Handed over",
+      "outstanding": "Still held",
+      "openOrders": "Open orders",
+      "earnings": "Earnings",
+      "paidLabel": "paid",
+      "recordHandover": "Record handover",
+      "handoverTitle": "Cash handover from {{name}}",
+      "expected": "Expected",
+      "countedPlaceholder": "Amount counted",
+      "invalidAmount": "Enter the amount counted.",
+      "order": "Order",
+      "collectedAt": "Collected at"
+    },
+    "costs": {
+      "empty": "No operating costs have been reported.",
+      "business": "Business",
+      "category": "Category",
+      "description": "Description",
+      "amount": "Amount",
+      "period": "Period",
+      "split": "Split",
+      "proposedBy": "Reported by"
+    },
+    "rates": {
+      "note": "A rate changes by publishing a new version. An order keeps the rates it was taken under, for good.",
+      "version": "Version",
+      "effectiveFrom": "Effective from",
+      "commission": "Commission (standard / promotional)",
+      "subscription": "Monthly subscription",
+      "marginSplit": "Margin split (partner / A / B)",
+      "costSplit": "Cost split (partner / A / B)",
+      "driverShare": "Driver delivery share",
+      "current": "in force",
+      "note_": "Note"
+    }
+  },
+  "operatingCosts": {
+    "title": "Operating costs",
+    "subtitle": "Report what the warehouse and staff have cost. The platform decides before anything is charged.",
+    "loadError": "Could not load your reported costs.",
+    "reportTitle": "Report a cost",
+    "descriptionPlaceholder": "What was this for?",
+    "amountPlaceholder": "Amount",
+    "monthly": "Monthly",
+    "submit": "Send for approval",
+    "approvalNote": "A reported cost is not charged to anyone until it is approved.",
+    "empty": "You have not reported any costs yet.",
+    "invalidAmount": "Enter an amount greater than zero.",
+    "descriptionRequired": "Describe what the cost was for.",
+    "yourShare": "Your share"
   }
 }

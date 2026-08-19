@@ -16,6 +16,8 @@ import { OrdersPage } from "./pages/OrdersPage";
 import { RestaurantDetailPage } from "./pages/RestaurantDetailPage";
 import { RestaurantsPage } from "./pages/RestaurantsPage";
 import { UsersPage } from "./pages/UsersPage";
+import { AccountingPage } from "./pages/AccountingPage";
+import { OperatingCostsPage } from "./pages/business/OperatingCostsPage";
 
 export default function App() {
   const { t } = useTranslation();
@@ -41,6 +43,7 @@ function BusinessRoutes() {
       <Route element={<BusinessOrderPage />} path="/business/orders/:orderId" />
       <Route element={<CataloguePage />} path="/business/catalogue" />
       <Route element={<InventoryPage />} path="/business/inventory" />
+      <Route element={<OperatingCostsPage />} path="/business/operating-costs" />
       <Route element={<StaffPage />} path="/business/staff" />
       <Route element={<Navigate replace to="/business" />} path="*" />
     </Routes>
@@ -57,6 +60,7 @@ function PlatformRoutes() {
       <Route element={<OrderDetailPage />} path="/orders/:orderId" />
       <Route element={<DriversPage />} path="/drivers" />
       <Route element={<UsersPage />} path="/users" />
+      <Route element={<AccountingPage />} path="/accounting" />
       <Route element={<AuditLogPage />} path="/audit-log" />
       <Route element={<Navigate replace to="/" />} path="*" />
     </Routes>

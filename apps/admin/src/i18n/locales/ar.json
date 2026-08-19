@@ -68,7 +68,9 @@
       "liveOrders": "الطلبات المباشرة",
       "catalogue": "المنتجات",
       "inventory": "المخزون",
-      "staff": "الموظفون"
+      "staff": "الموظفون",
+      "accounting": "المحاسبة",
+      "operatingCosts": "المصاريف التشغيلية"
     },
     "signedInAs": "تم تسجيل الدخول باسم",
     "signOut": "تسجيل الخروج",
@@ -390,5 +392,142 @@
     "owner": "المالك",
     "revoke": "إلغاء الصلاحية",
     "restore": "إعادة الصلاحية"
+  },
+  "accounting": {
+    "title": "المحاسبة",
+    "subtitle": "من يحمل النقد، ومن له مستحقات، وما الذي دُفع فعلياً",
+    "loadError": "تعذّر تحميل الأرقام المحاسبية.",
+    "tabs": {
+      "balances": "الأرصدة",
+      "cash": "نقد السائقين",
+      "costs": "المصاريف التشغيلية",
+      "rates": "النسب"
+    },
+    "overview": {
+      "orders": "طلبات محتسبة",
+      "delivered": "مُسلّمة",
+      "failed": "فاشلة",
+      "cashCollected": "النقد المحصّل",
+      "cashSettled": "النقد المُسلّم",
+      "cashOutstanding": "نقد ما زال مع السائقين",
+      "totalEarned": "إجمالي المستحقات",
+      "totalOutstanding": "ما زال مستحقاً للشركاء",
+      "operatingCosts": "مصاريف تشغيلية معتمدة",
+      "pendingCosts": "مصاريف بانتظار القرار",
+      "imbalance": "تدقيق الدفتر",
+      "balanced": "متوازن"
+    },
+    "payeeType": {
+      "PARTNER": "شريك",
+      "BUSINESS": "متجر",
+      "DRIVER": "سائق"
+    },
+    "method": {
+      "CASH": "نقداً",
+      "BANK_TRANSFER": "حوالة بنكية",
+      "OFFSET": "مقاصّة"
+    },
+    "custodyStatus": {
+      "OUTSTANDING": "غير مُسلّم",
+      "PARTIALLY_SETTLED": "مُسلّم جزئياً",
+      "SETTLED": "مُسلّم"
+    },
+    "costStatus": {
+      "PROPOSED": "بانتظار القرار",
+      "APPROVED": "معتمد",
+      "REJECTED": "مرفوض"
+    },
+    "costCategory": {
+      "WAREHOUSE_RENT": "إيجار المستودع",
+      "STAFF_SALARY": "رواتب الموظفين",
+      "UTILITIES": "خدمات ومرافق",
+      "MAINTENANCE": "صيانة",
+      "OTHER": "أخرى"
+    },
+    "component": {
+      "BUSINESS_MERCHANDISE_NET": "قيمة البضاعة بعد العمولة",
+      "SUPERMARKET_GOODS_COST": "تكلفة البضاعة",
+      "SUPERMARKET_MARGIN_SHARE": "حصة من هامش الربح",
+      "PLATFORM_COMMISSION_SHARE": "حصة من العمولة",
+      "BUSINESS_DISCOUNT_ABSORBED": "خصم من عرض المتجر",
+      "PLATFORM_DISCOUNT_ABSORBED": "خصم من عرض المنصة",
+      "DRIVER_DELIVERY_SHARE": "حصة التوصيل",
+      "DELIVERY_OPS_SHARE": "حصة إدارة التوصيل",
+      "PLATFORM_DELIVERY_SHARE": "حصة من رسوم التوصيل",
+      "FAILED_DELIVERY_LOSS": "خسارة توصيل فاشل",
+      "OPERATING_COST_SHARE": "حصة من المصاريف التشغيلية",
+      "SUBSCRIPTION_CHARGE": "الاشتراك الشهري",
+      "SUBSCRIPTION_SHARE": "حصة من الاشتراكات",
+      "ADJUSTMENT": "تصحيح"
+    },
+    "balances": {
+      "empty": "لم تُسجّل أي مستحقات بعد.",
+      "party": "الطرف",
+      "kind": "النوع",
+      "earned": "المستحق",
+      "paid": "المدفوع",
+      "outstanding": "المتبقّي",
+      "breakdown": "التفصيل",
+      "hide": "إخفاء",
+      "pay": "تسجيل دفعة",
+      "payTitle": "تسجيل دفعة إلى {{name}}",
+      "recordPayout": "تسجيل الدفعة",
+      "referencePlaceholder": "المرجع، مثلاً PAYOUT-2026-08",
+      "referenceRequired": "أدخل مرجعاً حتى تُرفض أي دفعة مكرّرة.",
+      "invalidAmount": "أدخل مبلغاً أكبر من صفر."
+    },
+    "cash": {
+      "empty": "لم يحصّل أي سائق نقداً بعد.",
+      "collected": "المحصّل",
+      "settled": "المُسلّم",
+      "outstanding": "ما زال بحوزته",
+      "openOrders": "طلبات مفتوحة",
+      "earnings": "المستحقات",
+      "paidLabel": "مدفوع",
+      "recordHandover": "تسجيل تسليم",
+      "handoverTitle": "تسليم نقد من {{name}}",
+      "expected": "المتوقّع",
+      "countedPlaceholder": "المبلغ المعدود",
+      "invalidAmount": "أدخل المبلغ المعدود.",
+      "order": "الطلب",
+      "collectedAt": "وقت التحصيل"
+    },
+    "costs": {
+      "empty": "لم تُسجّل أي مصاريف تشغيلية.",
+      "business": "المتجر",
+      "category": "الفئة",
+      "description": "الوصف",
+      "amount": "المبلغ",
+      "period": "الفترة",
+      "split": "التقسيم",
+      "proposedBy": "سجّلها"
+    },
+    "rates": {
+      "note": "تتغيّر النسبة بإصدار نسخة جديدة. يحتفظ الطلب بالنسب التي أُخذ بموجبها إلى الأبد.",
+      "version": "النسخة",
+      "effectiveFrom": "سارية من",
+      "commission": "العمولة (عادية / ترويجية)",
+      "subscription": "الاشتراك الشهري",
+      "marginSplit": "تقسيم الهامش (الشريك / أ / ب)",
+      "costSplit": "تقسيم التكاليف (الشريك / أ / ب)",
+      "driverShare": "حصة السائق من التوصيل",
+      "current": "سارية",
+      "note_": "ملاحظة"
+    }
+  },
+  "operatingCosts": {
+    "title": "المصاريف التشغيلية",
+    "subtitle": "سجّل تكاليف المستودع والموظفين. المنصة تقرّر قبل تحميل أي مبلغ على أحد.",
+    "loadError": "تعذّر تحميل المصاريف المسجّلة.",
+    "reportTitle": "تسجيل مصروف",
+    "descriptionPlaceholder": "ما الغرض من هذا المصروف؟",
+    "amountPlaceholder": "المبلغ",
+    "monthly": "شهري",
+    "submit": "إرسال للاعتماد",
+    "approvalNote": "المصروف المسجّل لا يُحمّل على أحد قبل اعتماده.",
+    "empty": "لم تسجّل أي مصاريف بعد.",
+    "invalidAmount": "أدخل مبلغاً أكبر من صفر.",
+    "descriptionRequired": "اكتب وصفاً للمصروف.",
+    "yourShare": "حصتك"
   }
 }

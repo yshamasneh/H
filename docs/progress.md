@@ -2319,3 +2319,218 @@ used for this session's browser verification were both stopped afterward
 respective `apps/` directory when next needed. Seeded test accounts used
 throughout: JOVO MARKET owner `+970590000004`, customer
 `+970590000000`, both password `Test@12345`.
+
+## 2026-08-19: Phase 15.6 — The accounting layer
+
+The whole money layer for a cash-on-delivery business: what every party is
+entitled to, who is physically holding customers' cash, and what has actually
+been paid. Those are three different questions and the design never lets them
+collapse into one.
+
+### The two things being tracked, kept apart on purpose
+
+**Entitlement** — `OrderFinancialRecord` (one order's money, frozen at its
+terminal outcome) and `PartnerEarning` (one party's signed, append-only share
+of one source). **Cash custody** — `DriverCashCustody` (what a driver took at
+the door) and `CashSettlement` (a handover event, with what was expected, what
+was counted, and the difference). **Payment** — `PartnerSettlement`, separate
+again, because "earned 1,400" and "was paid 1,400" answer different questions
+and a system that reports only their difference cannot say whether anyone has
+been paid.
+
+A driver holding 320.00 of customers' money while being owed 14.00 in pay is
+two facts about two pockets. The API reports them side by side and never nets
+them; the admin screen shows them in adjacent columns.
+
+### Completed
+
+- **Every rate is configurable and versioned.** `FinancialRateSet` carries the
+  commission (standard and promotional), the subscription, the commission
+  split, the supermarket margin split, the *separately configured* cost split,
+  the driver's delivery share and the three weights that divide what is left.
+  A rate never changes in place: it is immutable at the database level, so a
+  change means publishing a version. Migration `20260818150121` seeds version 1
+  with the agreed model.
+- **Historical snapshots are real.** `Order.financialRateSetId` and
+  `Order.commissionBpSnapshot` are stamped as the order is taken, and
+  `OrderItem.costPriceMinorSnapshot` freezes what the platform paid for each
+  line. A commission halved next month cannot restate last month's payouts —
+  verified end to end, not merely intended.
+- **The two verticals are structurally different code paths**, as they should
+  be. A restaurant is paid its merchandise less commission; a supermarket
+  partner is paid the cost of the goods and then shares the margin 40/30/30.
+  Only the delivery fee, which behaves identically either way, is shared code.
+- **The delivery-fee remainder now reaches its partners.** The `TODO` in
+  `delivery.rules.ts` is resolved: the driver's 70% is joined by delivery
+  operations and the two owners dividing the remaining 30% evenly. A driver's
+  own figures are now read from the ledger rather than recomputed, so there is
+  one source of truth for what a driver has earned.
+- **Discount scope decides who absorbs a promotion.** A business-scoped offer
+  comes off the business; a platform-scoped one off the two owners, with the
+  business paid as though the promotion had not happened. A promotion whose
+  scope was never recorded (see 15.6a) is carried by the platform and reported
+  as unattributed, because a business must never be billed for a discount
+  nobody can attribute.
+- **Failed deliveries follow the recorded fault, not a blanket rule.** The
+  business is still paid for goods that left the premises and the driver is
+  still paid for the attempt; one party then carries the whole uncollected
+  amount, chosen from the delivery's `faultParty`. A fault attributed to the
+  driver deliberately still lands on the platform — charging a driver is a
+  decision about a person's pay and belongs to a human making an adjustment,
+  not to a default that fires when a reason code is picked from a list.
+- **Supermarket operating costs are a workflow, not a calculation.** The
+  supermarket side reports a cost and it stays `PROPOSED`, charging nobody,
+  until someone holding `APPROVE_OPERATING_COSTS` decides. Approval freezes the
+  rate set onto the entry and writes the three-way split in the same
+  transaction. There is no approve route on the business controller at all.
+- **Subscriptions** bill each restaurant once a month, skip promotional
+  partners entirely rather than charging them zero, and are safe to re-run.
+- **Corrections are entries, never edits.** `FinancialAdjustment` carries a
+  reason, an actor, a timestamp and its own ledger rows; the original record
+  still says exactly what it said.
+
+### The guarantees live in the database
+
+37 CHECK constraints, and the ones that matter are not decorative:
+
+- `OrderFinancialRecord.orderId` is unique, so an order cannot be valued twice.
+- `PartnerEarning` is unique on `(sourceType, sourceId, payeeKey, component)`,
+  so one source cannot credit one party for the same reason twice.
+- `DriverCashCustody_never_oversettled` — `settledAmountMinor <=
+  collectedAmountMinor`. Double settlement is impossible at the database level,
+  not merely checked a few lines earlier in a service.
+- `CashSettlement.reference` and `PartnerSettlement.reference` are unique, so a
+  retried handover or payout is refused rather than posted twice.
+- Nine triggers refuse any `UPDATE` or `DELETE` on financial history.
+  `DriverCashCustody` is the one financial table that may legitimately change,
+  and only upward, and only in its settled amount.
+
+Genuine repair takes an explicit, visible route: drop the trigger, fix, restore
+— which is what `src/integration/financial-triggers.util.ts` does for test
+fixtures and what a repair migration would do in production.
+
+### Verified
+
+- `npm run typecheck` clean across all three workspaces; **API 271 pass, 2
+  skipped by design, 0 fail** (up from 204, with 40 new money tests); `apps/admin`
+  builds; **`npm run test:e2e` 21/21**.
+- **The money tests are worked examples with the arithmetic spelled out**, not
+  assertions comparing a function to itself. Every distribution is checked
+  against the cash actually collected, and a loop confirms every amount from 0
+  to 999 splits three ways without gaining or losing an agora.
+- **The end-to-end suite runs against real PostgreSQL**, because the guarantees
+  above cannot be demonstrated against a test double. Nineteen checks including
+  both worked examples, partial settlement, a repeated handover refused, an
+  already-settled order refused by both the service and the database, the
+  cost-approval workflow, a rate change leaving an already-taken order
+  untouched, and the ledger refusing to be edited.
+
+#### Worked example — restaurant, 110.00 collected
+
+```
+items 2 x 50.00                       100.00
+delivery fee (minimum)                 10.00
+customer pays in cash                 110.00
+
+commission 20% of 100.00               20.00  -> Mohammad 10.00, Khaldoun 10.00
+restaurant  100.00 - 20.00             80.00
+driver      70% of 10.00                7.00
+remainder   10.00 - 7.00                3.00  -> Abdullah 1.00, Mohammad 1.00,
+                                                 Khaldoun 1.00
+--------------------------------------------
+80.00 + 20.00 + 7.00 + 3.00           110.00   = exactly what was collected
+```
+
+#### Worked example — JOVO MARKET, 210.00 collected
+
+```
+goods at retail 2 x 100.00            200.00
+delivery fee (minimum)                 10.00
+customer pays in cash                 210.00
+
+cost of goods                         140.00  -> supermarket partner, in full
+margin 200.00 - 140.00                 60.00  -> partner 40%  24.00
+                                                 Mohammad 30% 18.00
+                                                 Khaldoun 30% 18.00
+driver 70% of 10.00                     7.00
+remainder                               3.00  -> 1.00 each, three ways
+--------------------------------------------
+supermarket partner 140.00 + 24.00    164.00
+Mohammad 18.00 + 1.00                  19.00
+Khaldoun 18.00 + 1.00                  19.00
+Abdullah                                1.00
+driver                                  7.00
+--------------------------------------------
+total                                 210.00   = exactly what was collected
+```
+
+- **Both examples were also placed as real orders** through the running local
+  API against the real JOVO MARKET account, and the resulting records matched
+  line for line — including a live browser check of the admin screens in both
+  Arabic and English. A partial handover of 150.00 was recorded through the
+  actual UI: cash handed over 150.00, still held 60.00, the order correctly
+  left open rather than marked settled, and the driver's 7.00 of earnings
+  untouched. The 2,500.00 rent entry was approved through the UI and charged
+  1,000.00 / 750.00 / 750.00, with the ledger check still reading Balanced.
+  All of that verification data was removed afterwards; the financial tables
+  are back to zero rows, JOVO MARKET is back to its original 6 products, and
+  all nine triggers are enabled.
+
+### Three fixes this work required
+
+- **The e2e runner now sets `RESTAURANT_ORDERING_ENABLED`.** A suite cannot set
+  it itself: TypeScript hoists imports above statements, so `ConfigModule` read
+  the environment before the assignment ran and the restaurant vertical stayed
+  silently behind its launch gate. This had been failing the Phase 13 suite;
+  it passes again.
+- **`FinancialRateSet.createdByUserId` is now `RESTRICT`**, matching every other
+  actor reference in the layer. As `SET NULL`, deleting a user issued an
+  `UPDATE` the append-only trigger refused — a confusing failure for something
+  that should simply not be allowed.
+- **A migration grants `PROPOSE_OPERATING_COSTS` to `BUSINESS_ADMIN`.**
+  `SystemRolesService` deliberately never rewrites a business role's
+  permissions, so a new capability reaching existing roles is a reviewed data
+  change rather than a silent one on deploy. Worth remembering for the next
+  permission added.
+
+### Decisions worth knowing about
+
+- **Financial records are produced at `DELIVERED` *and* `DELIVERY_FAILED`.**
+  The brief said "at DELIVERED only", contrasted with cancelled and rejected
+  orders producing none. A failed delivery is neither: money genuinely moves
+  (15.6a added the state for exactly that reason, and the failed-delivery rules
+  would otherwise be dead letters). Cancelled and rejected orders still produce
+  nothing at all.
+- **A driver's 70% is taken from the fee before any delivery-fee promotion.**
+  A discount is funded by whoever offered it, never out of the driver's pay.
+- **Splits use largest-remainder allocation**, so three shares of 10.01 come to
+  3.34 / 3.34 / 3.33 and never to 3.34 × 3. Ties break toward the earlier
+  weight, which makes the result deterministic and therefore testable.
+- **Every computation re-checks itself** against the cash collected before it
+  is returned. If a rate, a price, or a promotion snapshot ever drifts, the
+  delivery fails loudly rather than writing a ledger that is quietly a few
+  shekels out.
+- **A cost with an unknown price is flagged, not guessed.** A supermarket line
+  with no recorded cost price is treated as zero — which overstates the margin
+  — and the record carries `costDataComplete: false` so the number reads as
+  provisional rather than exact.
+
+### Known gaps, deliberately not built
+
+- **No `PartnerSettlement` for a partial entitlement.** An earning is cleared by
+  exactly one payout (unique on `earningId`), so a payout that does not match a
+  whole set of earnings leaves a legitimate unallocated remainder. Balances are
+  always `SUM(earnings) - SUM(payouts)` regardless, so nothing is lost —
+  allocations are provenance, not the arithmetic.
+- **`NET_OF_EARNINGS` handover mode exists in the schema but is not
+  implemented.** Handovers are gross today, as agreed; the column is there so
+  netting can be switched on later without a rebuild.
+- **No scheduled job runs the monthly subscription.** The endpoint exists and
+  is safe to re-run; something has to call it.
+- **The admin accounting screens are functional, not designed.** Plain tables,
+  no visual pass — that belongs to the design phase, and nothing here presumes
+  what it will look like.
+- **Nothing recomputes the six pre-existing orders** that predate the ledger.
+  They were delivered before any of this existed and have no financial record;
+  the reconciliation check would refuse two of them anyway, since they carry the
+  service fee removed in 15.6a.

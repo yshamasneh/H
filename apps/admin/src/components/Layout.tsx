@@ -22,6 +22,7 @@ const platformNav: NavItem[] = [
   { to: "/orders", labelKey: "layout.nav.orders", icon: "≡", permission: "VIEW_ALL_ORDERS" },
   { to: "/drivers", labelKey: "layout.nav.drivers", icon: "✈", permission: "MANAGE_DRIVERS" },
   { to: "/users", labelKey: "layout.nav.users", icon: "●", permission: "MANAGE_USERS" },
+  { to: "/accounting", labelKey: "layout.nav.accounting", icon: "₪", permission: "VIEW_ACCOUNTING" },
   { to: "/audit-log", labelKey: "layout.nav.auditLog", icon: "☷", permission: "VIEW_AUDIT_LOG" }
 ];
 
@@ -33,6 +34,13 @@ const businessNav: NavItem[] = [
     labelKey: "layout.nav.inventory",
     icon: "▧",
     permission: "MANAGE_INVENTORY",
+    businessType: "SUPERMARKET"
+  },
+  {
+    to: "/business/operating-costs",
+    labelKey: "layout.nav.operatingCosts",
+    icon: "₪",
+    permission: "PROPOSE_OPERATING_COSTS",
     businessType: "SUPERMARKET"
   },
   { to: "/business/staff", labelKey: "layout.nav.staff", icon: "◍", permission: "MANAGE_BUSINESS_STAFF" }
