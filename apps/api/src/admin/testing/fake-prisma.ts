@@ -90,6 +90,18 @@ export class FakeAdminPrisma {
       if (!select) return matches;
       return matches.map((order) => ({ totalMinor: order.totalMinor }));
     };
+    this.order.aggregate = async ({ where, _sum }: any) => {
+      const matches = this.orders.filter(
+        (order) =>
+          (!where?.createdAt?.gte || order.createdAt >= where.createdAt.gte) &&
+          inFilter(order.status, where?.status)
+      );
+      const sum: Record<string, number> = {};
+      for (const key of Object.keys(_sum ?? {})) {
+        sum[key] = matches.reduce((total, order) => total + ((order as any)[key] ?? 0), 0);
+      }
+      return { _sum: sum };
+    };
 
     this.delivery.count = async ({ where }: any) =>
       this.deliveries.filter((delivery) => inFilter(delivery.status, where?.status)).length;

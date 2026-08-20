@@ -37,6 +37,7 @@ import {
 } from "./cart";
 import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
+import { newUuid } from "../../core/uuid";
 import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
 import { OrderDetailSkeleton, OrderListSkeleton } from "../../components/skeleton";
@@ -161,6 +162,20 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   const [coordinates, setCoordinates] = useState<CurrentCoordinates>(defaultMapCoordinate);
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  // Synchronous double-submit guard. `loading` also disables the button, but that only
+  // takes effect on the next render — two taps in the same frame both slip through before
+  // then. This ref flips synchronously, so the second tap is refused immediately.
+  const submittingRef = useRef(false);
+  // One idempotency key per checkout attempt (M-1). It is stable across re-renders and across
+  // retries of the same attempt, and is regenerated only when the basket changes — so a genuine
+  // second order isn't deduped against the first, while a resubmit of the same basket is.
+  const cartSignature = props.cart
+    ? JSON.stringify(props.cart.items.map((line) => [line.menuItemId, line.quantity, line.allowSubstitution]))
+    : "";
+  const idempotencyRef = useRef({ signature: "", key: "" });
+  if (idempotencyRef.current.signature !== cartSignature) {
+    idempotencyRef.current = { signature: cartSignature, key: newUuid() };
+  }
 
   useEffect(() => {
     getAccessToken()
@@ -259,6 +274,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   }
 
   async function submit() {
+    if (submittingRef.current) return;
     setError(null);
     if (!props.cart || props.cart.items.length === 0) {
       setError(t("checkout.emptyCartError"));
@@ -276,6 +292,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       setError(t("checkout.quoteRequiredError"));
       return;
     }
+    submittingRef.current = true;
     setLoading(true);
     try {
       const accessToken = await getAccessToken();
@@ -295,7 +312,8 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         deliveryLatitude: coordinates.latitude,
         deliveryLongitude: coordinates.longitude,
         paymentMethod,
-        customerNote: customerNote.trim() || undefined
+        customerNote: customerNote.trim() || undefined,
+        idempotencyKey: idempotencyRef.current.key
       };
       const order = await createOrder(accessToken, input);
       props.onPlaced(order);
@@ -303,6 +321,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       setError(readError(requestError));
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   }
 

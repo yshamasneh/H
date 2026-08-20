@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { OfferType, type Offer } from "../generated/prisma/client";
-import { calculatePromotionDiscounts } from "./offers.service";
+import { ApiException } from "../common/api.exception";
+import { OffersService, calculatePromotionDiscounts } from "./offers.service";
 
 test("product offers use the best discount per line and beat a weaker order offer", () => {
   const itemId = randomUUID();
@@ -97,4 +98,33 @@ function offer(overrides: Partial<Offer>): Offer {
     updatedAt: now,
     ...overrides
   };
+}
+
+// --- gap closure: TC-163 (admin offer validation) ---------------------------------
+
+test("admin offer creation rejects invalid type/percent/target combinations (TC-163)", async () => {
+  const service = new OffersService({} as never);
+  const create = (input: Record<string, unknown>) => service.adminCreate("admin-id", input as never);
+
+  // A percentage offer with no percentage.
+  await assert.rejects(create({ type: OfferType.ORDER_PERCENTAGE, title: "x" }), hasCode("OFFER_PERCENT_REQUIRED"));
+  // Free delivery must not carry a percentage.
+  await assert.rejects(
+    create({ type: OfferType.FREE_DELIVERY, title: "x", discountPercent: 5 }),
+    hasCode("OFFER_PERCENT_NOT_ALLOWED")
+  );
+  // An order/product percentage must name a restaurant.
+  await assert.rejects(
+    create({ type: OfferType.ORDER_PERCENTAGE, title: "x", discountPercent: 10 }),
+    hasCode("OFFER_RESTAURANT_REQUIRED")
+  );
+  // A product offer must name a menu item.
+  await assert.rejects(
+    create({ type: OfferType.PRODUCT_PERCENTAGE, title: "x", discountPercent: 10, restaurantId: randomUUID() }),
+    hasCode("OFFER_ITEM_REQUIRED")
+  );
+});
+
+function hasCode(code: string): (error: unknown) => boolean {
+  return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

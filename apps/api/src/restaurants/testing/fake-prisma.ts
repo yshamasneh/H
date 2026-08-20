@@ -317,7 +317,7 @@ export class FakeRestaurantPrisma {
     this.orderItem.count = async ({ where }: any) =>
       this.orderItems.filter((line) => line.menuItemId === where.menuItemId).length;
     this.menuItem.count = async ({ where }: any) =>
-      this.menuItems.filter((item) => item.categoryId === where.categoryId).length;
+      this.menuItems.filter((item) => menuItemMatchesCatalogWhere(item, where)).length;
     this.menuItem.delete = async ({ where }: any) => {
       const index = this.menuItems.findIndex((item) => item.id === where.id);
       if (index < 0) throw new Error("missing menu item");
@@ -343,11 +343,28 @@ export class FakeRestaurantPrisma {
       if (where?.OR && item.stockQuantity === 0) return null;
       return item;
     };
-    this.menuItem.findMany = async ({ where }: any) => {
-      let items = this.menuItems.filter((item) => item.restaurantId === where.restaurantId);
-      if (where.isAvailable !== undefined) items = items.filter((item) => item.isAvailable === where.isAvailable);
-      if (where.categoryId) items = items.filter((item) => item.categoryId === where.categoryId);
-      return [...items].sort((left, right) => left.name.localeCompare(right.name));
+    this.menuItem.findMany = async ({ where, orderBy, skip = 0, take, select }: any) => {
+      let items = this.menuItems.filter((item) => menuItemMatchesCatalogWhere(item, where));
+      const orderings = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [{ name: "asc" }];
+      items = [...items].sort((left, right) => {
+        for (const ordering of orderings) {
+          if (ordering.isFeatured === "desc") {
+            const diff = Number(right.isFeatured) - Number(left.isFeatured);
+            if (diff !== 0) return diff;
+          } else if (ordering.name === "asc") {
+            const diff = left.name.localeCompare(right.name);
+            if (diff !== 0) return diff;
+          }
+        }
+        return 0;
+      });
+      const sliced = typeof take === "number" ? items.slice(skip, skip + take) : items.slice(skip);
+      if (!select) return sliced;
+      return sliced.map((item) => {
+        const projected: Record<string, unknown> = {};
+        for (const key of Object.keys(select)) projected[key] = (item as any)[key];
+        return projected;
+      });
     };
     this.menuItem.create = async ({ data }: any) => {
       const now = new Date();
@@ -403,6 +420,14 @@ export class FakeRestaurantPrisma {
       (where?.createdAt?.gte === undefined || order.createdAt.getTime() >= where.createdAt.gte.getTime());
     this.order.count = async ({ where }: any) =>
       this.orders.filter((order) => orderMatchesWhere(order, where)).length;
+    this.order.aggregate = async ({ where, _sum }: any) => {
+      const matches = this.orders.filter((order) => orderMatchesWhere(order, where));
+      const sum: Record<string, number> = {};
+      for (const key of Object.keys(_sum ?? {})) {
+        sum[key] = matches.reduce((total, order) => total + ((order as any)[key] ?? 0), 0);
+      }
+      return { _sum: sum };
+    };
     this.order.findMany = async ({ where, select, skip = 0, take, orderBy }: any) => {
       let matches = this.orders.filter((order) => orderMatchesWhere(order, where));
       if (orderBy?.createdAt === "desc") {
@@ -513,4 +538,47 @@ export class FakeRestaurantPrisma {
     });
     return restaurant;
   }
+}
+
+/**
+ * Matches the `where` shapes the supermarket catalog builds (`getSupermarketCatalog`):
+ * restaurant + availability + category (equality or `{ in }`) + optional `isFeatured`,
+ * plus the `AND` of the "in stock" clause and the case-insensitive name/description/brand/sku
+ * search `OR`. Kept faithful so the search/pagination tests exercise real filtering.
+ */
+function menuItemMatchesCatalogWhere(item: MenuItemRecord, where: any): boolean {
+  if (!where) return true;
+  const contains = (value: string | null, needle: unknown) =>
+    typeof value === "string" && value.toLowerCase().includes(String(needle).toLowerCase());
+  if (where.restaurantId !== undefined && item.restaurantId !== where.restaurantId) return false;
+  if (where.isAvailable !== undefined && item.isAvailable !== where.isAvailable) return false;
+  if (where.isFeatured !== undefined && item.isFeatured !== where.isFeatured) return false;
+  if (where.categoryId !== undefined) {
+    if (typeof where.categoryId === "string") {
+      if (item.categoryId !== where.categoryId) return false;
+    } else if (where.categoryId.in && !where.categoryId.in.includes(item.categoryId)) {
+      return false;
+    }
+  }
+  const matchesOr = (or: any[]) =>
+    or.some((cond) => {
+      if ("stockQuantity" in cond) {
+        if (cond.stockQuantity === null) return item.stockQuantity === null;
+        if (cond.stockQuantity?.gt !== undefined) {
+          return item.stockQuantity !== null && item.stockQuantity > cond.stockQuantity.gt;
+        }
+      }
+      if (cond.name?.contains !== undefined) return contains(item.name, cond.name.contains);
+      if (cond.description?.contains !== undefined) return contains(item.description, cond.description.contains);
+      if (cond.brand?.contains !== undefined) return contains(item.brand, cond.brand.contains);
+      if (cond.sku?.contains !== undefined) return contains(item.sku, cond.sku.contains);
+      return false;
+    });
+  if (Array.isArray(where.AND)) {
+    for (const clause of where.AND) {
+      if (Array.isArray(clause.OR) && !matchesOr(clause.OR)) return false;
+    }
+  }
+  if (Array.isArray(where.OR) && !matchesOr(where.OR)) return false;
+  return true;
 }

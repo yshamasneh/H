@@ -550,6 +550,19 @@ test("a terminal delivery cannot be moved again", async () => {
   );
 });
 
+test("updating a driver's location persists the coordinates (TC-116)", async () => {
+  const { prisma, service } = createService();
+  const driver = prisma.seedDriver();
+
+  const view = await service.updateLocation(driver.userId, 31.9038, 35.2034);
+
+  assert.equal(view.lastLatitude, 31.9038);
+  assert.equal(view.lastLongitude, 35.2034);
+  const stored = prisma.driverProfiles.find((profile) => profile.userId === driver.userId);
+  assert.equal(stored?.lastLatitude, 31.9038);
+  assert.equal(stored?.lastLongitude, 35.2034);
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

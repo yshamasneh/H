@@ -1,6 +1,19 @@
 import { Platform } from "react-native";
 import i18n from "../i18n";
 import type { CountryCode } from "./phone";
+import { ApiError } from "./api-error";
+import type { ApiErrorPayload } from "./api-error";
+import { createRefreshCoordinator, sendWithAuthRetry } from "./auth-retry";
+import { fetchWithTimeout, retryPolicyFor, runWithRetry } from "./http-retry";
+import { clearTokens, getRefreshToken, saveTokens } from "./session";
+
+/** Per-attempt network timeout (M-2): a hung connection aborts here instead of hanging forever. */
+const requestTimeoutMs = 20_000;
+
+// Re-exported so the many `import { ApiError } from "./api"` call sites keep working now
+// that the class itself lives in a leaf module with no react-native/i18n dependencies.
+export { ApiError } from "./api-error";
+export type { ApiErrorPayload } from "./api-error";
 
 export type UserRole = "CUSTOMER" | "RESTAURANT" | "DRIVER" | "ADMIN";
 export type BusinessType = "RESTAURANT" | "SUPERMARKET";
@@ -328,27 +341,9 @@ export type CreateOrderInput = {
   deliveryLongitude: number;
   paymentMethod: OrderPaymentMethod;
   customerNote?: string;
+  /** Makes placement idempotent: a retry of the same checkout returns the original order. */
+  idempotencyKey?: string;
 };
-
-type ApiErrorPayload = {
-  statusCode?: number;
-  code?: string;
-  message?: string;
-  details?: unknown;
-  requestId?: string;
-};
-
-export class ApiError extends Error {
-  constructor(
-    readonly statusCode: number,
-    readonly code: string,
-    message: string,
-    readonly details: unknown = null
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
 
 // Must be a plain `process.env.X` member expression: babel-preset-expo's
 // inline-env-vars plugin only visits MemberExpression, so `process.env?.X`
@@ -1122,22 +1117,83 @@ function toQuery(params: Record<string, unknown>): string {
   return query ? `?${query}` : "";
 }
 
+const refreshEndpoint = "/api/v1/auth/refresh";
+
+/**
+ * Obtains a fresh access token from the stored refresh token. Wrapped in a coordinator so
+ * that when several in-flight requests 401 at once they share ONE refresh call instead of
+ * each firing their own (the "refresh storm"). Returns null when it cannot mint a new
+ * token; only a genuine 401 on the refresh itself tears the session down.
+ */
+async function performTokenRefresh(): Promise<string | null> {
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const result = await refreshSession(refreshToken);
+    await saveTokens(result);
+    return result.accessToken;
+  } catch (error) {
+    // The refresh token itself was rejected → the session is genuinely over, so clear it
+    // (this is the one place a 401 legitimately clears tokens, mirroring session-restore).
+    // A network failure leaves the tokens untouched for a later retry.
+    if (error instanceof ApiError && error.statusCode === 401) {
+      await clearTokens();
+    }
+    return null;
+  }
+}
+
+const refreshAccessToken = createRefreshCoordinator(performTokenRefresh);
+
 async function request<T>(
   path: string,
   options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; accessToken?: string } = {}
 ): Promise<T> {
+  const method = options.method ?? "GET";
+  // Each fetch attempt gets its own AbortController timeout; a timeout/network failure is
+  // thrown (not returned) so runWithRetry can retry it for idempotent GETs.
+  const send = (accessToken: string | undefined) =>
+    fetchWithTimeout(
+      fetch,
+      `${apiBaseUrl}${path}`,
+      {
+        method,
+        headers: {
+          Accept: "application/json",
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined
+      },
+      requestTimeoutMs,
+      {
+        timeout: () => new ApiError(0, "TIMEOUT", i18n.t("common:requestTimeout")),
+        network: () => new ApiError(0, "NETWORK_ERROR", i18n.t("common:networkError"))
+      }
+    );
+
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}${path}`, {
-      method: options.method ?? "GET",
-      headers: {
-        Accept: "application/json",
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {})
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined
-    });
-  } catch {
+    // Two composed, individually-bounded mechanisms:
+    //  - sendWithAuthRetry: on a 401, refresh the token ONCE and replay (H-2).
+    //  - runWithRetry: on a timeout/network error, retry a GET up to a small cap with backoff.
+    // A 401 comes back as a Response (handled by the former, never retried by the latter);
+    // a timeout is thrown (retried by the latter). Neither path feeds the other, so total
+    // attempts stay hard-capped even when a request both times out and later 401s.
+    const result = await runWithRetry(
+      () =>
+        sendWithAuthRetry(send, {
+          accessToken: options.accessToken,
+          refresh: refreshAccessToken,
+          canRefresh: options.accessToken !== undefined && path !== refreshEndpoint,
+          statusOf: (res) => res.status
+        }),
+      retryPolicyFor(method)
+    );
+    response = result.response;
+  } catch (error) {
+    // fetchWithTimeout already shapes transport failures as TIMEOUT/NETWORK_ERROR ApiErrors.
+    if (error instanceof ApiError) throw error;
     throw new ApiError(0, "NETWORK_ERROR", i18n.t("common:networkError"));
   }
 

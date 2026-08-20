@@ -1,5 +1,6 @@
 import type { AccessContext } from "./api.business";
 export type { AccessContext, BusinessType, Permission } from "./api.business";
+import { createRefreshCoordinator, sendWithAuthRetry } from "./auth-retry";
 const configuredApiUrl = (import.meta as any).env?.VITE_API_URL?.replace(/\/$/, "");
 if ((import.meta as any).env?.PROD && (!configuredApiUrl || !configuredApiUrl.startsWith("https://"))) {
   throw new Error("Production builds require an HTTPS VITE_API_URL.");
@@ -164,6 +165,7 @@ export class ApiError extends Error {
 }
 
 export const accessTokenStorageKey = "wasel_admin_access_token";
+export const refreshTokenStorageKey = "wasel_admin_refresh_token";
 
 export function getAccessToken(): string | null {
   return localStorage.getItem(accessTokenStorageKey);
@@ -172,6 +174,28 @@ export function getAccessToken(): string | null {
 export function setAccessToken(token: string | null): void {
   if (token) localStorage.setItem(accessTokenStorageKey, token);
   else localStorage.removeItem(accessTokenStorageKey);
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(refreshTokenStorageKey);
+}
+
+export function setRefreshToken(token: string | null): void {
+  if (token) localStorage.setItem(refreshTokenStorageKey, token);
+  else localStorage.removeItem(refreshTokenStorageKey);
+}
+
+/** Persist a full auth result — both tokens — so the session survives past the 15-minute
+ *  access-token lifetime (H-2). */
+export function storeSession(result: AuthResult): void {
+  setAccessToken(result.accessToken);
+  setRefreshToken(result.refreshToken);
+}
+
+/** Drop both tokens (logout, or a refused refresh token). */
+export function clearSession(): void {
+  setAccessToken(null);
+  setRefreshToken(null);
 }
 
 export function login(input: { countryCode: string; phoneNumber: string; password: string }): Promise<AuthResult> {
@@ -273,19 +297,63 @@ export function toQuery(params: Record<string, unknown>): string {
   return `?${search.toString()}`;
 }
 
-export async function request<T>(path: string, options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {}): Promise<T> {
-  const accessToken = getAccessToken();
+const refreshEndpoint = "/api/v1/auth/refresh";
+
+/**
+ * Mints a fresh access token from the stored refresh token, using a raw fetch so it can't
+ * recurse back through `request()`. Wrapped in a coordinator (below) so simultaneous 401s
+ * share one refresh. Only a rejected refresh token (a 401 on the refresh itself) tears the
+ * session down; a network failure leaves both tokens in place for a later attempt.
+ */
+async function performTokenRefresh(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl}${path}`, {
+    response = await fetch(`${apiBaseUrl}${refreshEndpoint}`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken })
+    });
+  } catch {
+    return null;
+  }
+  if (!response.ok) {
+    if (response.status === 401) clearSession();
+    return null;
+  }
+  const result = (await response.json().catch(() => null)) as AuthResult | null;
+  if (!result?.accessToken) return null;
+  storeSession(result);
+  return result.accessToken;
+}
+
+const refreshAccessToken = createRefreshCoordinator(performTokenRefresh);
+
+export async function request<T>(path: string, options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {}): Promise<T> {
+  const accessToken = getAccessToken();
+  const send = (token: string | undefined) =>
+    fetch(`${apiBaseUrl}${path}`, {
       method: options.method ?? "GET",
       headers: {
         Accept: "application/json",
         ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       body: options.body ? JSON.stringify(options.body) : undefined
     });
+
+  let response: Response;
+  try {
+    // On a 401, refresh the access token once and replay — never for the refresh call
+    // itself or an unauthenticated request, so this can't recurse.
+    const result = await sendWithAuthRetry(send, {
+      accessToken: accessToken ?? undefined,
+      refresh: refreshAccessToken,
+      canRefresh: accessToken !== null && path !== refreshEndpoint,
+      statusOf: (res) => res.status
+    });
+    response = result.response;
   } catch {
     throw new ApiError(0, "NETWORK_ERROR", "Cannot connect to the TasawaQ server.");
   }
@@ -293,7 +361,8 @@ export async function request<T>(path: string, options: { method?: "GET" | "POST
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const error = payload ?? {};
-    if (response.status === 401) setAccessToken(null);
+    // A 401 that survives the refresh attempt means the session is truly over.
+    if (response.status === 401) clearSession();
     throw new ApiError(response.status, error.code ?? "API_ERROR", error.message ?? "The request could not be completed.", error.details ?? null);
   }
   return payload as T;

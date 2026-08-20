@@ -11,16 +11,23 @@ const languageLabels: Record<SupportedLanguage, string> = { ar: "العربية"
 
 export function LanguageSwitcher() {
   const { t, i18n } = useTranslation();
-  const [isRestarting, setIsRestarting] = useState(false);
+  // null = idle · "reloading" = auto-reload in progress · "manual" = auto-reload unavailable.
+  const [restart, setRestart] = useState<"reloading" | "manual" | null>(null);
 
   async function select(language: SupportedLanguage) {
-    if (language === i18n.language || isRestarting) return;
+    if (language === i18n.language || restart === "reloading") return;
     await changeLanguage(language);
     const needsReload = reconcileRTL(language);
-    if (needsReload) {
-      setIsRestarting(true);
-      setTimeout(() => reloadApp(), 600);
-    }
+    if (!needsReload) return;
+    setRestart("reloading");
+    // Let the "restarting…" copy paint, then reload. If no reload path is available
+    // (e.g. a build without expo-updates), fall back to asking the user to restart manually
+    // rather than leaving the UI half-mirrored silently (M-4).
+    setTimeout(() => {
+      void reloadApp().then((reloaded) => {
+        if (!reloaded) setRestart("manual");
+      });
+    }, 600);
   }
 
   return (
@@ -29,7 +36,7 @@ export function LanguageSwitcher() {
       <View style={styles.optionRow}>
         {supportedLanguages.map((language) => (
           <TouchableOpacity
-            disabled={isRestarting}
+            disabled={restart === "reloading"}
             key={language}
             onPress={() => void select(language)}
             style={[styles.option, i18n.language === language ? styles.optionActive : null]}
@@ -40,7 +47,8 @@ export function LanguageSwitcher() {
           </TouchableOpacity>
         ))}
       </View>
-      {isRestarting ? <Text style={styles.restartingText}>{t("common:restartingMessage")}</Text> : null}
+      {restart === "reloading" ? <Text style={styles.restartingText}>{t("common:restartingMessage")}</Text> : null}
+      {restart === "manual" ? <Text style={styles.restartingText}>{t("common:restartRequiredBody")}</Text> : null}
     </View>
   );
 }

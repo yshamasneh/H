@@ -23,7 +23,8 @@ if (build.status !== 0) {
       "--test",
       "--test-concurrency=1",
       "dist/integration/phase11.e2e.test.js",
-      "dist/integration/accounting.e2e.test.js"
+      "dist/integration/accounting.e2e.test.js",
+      "dist/integration/order-idempotency.e2e.test.js"
     ],
     {
       cwd: apiDirectory,

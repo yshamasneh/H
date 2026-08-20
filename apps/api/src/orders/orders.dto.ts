@@ -83,6 +83,11 @@ export class CreateOrderDto {
   @IsString()
   @MaxLength(500)
   customerNote?: string;
+
+  @ApiPropertyOptional({ description: "Client-generated key that makes this checkout idempotent; a retry with the same key returns the original order." })
+  @IsOptional()
+  @IsUUID()
+  idempotencyKey?: string;
 }
 
 export const restaurantOrderStatusActionValues = ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "REJECTED"] as const;

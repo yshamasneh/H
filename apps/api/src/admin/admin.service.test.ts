@@ -26,6 +26,17 @@ test("dashboard counts today's orders and excludes cancelled/rejected orders fro
   assert.equal(dashboard.revenueTodayMinor, 3000);
 });
 
+test("dashboard revenue is 0 (not an error) when no order qualifies", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  // Only excluded/out-of-range orders exist → the SQL _sum returns null, reported as 0.
+  prisma.seedOrder(restaurant.id, { status: OrderStatus.CANCELLED, totalMinor: 5000 });
+  prisma.seedOrder(restaurant.id, { status: OrderStatus.DELIVERED, totalMinor: 9000, createdAt: new Date(Date.now() - 86_400_000 * 2) });
+
+  const dashboard = await service.getDashboard();
+  assert.equal(dashboard.revenueTodayMinor, 0);
+});
+
 test("dashboard counts active deliveries, pending restaurants, and online approved drivers", async () => {
   const { prisma, service } = createService();
   prisma.seedDelivery({ status: "ASSIGNED" as never });
@@ -232,6 +243,32 @@ test("a platform role can be removed again", async () => {
   const stored = prisma.users.find((user) => user.id === admin.id)!;
   assert.equal((stored as unknown as { platformRoleId: string | null }).platformRoleId, null);
   assert.equal(prisma.auditLogs.at(-1)?.action, "PLATFORM_ROLE_ASSIGNED");
+});
+
+test("admin user search filters by role (TC-143)", async () => {
+  const { prisma, service } = createService();
+  prisma.seedUser({ fullName: "Alice Customer", role: UserRole.CUSTOMER });
+  prisma.seedUser({ fullName: "Bob Driver", role: UserRole.DRIVER });
+  prisma.seedUser({ fullName: "Carol Driver", role: UserRole.DRIVER });
+
+  const drivers = await service.listUsers({ role: UserRole.DRIVER } as never);
+  assert.equal(drivers.items.length, 2);
+  assert.ok(drivers.items.every((user) => user.role === UserRole.DRIVER));
+});
+
+test("admin audit log lists entries and filters by action (TC-145)", async () => {
+  const { prisma, service } = createService();
+  const actor = prisma.seedUser({ fullName: "Platform Admin", role: UserRole.ADMIN });
+  prisma.seedAuditLog({ actorUserId: actor.id, action: "RESTAURANT_APPROVED" });
+  prisma.seedAuditLog({ actorUserId: actor.id, action: "DRIVER_SUSPENDED" });
+
+  const all = await service.listAuditLog({} as never);
+  assert.ok(all.total >= 2);
+
+  const filtered = await service.listAuditLog({ action: "RESTAURANT_APPROVED" } as never);
+  assert.ok(filtered.items.length >= 1);
+  assert.ok(filtered.items.every((entry) => entry.action === "RESTAURANT_APPROVED"));
+  assert.equal(filtered.items[0].actorFullName, "Platform Admin");
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

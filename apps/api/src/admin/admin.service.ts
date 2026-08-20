@@ -32,7 +32,7 @@ export class AdminService {
 
     const [
       ordersToday,
-      revenueOrders,
+      revenueAggregate,
       activeDeliveries,
       pendingRestaurantApprovals,
       onlineDriversCount,
@@ -40,12 +40,14 @@ export class AdminService {
       activity
     ] = await Promise.all([
       this.prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
-      this.prisma.order.findMany({
+      // Sum today's revenue in SQL rather than loading every order (M-8). Same filter as
+      // before: created today, excluding CANCELLED/REJECTED.
+      this.prisma.order.aggregate({
         where: {
           createdAt: { gte: startOfToday },
           status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REJECTED] }
         },
-        select: { totalMinor: true }
+        _sum: { totalMinor: true }
       }),
       this.prisma.delivery.count({
         where: {
@@ -64,7 +66,7 @@ export class AdminService {
       })
     ]);
 
-    const revenueTodayMinor = revenueOrders.reduce((sum, order) => sum + order.totalMinor, 0);
+    const revenueTodayMinor = revenueAggregate._sum.totalMinor ?? 0;
 
     return {
       ordersToday,

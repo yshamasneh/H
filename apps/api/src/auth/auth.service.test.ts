@@ -304,6 +304,92 @@ test("resets a password once, rejects token reuse, accepts new password, and rej
   );
 });
 
+// --- gap closures: TC-013/014/016/021/025 -----------------------------------------
+
+test("login is refused for an inactive account (TC-013)", async () => {
+  const context = createContext();
+  await context.prisma.user.create({
+    data: {
+      fullName: "Inactive",
+      phone: "+970590000009",
+      passwordHash: await hashPassword("Test@12345"),
+      role: UserRole.CUSTOMER,
+      phoneVerifiedAt: new Date(),
+      isActive: false
+    }
+  });
+  await assert.rejects(
+    context.auth.login({ countryCode: "+970", phoneNumber: "0590000009", password: "Test@12345" }),
+    hasCode("ACCOUNT_INACTIVE")
+  );
+});
+
+test("login is refused for an unverified phone (TC-014)", async () => {
+  const context = createContext();
+  await context.prisma.user.create({
+    data: {
+      fullName: "Unverified",
+      phone: "+970590000008",
+      passwordHash: await hashPassword("Test@12345"),
+      role: UserRole.CUSTOMER,
+      phoneVerifiedAt: null,
+      isActive: true
+    }
+  });
+  await assert.rejects(
+    context.auth.login({ countryCode: "+970", phoneNumber: "0590000008", password: "Test@12345" }),
+    hasCode("PHONE_NOT_VERIFIED")
+  );
+});
+
+test("a rotated refresh token cannot be reused (TC-016)", async () => {
+  const context = createContext();
+  await seedCustomer(context.prisma);
+  const session = await context.auth.login({ countryCode: "+970", phoneNumber: "0590000000", password: "Test@12345" });
+  // First refresh rotates the token: the old session is revoked, a new one issued.
+  const rotated = await context.auth.refresh(session.refreshToken);
+  assert.notEqual(rotated.refreshToken, session.refreshToken);
+  // Reusing the original (now-revoked) refresh token is rejected.
+  await assert.rejects(context.auth.refresh(session.refreshToken), hasCode("INVALID_REFRESH_TOKEN"));
+  // The freshly-rotated token still works.
+  const again = await context.auth.refresh(rotated.refreshToken);
+  assert.ok(again.accessToken);
+});
+
+test("logout revokes the session so its refresh token stops working (TC-021)", async () => {
+  const context = createContext();
+  const user = await seedCustomer(context.prisma);
+  const session = await context.auth.login({ countryCode: "+970", phoneNumber: "0590000000", password: "Test@12345" });
+  const sessionId = context.prisma.sessions[0].id;
+  await context.auth.logout({
+    id: user.id,
+    fullName: user.fullName,
+    phone: user.phone,
+    role: user.role,
+    sessionId,
+    tokenVersion: user.tokenVersion
+  });
+  assert.ok(context.prisma.sessions[0].revokedAt, "the session is revoked on logout");
+  await assert.rejects(context.auth.refresh(session.refreshToken), hasCode("INVALID_REFRESH_TOKEN"));
+});
+
+test("a password reset bumps tokenVersion and revokes every live session (TC-025)", async () => {
+  const context = createContext();
+  await seedCustomer(context.prisma);
+  await context.auth.login({ countryCode: "+970", phoneNumber: "0590000000", password: "Test@12345" });
+  assert.equal(context.prisma.users[0].tokenVersion, 0);
+  assert.equal(context.prisma.sessions[0].revokedAt, null);
+
+  await context.auth.requestPasswordResetCode({ countryCode: "+970", phoneNumber: "0590000000" });
+  const code = context.otp.latest(OtpPurpose.PASSWORD_RESET).code;
+  const verification = await context.auth.verifyPasswordResetCode({ countryCode: "+970", phoneNumber: "0590000000", code });
+  await context.auth.resetPassword({ resetToken: verification.resetToken, password: "Changed@123", confirmPassword: "Changed@123" });
+
+  // Bumping tokenVersion invalidates every outstanding access token; sessions are revoked.
+  assert.equal(context.prisma.users[0].tokenVersion, 1);
+  assert.ok(context.prisma.sessions[0].revokedAt, "existing sessions are revoked on reset");
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) =>
     error instanceof ApiException &&

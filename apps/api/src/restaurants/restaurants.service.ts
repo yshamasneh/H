@@ -183,15 +183,17 @@ export class RestaurantsService {
 
   private async periodStats(restaurantId: string, since?: Date): Promise<RestaurantPeriodStats> {
     const createdAt = since ? { gte: since } : undefined;
-    const [ordersCount, deliveredOrders] = await Promise.all([
+    // Sum in SQL rather than loading every delivered order into memory (M-8): same filter
+    // (restaurant + DELIVERED + date window), just `_sum` instead of findMany().reduce().
+    const [ordersCount, salesAggregate] = await Promise.all([
       this.prisma.order.count({ where: { restaurantId, createdAt } }),
-      this.prisma.order.findMany({
+      this.prisma.order.aggregate({
         where: { restaurantId, status: OrderStatus.DELIVERED, createdAt },
-        select: { totalMinor: true }
+        _sum: { totalMinor: true }
       })
     ]);
     return {
-      salesMinor: deliveredOrders.reduce((sum, order) => sum + order.totalMinor, 0),
+      salesMinor: salesAggregate._sum.totalMinor ?? 0,
       ordersCount
     };
   }
@@ -490,11 +492,14 @@ export class RestaurantsService {
     if (!restaurant) {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
     }
-    const [totalOrdersCount, deliveredOrders] = await Promise.all([
+    const [totalOrdersCount, revenueAggregate] = await Promise.all([
       this.prisma.order.count({ where: { restaurantId } }),
-      this.prisma.order.findMany({ where: { restaurantId, status: OrderStatus.DELIVERED }, select: { totalMinor: true } })
+      this.prisma.order.aggregate({
+        where: { restaurantId, status: OrderStatus.DELIVERED },
+        _sum: { totalMinor: true }
+      })
     ]);
-    const revenueMinor = deliveredOrders.reduce((sum, order) => sum + order.totalMinor, 0);
+    const revenueMinor = revenueAggregate._sum.totalMinor ?? 0;
     return {
       ...toProfileView(restaurant),
       ownerFullName: restaurant.owner.fullName,

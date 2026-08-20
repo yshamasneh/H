@@ -7,6 +7,7 @@ import { BusinessType, RestaurantStatus } from "../generated/prisma/client";
 import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
 import { FakeOrdersPrisma } from "./testing/fake-prisma";
 import { OrdersService } from "./orders.service";
+import type { OrderDetailView } from "./orders.types";
 
 function createService() {
   const prisma = new FakeOrdersPrisma();
@@ -910,6 +911,255 @@ test("customer-facing order views never expose the name of the staff member who 
 
   const businessView = await service.getForRestaurantOwner(restaurant.ownerUserId, order.id);
   assert.equal("acceptedByFullName" in businessView, true);
+});
+
+// --- gap closures: TC-070/088 -----------------------------------------------------
+
+test("quoting an order for a store with no configured location is rejected (TC-070)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ latitude: null, longitude: null });
+  const item = prisma.seedMenuItem(restaurant.id);
+  await assert.rejects(
+    service.quoteOrder(baseInput(restaurant.id, item.id) as never),
+    hasCode("RESTAURANT_LOCATION_REQUIRED")
+  );
+});
+
+test("a status change emits a realtime event to the order and to admins (TC-088)", async () => {
+  const { prisma, realtime, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, item.id) as never);
+  realtime.emitted.length = 0; // ignore the order.created emits from placement
+
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+
+  const statusEvents = realtime.emitted.filter((event) => event.event === "order.status.changed");
+  assert.ok(statusEvents.length >= 1, "order.status.changed is emitted");
+  assert.ok(statusEvents.some((event) => event.room === "admins"), "admins are notified");
+});
+
+// --- gap closures: TC-091/095/099/100/103/106 -------------------------------------
+
+test("proposing the same product as its own replacement is rejected (TC-099)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const item = prisma.seedMenuItem(restaurant.id, { stockQuantity: 10 });
+  const order = await service.createOrder(
+    randomUUID(),
+    baseInput(restaurant.id, item.id, { items: [{ menuItemId: item.id, quantity: 2, allowSubstitution: true }] }) as never
+  );
+  await assert.rejects(
+    service.proposeFulfillmentAdjustment(restaurant.ownerUserId, order.id, order.items[0].id, {
+      replacementMenuItemId: item.id
+    } as never),
+    hasCode("SUBSTITUTION_SAME_PRODUCT")
+  );
+});
+
+test("a replacement with insufficient stock is rejected (TC-100)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const original = prisma.seedMenuItem(restaurant.id, { stockQuantity: 10 });
+  const replacement = prisma.seedMenuItem(restaurant.id, { name: "Low stock", stockQuantity: 1 });
+  const order = await service.createOrder(
+    randomUUID(),
+    baseInput(restaurant.id, original.id, { items: [{ menuItemId: original.id, quantity: 2, allowSubstitution: true }] }) as never
+  );
+  await assert.rejects(
+    service.proposeFulfillmentAdjustment(restaurant.ownerUserId, order.id, order.items[0].id, {
+      replacementMenuItemId: replacement.id
+    } as never),
+    hasCode("SUBSTITUTION_OUT_OF_STOCK")
+  );
+});
+
+test("fulfillment adjustments are rejected for a non-supermarket order (TC-103)", async () => {
+  const { prisma, service } = createService();
+  // A RESTAURANT-type business (ordering enabled via the suite's config).
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, item.id) as never);
+  await assert.rejects(
+    service.proposeFulfillmentAdjustment(restaurant.ownerUserId, order.id, order.items[0].id, {
+      note: "n/a"
+    } as never),
+    hasCode("SUPERMARKET_NOT_FOUND")
+  );
+});
+
+async function approveSubstitution(
+  service: OrdersService,
+  restaurant: { id: string; ownerUserId: string },
+  customerId: string,
+  order: OrderDetailView,
+  replacementMenuItemId: string
+): Promise<OrderDetailView> {
+  const proposed = await service.proposeFulfillmentAdjustment(restaurant.ownerUserId, order.id, order.items[0].id, {
+    replacementMenuItemId
+  } as never);
+  return service.decideFulfillmentAdjustment(customerId, order.id, proposed.items[0].fulfillmentAdjustment!.id, "APPROVED");
+}
+
+test("approving a substitution re-derives a percentage discount on the new subtotal (TC-106)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const original = prisma.seedMenuItem(restaurant.id, { priceMinor: 1_000, stockQuantity: 10 });
+  const replacement = prisma.seedMenuItem(restaurant.id, { name: "Pricier", priceMinor: 2_000, stockQuantity: 10 });
+  prisma.seedOffer({ type: "ORDER_PERCENTAGE", discountPercent: 10, restaurantId: restaurant.id });
+  const customerId = randomUUID();
+  const order = await service.createOrder(
+    customerId,
+    baseInput(restaurant.id, original.id, { items: [{ menuItemId: original.id, quantity: 2, allowSubstitution: true }] }) as never
+  );
+  assert.equal(order.subtotalMinor, 2_000);
+  assert.equal(order.discountMinor, 200, "10% of the original 2000 subtotal");
+
+  const approved = await approveSubstitution(service, restaurant, customerId, order, replacement.id);
+
+  assert.equal(approved.subtotalMinor, 4_000, "subtotal tracks the new line total");
+  assert.equal(approved.discountMinor, 400, "the 10% discount is re-derived on the new 4000 subtotal");
+  assert.equal(approved.merchandiseDiscountMinor, 400);
+  assert.equal(approved.totalMinor, 4_000 + order.deliveryFeeMinor - 400);
+});
+
+test("a capped (flat-like) discount stays at its cap when the percentage exceeds it (TC-106 flat case)", async () => {
+  // The offer model has no pure flat discount; the closest is a percentage with a
+  // `maxDiscountMinor` cap. When the percentage exceeds the cap, the discount is the cap —
+  // and must not scale up with the subtotal after a substitution.
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const original = prisma.seedMenuItem(restaurant.id, { priceMinor: 1_000, stockQuantity: 10 });
+  const replacement = prisma.seedMenuItem(restaurant.id, { name: "Pricier", priceMinor: 2_000, stockQuantity: 10 });
+  prisma.seedOffer({ type: "ORDER_PERCENTAGE", discountPercent: 50, maxDiscountMinor: 300, restaurantId: restaurant.id });
+  const customerId = randomUUID();
+  const order = await service.createOrder(
+    customerId,
+    baseInput(restaurant.id, original.id, { items: [{ menuItemId: original.id, quantity: 2, allowSubstitution: true }] }) as never
+  );
+  assert.equal(order.discountMinor, 300, "50% of 2000 is 1000, capped at 300");
+
+  const approved = await approveSubstitution(service, restaurant, customerId, order, replacement.id);
+  assert.equal(approved.subtotalMinor, 4_000);
+  assert.equal(approved.discountMinor, 300, "still capped at 300, not scaled to 50% of 4000");
+});
+
+test("a substitution on an order with no promotion introduces no discount (TC-106 no-discount case)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const original = prisma.seedMenuItem(restaurant.id, { priceMinor: 1_000, stockQuantity: 10 });
+  const replacement = prisma.seedMenuItem(restaurant.id, { name: "Pricier", priceMinor: 2_000, stockQuantity: 10 });
+  const customerId = randomUUID();
+  const order = await service.createOrder(
+    customerId,
+    baseInput(restaurant.id, original.id, { items: [{ menuItemId: original.id, quantity: 2, allowSubstitution: true }] }) as never
+  );
+  assert.equal(order.discountMinor, 0);
+
+  const approved = await approveSubstitution(service, restaurant, customerId, order, replacement.id);
+  assert.equal(approved.subtotalMinor, 4_000);
+  assert.equal(approved.discountMinor, 0, "no discount is invented");
+  assert.equal(approved.totalMinor, 4_000 + order.deliveryFeeMinor);
+});
+
+test("a substitution that shrinks the subtotal below the original discount re-derives it and keeps the total non-negative (TC-106 shrink case)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const original = prisma.seedMenuItem(restaurant.id, { priceMinor: 1_000, stockQuantity: 10 });
+  const cheaper = prisma.seedMenuItem(restaurant.id, { name: "Cheaper", priceMinor: 250, stockQuantity: 10 });
+  // 90% up to a 1800 cap: on the original 2000 subtotal → 1800 discount.
+  prisma.seedOffer({ type: "ORDER_PERCENTAGE", discountPercent: 90, maxDiscountMinor: 1_800, restaurantId: restaurant.id });
+  const customerId = randomUUID();
+  const order = await service.createOrder(
+    customerId,
+    baseInput(restaurant.id, original.id, { items: [{ menuItemId: original.id, quantity: 2, allowSubstitution: true }] }) as never
+  );
+  assert.equal(order.subtotalMinor, 2_000);
+  assert.equal(order.discountMinor, 1_800, "90% of 2000 is 1800, at the cap");
+
+  const approved = await approveSubstitution(service, restaurant, customerId, order, cheaper.id);
+  assert.equal(approved.subtotalMinor, 500, "2 × 250");
+  assert.equal(approved.discountMinor, 450, "re-derived: 90% of 500 (below the cap), NOT the frozen 1800");
+  assert.ok(approved.totalMinor >= 0, "the total never goes negative");
+  assert.equal(approved.totalMinor, 500 + order.deliveryFeeMinor - 450);
+});
+
+test("status history is returned in chronological order across transitions (TC-091)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, item.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+  const preparing = await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "PREPARING", undefined);
+
+  assert.deepEqual(
+    preparing.statusHistory.map((entry) => entry.toStatus),
+    ["PLACED", "ACCEPTED", "PREPARING"]
+  );
+  for (let i = 1; i < preparing.statusHistory.length; i += 1) {
+    assert.ok(
+      preparing.statusHistory[i].createdAt.getTime() >= preparing.statusHistory[i - 1].createdAt.getTime(),
+      "history entries are non-decreasing in time"
+    );
+  }
+});
+
+test("an admin cannot cancel an order that is already in a terminal state (TC-095)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, item.id) as never);
+  // Customer cancels the PLACED order; it is now terminal.
+  await service.cancelForCustomer(customerId, order.id);
+  await assert.rejects(
+    service.adminCancelOrder(randomUUID(), order.id, "too late"),
+    hasCode("ORDER_NOT_CANCELLABLE")
+  );
+});
+
+// --- gap closures: M-1 order idempotency (TC-081) ---------------------------------
+
+test("a repeated checkout with the same idempotency key returns the original order and reserves stock once (TC-081)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id, { stockQuantity: 10 });
+  const customerId = randomUUID();
+  const key = randomUUID();
+  const input = baseInput(restaurant.id, item.id, { idempotencyKey: key });
+
+  const first = await service.createOrder(customerId, input as never);
+  const second = await service.createOrder(customerId, input as never);
+
+  assert.equal(first.id, second.id, "the same order is returned on the retry");
+  assert.equal(prisma.orders.length, 1, "no duplicate order is created");
+  assert.equal(item.stockQuantity, 8, "stock is decremented exactly once (quantity 2)");
+});
+
+test("different idempotency keys create distinct orders (TC-081)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id, { stockQuantity: 10 });
+  const customerId = randomUUID();
+
+  const a = await service.createOrder(customerId, baseInput(restaurant.id, item.id, { idempotencyKey: randomUUID() }) as never);
+  const b = await service.createOrder(customerId, baseInput(restaurant.id, item.id, { idempotencyKey: randomUUID() }) as never);
+
+  assert.notEqual(a.id, b.id);
+  assert.equal(prisma.orders.length, 2);
+});
+
+test("orders placed without an idempotency key are never deduped (TC-081)", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id, { stockQuantity: 10 });
+  const customerId = randomUUID();
+
+  const a = await service.createOrder(customerId, baseInput(restaurant.id, item.id) as never);
+  const b = await service.createOrder(customerId, baseInput(restaurant.id, item.id) as never);
+
+  assert.notEqual(a.id, b.id, "null keys are distinct, so genuinely separate orders both persist");
+  assert.equal(prisma.orders.length, 2);
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

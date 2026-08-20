@@ -212,6 +212,8 @@ export class FakeDriversPrisma {
       if (!profile) throw new Error("missing driver profile");
       if (data.isOnline !== undefined) profile.isOnline = data.isOnline;
       if (data.status !== undefined) profile.status = data.status;
+      if (data.lastLatitude !== undefined) profile.lastLatitude = data.lastLatitude;
+      if (data.lastLongitude !== undefined) profile.lastLongitude = data.lastLongitude;
       profile.updatedAt = new Date();
       return include?.user ? { ...profile, user: this.users.find((user) => user.id === profile.userId)! } : profile;
     };

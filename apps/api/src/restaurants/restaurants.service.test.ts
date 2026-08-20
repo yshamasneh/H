@@ -279,6 +279,174 @@ test("owner stats sum delivered revenue and count every order in each period", a
   assert.equal(stats.total.ordersCount, 4);
 });
 
+test("owner stats report 0 revenue (not an error) when nothing has been delivered", async () => {
+  const { prisma, service } = createService();
+  await service.register(registerInput);
+  const ownerId = prisma.users[0].id;
+  const restaurantId = prisma.restaurants[0].id;
+
+  // Volume exists but nothing is DELIVERED → aggregate _sum is null, surfaced as 0.
+  prisma.seedOrder(restaurantId, { status: "PLACED", totalMinor: 1500, createdAt: new Date() });
+
+  const stats = await service.getOwnStats(ownerId);
+  assert.equal(stats.today.salesMinor, 0);
+  assert.equal(stats.today.ordersCount, 1);
+  assert.equal(stats.total.salesMinor, 0);
+});
+
+test("adminGetRestaurant reports 0 revenue when there are no delivered orders", async () => {
+  const { prisma, service } = createService();
+  const ownerUserId = randomUUID();
+  prisma.users.push({
+    id: ownerUserId,
+    fullName: "Owner Name",
+    phone: "+970593334444",
+    email: null,
+    passwordHash: "hash",
+    role: UserRole.RESTAURANT,
+    phoneVerifiedAt: new Date(),
+    isActive: true,
+    tokenVersion: 0,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  const restaurant = prisma.seedApprovedOpenRestaurant({ ownerUserId });
+  prisma.seedOrder(restaurant.id, { status: "PLACED", totalMinor: 4200 });
+
+  const view = await service.adminGetRestaurant(restaurant.id);
+  assert.equal(view.revenueMinor, 0);
+  assert.equal(view.totalOrdersCount, 1);
+});
+
+test("a store cannot open for orders until it is approved (TC-125)", async () => {
+  const { prisma, service } = createService();
+  await service.register(registerInput); // creates a PENDING restaurant + owner + membership
+  const ownerId = prisma.users[0].id;
+  await assert.rejects(service.setOwnOpenStatus(ownerId, true), hasCode("RESTAURANT_NOT_APPROVED"));
+});
+
+test("admin restaurant list filters by status and business type (TC-137)", async () => {
+  const { prisma, service } = createService();
+  prisma.seedApprovedOpenRestaurant({ name: "Approved Kitchen" });
+  prisma.seedApprovedOpenRestaurant({ name: "Approved Market", businessType: BusinessType.SUPERMARKET });
+  await service.register(registerInput); // a PENDING restaurant
+
+  const approved = await service.adminList({ status: RestaurantStatus.APPROVED } as never);
+  assert.equal(approved.items.length, 2);
+  assert.ok(approved.items.every((restaurant) => restaurant.status === RestaurantStatus.APPROVED));
+
+  const markets = await service.adminList({ businessType: BusinessType.SUPERMARKET } as never);
+  assert.ok(markets.items.length >= 1);
+  assert.ok(markets.items.every((restaurant) => restaurant.businessType === BusinessType.SUPERMARKET));
+});
+
+test("admin creates a business with an owner, a membership, and immediate approval (TC-141)", async () => {
+  const { prisma, service } = createService();
+  const view = await service.adminCreateBusiness(randomUUID(), {
+    countryCode: "+970",
+    phoneNumber: "0599990000",
+    ownerFullName: "New Owner",
+    password: "Owner@1234",
+    businessName: "New Market",
+    addressLine: "Ramallah",
+    businessType: BusinessType.SUPERMARKET,
+    approveImmediately: true
+  } as never);
+
+  assert.equal(view.status, RestaurantStatus.APPROVED);
+  assert.equal(prisma.restaurants.length, 1);
+  assert.ok(prisma.users.some((user) => user.role === UserRole.RESTAURANT), "an owner user is created");
+  assert.ok(
+    prisma.businessMembers.some((member) => member.businessId === prisma.restaurants[0].id),
+    "the owner is granted a membership"
+  );
+  assert.ok(prisma.auditLogs.some((entry) => entry.action === "BUSINESS_CREATED_BY_ADMIN"));
+});
+
+test("catalog rejects an unknown supermarket department (TC-046)", async () => {
+  const { prisma, service } = createService();
+  const market = prisma.seedApprovedOpenRestaurant({ businessType: BusinessType.SUPERMARKET });
+  await assert.rejects(
+    service.getSupermarketCatalog(market.id, { categoryId: randomUUID() } as never),
+    hasCode("SUPERMARKET_DEPARTMENT_NOT_FOUND")
+  );
+});
+
+test("product detail rejects an unknown product (TC-052)", async () => {
+  const { prisma, service } = createService();
+  const market = prisma.seedApprovedOpenRestaurant({ businessType: BusinessType.SUPERMARKET });
+  await assert.rejects(
+    service.getSupermarketProduct(market.id, randomUUID()),
+    hasCode("SUPERMARKET_PRODUCT_NOT_FOUND")
+  );
+});
+
+// --- gap closures: TC-047/048/049 (catalog search, featured, pagination) ----------
+
+async function seedCatalog(prisma: FakeRestaurantPrisma) {
+  const market = prisma.seedApprovedOpenRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const department = await prisma.menuCategory.create({
+    data: { restaurantId: market.id, name: "Groceries", sortOrder: 0, isActive: true }
+  });
+  const addProduct = (overrides: Record<string, unknown>) =>
+    prisma.menuItem.create({
+      data: {
+        restaurantId: market.id,
+        categoryId: department.id,
+        name: "Product",
+        priceMinor: 500,
+        isAvailable: true,
+        stockQuantity: 10,
+        isFeatured: false,
+        ...overrides
+      }
+    });
+  return { market, department, addProduct };
+}
+
+test("catalog search matches name/brand/sku case-insensitively (TC-047)", async () => {
+  const { prisma, service } = createService();
+  const { market, addProduct } = await seedCatalog(prisma);
+  await addProduct({ name: "Fresh Milk", brand: "Alpha", sku: "MILK-1" });
+  await addProduct({ name: "Bread Loaf", brand: "Beta", sku: "BREAD-1" });
+  await addProduct({ name: "Yogurt", brand: "Alpha", sku: "YOG-1" });
+
+  const byName = await service.getSupermarketCatalog(market.id, { search: "milk" } as never);
+  assert.equal(byName.products.length, 1);
+  assert.equal(byName.products[0].name, "Fresh Milk");
+
+  const byBrand = await service.getSupermarketCatalog(market.id, { search: "ALPHA" } as never);
+  assert.equal(byBrand.products.length, 2, "brand match is case-insensitive");
+});
+
+test("the featured filter returns only featured products (TC-048)", async () => {
+  const { prisma, service } = createService();
+  const { market, addProduct } = await seedCatalog(prisma);
+  await addProduct({ name: "Regular" });
+  await addProduct({ name: "Star", isFeatured: true });
+
+  const featured = await service.getSupermarketCatalog(market.id, { featured: true } as never);
+  assert.equal(featured.products.length, 1);
+  assert.equal(featured.products[0].name, "Star");
+});
+
+test("catalog pagination respects page size, reports the true total, and tolerates a page past the end (TC-049)", async () => {
+  const { prisma, service } = createService();
+  const { market, addProduct } = await seedCatalog(prisma);
+  for (const suffix of ["A", "B", "C", "D", "E"]) await addProduct({ name: `Item ${suffix}` });
+
+  const page1 = await service.getSupermarketCatalog(market.id, { page: 1, pageSize: 2 } as never);
+  assert.equal(page1.total, 5);
+  assert.equal(page1.products.length, 2);
+
+  const lastPage = await service.getSupermarketCatalog(market.id, { page: 3, pageSize: 2 } as never);
+  assert.equal(lastPage.products.length, 1, "the tail page holds the remainder");
+
+  const beyond = await service.getSupermarketCatalog(market.id, { page: 4, pageSize: 2 } as never);
+  assert.equal(beyond.products.length, 0, "a page beyond the last is empty, not an error");
+  assert.equal(beyond.total, 5);
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

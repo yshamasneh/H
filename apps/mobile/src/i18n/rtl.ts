@@ -1,5 +1,7 @@
-import { DevSettings, I18nManager, Platform } from "react-native";
+import { I18nManager, Platform } from "react-native";
+import * as Updates from "expo-updates";
 import type { SupportedLanguage } from "../core/language";
+import { performReload } from "./reload";
 
 const rtlLanguages: readonly SupportedLanguage[] = ["ar"];
 
@@ -61,17 +63,21 @@ export function reconcileRTL(language: SupportedLanguage): boolean {
 }
 
 /**
- * Reloads the app so a just-applied I18nManager.forceRTL change takes visual
- * effect. On web this is a full page reload (equivalent to admin's instant
- * dir-attribute flip, since react-native-web re-resolves styles on remount).
- * On native this uses React Native's built-in DevSettings.reload(), which
- * Expo's custom dev client wires up in both dev and release-style builds
- * (unlike bare RN release builds, where DevSettings can be a no-op).
+ * Reloads the app so a just-applied I18nManager.forceRTL change takes visual effect. On web
+ * this is a full page reload (react-native-web re-resolves styles on remount). On native it
+ * uses `Updates.reloadAsync()` (M-4) — reliable in real release builds, unlike the previous
+ * `DevSettings.reload()`, which is a no-op outside a dev client.
+ *
+ * Returns `true` when a reload was initiated (native reloads restart the process, so nothing
+ * after the call runs) and `false` when no reload path was available — the language switcher
+ * then shows a "please restart" message instead of leaving the UI half-mirrored.
  */
-export function reloadApp(): void {
-  if (Platform.OS === "web") {
-    if (typeof window !== "undefined") window.location.reload();
-    return;
-  }
-  DevSettings.reload();
+export function reloadApp(): Promise<boolean> {
+  return performReload({
+    platformOS: Platform.OS,
+    reloadWeb: () => {
+      if (typeof window !== "undefined") window.location.reload();
+    },
+    reloadNative: () => Updates.reloadAsync()
+  });
 }

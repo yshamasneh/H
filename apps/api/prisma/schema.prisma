@@ -564,6 +564,10 @@ model Order {
   /// here so a rate changed tomorrow can never recompute an order taken today.
   financialRateSetId       String?               @db.Uuid
   commissionBpSnapshot     Int?
+  /// Client-supplied key that makes order placement idempotent: a retried checkout with the same
+  /// key returns the original order rather than creating a duplicate. Nullable so legacy orders (and
+  /// any placed without a key) never collide — Postgres treats NULLs as distinct in the unique index.
+  idempotencyKey           String?               @db.Uuid
   customerNote             String?
   totalMinor               Int
   acceptedByUserId         String?               @db.Uuid
@@ -583,6 +587,7 @@ model Order {
   financialRecord          OrderFinancialRecord?
   cashCustody              DriverCashCustody?
 
+  @@unique([customerId, idempotencyKey])
   @@index([customerId, createdAt])
   @@index([restaurantId, createdAt])
   @@index([restaurantId, status, createdAt])

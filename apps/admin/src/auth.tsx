@@ -2,11 +2,12 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { useTranslation } from "react-i18next";
 import {
   ApiError,
+  clearSession,
   fetchCurrentUser,
   getAccessToken,
   login as apiLogin,
   logout as apiLogout,
-  setAccessToken,
+  storeSession,
   type AccessContext,
   type Permission,
   type PublicUser
@@ -42,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function loadCurrent(): Promise<boolean> {
     const current = await fetchCurrentUser();
     if (!supportedRoles.includes(current.user.role)) {
-      setAccessToken(null);
+      clearSession();
       setError(t("login.errorNotAdminRestore"));
       return false;
     }
@@ -59,8 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       try {
         await loadCurrent();
-      } catch {
-        setAccessToken(null);
+      } catch (restoreError) {
+        // Only give up the stored session if the server actively rejected it. A network
+        // failure at boot must not log the admin out (mirrors the mobile H-1 fix); the
+        // refresh-on-401 in request() already handled a merely-expired access token.
+        if (restoreError instanceof ApiError && restoreError.statusCode === 401) clearSession();
       } finally {
         setIsBooting(false);
       }
@@ -77,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setError(t("login.errorNotAdminSignIn"));
         return;
       }
-      setAccessToken(result.accessToken);
+      storeSession(result);
       // Permissions come from the API rather than being inferred from the role, so a role whose
       // permissions change later needs no client change.
       await loadCurrent();
@@ -92,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Local sign-out still clears credentials if the API is unreachable.
     }
-    setAccessToken(null);
+    clearSession();
     setUser(null);
     setAccess(null);
   }

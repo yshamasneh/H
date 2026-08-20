@@ -19,11 +19,11 @@ import { colors } from "./src/theme/tokens";
 import {
   fetchCurrentUser,
   logout,
-  refreshSession,
   type AuthResult,
   type MenuItemSummary,
   type RestaurantSummary
 } from "./src/core/api";
+import { restoreSession } from "./src/core/session-restore";
 import {
   ForgotPasswordScreen,
   HomeScreen,
@@ -101,7 +101,7 @@ import { DriverEarningsScreen } from "./src/features/driver/earnings-screen";
 import { NotificationInboxScreen } from "./src/features/shared/notification-screens";
 import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/features/restaurant/order-screens";
 import { RestaurantListScreen, RestaurantMenuScreen } from "./src/features/customer/restaurant-screens";
-import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./src/core/session";
+import { cartRepository, clearTokens, getAccessToken, getCachedUser, saveTokens } from "./src/core/session";
 import { disconnectSocket } from "./src/core/socket";
 import { ErrorBoundary } from "./src/components/error-boundary";
 import { AdminDashboardScreen } from "./src/features/admin/dashboard-screen";
@@ -178,6 +178,9 @@ function TasawaQApp() {
   const [isBooting, setIsBooting] = useState(true);
   const [minSplashElapsed, setMinSplashElapsed] = useState(false);
   const [cart, setCart] = useState<Cart | null>(null);
+  // Gate cart persistence until the stored cart has been read, so the first render's
+  // empty state can't overwrite a saved cart before we've loaded it (M-3).
+  const [cartHydrated, setCartHydrated] = useState(false);
   // Every screen after the splash renders text in Cairo/Inter, so the splash
   // (a logo image, no text) stays up until fonts are ready too — otherwise
   // the loading screen or first screen would flash in the system font.
@@ -190,43 +193,62 @@ function TasawaQApp() {
       if (isMounted) setMinSplashElapsed(true);
     }, splashDurationMs);
 
-    async function restoreSession() {
+    async function boot() {
       const language = await resolveInitialLanguage();
       if (i18n.language !== language) await i18n.changeLanguage(language);
       if (reconcileRTL(language)) {
         // A native reload is about to happen (see reconcileRTL's doc comment).
         // Deliberately skip setIsBooting(false) so the loading screen stays
-        // up instead of flashing mis-mirrored UI before the reload lands.
-        reloadApp();
+        // up instead of flashing mis-mirrored UI before the reload lands. This is a
+        // rare cold-start case (stored direction changed since last run); fire-and-forget.
+        void reloadApp();
         return;
       }
 
-      try {
-        const [accessToken, storedRefreshToken] = await Promise.all([getAccessToken(), getRefreshToken()]);
-        if (!accessToken) return;
+      // Rehydrate the saved cart before the first customer screen renders (M-3).
+      const storedCart = await cartRepository.load();
+      if (isMounted && storedCart) setCart(storedCart);
 
-        try {
-          const user = await fetchCurrentUser(accessToken);
-          if (isMounted) setScreen(homeForUser(user));
-        } catch {
-          if (!storedRefreshToken) throw new Error("No refresh token");
-          const result = await refreshSession(storedRefreshToken);
-          await saveTokens(result);
-          if (isMounted) setScreen(authResultToHome(result));
+      try {
+        // restoreSession keeps the session on a network error and only clears it on a real
+        // 401 (H-1). Mid-session/expired access tokens are refreshed transparently inside
+        // request() (H-2), so fetchCurrentUser only throws here when truly offline or when
+        // the refresh token is itself dead.
+        const outcome = await restoreSession({ getAccessToken, fetchCurrentUser, getCachedUser, clearTokens });
+        if (!isMounted) return;
+        if (outcome.status === "authenticated") {
+          setScreen(homeForUser(outcome.user));
+        } else if (outcome.status === "offline" && outcome.user) {
+          // Couldn't reach the server, but the stored tokens are intact and we have a
+          // cached identity: keep the user in their app. Each screen surfaces its own
+          // "couldn't load — pull to refresh" state instead of a forced logout.
+          setScreen(homeForUser(outcome.user));
+        } else if (outcome.status === "signed-out" || outcome.status === "unauthenticated") {
+          // No usable session → fall through to login and don't carry a basket into the
+          // logged-out state (clearTokens already cleared the persisted copy on sign-out).
+          setCart(null);
         }
-      } catch {
-        await clearTokens();
       } finally {
-        if (isMounted) setIsBooting(false);
+        if (isMounted) {
+          setCartHydrated(true);
+          setIsBooting(false);
+        }
       }
     }
 
-    void restoreSession();
+    void boot();
     return () => {
       isMounted = false;
       clearTimeout(splashTimer);
     };
   }, []);
+
+  // Persist every cart change once hydration is done. `save(null)` clears storage, so
+  // clearing the cart on a placed order / logout also clears the saved copy (M-3).
+  useEffect(() => {
+    if (!cartHydrated) return;
+    void cartRepository.save(cart);
+  }, [cart, cartHydrated]);
 
   async function handleAuthenticated(result: AuthResult, notice?: string) {
     await saveTokens(result);

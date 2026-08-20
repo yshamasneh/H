@@ -33,6 +33,7 @@
   "pushPermissionDenied": "Notification permission was not granted.",
   "pushProjectIdMissing": "EAS project ID is required before push notifications can be enabled.",
   "networkError": "Could not reach the server. Check your internet connection.",
+  "requestTimeout": "The request took too long. Please check your connection and try again.",
   "invalidResponse": "The server returned an invalid response.",
   "requestFailed": "The request could not be completed.",
   "restartRequiredTitle": "Restart required",

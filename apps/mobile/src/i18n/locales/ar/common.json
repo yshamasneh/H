@@ -33,6 +33,7 @@
   "pushPermissionDenied": "لم يتم منح إذن الإشعارات.",
   "pushProjectIdMissing": "معرّف مشروع EAS مطلوب قبل تفعيل الإشعارات الفورية.",
   "networkError": "تعذّر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.",
+  "requestTimeout": "استغرق الطلب وقتًا طويلًا. تحقق من اتصالك وحاول مرة أخرى.",
   "invalidResponse": "استجاب الخادم برد غير صالح.",
   "requestFailed": "تعذّر إتمام الطلب.",
   "restartRequiredTitle": "إعادة تشغيل مطلوبة",

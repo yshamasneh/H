@@ -62,8 +62,18 @@ export class OrdersService {
   ) {}
 
   async createOrder(customerId: string, input: CreateOrderDto): Promise<OrderDetailView> {
+    const idempotencyKey = input.idempotencyKey ?? null;
+    // Fast path: a retry of a checkout that already succeeded returns the original order
+    // without re-running the transaction (and so without touching stock again).
+    if (idempotencyKey) {
+      const existing = await this.findOrderByIdempotencyKey(customerId, idempotencyKey);
+      if (existing) return existing;
+    }
+
     const emitter = new DeferredEmitter(this.realtime);
-    const order = await this.prisma.$transaction(async (tx) => {
+    let order: OrderWithRelations;
+    try {
+      order = await this.prisma.$transaction(async (tx) => {
       const quote = await this.calculateOrderQuote(tx, input);
       const { restaurant, itemsData } = quote;
       const inventoryReservations = await this.reserveTrackedInventory(tx, quote.inventoryReservations);
@@ -75,6 +85,7 @@ export class OrdersService {
       const created = await tx.order.create({
         data: {
           customerId,
+          idempotencyKey,
           restaurantId: restaurant.id,
           status: OrderStatus.PLACED,
           paymentMethod: input.paymentMethod,
@@ -124,13 +135,31 @@ export class OrdersService {
         relatedEntityId: created.id
       });
       return { ...created, statusHistory: await tx.orderStatusHistory.findMany({ where: { orderId: created.id } }) };
-    });
+      });
+    } catch (error) {
+      // A concurrent duplicate lost the (customerId, idempotencyKey) unique-index race. The
+      // transaction rolled back — including its stock reservation — so return the winning order
+      // rather than surfacing the constraint error.
+      if (idempotencyKey && isUniqueConstraintViolation(error)) {
+        const existing = await this.findOrderByIdempotencyKey(customerId, idempotencyKey);
+        if (existing) return existing;
+      }
+      throw error;
+    }
     emitter.flush();
 
     this.realtime.emitToRestaurant(order.restaurantId, "order.created", { orderId: order.id });
     this.realtime.emitToAdmins("order.created", { orderId: order.id, restaurantId: order.restaurantId, totalMinor: order.totalMinor });
 
     return toOrderDetailView(order);
+  }
+
+  private async findOrderByIdempotencyKey(customerId: string, idempotencyKey: string): Promise<OrderDetailView | null> {
+    const existing = await this.prisma.order.findUnique({
+      where: { customerId_idempotencyKey: { customerId, idempotencyKey } },
+      include: orderInclude
+    });
+    return existing ? toOrderDetailView(existing) : null;
   }
 
   async quoteOrder(input: CreateOrderDto): Promise<OrderQuoteView> {
@@ -462,19 +491,16 @@ export class OrdersService {
             reason: "Unused original quantity released after packed-quantity approval"
           });
         }
-        const originalLineTotal = adjustment.orderItem.priceMinorSnapshot * adjustment.orderItem.quantity;
-        const subtotalMinor = order.subtotalMinor - originalLineTotal + adjustment.lineTotalMinor;
-        await tx.order.update({
-          where: { id: order.id },
-          data: {
-            subtotalMinor,
-            totalMinor: Math.max(0, subtotalMinor + order.deliveryFeeMinor - order.discountMinor)
-          }
-        });
         await tx.fulfillmentAdjustment.update({
           where: { id: adjustment.id },
           data: { status: FulfillmentAdjustmentStatus.APPROVED, decidedAt: new Date() }
         });
+        // Re-derive the whole price after the substitution, not just the subtotal: a
+        // percentage promotion's amount is a function of the subtotal, so keeping the old
+        // absolute discount would over/under-charge against the promo's actual terms. We
+        // re-run the same promotion engine used at order creation, over the new effective
+        // lines and subtotal, using the offers that applied to this order.
+        await this.recomputeOrderPricingAfterAdjustment(tx, order);
       }
 
       await createBusinessNotification(tx, emitter, {
@@ -492,6 +518,55 @@ export class OrdersService {
 
     this.realtime.emitToOrder(orderId, "order.fulfillment.changed", { orderId });
     return toOrderDetailView(updated!);
+  }
+
+  /**
+   * Recomputes an order's subtotal, discount split and total after a fulfillment adjustment is
+   * approved. Runs the same promotion engine used at order creation over the new effective
+   * lines, so a percentage discount tracks the new subtotal instead of being frozen at its
+   * original amount. The offers are re-fetched by the ids recorded in the order's promotion
+   * snapshot, so the order's commercial terms stay the ones that applied when it was placed
+   * (an offer that has since expired or been deleted simply no longer contributes).
+   */
+  private async recomputeOrderPricingAfterAdjustment(
+    tx: Prisma.TransactionClient,
+    order: { id: string; deliveryFeeMinor: number; promotionSnapshot: Prisma.JsonValue | null }
+  ): Promise<void> {
+    const items = await tx.orderItem.findMany({
+      where: { orderId: order.id },
+      include: { fulfillmentAdjustment: true }
+    });
+    const lines = items.map((item) => {
+      const adjustment = item.fulfillmentAdjustment;
+      if (adjustment?.status === FulfillmentAdjustmentStatus.APPROVED) {
+        return { menuItemId: adjustment.replacementMenuItemId ?? item.menuItemId, amountMinor: adjustment.lineTotalMinor };
+      }
+      return { menuItemId: item.menuItemId, amountMinor: item.priceMinorSnapshot * item.quantity };
+    });
+    const subtotalMinor = lines.reduce((sum, line) => sum + line.amountMinor, 0);
+
+    const offerIds = parsePromotionSnapshot(order.promotionSnapshot).map((promotion) => promotion.offerId);
+    const offers = offerIds.length > 0 ? await tx.offer.findMany({ where: { id: { in: offerIds } } }) : [];
+    const promotion = calculatePromotionDiscounts({
+      offers,
+      // Each effective line is passed as a single unit priced at its line total, so the
+      // per-item discount math is faithful without having to model variable-weight quantities.
+      items: lines.map((line) => ({ menuItemId: line.menuItemId, priceMinor: line.amountMinor, quantity: 1 })),
+      subtotalMinor,
+      deliveryFeeMinor: order.deliveryFeeMinor
+    });
+
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        subtotalMinor,
+        merchandiseDiscountMinor: promotion.merchandiseDiscountMinor,
+        deliveryDiscountMinor: promotion.deliveryDiscountMinor,
+        discountMinor: promotion.discountMinor,
+        promotionSnapshot: promotion.appliedPromotions as unknown as Prisma.InputJsonValue,
+        totalMinor: Math.max(0, subtotalMinor + order.deliveryFeeMinor - promotion.discountMinor)
+      }
+    });
   }
 
   async updateStatusForRestaurantOwner(
@@ -974,6 +1049,10 @@ export class OrdersService {
 
 function orderNotFound(): ApiException {
   return new ApiException(404, "ORDER_NOT_FOUND", "This order does not exist.");
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
 function invalidTransition(from: OrderStatus, to: OrderStatus): ApiException {

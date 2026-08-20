@@ -5,6 +5,7 @@ import {
   FulfillmentAdjustmentStatus,
   OrderPaymentMethod,
   OrderStatus,
+  Prisma,
   RestaurantStatus
 } from "../../generated/prisma/client";
 import { FakeAccountingStore } from "../../accounting/testing/fake-accounting-prisma";
@@ -81,6 +82,7 @@ type OrderRecord = {
   merchandiseDiscountMinor: number;
   deliveryDiscountMinor: number;
   promotionSnapshot: unknown;
+  idempotencyKey: string | null;
   totalMinor: number;
   acceptedByUserId: string | null;
   acceptedAt: Date | null;
@@ -237,6 +239,10 @@ export class FakeOrdersPrisma {
     };
 
     this.offer.findMany = async ({ where }: any) => {
+      // Re-fetch by id (used when re-deriving discounts after a substitution).
+      if (where?.id?.in) {
+        return this.offers.filter((offer) => where.id.in.includes(offer.id));
+      }
       const now = new Date();
       return this.offers.filter((offer) =>
         (!where?.isActive || offer.isActive) &&
@@ -247,10 +253,22 @@ export class FakeOrdersPrisma {
     };
 
     this.order.create = async ({ data }: any) => {
+      // Model the (customerId, idempotencyKey) unique index — NULL keys don't collide.
+      if (
+        data.idempotencyKey != null &&
+        this.orders.some((existing) => existing.customerId === data.customerId && existing.idempotencyKey === data.idempotencyKey)
+      ) {
+        throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+          code: "P2002",
+          clientVersion: "test",
+          meta: { target: ["customerId", "idempotencyKey"] }
+        });
+      }
       const now = new Date();
       const order: OrderRecord = {
         id: data.id ?? randomUUID(),
         customerId: data.customerId,
+        idempotencyKey: data.idempotencyKey ?? null,
         restaurantId: data.restaurantId,
         status: data.status ?? OrderStatus.PLACED,
         paymentMethod: data.paymentMethod,
@@ -294,7 +312,13 @@ export class FakeOrdersPrisma {
     };
 
     this.order.findUnique = async ({ where }: any) => {
-      const order = this.orders.find((candidate) => candidate.id === where.id);
+      const order = where.customerId_idempotencyKey
+        ? this.orders.find(
+            (candidate) =>
+              candidate.customerId === where.customerId_idempotencyKey.customerId &&
+              candidate.idempotencyKey === where.customerId_idempotencyKey.idempotencyKey
+          )
+        : this.orders.find((candidate) => candidate.id === where.id);
       return order ? this.hydrateOrder(order) : null;
     };
 
@@ -330,6 +354,10 @@ export class FakeOrdersPrisma {
       if (data.status !== undefined) order.status = data.status;
       if (data.subtotalMinor !== undefined) order.subtotalMinor = data.subtotalMinor;
       if (data.totalMinor !== undefined) order.totalMinor = data.totalMinor;
+      if (data.merchandiseDiscountMinor !== undefined) order.merchandiseDiscountMinor = data.merchandiseDiscountMinor;
+      if (data.deliveryDiscountMinor !== undefined) order.deliveryDiscountMinor = data.deliveryDiscountMinor;
+      if (data.discountMinor !== undefined) order.discountMinor = data.discountMinor;
+      if (data.promotionSnapshot !== undefined) order.promotionSnapshot = data.promotionSnapshot;
       order.updatedAt = new Date();
       return this.hydrateOrder(order);
     };
