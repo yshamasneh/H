@@ -560,8 +560,9 @@ async function cleanupTestActors(prisma: PrismaService): Promise<void> {
 function assertSafeE2eDatabase(databaseUrl: string): void {
   const parsed = new URL(databaseUrl);
   const databaseName = parsed.pathname.replace(/^\//, "").toLowerCase();
-  const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
-  if (!localHosts.has(parsed.hostname) && !databaseName.includes("test")) {
-    throw new Error("Phase 13 E2E requires a local database or a database whose name contains 'test'.");
+  // Required unconditionally, even on localhost — the dev DATABASE_URL also points at localhost,
+  // and this suite deletes/mutates real rows. A local host is not evidence of a safe database.
+  if (!databaseName.includes("test")) {
+    throw new Error("Phase 13 E2E requires a database whose name contains 'test'.");
   }
 }

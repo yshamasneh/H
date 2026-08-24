@@ -25,10 +25,11 @@ test(
 
     const databaseUrl = app.get(ConfigService).getOrThrow<string>("DATABASE_URL");
     const parsed = new URL(databaseUrl);
-    const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
-    if (!localHosts.has(parsed.hostname) && !parsed.pathname.toLowerCase().includes("test")) {
+    // Required unconditionally, even on localhost — the dev DATABASE_URL also points at localhost,
+    // and this suite deletes/mutates real rows. A local host is not evidence of a safe database.
+    if (!parsed.pathname.toLowerCase().includes("test")) {
       await app.close();
-      throw new Error("This E2E requires a local database or one whose name contains 'test'.");
+      throw new Error("This E2E requires a database whose name contains 'test'.");
     }
 
     const cleanup = async () => {
