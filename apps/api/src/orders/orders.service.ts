@@ -383,6 +383,16 @@ export class OrdersService {
       }
 
       const unitPriceMinor = replacement?.priceMinor ?? orderItem.priceMinorSnapshot;
+      // The cost of what will actually be packed, frozen here for the same reason the price is:
+      // a substitution changes which product's cost applies, and a re-weighed line changes how
+      // much of it applies. Computing this later from the order item would value the margin
+      // against the product and quantity the customer originally asked for, not the one that
+      // left the shelf. Null stays null — an unrecorded cost is reported, never guessed at.
+      const unitCostMinor = replacement ? replacement.costPriceMinor : orderItem.costPriceMinorSnapshot;
+      const costSnapshot = {
+        unitCostMinor,
+        lineCostMinor: unitCostMinor === null ? null : lineAmount(unitCostMinor, actualQuantityMilli)
+      };
       await tx.fulfillmentAdjustment.upsert({
         where: { orderItemId: orderItem.id },
         create: {
@@ -393,7 +403,8 @@ export class OrdersService {
           replacementUnitLabelSnapshot: replacement?.unitLabel ?? null,
           actualQuantityMilli,
           unitPriceMinor,
-          lineTotalMinor: Math.floor(unitPriceMinor * actualQuantityMilli / 1_000),
+          lineTotalMinor: lineAmount(unitPriceMinor, actualQuantityMilli),
+          ...costSnapshot,
           note: input.note?.trim() || null
         },
         update: {
@@ -403,7 +414,8 @@ export class OrdersService {
           replacementUnitLabelSnapshot: replacement?.unitLabel ?? null,
           actualQuantityMilli,
           unitPriceMinor,
-          lineTotalMinor: Math.floor(unitPriceMinor * actualQuantityMilli / 1_000),
+          lineTotalMinor: lineAmount(unitPriceMinor, actualQuantityMilli),
+          ...costSnapshot,
           status: FulfillmentAdjustmentStatus.PENDING,
           note: input.note?.trim() || null,
           decidedAt: null
@@ -860,6 +872,17 @@ export class OrdersService {
           `${menuItem.name} does not have enough stock for the requested quantity.`
         );
       }
+      // Selling a supermarket product with no recorded cost would silently misallocate the money:
+      // the goods cost reads as zero, the whole retail value is counted as margin and split
+      // 40/30/30, and the order still reconciles exactly — so nothing downstream can detect it.
+      // Refusing the sale is the fail-closed guard; MenuService stops the data being created.
+      if (restaurant.businessType === BusinessType.SUPERMARKET && menuItem.costPriceMinor === null) {
+        throw new ApiException(
+          409,
+          "ORDER_ITEM_COST_PRICE_MISSING",
+          `${menuItem.name} is not available for ordering right now. Please review your cart.`
+        );
+      }
     }
 
     let subtotalMinor = 0;
@@ -1065,6 +1088,16 @@ function formatPrice(priceMinor: number): string {
 
 function reservedUnits(actualQuantityMilli: number): number {
   return Math.max(1, Math.ceil(actualQuantityMilli / 1_000));
+}
+
+/**
+ * A line amount for a packed quantity expressed in milli-units.
+ *
+ * Price and cost are rounded the same way — down — so a re-weighed line can never cost the
+ * platform more than it charges purely because the two used different rounding.
+ */
+function lineAmount(unitAmountMinor: number, actualQuantityMilli: number): number {
+  return Math.floor((unitAmountMinor * actualQuantityMilli) / 1_000);
 }
 
 function orderStatusNotificationTitle(status: OrderStatus): string {

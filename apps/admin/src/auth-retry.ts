@@ -1,8 +1,8 @@
 /**
  * Pure, dependency-injected "refresh the token on a 401 and replay once" coordination for
  * the admin web client — the counterpart to the mobile app's core/auth-retry.ts. Kept free
- * of `import.meta` / `localStorage` / `fetch` so it can be unit-tested directly
- * (auth-retry.test.ts); api.ts wires it to `fetch` and the localStorage-backed token store.
+ * of `import.meta` / Web Storage / `fetch` so it can be unit-tested directly
+ * (auth-retry.test.ts); api.ts wires it to `fetch` and the sessionStorage-backed token store.
  */
 
 /** Collapses concurrent refresh attempts into one shared in-flight call (no refresh storm). */

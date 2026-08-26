@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { AdminAccountingController } from "../../accounting/admin-accounting.controller";
+import { BusinessAccountingController } from "../../accounting/business-accounting.controller";
 import { AdminAuditLogController } from "../../admin/admin-audit-log.controller";
 import { AdminDashboardController } from "../../admin/admin-dashboard.controller";
 import { AdminUsersController } from "../../admin/admin-users.controller";
@@ -96,6 +98,43 @@ test("acting on a business order requires MANAGE_ORDERS while viewing requires o
   assert.deepEqual(methodPermissions(RestaurantOrdersController, "proposeFulfillment"), ["MANAGE_ORDERS"]);
 });
 
+test("reading the books and moving money are separate authorities", () => {
+  // The accounting controller is the most financially sensitive surface on the platform: it can
+  // accept a driver's cash, pay a partner, approve a cost, and change the rates every future
+  // order is valued against. VIEW_ACCOUNTING gets someone through the door and nothing more —
+  // every write names its own permission, and these assertions are what stop one going missing.
+  assert.ok(usesPermissionsGuard(AdminAccountingController), "AdminAccountingController must apply PermissionsGuard");
+  assert.deepEqual(classPermissions(AdminAccountingController), ["VIEW_ACCOUNTING"]);
+
+  const expected: [string, Permission[]][] = [
+    ["recordCashSettlement", ["RECEIVE_DRIVER_CASH"]],
+    ["decideOperatingCost", ["APPROVE_OPERATING_COSTS"]],
+    ["recordPartnerSettlement", ["MANAGE_SETTLEMENTS"]],
+    ["recordAdjustment", ["MANAGE_SETTLEMENTS"]],
+    ["generateSubscriptions", ["MANAGE_ACCOUNTING_SETTINGS"]],
+    ["createRateSet", ["MANAGE_ACCOUNTING_SETTINGS"]]
+  ];
+  for (const [method, permissions] of expected) {
+    assert.deepEqual(methodPermissions(AdminAccountingController, method), permissions, method);
+  }
+
+  // Reads inherit the class-level VIEW_ACCOUNTING and must not silently carry a write permission.
+  for (const method of ["getOverview", "listBalances", "listDriverCash", "listRateSets"]) {
+    assert.equal(methodPermissions(AdminAccountingController, method), undefined, method);
+  }
+});
+
+test("a business may propose an operating cost but never decide one", () => {
+  // The supermarket side reports and requests; the platform approves. A business-scoped route
+  // holding APPROVE_OPERATING_COSTS would let a partner sign off its own rent.
+  assert.ok(usesPermissionsGuard(BusinessAccountingController));
+  assert.deepEqual(classPermissions(BusinessAccountingController), ["PROPOSE_OPERATING_COSTS"]);
+
+  for (const method of ["list", "propose"]) {
+    assert.equal(methodPermissions(BusinessAccountingController, method), undefined, method);
+  }
+});
+
 test("stock, supplier, and purchasing routes require MANAGE_INVENTORY", () => {
   assert.ok(usesPermissionsGuard(InventoryController));
   assert.deepEqual(classPermissions(InventoryController), ["MANAGE_INVENTORY"]);
@@ -121,6 +160,8 @@ test("every permission a route requires exists in the catalogue", () => {
     AdminOffersController,
     AdminRestaurantsController,
     AdminOrdersController,
+    AdminAccountingController,
+    BusinessAccountingController,
     RestaurantPortalController,
     RestaurantOrdersController,
     InventoryController

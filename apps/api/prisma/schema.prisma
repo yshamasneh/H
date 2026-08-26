@@ -640,6 +640,14 @@ model FulfillmentAdjustment {
   actualQuantityMilli          Int
   unitPriceMinor               Int
   lineTotalMinor               Int
+  /// What the effective product costs the store, and what this line's packed quantity costs in
+  /// total — frozen at proposal time exactly like `unitPriceMinor`/`lineTotalMinor` beside them.
+  /// Without these the supermarket margin would still be computed from the *originally ordered*
+  /// product and quantity, so a substitution or a re-weighed line would move the retail side and
+  /// leave the cost side behind. Null when the product had no recorded cost price, which the
+  /// financial record reports as provisional rather than treating as a zero cost.
+  unitCostMinor                Int?
+  lineCostMinor                Int?
   status                       FulfillmentAdjustmentStatus @default(PENDING)
   note                         String?
   decidedAt                    DateTime?

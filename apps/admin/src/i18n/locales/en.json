@@ -56,7 +56,7 @@
     "BUSINESS_STAFF": "Business Account"
   },
   "layout": {
-    "brandTitle": "TasawaQ Ops",
+    "brandTitle": "JOVO Ops",
     "brandSubtitle": "Operations Console",
     "nav": {
       "dashboard": "Dashboard",
@@ -81,7 +81,7 @@
     }
   },
   "login": {
-    "title": "TasawaQ Ops",
+    "title": "JOVO Ops",
     "subtitle": "Sign in with an administrator account",
     "phoneLabel": "Phone number",
     "passwordLabel": "Password",
@@ -415,7 +415,10 @@
       "operatingCosts": "Approved operating costs",
       "pendingCosts": "Costs awaiting a decision",
       "imbalance": "Ledger check",
-      "balanced": "Balanced"
+      "balanced": "Balanced",
+      "costDataIncomplete": "Orders missing a cost price",
+      "costDataComplete": "All costs recorded",
+      "costDataIncompleteWarning": "{{count}} order(s) were valued without a cost price on at least one line. Those orders balance, but the goods cost was counted as zero and the whole retail value was split as margin — so the supermarket was underpaid and the platform owners overpaid. Add cost prices to the affected products, then record a financial adjustment for each order."
     },
     "payeeType": {
       "PARTNER": "Partner",

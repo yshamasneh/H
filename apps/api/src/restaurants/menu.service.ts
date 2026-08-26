@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ApiException } from "../common/api.exception";
-import type { MenuCategory, MenuItem } from "../generated/prisma/client";
+import { BusinessType, type MenuCategory, type MenuItem } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import type {
   CreateMenuCategoryDto,
@@ -71,6 +71,9 @@ export class MenuService {
     await this.requireOwnCategory(restaurantId, input.categoryId);
     await this.assertSkuAvailable(restaurantId, input.sku);
     await this.assertBarcodeAvailable(restaurantId, input.barcode);
+    if (await this.isSupermarket(restaurantId)) {
+      assertSupermarketCostPrice(input.costPriceMinor);
+    }
     const item = await this.prisma.menuItem.create({
       data: {
         restaurantId,
@@ -119,6 +122,12 @@ export class MenuService {
     }
     await this.assertSkuAvailable(restaurantId, input.sku, item.id);
     await this.assertBarcodeAvailable(restaurantId, input.barcode, item.id);
+    // A supermarket product's cost is what the whole margin split is computed from, so it may be
+    // corrected but never cleared. Unrelated edits (a rename, a stock change) are left alone —
+    // only an explicit attempt to blank the cost is refused.
+    if (input.costPriceMinor === null && (await this.isSupermarket(restaurantId))) {
+      assertSupermarketCostPrice(null);
+    }
     const updated = await this.prisma.menuItem.update({
       where: { id: item.id },
       data: {
@@ -183,6 +192,22 @@ export class MenuService {
     const item = await this.requireOwnItem(restaurantId, itemId);
     const updated = await this.prisma.menuItem.update({ where: { id: item.id }, data: { isAvailable } });
     return toItemView(updated);
+  }
+
+  /**
+   * Whether this business is a supermarket, which is what decides if a cost price is mandatory.
+   *
+   * A business that cannot be found is treated as not a supermarket: this guard exists to stop
+   * bad catalogue data being created, and the fail-closed guard that actually protects the money
+   * is the one in `OrdersService.calculateOrderQuote`, which refuses to *sell* a supermarket
+   * product with no recorded cost.
+   */
+  private async isSupermarket(restaurantId: string): Promise<boolean> {
+    const restaurant = await this.prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { businessType: true }
+    });
+    return restaurant?.businessType === BusinessType.SUPERMARKET;
   }
 
   private async requireOwnCategory(restaurantId: string, categoryId: string): Promise<MenuCategory> {
@@ -274,6 +299,25 @@ export class MenuService {
     if (existing) {
       throw new ApiException(409, "MENU_ITEM_BARCODE_EXISTS", "This barcode is already used by another product in this store.");
     }
+  }
+}
+
+/**
+ * A supermarket product must carry what the platform paid for it.
+ *
+ * The supermarket vertical pays the partner the cost of the goods outright and then splits the
+ * margin (retail minus cost) three ways. With no cost recorded, `summariseGoodsCost` treats the
+ * cost as zero, the entire retail value is counted as margin, and the partner is paid roughly 40%
+ * of retail instead of cost plus their share — while the order still reconciles exactly, so
+ * nothing downstream can notice. Requiring it here is what stops that data existing at all.
+ */
+function assertSupermarketCostPrice(costPriceMinor: number | null | undefined): void {
+  if (costPriceMinor === null || costPriceMinor === undefined) {
+    throw new ApiException(
+      400,
+      "SUPERMARKET_COST_PRICE_REQUIRED",
+      "Enter what this product costs the store. A supermarket product without a cost price cannot be priced or paid out correctly."
+    );
   }
 }
 

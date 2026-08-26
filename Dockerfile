@@ -21,6 +21,10 @@ RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production
+# Store opening hours are compared against the server's local wall clock (isWithinWeeklyHours
+# reads Date#getHours), so the container must run on Palestinian local time. Without this a
+# base image defaults to UTC and every store would open and close 2-3 hours late.
+ENV TZ=Asia/Hebron
 WORKDIR /app/apps/api
 COPY --from=production-dependencies --chown=node:node /app/node_modules /app/node_modules
 COPY --from=build --chown=node:node /app/apps/api/dist ./dist

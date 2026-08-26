@@ -34,7 +34,7 @@ class CapturingOtpProvider implements OtpProvider {
   }
 }
 
-function createContext() {
+function createContext(configOverrides: Record<string, unknown> = {}) {
   const prisma = new FakePrisma();
   const otp = new CapturingOtpProvider();
   const config = new ConfigService({
@@ -46,7 +46,8 @@ function createContext() {
     OTP_EXPIRATION_MINUTES: 5,
     OTP_RESEND_COOLDOWN_SECONDS: 60,
     OTP_MAX_ATTEMPTS: 5,
-    PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES: 10
+    PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES: 10,
+    ...configOverrides
   });
   const authorization = new AuthorizationService(prisma as never);
   const auth = new AuthService(prisma as never, config, new JwtService(), authorization, otp);
@@ -389,6 +390,116 @@ test("a password reset bumps tokenVersion and revokes every live session (TC-025
   assert.equal(context.prisma.users[0].tokenVersion, 1);
   assert.ok(context.prisma.sessions[0].revokedAt, "existing sessions are revoked on reset");
 });
+
+/**
+ * Daily OTP ceilings.
+ *
+ * These are cost controls, not security controls. The 60-second resend cooldown caps one number
+ * on one flow to about a code a minute and caps nothing at all across many numbers — so with a
+ * paid SMS gateway behind the webhook, send volume is an unbounded invoice that an attacker pays
+ * nothing to run up. Both ceilings count codes actually sent, across every purpose, over a
+ * rolling 24 hours.
+ */
+
+/** Clears the per-phone cooldown so a test can exercise the daily ceiling behind it. */
+function clearCooldown(context: ReturnType<typeof createContext>): void {
+  for (const challenge of context.prisma.challenges) {
+    challenge.resendAvailableAt = new Date(Date.now() - 1);
+  }
+}
+
+test("one number cannot be sent more than its daily allowance of codes", async () => {
+  const context = createContext({ OTP_MAX_PER_PHONE_PER_DAY: 3 });
+
+  for (let sent = 0; sent < 3; sent += 1) {
+    await context.auth.requestCustomerSignupCode(signupInput);
+    clearCooldown(context);
+  }
+  assert.equal(context.otp.deliveries.length, 3);
+
+  await assert.rejects(
+    context.auth.requestCustomerSignupCode(signupInput),
+    hasCode("OTP_DAILY_LIMIT_REACHED")
+  );
+  assert.equal(context.otp.deliveries.length, 3, "the refused request costs nothing to send");
+});
+
+test("the daily allowance counts every flow, because every code costs the same to send", async () => {
+  // Signup and password reset have separate resend cooldowns, so without a shared ceiling one
+  // number could be used to send twice as many messages by alternating between them.
+  const context = createContext({ OTP_MAX_PER_PHONE_PER_DAY: 2 });
+  await seedUser(context, "0591234567");
+
+  await context.auth.requestPasswordResetCode({ countryCode: "+970", phoneNumber: "0591234567" });
+  clearCooldown(context);
+  await context.auth.requestPasswordResetCode({ countryCode: "+970", phoneNumber: "0591234567" });
+  clearCooldown(context);
+
+  await assert.rejects(
+    context.auth.requestPasswordResetCode({ countryCode: "+970", phoneNumber: "0591234567" }),
+    hasCode("OTP_DAILY_LIMIT_REACHED")
+  );
+});
+
+test("a busy number does not stop a different number receiving its code", async () => {
+  const context = createContext({ OTP_MAX_PER_PHONE_PER_DAY: 1 });
+
+  await context.auth.requestCustomerSignupCode(signupInput);
+  clearCooldown(context);
+  await assert.rejects(
+    context.auth.requestCustomerSignupCode(signupInput),
+    hasCode("OTP_DAILY_LIMIT_REACHED")
+  );
+
+  const neighbour = await context.auth.requestCustomerSignupCode({ ...signupInput, phoneNumber: "0597654321" });
+  assert.equal(neighbour.phone, "+970597654321", "the ceiling is per number, not global");
+});
+
+test("a platform-wide send ceiling stops the bill running away, without naming itself", async () => {
+  const context = createContext({ OTP_MAX_PER_PHONE_PER_DAY: 50, OTP_MAX_GLOBAL_PER_DAY: 2 });
+
+  await context.auth.requestCustomerSignupCode({ ...signupInput, phoneNumber: "0591111111" });
+  await context.auth.requestCustomerSignupCode({ ...signupInput, phoneNumber: "0592222222" });
+
+  const refused = await context.auth
+    .requestCustomerSignupCode({ ...signupInput, phoneNumber: "0593333333" })
+    .then(() => null)
+    .catch((error: unknown) => error as ApiException);
+
+  assert.ok(refused instanceof ApiException);
+  const body = refused.getResponse() as { code?: string; message?: string };
+  assert.equal(body.code, "OTP_TEMPORARILY_UNAVAILABLE");
+  assert.equal(refused.getStatus(), 503, "a platform limit is the platform's problem, not a 429 at the caller");
+  // The caller must not learn the platform's send volume or how close they came to the ceiling.
+  assert.match(body.message ?? "", /temporarily unavailable/i);
+  assert.doesNotMatch(body.message ?? "", /\d/, "no counts or limits leak into the message");
+  assert.equal(context.otp.deliveries.length, 2);
+});
+
+test("the ceilings sit high enough that an ordinary retry never meets them", async () => {
+  // The defaults exist to bound abuse, not to interrupt somebody who mistyped their number.
+  const context = createContext();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await context.auth.requestCustomerSignupCode(signupInput);
+    clearCooldown(context);
+  }
+  assert.equal(context.otp.deliveries.length, 5, "five retries in a row is unremarkable");
+});
+
+async function seedUser(context: ReturnType<typeof createContext>, phoneNumber: string): Promise<void> {
+  context.prisma.users.push({
+    id: `user-${phoneNumber}`,
+    fullName: "Existing Customer",
+    phone: `+970${phoneNumber.replace(/^0/, "")}`,
+    email: null,
+    passwordHash: await hashPassword("Existing@123"),
+    role: UserRole.CUSTOMER,
+    platformRoleId: null,
+    phoneVerifiedAt: new Date(),
+    isActive: true,
+    tokenVersion: 0
+  } as never);
+}
 
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) =>

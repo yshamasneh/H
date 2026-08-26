@@ -29,6 +29,9 @@ type MenuItemRecord = {
   restaurantId: string;
   name: string;
   priceMinor: number;
+  /** Nullable exactly as in the schema: a product created without one carries null, and the
+   *  supermarket order guard exists precisely to refuse selling such a product. */
+  costPriceMinor: number | null;
   isAvailable: boolean;
   unitLabel: string;
   stockQuantity: number | null;
@@ -41,6 +44,9 @@ type OrderItemRecord = {
   menuItemId: string;
   nameSnapshot: string;
   priceMinorSnapshot: number;
+  /** What the goods on this line cost, frozen at order time. Null on a line whose product had no
+   *  cost recorded — which the financial record reports rather than treating as a zero cost. */
+  costPriceMinorSnapshot: number | null;
   quantity: number;
   unitLabelSnapshot: string;
   allowSubstitution: boolean;
@@ -57,6 +63,10 @@ type FulfillmentAdjustmentRecord = {
   actualQuantityMilli: number;
   unitPriceMinor: number;
   lineTotalMinor: number;
+  /** Frozen alongside the price: what the packed product costs, and what this packed quantity
+   *  costs in total. Null when the effective product had no recorded cost price. */
+  unitCostMinor: number | null;
+  lineCostMinor: number | null;
   status: FulfillmentAdjustmentStatus;
   note: string | null;
   decidedAt: Date | null;
@@ -301,6 +311,7 @@ export class FakeOrdersPrisma {
           menuItemId: itemData.menuItemId,
           nameSnapshot: itemData.nameSnapshot,
           priceMinorSnapshot: itemData.priceMinorSnapshot,
+          costPriceMinorSnapshot: itemData.costPriceMinorSnapshot ?? null,
           quantity: itemData.quantity,
           unitLabelSnapshot: itemData.unitLabelSnapshot ?? "item",
           allowSubstitution: itemData.allowSubstitution ?? false,
@@ -422,6 +433,8 @@ export class FakeOrdersPrisma {
         actualQuantityMilli: create.actualQuantityMilli,
         unitPriceMinor: create.unitPriceMinor,
         lineTotalMinor: create.lineTotalMinor,
+        unitCostMinor: create.unitCostMinor ?? null,
+        lineCostMinor: create.lineCostMinor ?? null,
         status: create.status ?? FulfillmentAdjustmentStatus.PENDING,
         note: create.note ?? null,
         decidedAt: create.decidedAt ?? null,
@@ -613,11 +626,21 @@ export class FakeOrdersPrisma {
   }
 
   seedMenuItem(restaurantId: string, overrides: Partial<MenuItemRecord> = {}): MenuItemRecord {
+    const priceMinor = overrides.priceMinor ?? 1_500;
+    // A supermarket product always carries a cost price in production — MenuService refuses to
+    // create one without it, and OrdersService refuses to sell one — so the fixture defaults the
+    // same way rather than modelling a state the system no longer allows. 60% of retail gives a
+    // predictable 40% margin for the worked examples. A test that wants the missing-cost case
+    // passes `costPriceMinor: null` explicitly.
+    const isSupermarket =
+      this.restaurants.find((candidate) => candidate.id === restaurantId)?.businessType ===
+      BusinessType.SUPERMARKET;
     const item: MenuItemRecord = {
       id: randomUUID(),
       restaurantId,
       name: "Falafel Sandwich",
-      priceMinor: 1500,
+      priceMinor,
+      costPriceMinor: isSupermarket ? Math.round(priceMinor * 0.6) : null,
       isAvailable: true,
       unitLabel: "item",
       stockQuantity: null,

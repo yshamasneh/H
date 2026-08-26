@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ConfigService } from "@nestjs/config";
 import { ApiException } from "../common/api.exception";
-import { RestaurantStatus } from "../generated/prisma/client";
+import { BusinessType, RestaurantStatus } from "../generated/prisma/client";
 import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
 import { MenuService } from "./menu.service";
 import { RestaurantsService } from "./restaurants.service";
@@ -293,6 +293,75 @@ test("one restaurant cannot delete another restaurant's product or category", as
 
   await assert.rejects(menu.deleteItem("restaurant-a", itemB.id), hasCode("MENU_ITEM_NOT_FOUND"));
   await assert.rejects(menu.deleteCategory("restaurant-a", categoryB.id), hasCode("MENU_CATEGORY_NOT_FOUND"));
+});
+
+/**
+ * A supermarket product must carry a cost price.
+ *
+ * The supermarket vertical pays the partner the cost of the goods outright and splits the margin
+ * — retail minus cost — three ways. A product with no recorded cost makes that cost read as zero,
+ * so the whole retail value is treated as margin and split 40/30/30: the partner is paid roughly
+ * 40% of retail instead of cost plus their share. The order still reconciles to the agora, which
+ * is exactly why nothing downstream can notice. These tests keep that data from existing.
+ */
+test("a supermarket product cannot be created without a cost price", async () => {
+  const { prisma, menu } = createServices();
+  const market = prisma.seedApprovedOpenRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const category = await menu.createCategory(market.id, { name: "Produce" });
+
+  await assert.rejects(
+    menu.createItem(market.id, { categoryId: category.id, name: "Tomatoes", priceMinor: 1200 }),
+    hasCode("SUPERMARKET_COST_PRICE_REQUIRED")
+  );
+
+  const created = await menu.createItem(market.id, {
+    categoryId: category.id,
+    name: "Tomatoes",
+    priceMinor: 1200,
+    costPriceMinor: 900
+  });
+  assert.equal(created.costPriceMinor, 900);
+});
+
+test("a restaurant product may still omit its cost price", async () => {
+  // Restaurants are paid merchandise less commission; nothing in that formula reads a cost, so
+  // requiring one there would be a rule with no purpose behind it.
+  const { prisma, menu } = createServices();
+  const kitchen = prisma.seedApprovedOpenRestaurant({ businessType: BusinessType.RESTAURANT });
+  const category = await menu.createCategory(kitchen.id, { name: "Mains" });
+
+  const created = await menu.createItem(kitchen.id, {
+    categoryId: category.id,
+    name: "Shawarma",
+    priceMinor: 2000
+  });
+  assert.equal(created.costPriceMinor, null);
+});
+
+test("a supermarket product's cost may be corrected but never cleared", async () => {
+  const { prisma, menu } = createServices();
+  const market = prisma.seedApprovedOpenRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const category = await menu.createCategory(market.id, { name: "Dairy" });
+  const item = await menu.createItem(market.id, {
+    categoryId: category.id,
+    name: "Milk 1L",
+    priceMinor: 700,
+    costPriceMinor: 500
+  });
+
+  const corrected = await menu.updateItem(market.id, item.id, { costPriceMinor: 550 }, { canManagePrices: true });
+  assert.equal(corrected.costPriceMinor, 550);
+
+  await assert.rejects(
+    menu.updateItem(market.id, item.id, { costPriceMinor: null }, { canManagePrices: true }),
+    hasCode("SUPERMARKET_COST_PRICE_REQUIRED")
+  );
+
+  // An edit that does not touch the cost is unaffected — the rule guards the number, it does not
+  // hold the rest of the product hostage.
+  const renamed = await menu.updateItem(market.id, item.id, { name: "Fresh Milk 1L" }, { canManagePrices: false });
+  assert.equal(renamed.name, "Fresh Milk 1L");
+  assert.equal(renamed.costPriceMinor, 550);
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

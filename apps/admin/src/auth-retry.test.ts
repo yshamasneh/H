@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createRefreshCoordinator, sendWithAuthRetry } from "./auth-retry";
 
-// A minimal localStorage shim so the token-store persistence functions in api.ts can be
-// exercised under node:test (jsdom is not part of this workspace).
+// A minimal Web Storage shim so the token-store persistence functions in api.ts can be
+// exercised under node:test (jsdom is not part of this workspace). Both globals are provided:
+// tokens live in sessionStorage, while the language and alert-sound preferences use
+// localStorage.
 class MemoryStorage {
   private readonly map = new Map<string, string>();
   getItem(key: string) {
@@ -20,6 +22,7 @@ class MemoryStorage {
   }
 }
 (globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage();
+(globalThis as { sessionStorage?: unknown }).sessionStorage = new MemoryStorage();
 
 type FakeResponse = { status: number; token: string | undefined };
 const statusOf = (response: FakeResponse) => response.status;

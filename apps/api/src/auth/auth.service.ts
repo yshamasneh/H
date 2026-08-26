@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
@@ -43,6 +43,8 @@ type CorrectOtp<T> = { incorrect: false; value: T };
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -378,6 +380,7 @@ export class AuthService {
           { retryAfterSeconds: waitSeconds }
         );
       }
+      await this.assertDailySendBudget(transaction, phone, now);
       if (beforeCreate) {
         await beforeCreate(transaction);
       }
@@ -405,6 +408,61 @@ export class AuthService {
       resendAvailableInSeconds: resendSeconds,
       message: "A verification code was created. Check the backend terminal in development."
     };
+  }
+
+  /**
+   * Bound what a day of OTP delivery can cost.
+   *
+   * The resend cooldown is per phone *and* per purpose, so it caps one number to roughly one code
+   * a minute on each of two flows — and caps nothing at all across many numbers. Once a paid SMS
+   * gateway sits behind the webhook that is an unbounded bill: every code is a few agora, the
+   * attacker pays nothing, and per-IP throttling does not survive a distributed source.
+   *
+   * Both ceilings count challenges *created*, across every purpose, over a rolling 24 hours —
+   * one row is written per code sent, so the row count is the send count. They are cost controls
+   * rather than security controls, and are sized so a real person retrying a signup or a reset
+   * never encounters them.
+   */
+  private async assertDailySendBudget(
+    transaction: Prisma.TransactionClient,
+    phone: string,
+    now: Date
+  ): Promise<void> {
+    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const perPhoneLimit = this.numberConfig("OTP_MAX_PER_PHONE_PER_DAY", 10);
+    const globalLimit = this.numberConfig("OTP_MAX_GLOBAL_PER_DAY", 2_000);
+
+    const sentToPhone = await transaction.phoneVerificationChallenge.count({
+      where: { phone, createdAt: { gte: since } }
+    });
+    if (sentToPhone >= perPhoneLimit) {
+      throw new ApiException(
+        429,
+        "OTP_DAILY_LIMIT_REACHED",
+        "Too many verification codes have been requested for this number today. Please try again tomorrow or contact support.",
+        { retryAfterSeconds: retryAfterSeconds(now, since) }
+      );
+    }
+
+    const sentGlobally = await transaction.phoneVerificationChallenge.count({
+      where: { createdAt: { gte: since } }
+    });
+    if (sentGlobally >= globalLimit) {
+      // Deliberately vague to the caller: the platform's own send volume is not their business,
+      // and naming the ceiling would tell an attacker exactly how close they got to it. The
+      // operator sees this as a spike in 503s plus the error-tracking event.
+      this.logger.error({
+        event: "otp_global_daily_limit_reached",
+        sentGlobally,
+        globalLimit,
+        windowStart: since.toISOString()
+      });
+      throw new ApiException(
+        503,
+        "OTP_TEMPORARILY_UNAVAILABLE",
+        "Verification codes are temporarily unavailable. Please try again later."
+      );
+    }
   }
 
   private async requireUsableChallenge(
@@ -563,6 +621,17 @@ export class AuthService {
     }
     throw new ApiException(409, "TRANSACTION_CONFLICT", "Please retry the request.");
   }
+}
+
+/**
+ * How long until the rolling 24-hour window frees a slot.
+ *
+ * The window is rolling rather than calendar-based, so the earliest a blocked caller can succeed
+ * is when the oldest send in the window ages out. Reporting the full window is the honest upper
+ * bound without having to read the oldest row back.
+ */
+function retryAfterSeconds(now: Date, windowStart: Date): number {
+  return Math.max(1, Math.ceil((windowStart.getTime() + 24 * 60 * 60 * 1000 - now.getTime()) / 1000));
 }
 
 function toPublicUser(user: Pick<User, "id" | "fullName" | "phone" | "role">): PublicUser {

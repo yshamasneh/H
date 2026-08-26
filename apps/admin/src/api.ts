@@ -167,22 +167,47 @@ export class ApiError extends Error {
 export const accessTokenStorageKey = "wasel_admin_access_token";
 export const refreshTokenStorageKey = "wasel_admin_refresh_token";
 
+/**
+ * Session storage, not local storage.
+ *
+ * These are the most privileged tokens the platform issues, and a refresh token is good for 30
+ * days. Keeping them in `sessionStorage` means they die with the browser tab rather than sitting
+ * on disk on a shared or unattended machine, and it matches what the mobile web build already
+ * does. Reads are wrapped because a browser configured to block site data throws on access
+ * rather than returning null.
+ */
+function readToken(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeToken(key: string, token: string | null): void {
+  try {
+    if (token) sessionStorage.setItem(key, token);
+    else sessionStorage.removeItem(key);
+  } catch {
+    // A browser that refuses to store leaves the session in memory only; the user signs in again
+    // on the next reload rather than seeing the app fail outright.
+  }
+}
+
 export function getAccessToken(): string | null {
-  return localStorage.getItem(accessTokenStorageKey);
+  return readToken(accessTokenStorageKey);
 }
 
 export function setAccessToken(token: string | null): void {
-  if (token) localStorage.setItem(accessTokenStorageKey, token);
-  else localStorage.removeItem(accessTokenStorageKey);
+  writeToken(accessTokenStorageKey, token);
 }
 
 export function getRefreshToken(): string | null {
-  return localStorage.getItem(refreshTokenStorageKey);
+  return readToken(refreshTokenStorageKey);
 }
 
 export function setRefreshToken(token: string | null): void {
-  if (token) localStorage.setItem(refreshTokenStorageKey, token);
-  else localStorage.removeItem(refreshTokenStorageKey);
+  writeToken(refreshTokenStorageKey, token);
 }
 
 /** Persist a full auth result — both tokens — so the session survives past the 15-minute

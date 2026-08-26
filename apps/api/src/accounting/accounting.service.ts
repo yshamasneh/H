@@ -981,7 +981,7 @@ export class AccountingService {
   // ================================================================================== overview
 
   async getOverview(): Promise<AccountingOverviewView> {
-    const [records, custody, earnings, payouts, approvedCosts, pendingCosts] = await Promise.all([
+    const [records, custody, earnings, payouts, approvedCosts, pendingCosts, costDataIncomplete] = await Promise.all([
       this.prisma.orderFinancialRecord.groupBy({
         by: ["outcome"],
         _count: { _all: true },
@@ -993,7 +993,10 @@ export class AccountingService {
       this.prisma.partnerEarning.aggregate({ _sum: { amountMinor: true } }),
       this.prisma.partnerSettlement.aggregate({ _sum: { amountMinor: true } }),
       this.prisma.operatingCostEntry.aggregate({ where: { status: "APPROVED" }, _sum: { amountMinor: true } }),
-      this.prisma.operatingCostEntry.count({ where: { status: "PROPOSED" } })
+      this.prisma.operatingCostEntry.count({ where: { status: "PROPOSED" } }),
+      // Surfaced deliberately: these records reconcile, so the imbalance figure below reads zero
+      // while the money was still split against a goods cost of zero.
+      this.prisma.orderFinancialRecord.count({ where: { costDataComplete: false } })
     ]);
 
     const deliveredCount = records.find((row) => row.outcome === "DELIVERED")?._count._all ?? 0;
@@ -1018,7 +1021,8 @@ export class AccountingService {
       pendingOperatingCostCount: pendingCosts,
       // Every shekel collected is owed to somebody, less whatever the operating costs consumed.
       // Anything other than zero here means the ledger has drifted and needs looking at.
-      ledgerImbalanceMinor: cashCollectedMinor - approvedOperatingCostMinor - totalEarnedMinor
+      ledgerImbalanceMinor: cashCollectedMinor - approvedOperatingCostMinor - totalEarnedMinor,
+      costDataIncompleteCount: costDataIncomplete
     };
   }
 

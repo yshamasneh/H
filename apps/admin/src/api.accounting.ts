@@ -116,6 +116,8 @@ export type AccountingOverview = {
   approvedOperatingCostMinor: number;
   pendingOperatingCostCount: number;
   ledgerImbalanceMinor: number;
+  /** Orders valued with a missing cost price. These reconcile but split the money wrongly. */
+  costDataIncompleteCount: number;
 };
 
 export type RateSet = {

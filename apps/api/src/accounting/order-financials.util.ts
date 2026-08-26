@@ -91,7 +91,10 @@ export async function resolveCurrentRateSet(tx: Prisma.TransactionClient, at: Da
 }
 
 const orderForFinancialsInclude = {
-  items: true,
+  // The approved adjustment is part of the line: it is what decides which product was actually
+  // packed and how much of it, and therefore what the line really cost. Valuing the order from
+  // the order item alone would price the substitution and cost the original.
+  items: { include: { fulfillmentAdjustment: true } },
   restaurant: { select: { id: true, businessType: true, isPromotionalPartner: true } },
   delivery: { select: { driverId: true, faultParty: true, deliveredAt: true, failedAt: true } }
 } as const;
@@ -303,22 +306,51 @@ export async function writeEarnings(
   });
 }
 
-/** Sum every line's frozen cost, and say whether any line had none recorded. */
-export function summariseGoodsCost(
-  items: { costPriceMinorSnapshot: number | null; quantity: number }[]
-): { totalMinor: number; complete: boolean } {
+/** One order line's cost input: what was ordered, plus whatever adjustment replaced it. */
+export type GoodsCostLine = {
+  costPriceMinorSnapshot: number | null;
+  quantity: number;
+  fulfillmentAdjustment?: {
+    status: string;
+    lineCostMinor: number | null;
+  } | null;
+};
+
+/**
+ * Sum every line's frozen cost, and say whether any line had none recorded.
+ *
+ * An approved fulfillment adjustment supersedes the line entirely: it named the product that was
+ * actually packed and the quantity that was actually weighed, and froze both the price and the
+ * cost of that at proposal time. Reading the order item instead would value a substituted or
+ * re-weighed line against the product and quantity the customer originally asked for — the retail
+ * side would follow the adjustment and the cost side would not, and the margin split three ways
+ * would be wrong on every variable-weight line a supermarket sells.
+ */
+export function summariseGoodsCost(items: GoodsCostLine[]): { totalMinor: number; complete: boolean } {
   let totalMinor = 0;
   let complete = true;
   for (const item of items) {
-    if (item.costPriceMinorSnapshot === null) {
+    const lineCostMinor = effectiveLineCostMinor(item);
+    if (lineCostMinor === null) {
       // Treated as zero cost, which overstates the margin — so the record is flagged rather than
       // read as exact. Silently assuming a cost would be worse than admitting it is missing.
       complete = false;
       continue;
     }
-    totalMinor += item.costPriceMinorSnapshot * item.quantity;
+    totalMinor += lineCostMinor;
   }
   return { totalMinor, complete };
+}
+
+function effectiveLineCostMinor(item: GoodsCostLine): number | null {
+  const adjustment = item.fulfillmentAdjustment;
+  if (adjustment?.status === "APPROVED") {
+    // Null here means the packed product had no recorded cost. That is reported, not fallen back
+    // to the original line's cost, which would be the cost of a product that was never delivered.
+    return adjustment.lineCostMinor;
+  }
+  if (item.costPriceMinorSnapshot === null) return null;
+  return item.costPriceMinorSnapshot * item.quantity;
 }
 
 /** Read the promotion snapshot defensively: it is JSON written by an earlier version of the code. */

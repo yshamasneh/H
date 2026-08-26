@@ -135,6 +135,14 @@ export class FakePrisma {
       challenge.updatedAt = new Date();
       return challenge;
     };
+    // Supports the daily send budget: an optional phone filter plus a createdAt lower bound,
+    // counting across every purpose because the SMS bill does not care which flow sent the code.
+    this.phoneVerificationChallenge.count = async ({ where }: any = {}) =>
+      this.challenges.filter(
+        (item) =>
+          (where?.phone === undefined || item.phone === where.phone) &&
+          (where?.createdAt?.gte === undefined || item.createdAt >= where.createdAt.gte)
+      ).length;
     this.phoneVerificationChallenge.updateMany = async ({ where, data }: any) => {
       const matches = this.challenges.filter((item) =>
         item.phone === where.phone &&

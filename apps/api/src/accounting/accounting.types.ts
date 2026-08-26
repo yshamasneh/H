@@ -204,4 +204,11 @@ export type AccountingOverviewView = {
   pendingOperatingCostCount: number;
   /** cashCollected - operatingCosts - totalEarned. Zero when the ledger is internally consistent. */
   ledgerImbalanceMinor: number;
+  /**
+   * Records valued against at least one line with no recorded cost price. Those orders reconcile
+   * exactly but split the money wrongly — the goods cost counted as zero and the whole retail
+   * value treated as margin — so this is the one drift the imbalance figure cannot show.
+   * Anything above zero needs investigating.
+   */
+  costDataIncompleteCount: number;
 };

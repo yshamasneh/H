@@ -1162,6 +1162,184 @@ test("orders placed without an idempotency key are never deduped (TC-081)", asyn
   assert.equal(prisma.orders.length, 2);
 });
 
+/**
+ * The fail-closed half of the missing-cost-price guard.
+ *
+ * MenuService stops a supermarket product being created without a cost. This is what catches
+ * anything that got in before that rule existed, or through a path that bypasses it: the sale is
+ * refused rather than valued against a goods cost of zero. The customer sees an availability
+ * message, not the platform's internal accounting state.
+ */
+test("a supermarket product with no cost price cannot be sold", async () => {
+  const { prisma, service } = createService();
+  const market = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const uncosted = prisma.seedMenuItem(market.id, { name: "Legacy product", priceMinor: 1_000, costPriceMinor: null });
+
+  await assert.rejects(
+    service.createOrder(randomUUID(), baseInput(market.id, uncosted.id) as never),
+    hasCode("ORDER_ITEM_COST_PRICE_MISSING")
+  );
+  assert.equal(prisma.orders.length, 0, "no order, and therefore no misvalued financial record");
+});
+
+test("a restaurant product with no cost price is still perfectly sellable", async () => {
+  // The restaurant formula is merchandise less commission and never reads a cost, so the guard
+  // must not spread to a vertical where a missing cost means nothing.
+  const { prisma, service } = createService();
+  const kitchen = prisma.seedRestaurant({ businessType: BusinessType.RESTAURANT });
+  const item = prisma.seedMenuItem(kitchen.id, { priceMinor: 1_000, costPriceMinor: null });
+
+  const order = await service.createOrder(randomUUID(), baseInput(kitchen.id, item.id) as never);
+  assert.equal(order.subtotalMinor, 2_000);
+});
+
+test("an order line freezes the cost of the product it was placed against", async () => {
+  const { prisma, service } = createService();
+  const market = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const item = prisma.seedMenuItem(market.id, { priceMinor: 1_000, costPriceMinor: 600 });
+
+  await service.createOrder(randomUUID(), baseInput(market.id, item.id) as never);
+
+  assert.equal(prisma.orderItems[0].costPriceMinorSnapshot, 600);
+});
+
+/**
+ * A fulfillment adjustment must move the cost as well as the price.
+ *
+ * `lineTotalMinor` already froze what the customer pays for the packed line. Until the matching
+ * cost was frozen beside it, the supermarket margin was still computed from the *originally
+ * ordered* product at the *originally ordered* quantity — so the retail side followed the
+ * substitution or the re-weigh and the cost side did not. On a supermarket, where variable-weight
+ * lines are the normal case, that was wrong on most orders.
+ *
+ * Worked example, tomatoes at 12.00/kg costing 9.00/kg:
+ *
+ *   ordered   1 kg   price 12.00   cost 9.00   margin 3.00
+ *   packed  1.3 kg   price 15.60   cost 11.70  margin 3.90
+ *
+ * Before this fix the packed line was priced at 15.60 and costed at 9.00, reporting a 6.60 margin
+ * — 2.70 too much — and splitting that excess 40/30/30 away from the supermarket every time.
+ */
+test("a re-weighed line freezes the cost of what was actually packed", async () => {
+  const { prisma, service } = createService();
+  const market = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const tomatoes = prisma.seedMenuItem(market.id, {
+    name: "Tomatoes",
+    priceMinor: 1_200,
+    costPriceMinor: 900,
+    isVariableWeight: true,
+    stockQuantity: 50
+  });
+  const customerId = randomUUID();
+  const order = await service.createOrder(
+    customerId,
+    baseInput(market.id, tomatoes.id, { items: [{ menuItemId: tomatoes.id, quantity: 1 }] }) as never
+  );
+  assert.equal(order.subtotalMinor, 1_200);
+  assert.equal(prisma.orderItems[0].costPriceMinorSnapshot, 900);
+
+  const proposed = await service.proposeFulfillmentAdjustment(
+    market.ownerUserId,
+    order.id,
+    order.items[0].id,
+    { actualQuantityMilli: 1_300 } as never
+  );
+  const adjustment = prisma.fulfillmentAdjustments.find(
+    (entry) => entry.orderItemId === proposed.items[0].id
+  )!;
+
+  assert.equal(adjustment.unitPriceMinor, 1_200, "the unit price is unchanged; the quantity moved");
+  assert.equal(adjustment.lineTotalMinor, 1_560, "1.3 kg at 12.00/kg");
+  assert.equal(adjustment.unitCostMinor, 900, "the same product, so the same unit cost");
+  assert.equal(adjustment.lineCostMinor, 1_170, "1.3 kg at 9.00/kg — not the 9.00 of the ordered 1 kg");
+
+  const margin = adjustment.lineTotalMinor - adjustment.lineCostMinor!;
+  assert.equal(margin, 390, "3.90 of margin on the packed line, not the 6.60 the old code reported");
+});
+
+test("a substitution freezes the replacement product's cost, not the original's", async () => {
+  // Worked example: 5.00 milk costing 3.00 is replaced by 7.00 milk costing 5.50.
+  //   priced at   7.00 x 2 = 14.00
+  //   costed at   5.50 x 2 = 11.00   -> margin 3.00
+  // Reading the original's cost would have costed it at 3.00 x 2 = 6.00 and claimed 8.00 of
+  // margin: 5.00 too much, taken out of the supermarket's share.
+  const { prisma, service } = createService();
+  const market = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const original = prisma.seedMenuItem(market.id, {
+    name: "Milk 1L",
+    priceMinor: 500,
+    costPriceMinor: 300,
+    stockQuantity: 10
+  });
+  const replacement = prisma.seedMenuItem(market.id, {
+    name: "Milk 1L (other brand)",
+    priceMinor: 700,
+    costPriceMinor: 550,
+    stockQuantity: 10
+  });
+  const customerId = randomUUID();
+  const order = await service.createOrder(
+    customerId,
+    baseInput(market.id, original.id, {
+      items: [{ menuItemId: original.id, quantity: 2, allowSubstitution: true }]
+    }) as never
+  );
+
+  const proposed = await service.proposeFulfillmentAdjustment(
+    market.ownerUserId,
+    order.id,
+    order.items[0].id,
+    { replacementMenuItemId: replacement.id } as never
+  );
+  const adjustment = prisma.fulfillmentAdjustments.find(
+    (entry) => entry.orderItemId === proposed.items[0].id
+  )!;
+
+  assert.equal(adjustment.unitPriceMinor, 700, "the replacement's price");
+  assert.equal(adjustment.lineTotalMinor, 1_400, "2 units at 7.00");
+  assert.equal(adjustment.unitCostMinor, 550, "the replacement's cost, not the original's 3.00");
+  assert.equal(adjustment.lineCostMinor, 1_100, "2 units at 5.50");
+  assert.equal(adjustment.lineTotalMinor - adjustment.lineCostMinor!, 300, "3.00 margin, not 8.00");
+});
+
+test("a proposal against an uncosted product records no cost rather than inventing one", async () => {
+  // Only reachable for a restaurant now that supermarket products must carry a cost, but the
+  // null must still travel through honestly: the financial record reports the line as
+  // provisional instead of treating the cost as zero.
+  const { prisma, service } = createService();
+  const market = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const item = prisma.seedMenuItem(market.id, {
+    priceMinor: 1_000,
+    costPriceMinor: 800,
+    isVariableWeight: true,
+    stockQuantity: 10
+  });
+  const uncostedReplacement = prisma.seedMenuItem(market.id, {
+    name: "Uncosted",
+    priceMinor: 1_000,
+    costPriceMinor: null,
+    stockQuantity: 10
+  });
+  const customerId = randomUUID();
+  const order = await service.createOrder(
+    customerId,
+    baseInput(market.id, item.id, { items: [{ menuItemId: item.id, quantity: 1, allowSubstitution: true }] }) as never
+  );
+
+  const proposed = await service.proposeFulfillmentAdjustment(
+    market.ownerUserId,
+    order.id,
+    order.items[0].id,
+    { replacementMenuItemId: uncostedReplacement.id } as never
+  );
+  const adjustment = prisma.fulfillmentAdjustments.find(
+    (entry) => entry.orderItemId === proposed.items[0].id
+  )!;
+
+  assert.equal(adjustment.unitCostMinor, null);
+  assert.equal(adjustment.lineCostMinor, null);
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }

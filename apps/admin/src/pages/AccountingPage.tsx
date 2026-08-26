@@ -111,6 +111,7 @@ type SectionProps = {
 function OverviewCard({ overview }: { overview: AccountingOverview }) {
   const { t } = useTranslation();
   const balanced = overview.ledgerImbalanceMinor === 0;
+  const costDataComplete = overview.costDataIncompleteCount === 0;
   return (
     <div className="card">
       <table className="data-table">
@@ -154,8 +155,26 @@ function OverviewCard({ overview }: { overview: AccountingOverview }) {
               </span>
             </td>
           </tr>
+          <tr>
+            <th>{t("accounting.overview.costDataIncomplete")}</th>
+            <td colSpan={3}>
+              <span className={costDataComplete ? "status-pill status-approved" : "status-pill status-error"}>
+                {costDataComplete
+                  ? t("accounting.overview.costDataComplete")
+                  : overview.costDataIncompleteCount}
+              </span>
+            </td>
+          </tr>
         </tbody>
       </table>
+      {costDataComplete ? null : (
+        // This is the one drift the imbalance figure above cannot show: those orders balance to
+        // the agora and still paid the wrong parties, so it gets its own banner rather than a row
+        // someone has to notice.
+        <div className="error-banner" style={{ marginTop: 12 }}>
+          {t("accounting.overview.costDataIncompleteWarning", { count: overview.costDataIncompleteCount })}
+        </div>
+      )}
     </div>
   );
 }

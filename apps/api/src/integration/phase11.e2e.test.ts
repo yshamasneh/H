@@ -298,6 +298,9 @@ test(
         name: "Phase 11 Fresh Milk",
         description: "Tracked grocery product",
         priceMinor: 800,
+        // A supermarket product must carry what it cost the store — the margin split is computed
+        // from it, and the API refuses to create one without it.
+        costPriceMinor: 500,
         brand: "E2E Dairy",
         sku: "E2E-MILK-1L",
         barcode: "7290000000013",
@@ -315,6 +318,7 @@ test(
         categoryId: departmentResponse.body.id,
         name: "Phase 13 Alternative Milk",
         priceMinor: 900,
+        costPriceMinor: 600,
         brand: "E2E Dairy",
         sku: "E2E-MILK-ALT",
         barcode: "7290000000020",

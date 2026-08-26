@@ -83,6 +83,13 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   environment.OTP_EXPIRATION_MINUTES = readPositiveInteger(environment, "OTP_EXPIRATION_MINUTES", 5);
   environment.OTP_RESEND_COOLDOWN_SECONDS = readPositiveInteger(environment, "OTP_RESEND_COOLDOWN_SECONDS", 60);
   environment.OTP_MAX_ATTEMPTS = readPositiveInteger(environment, "OTP_MAX_ATTEMPTS", 5);
+  // Cost ceilings, not security controls. The 60-second resend cooldown stops one person spamming
+  // one number; neither of these stops a determined attacker. What they do is bound the bill when
+  // a paid SMS gateway is behind the webhook, because every code sent costs real money and an
+  // unbounded send rate is an unbounded invoice. Sized generously enough that a real person
+  // retrying a signup never meets them.
+  environment.OTP_MAX_PER_PHONE_PER_DAY = readPositiveInteger(environment, "OTP_MAX_PER_PHONE_PER_DAY", 10);
+  environment.OTP_MAX_GLOBAL_PER_DAY = readPositiveInteger(environment, "OTP_MAX_GLOBAL_PER_DAY", 2_000);
   environment.OTP_WEBHOOK_TIMEOUT_MS = readPositiveInteger(environment, "OTP_WEBHOOK_TIMEOUT_MS", 5_000);
   environment.ERROR_TRACKING_TIMEOUT_MS = readPositiveInteger(environment, "ERROR_TRACKING_TIMEOUT_MS", 3_000);
   environment.PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES = readPositiveInteger(

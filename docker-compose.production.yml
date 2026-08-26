@@ -15,6 +15,11 @@ services:
       target: runtime
     env_file:
       - ${PRODUCTION_ENV_FILE:-.env.production}
+    environment:
+      # Store opening hours are compared against the server's local wall clock, so this must be
+      # the trading timezone. Repeated here as well as in the Dockerfile so it stays visible and
+      # overridable to an operator, and survives a change of base image.
+      TZ: ${TZ:-Asia/Hebron}
     depends_on:
       migrate:
         condition: service_completed_successfully

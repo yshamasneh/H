@@ -25,6 +25,7 @@
     "prisma:studio": "npm run prisma:studio --workspace @wasel/api",
     "db:backup": "node scripts/backup-database.mjs",
     "db:restore": "node scripts/restore-database.mjs",
+    "check:financial": "node scripts/check-financial-integrity.mjs",
     "release:check": "node scripts/release-readiness.mjs",
     "prod:config": "docker compose --env-file .env.production -f docker-compose.production.yml config",
     "prod:up": "docker compose --env-file .env.production -f docker-compose.production.yml up -d --build",

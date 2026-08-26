@@ -82,7 +82,10 @@ test(
       data: { restaurantId: restaurant.id, name: "Groceries", sortOrder: 0, isActive: true }
     });
     const item = await prisma.menuItem.create({
-      data: { restaurantId: restaurant.id, categoryId: category.id, name: "Milk", priceMinor: 500, unitLabel: "carton", isAvailable: true, stockQuantity: 10 }
+      // Seeded straight through Prisma rather than the API, so the cost price has to be set
+      // here: a supermarket product without one is refused at the point of sale, which would
+      // stop this test's order ever being placed.
+      data: { restaurantId: restaurant.id, categoryId: category.id, name: "Milk", priceMinor: 500, costPriceMinor: 300, unitLabel: "carton", isAvailable: true, stockQuantity: 10 }
     });
 
     const idempotencyKey = randomUUID();
