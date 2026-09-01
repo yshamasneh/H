@@ -1,11 +1,12 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Icon, type IconName } from "../../theme/icon";
-import { colors, radius, spacing } from "../../theme/tokens";
+import { radius, spacing, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
-import { customerTheme } from "./theme";
+import { useCustomerTheme, type CustomerTheme } from "./theme";
 
 export type CustomerTab = "home" | "browse" | "cart" | "orders" | "account";
 
@@ -33,6 +34,9 @@ export function CustomerBottomNav(props: {
   onNavigate: (tab: CustomerTab) => void;
 }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const tabs: CustomerTab[] = ["home", "browse", "cart", "orders", "account"];
 
   return (
@@ -64,6 +68,9 @@ export function CustomerBottomNav(props: {
 }
 
 function Badge(props: { count: number }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.badge}>
       <Text style={styles.badgeText}>{props.count > 9 ? "9+" : props.count}</Text>
@@ -88,6 +95,9 @@ export function CustomerTabShell(props: {
   onNavigate: (tab: CustomerTab) => void;
   children: ReactNode;
 }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.shell}>
       <View style={styles.shellContent}>{props.children}</View>
@@ -96,7 +106,7 @@ export function CustomerTabShell(props: {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   shell: { backgroundColor: customerTheme.colors.background, flex: 1 },
   shellContent: { flex: 1 },
   safeArea: { backgroundColor: customerTheme.colors.surface, borderTopColor: customerTheme.colors.border, borderTopWidth: 1 },

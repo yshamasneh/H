@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FlatList, Pressable, RefreshControl, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,10 +8,13 @@ import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
 import { Skeleton } from "../../components/skeleton";
 import { Icon, backIconName } from "../../theme/icon";
-import { colors, radius, spacing } from "../../theme/tokens";
+import { radius, spacing, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 
 function NotificationListSkeleton() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.listContent}>
       {[1, 2, 3, 4].map((row) => (
@@ -34,6 +37,8 @@ type NotificationInboxScreenProps = {
 
 export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
   const { t } = useTranslation(["notifications", "common"]);
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [notifications, setNotifications] = useState<NotificationView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -138,7 +143,7 @@ function formatDate(iso: string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   header: {
     alignItems: "center",

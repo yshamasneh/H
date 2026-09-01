@@ -45,12 +45,19 @@ export type DeliveryOrderSummary = {
   deliveryAddressLine: string;
   totalMinor: number;
   paymentMethod: OrderPaymentMethod;
+  // The customer's delivery destination, captured at checkout. Optional because
+  // orders placed before delivery coordinates were recorded may lack them.
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type DeliveryRestaurantSummary = {
   id: string;
   name: string;
   addressLine: string;
+  // The pickup store's location. Optional because a store may not have set coordinates.
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type DeliveryView = {

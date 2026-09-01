@@ -10,6 +10,7 @@ import { validateEnvironment } from "./config/environment";
 import { DriversModule } from "./drivers/drivers.module";
 import { HealthModule } from "./health/health.module";
 import { InventoryModule } from "./inventory/inventory.module";
+import { LandmarksModule } from "./landmarks/landmarks.module";
 import { UsersModule } from "./users/users.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { OffersModule } from "./offers/offers.module";
@@ -48,6 +49,7 @@ import { RestaurantsModule } from "./restaurants/restaurants.module";
     DriversModule,
     NotificationsModule,
     OffersModule,
+    LandmarksModule,
     AccountingModule,
     AdminModule
   ],

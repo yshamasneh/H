@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
@@ -24,9 +24,10 @@ import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } 
 import { readError } from "../../core/errors";
 import { ProductDetailSkeleton, ProductGridSkeleton } from "../../components/skeleton";
 import { Icon, backIconName } from "../../theme/icon";
-import { colors, iconSize, radius, spacing, withAlpha } from "../../theme/tokens";
+import { iconSize, radius, spacing, withAlpha, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
-import { customerTheme } from "./theme";
+import { useCustomerTheme, type CustomerTheme } from "./theme";
 
 /**
  * JOVO MARKET is the only supermarket partner at launch, so the customer lands
@@ -47,6 +48,9 @@ export function SupermarketCatalogScreen(props: {
   onViewCart: () => void;
 }) {
   const { t } = useTranslation(["customer", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
   const [searchInput, setSearchInput] = useState(props.initialSearch ?? "");
   const [search, setSearch] = useState(props.initialSearch ?? "");
@@ -139,12 +143,16 @@ export function SupermarketProductScreen(props: {
   productId: string;
   cart: Cart | null;
   onBack: () => void;
-  onAddItem: (item: SupermarketProduct & { allowSubstitution?: boolean }) => void;
+  onAddItem: (item: SupermarketProduct & { allowSubstitution?: boolean }, quantity: number) => void;
   onViewCart: () => void;
 }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [product, setProduct] = useState<SupermarketProduct | null>(null);
   const [allowSubstitution, setAllowSubstitution] = useState(true);
+  const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -195,8 +203,41 @@ export function SupermarketProductScreen(props: {
             </Text>
             <Text style={styles.muted}>{t("supermarket.substitutionHelper")}</Text>
           </Pressable>
-          <Pressable onPress={() => props.onAddItem({ ...product, allowSubstitution })} style={styles.addDetailButton}>
-            <Text style={styles.addDetailText}>{t("supermarket.addToBasket", { price: formatPrice(product.effectivePriceMinor) })}</Text>
+          <View style={styles.quantityRow}>
+            <Text style={styles.quantityLabel}>{t("supermarket.quantityLabel")}</Text>
+            <View style={styles.quantityStepper}>
+              <Pressable
+                accessibilityLabel={t("supermarket.decreaseQuantityAccessibility")}
+                accessibilityState={{ disabled: quantity <= 1 }}
+                disabled={quantity <= 1}
+                onPress={() => setQuantity((current) => Math.max(1, current - 1))}
+                style={[styles.stepperButton, quantity <= 1 && styles.stepperButtonDisabled]}
+              >
+                <Icon color={customerTheme.colors.primary} name="remove" size="sm" />
+              </Pressable>
+              <Text style={styles.stepperValue}>{quantity}</Text>
+              <Pressable
+                accessibilityLabel={t("supermarket.increaseQuantityAccessibility")}
+                accessibilityState={{ disabled: product.stockQuantity !== null && quantity >= product.stockQuantity }}
+                disabled={product.stockQuantity !== null && quantity >= product.stockQuantity}
+                onPress={() =>
+                  setQuantity((current) =>
+                    product.stockQuantity !== null ? Math.min(product.stockQuantity, current + 1) : current + 1
+                  )
+                }
+                style={[
+                  styles.stepperButton,
+                  product.stockQuantity !== null && quantity >= product.stockQuantity && styles.stepperButtonDisabled
+                ]}
+              >
+                <Icon color={customerTheme.colors.primary} name="add" size="sm" />
+              </Pressable>
+            </View>
+          </View>
+          <Pressable onPress={() => props.onAddItem({ ...product, allowSubstitution }, quantity)} style={styles.addDetailButton}>
+            <Text style={styles.addDetailText}>
+              {t("supermarket.addToBasketWithQuantity", { count: quantity, price: formatPrice(product.effectivePriceMinor * quantity) })}
+            </Text>
           </Pressable>
         </ScrollView>
       )}
@@ -207,6 +248,9 @@ export function SupermarketProductScreen(props: {
 
 function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpen: () => void }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <Pressable onPress={props.onOpen} style={({ pressed }) => [styles.productCard, pressed && styles.pressed]}>
       <View style={styles.productArtwork}>{props.item.imageUrl ? <Image resizeMode="cover" source={{ uri: props.item.imageUrl }} style={styles.image} /> : <Text style={styles.productEmoji}>🥫</Text>}</View>
@@ -232,11 +276,17 @@ function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpe
 }
 
 function Chip(props: { active: boolean; label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return <Pressable onPress={props.onPress} style={[styles.chip, props.active && styles.chipActive]}><Text style={[styles.chipText, props.active && styles.chipTextActive]}>{props.label}</Text></Pressable>;
 }
 
 function CartDock(props: { cart: Cart; onPress: () => void }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.cartDock}>
       <Pressable onPress={props.onPress} style={styles.cartButton}>
@@ -250,12 +300,23 @@ function CartDock(props: { cart: Cart; onPress: () => void }) {
 
 function BackButton({ onPress }: { onPress: () => void }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return <Pressable accessibilityLabel={t("supermarket.goBackAccessibility")} onPress={onPress} style={styles.backButton}><Icon name={backIconName()} size="md" /></Pressable>;
 }
 
-function Centered({ children }: { children: React.ReactNode }) { return <View style={styles.centered}>{children}</View>; }
+function Centered({ children }: { children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
+  return <View style={styles.centered}>{children}</View>;
+}
 function ErrorState(props: { message: string; onRetry?: () => void }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.errorState}>
       <Text style={styles.errorText}>{props.message}</Text>
@@ -265,9 +326,9 @@ function ErrorState(props: { message: string; onRetry?: () => void }) {
 }
 function formatPrice(value: number) { return `${(value / 100).toFixed(2)} ILS`; }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
-  catalogHeader: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, flexDirection: "row", minHeight: 86, padding: spacing[4] },
+  catalogHeader: { alignItems: "center", backgroundColor: customerTheme.colors.inverseSurface, flexDirection: "row", minHeight: 86, padding: spacing[4] },
   headerCopy: { flex: 1, marginStart: spacing[4] },
   headerEyebrow: { ...text("label", "bold"), color: customerTheme.colors.primary },
   catalogTitle: { ...text("h2", "bold"), color: colors.textInverse, marginTop: spacing[1] },
@@ -303,7 +364,7 @@ const styles = StyleSheet.create({
   departmentStrip: { flexGrow: 0, flexShrink: 0, maxHeight: 54 },
   departmentContent: { alignItems: "center", paddingHorizontal: spacing[3], paddingBottom: spacing[2] },
   chip: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.pill, borderWidth: 1, marginEnd: spacing[2], paddingHorizontal: spacing[4], paddingVertical: spacing[2] },
-  chipActive: { backgroundColor: customerTheme.colors.secondary, borderColor: customerTheme.colors.secondary },
+  chipActive: { backgroundColor: customerTheme.colors.inverseSurface, borderColor: customerTheme.colors.inverseSurface },
   chipText: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
   chipTextActive: { color: colors.textInverse },
   productGrid: { alignSelf: "center", maxWidth: 900, padding: spacing[3], width: "100%" },
@@ -326,7 +387,7 @@ const styles = StyleSheet.create({
   cartCount: { ...text("caption", "bold"), color: colors.textInverse },
   cartLabel: { ...text("bodySm", "bold"), color: colors.textInverse, flex: 1, marginStart: spacing[4] },
   cartPrice: { ...text("caption", "bold"), color: colors.textInverse },
-  productDetailHeader: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, flexDirection: "row", padding: spacing[4] },
+  productDetailHeader: { alignItems: "center", backgroundColor: customerTheme.colors.inverseSurface, flexDirection: "row", padding: spacing[4] },
   productDetailHeaderTitle: { ...text("h3", "bold"), color: colors.textInverse, flex: 1, marginStart: spacing[4] },
   detailContent: { alignSelf: "center", maxWidth: 720, padding: spacing[5], width: "100%" },
   detailArtwork: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 270, justifyContent: "center", overflow: "hidden" },
@@ -340,6 +401,12 @@ const styles = StyleSheet.create({
   oldPrice: { ...text("body"), color: customerTheme.colors.textMuted, textDecorationLine: "line-through" },
   detailPrice: { ...text("h1", "bold"), color: customerTheme.colors.secondary },
   stockText: { ...text("caption", "bold"), color: customerTheme.colors.success, marginTop: spacing[2] },
+  quantityRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[6] },
+  quantityLabel: { ...text("body", "bold"), color: customerTheme.colors.text },
+  quantityStepper: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.md, flexDirection: "row", gap: spacing[3], padding: spacing[1] },
+  stepperButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.sm, height: 36, justifyContent: "center", width: 36 },
+  stepperButtonDisabled: { opacity: 0.4 },
+  stepperValue: { ...text("body", "bold"), color: customerTheme.colors.text, minWidth: 24, textAlign: "center" },
   substitutionCard: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, marginTop: spacing[6], padding: spacing[4] },
   substitutionCardActive: { borderColor: customerTheme.colors.success, borderWidth: 2 },
   substitutionTitle: { ...text("caption", "bold"), color: customerTheme.colors.text },

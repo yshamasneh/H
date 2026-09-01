@@ -8,6 +8,7 @@ import { AdminUsersController } from "../../admin/admin-users.controller";
 import { AdminDriversController } from "../../drivers/admin-drivers.controller";
 import { DriverPortalController } from "../../drivers/driver-portal.controller";
 import { InventoryController } from "../../inventory/inventory.controller";
+import { AdminLandmarksController } from "../../landmarks/admin-landmarks.controller";
 import { AdminOffersController } from "../../offers/admin-offers.controller";
 import { AdminOrdersController } from "../../orders/admin-orders.controller";
 import { OrdersController } from "../../orders/orders.controller";
@@ -49,6 +50,7 @@ test("every platform administration controller is protected by a permission", ()
     [AdminAuditLogController, "VIEW_AUDIT_LOG"],
     [AdminDriversController, "MANAGE_DRIVERS"],
     [AdminOffersController, "MANAGE_OFFERS"],
+    [AdminLandmarksController, "MANAGE_LANDMARKS"],
     [AdminRestaurantsController, "MANAGE_BUSINESSES"],
     [AdminOrdersController, "VIEW_ALL_ORDERS"]
   ];
@@ -158,6 +160,7 @@ test("every permission a route requires exists in the catalogue", () => {
     AdminAuditLogController,
     AdminDriversController,
     AdminOffersController,
+    AdminLandmarksController,
     AdminRestaurantsController,
     AdminOrdersController,
     AdminAccountingController,

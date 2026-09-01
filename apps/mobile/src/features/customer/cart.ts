@@ -24,7 +24,7 @@ export type CartCandidateItem = {
 };
 export type CartCandidateRestaurant = { id: string; name: string };
 
-export function startCart(restaurant: CartCandidateRestaurant, item: CartCandidateItem): Cart {
+export function startCart(restaurant: CartCandidateRestaurant, item: CartCandidateItem, quantity = 1): Cart {
   return {
     restaurantId: restaurant.id,
     restaurantName: restaurant.name,
@@ -32,20 +32,21 @@ export function startCart(restaurant: CartCandidateRestaurant, item: CartCandida
       menuItemId: item.id,
       name: item.name,
       priceMinor: item.effectivePriceMinor ?? item.priceMinor,
-      quantity: 1,
+      quantity: Math.max(1, Math.floor(quantity)),
       unitLabel: item.unitLabel ?? "item",
       allowSubstitution: item.allowSubstitution ?? false
     }]
   };
 }
 
-export function addCartItem(cart: Cart, item: CartCandidateItem): Cart {
+export function addCartItem(cart: Cart, item: CartCandidateItem, quantity = 1): Cart {
+  const amount = Math.max(1, Math.floor(quantity));
   const existing = cart.items.find((line) => line.menuItemId === item.id);
   if (existing) {
     return {
       ...cart,
       items: cart.items.map((line) =>
-        line.menuItemId === item.id ? { ...line, quantity: line.quantity + 1 } : line
+        line.menuItemId === item.id ? { ...line, quantity: line.quantity + amount } : line
       )
     };
   }
@@ -55,7 +56,7 @@ export function addCartItem(cart: Cart, item: CartCandidateItem): Cart {
       menuItemId: item.id,
       name: item.name,
       priceMinor: item.effectivePriceMinor ?? item.priceMinor,
-      quantity: 1,
+      quantity: amount,
       unitLabel: item.unitLabel ?? "item",
       allowSubstitution: item.allowSubstitution ?? false
     }]

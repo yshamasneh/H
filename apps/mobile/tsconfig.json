@@ -2,7 +2,7 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "moduleSuffixes": [".native", ".web", ""]
+    "moduleSuffixes": [".ios", ".android", ".native", ".web", ""]
   },
   "include": ["index.ts", "App.tsx", "src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"]
 }

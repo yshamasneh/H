@@ -24,9 +24,10 @@ import {
 } from "../../core/api";
 import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
 import { readError } from "../../core/errors";
-import { colors, iconSize, isRTL, radius, spacing, withAlpha } from "../../theme/tokens";
+import { iconSize, isRTL, radius, spacing, withAlpha, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
-import { customerTheme } from "./theme";
+import { useCustomerTheme, type CustomerTheme } from "./theme";
 
 type RestaurantListScreenProps = {
   onBack: () => void;
@@ -35,6 +36,9 @@ type RestaurantListScreenProps = {
 
 export function RestaurantListScreen(props: RestaurantListScreenProps) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [restaurants, setRestaurants] = useState<RestaurantSummary[] | null>(null);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +119,9 @@ export function RestaurantListScreen(props: RestaurantListScreenProps) {
 
 function RestaurantCard(props: { restaurant: RestaurantSummary; index: number; onPress: () => void }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <Pressable onPress={props.onPress} style={({ pressed }) => [styles.restaurantCard, pressed && styles.pressed]}>
       <View style={styles.restaurantImage}>
@@ -147,6 +154,9 @@ type RestaurantMenuScreenProps = {
 
 export function RestaurantMenuScreen(props: RestaurantMenuScreenProps) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [menu, setMenu] = useState<RestaurantMenu | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -164,7 +174,7 @@ export function RestaurantMenuScreen(props: RestaurantMenuScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.secondary} barStyle="light-content" />
+      <StatusBar backgroundColor={customerTheme.colors.inverseSurface} barStyle="light-content" />
       <View style={styles.menuHero}>
         <CircleButton dark label={isRTL() ? "›" : "‹"} onPress={props.onBack} />
         <View style={styles.menuHeroArt}>
@@ -218,6 +228,9 @@ export function RestaurantMenuScreen(props: RestaurantMenuScreenProps) {
 
 function MenuCategorySection(props: { category: MenuCategorySummary; onAddItem: (item: MenuItemSummary) => void }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.categorySection}>
       <Text style={styles.categoryTitle}>{props.category.name}</Text>
@@ -256,6 +269,9 @@ function MenuCategorySection(props: { category: MenuCategorySummary; onAddItem: 
 }
 
 function CircleButton(props: { label: string; onPress: () => void; dark?: boolean }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <Pressable onPress={props.onPress} style={({ pressed }) => [styles.circleButton, props.dark && styles.circleButtonDark, pressed && styles.pressed]}>
       <Text style={[styles.circleButtonText, props.dark && styles.circleButtonTextDark]}>{props.label}</Text>
@@ -264,11 +280,17 @@ function CircleButton(props: { label: string; onPress: () => void; dark?: boolea
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return <View style={styles.centered}>{children}</View>;
 }
 
 function ErrorState(props: { message: string; onRetry?: () => void }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.errorBox}>
       <Text style={styles.errorIcon}>!</Text>
@@ -283,7 +305,7 @@ function formatPrice(priceMinor: number): string {
 }
 
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   pageWidth: { alignSelf: "center", maxWidth: 900, width: "100%" },
   topHeader: { alignItems: "center", flexDirection: "row", paddingHorizontal: spacing[5], paddingTop: spacing[2] },
@@ -313,7 +335,7 @@ const styles = StyleSheet.create({
   restaurantAddress: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[2] },
   detailsRow: { alignItems: "center", flexDirection: "row", marginTop: spacing[2] },
   openText: { ...text("label", "bold"), color: customerTheme.colors.success },
-  menuHero: { alignItems: "flex-start", backgroundColor: customerTheme.colors.secondary, height: 205, overflow: "hidden", padding: spacing[4], position: "relative" },
+  menuHero: { alignItems: "flex-start", backgroundColor: customerTheme.colors.inverseSurface, height: 205, overflow: "hidden", padding: spacing[4], position: "relative" },
   menuHeroArt: { alignItems: "center", backgroundColor: colors.primarySubtle, borderColor: colors.surface, borderRadius: 78, borderWidth: 7, height: 156, justifyContent: "center", position: "absolute", end: "27%", top: 27, transform: [{ rotate: "-6deg" }], width: 156 },
   menuHeroEmoji: { fontSize: iconSize.xxxl + 24 },
   heroHeart: { alignItems: "center", backgroundColor: withAlpha(colors.textInverse, 0.16), borderRadius: 22, height: 44, justifyContent: "center", position: "absolute", end: 18, top: 18, width: 44 },
@@ -326,7 +348,7 @@ const styles = StyleSheet.create({
   menuAddress: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[3] },
   categoryTabs: { flexGrow: 0, paddingHorizontal: spacing[4], paddingVertical: spacing[4] },
   categoryTab: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.pill, borderWidth: 1, marginEnd: spacing[2], paddingHorizontal: spacing[4], paddingVertical: spacing[2] },
-  categoryTabActive: { backgroundColor: customerTheme.colors.secondary, borderColor: customerTheme.colors.secondary },
+  categoryTabActive: { backgroundColor: customerTheme.colors.inverseSurface, borderColor: customerTheme.colors.inverseSurface },
   categoryTabText: { ...text("caption", "bold"), color: customerTheme.colors.textMuted },
   categoryTabTextActive: { color: colors.textInverse },
   categorySection: { paddingHorizontal: spacing[4], paddingTop: spacing[2] },

@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { ToastProvider, useToast } from "./src/components/toast";
+import { ThemeProvider } from "./src/theme/theme-context";
 import i18n, { resolveInitialLanguage } from "./src/i18n";
 import { isRTLLanguage, reconcileRTL, reloadApp } from "./src/i18n/rtl";
 import type { SupportedLanguage } from "./src/core/language";
@@ -129,11 +130,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <RTLRoot>
-        <ToastProvider>
-          <ErrorBoundary>
-            <TasawaQApp />
-          </ErrorBoundary>
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <ErrorBoundary>
+              <TasawaQApp />
+            </ErrorBoundary>
+          </ToastProvider>
+        </ThemeProvider>
       </RTLRoot>
     </SafeAreaProvider>
   );
@@ -295,7 +298,8 @@ function TasawaQApp() {
 
   function handleAddToCart(
     restaurant: Pick<RestaurantSummary, "id" | "name">,
-    item: MenuItemSummary & { allowSubstitution?: boolean }
+    item: MenuItemSummary & { allowSubstitution?: boolean },
+    quantity = 1
   ) {
     if (cart && cart.restaurantId !== restaurant.id) {
       const confirmationMessage = t("common:startNewCartBody", {
@@ -307,7 +311,7 @@ function TasawaQApp() {
           typeof globalThis.confirm === "function" &&
           globalThis.confirm(`${t("common:startNewCartTitle")}\n\n${confirmationMessage}`)
         ) {
-          setCart(startCart(restaurant, item));
+          setCart(startCart(restaurant, item, quantity));
           showToast(t("common:addedToCartToast", { name: item.name }));
         }
         return;
@@ -321,7 +325,7 @@ function TasawaQApp() {
             text: t("common:clearCart"),
             style: "destructive",
             onPress: () => {
-              setCart(startCart(restaurant, item));
+              setCart(startCart(restaurant, item, quantity));
               showToast(t("common:addedToCartToast", { name: item.name }));
             }
           }
@@ -329,7 +333,7 @@ function TasawaQApp() {
       );
       return;
     }
-    setCart((current) => (current ? addCartItem(current, item) : startCart(restaurant, item)));
+    setCart((current) => (current ? addCartItem(current, item, quantity) : startCart(restaurant, item, quantity)));
     showToast(t("common:addedToCartToast", { name: item.name }));
   }
 
@@ -580,7 +584,7 @@ function TasawaQApp() {
       return (
         <SupermarketProductScreen
           cart={cart}
-          onAddItem={(item) => handleAddToCart({ id: screen.supermarketId, name: screen.supermarketName }, item)}
+          onAddItem={(item, quantity) => handleAddToCart({ id: screen.supermarketId, name: screen.supermarketName }, item, quantity)}
           onBack={() => setScreen(goToSupermarketCatalog(
             screen.user,
             { id: screen.supermarketId, name: screen.supermarketName }

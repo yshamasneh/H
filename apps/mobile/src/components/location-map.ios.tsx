@@ -1,13 +1,30 @@
 import Constants from "expo-constants";
+import { useMemo, useState } from "react";
 import MapView, { Marker, type MapPressEvent, type Region } from "react-native-maps";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import i18n from "../i18n";
-import type { LocationMapProps, MapCoordinate } from "./location-map.types";
-import { colors, radius, spacing } from "../theme/tokens";
+import { LandmarkFlag } from "./landmark-flag";
+import { MapDot } from "./map-pin";
+import { landmarkMarkerColor, landmarkVisibilityMinZoom, type LocationMapProps, type MapCoordinate } from "./location-map.types";
+import { radius, spacing, type ThemeColors } from "../theme/tokens";
+import { useTheme } from "../theme/theme-context";
 import { text } from "../theme/typography";
 
 const latitudeDelta = 0.025;
 const longitudeDelta = 0.025;
+
+// The flag view is anchored at its bottom-left, which is the base of the pole, so
+// the pin sits on the exact coordinate rather than floating above it.
+const flagAnchor = { x: 0, y: 1 };
+// A dot marker centers on its coordinate.
+const dotAnchor = { x: 0.5, y: 0.5 };
+
+// react-native-maps exposes the viewport as lat/long deltas, not a zoom level, so
+// approximate the Web-Mercator zoom the same way Leaflet/MapLibre report it. This
+// is only used to gate landmark visibility, so an approximation is fine.
+function approximateZoom(longitudeSpan: number): number {
+  return Math.log2(360 / longitudeSpan);
+}
 
 /**
  * `react-native-maps` renders Google Maps on Android and (by default) Apple
@@ -51,11 +68,18 @@ const mapsApiKey = resolveMapsApiKey();
 export const isInteractiveMapAvailable = Platform.OS !== "android" || mapsApiKey !== null;
 
 export function LocationMap(props: LocationMapProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const region: Region = {
     ...props.coordinate,
     latitudeDelta,
     longitudeDelta
   };
+  // Start from the initial region's zoom so landmarks are correct on first paint,
+  // then track it as the user pans/zooms. Only landmark markers are gated on this;
+  // the draggable delivery pin always renders.
+  const [zoom, setZoom] = useState(() => approximateZoom(longitudeDelta));
+  const showLandmarks = zoom >= landmarkVisibilityMinZoom;
 
   function select(event: MapPressEvent) {
     props.onCoordinateChange?.(event.nativeEvent.coordinate);
@@ -71,7 +95,13 @@ export function LocationMap(props: LocationMapProps) {
 
   return (
     <View style={[styles.frame, { height: props.height ?? 300 }]}>
-      <MapView initialRegion={region} onPress={select} style={StyleSheet.absoluteFillObject}>
+      <MapView
+        initialRegion={region}
+        mapType="hybrid"
+        onPress={select}
+        onRegionChangeComplete={(next: Region) => setZoom(approximateZoom(next.longitudeDelta))}
+        style={StyleSheet.absoluteFillObject}
+      >
         {props.onCoordinateChange ? (
           <Marker
             coordinate={props.coordinate}
@@ -81,20 +111,31 @@ export function LocationMap(props: LocationMapProps) {
             title={i18n.t("common:map.deliveryPinTitle")}
           />
         ) : null}
-        {props.markers?.map((marker) => (
-          <Marker
-            coordinate={marker}
-            key={marker.id}
-            pinColor={marker.color}
-            title={marker.title}
-          />
-        ))}
+        {showLandmarks
+          ? props.markers?.map((marker) => (
+              <Marker anchor={flagAnchor} coordinate={marker} key={marker.id} title={marker.title}>
+                <LandmarkFlag color={marker.color ?? landmarkMarkerColor} name={marker.title} />
+              </Marker>
+            ))
+          : null}
+        {/* Always-visible point markers (driver, store, destination) — never zoom-gated. */}
+        {props.pins?.map((pin) =>
+          pin.shape === "pin" ? (
+            <Marker coordinate={pin} key={pin.id} pinColor={pin.color ?? colors.primary} title={pin.title} />
+          ) : (
+            <Marker anchor={dotAnchor} coordinate={pin} key={pin.id} title={pin.title}>
+              <MapDot color={pin.color ?? colors.primary} />
+            </Marker>
+          )
+        )}
       </MapView>
     </View>
   );
 }
 
 function CoordinatePanel(props: { coordinate: MapCoordinate }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.fallback}>
       <Text style={styles.fallbackIcon}>⌖</Text>
@@ -107,7 +148,7 @@ function CoordinatePanel(props: { coordinate: MapCoordinate }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   frame: {
     borderColor: colors.border,
     borderRadius: radius.lg,

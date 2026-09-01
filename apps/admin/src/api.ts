@@ -426,3 +426,33 @@ export function createBusiness(body: {
 }): Promise<RestaurantProfile> {
   return request("/api/v1/admin/restaurants", { method: "POST", body });
 }
+
+// ---- public orientation landmarks for the customer address map ----
+
+export type Landmark = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function listLandmarks(): Promise<Landmark[]> {
+  return request("/api/v1/admin/landmarks");
+}
+
+export function createLandmark(body: { name: string; latitude: number; longitude: number }): Promise<Landmark> {
+  return request("/api/v1/admin/landmarks", { method: "POST", body });
+}
+
+export function updateLandmark(
+  id: string,
+  body: { name: string; latitude: number; longitude: number }
+): Promise<Landmark> {
+  return request(`/api/v1/admin/landmarks/${id}`, { method: "PATCH", body });
+}
+
+export function deleteLandmark(id: string): Promise<{ id: string }> {
+  return request(`/api/v1/admin/landmarks/${id}`, { method: "DELETE" });
+}

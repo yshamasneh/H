@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -41,17 +41,20 @@ import { newUuid } from "../../core/uuid";
 import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
 import { OrderDetailSkeleton, OrderListSkeleton } from "../../components/skeleton";
-import { customerTheme } from "./theme";
+import { useCustomerTheme, type CustomerTheme } from "./theme";
 import { Icon, backIconName } from "../../theme/icon";
 import { motionDuration, motionEasing, useReducedMotion } from "../../theme/motion";
-import { colors, iconSize, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
+import { iconSize, radius, spacing, statusFamily, statusPaletteFor, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 import i18n from "../../i18n";
 import { LocationMap } from "../../components/location-map";
 import type { MapCoordinate } from "../../components/location-map.types";
 
 const currencyCode = "ILS";
-const defaultMapCoordinate: MapCoordinate = { latitude: 31.9038, longitude: 35.2034 };
+// Default checkout-map center: the Biddu-enclave service area, used only until
+// the customer's saved/detected location is available.
+const defaultMapCoordinate: MapCoordinate = { latitude: 31.83804, longitude: 35.14047 };
 
 type CartScreenProps = {
   cart: Cart | null;
@@ -66,6 +69,9 @@ type CartScreenProps = {
 
 export function CartScreen(props: CartScreenProps) {
   const { t } = useTranslation(["cart"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const isEmpty = !props.cart || props.cart.items.length === 0;
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
@@ -152,6 +158,9 @@ type CheckoutScreenProps = {
 
 export function CheckoutScreen(props: CheckoutScreenProps) {
   const { t } = useTranslation(["cart", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [deliveryLabel, setDeliveryLabel] = useState(() => t("checkout.labelPlaceholder"));
   const [deliveryAddressLine, setDeliveryAddressLine] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>("CASH");
@@ -455,6 +464,9 @@ type OrderConfirmationScreenProps = {
 
 export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
   const { t } = useTranslation(["cart"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const { order } = props;
   return (
     <SafeAreaView style={styles.screen}>
@@ -497,6 +509,9 @@ export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
  * than substituted with a faster version — the checkmark just appears.
  */
 function SuccessCheckmark() {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const reducedMotion = useReducedMotion();
   const scale = useRef(new Animated.Value(reducedMotion ? 1 : 0.4)).current;
   const opacity = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
@@ -517,6 +532,9 @@ function SuccessCheckmark() {
 }
 
 function NextStep(props: { index: number; label: string }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.nextStepRow}>
       <View style={styles.nextStepBullet}><Text style={styles.nextStepBulletText}>{props.index}</Text></View>
@@ -538,6 +556,9 @@ type OrderHistoryScreenProps = {
 
 export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
   const { t } = useTranslation(["cart", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -614,6 +635,9 @@ type OrderDetailScreenProps = {
 
 export function OrderDetailScreen(props: OrderDetailScreenProps) {
   const { t } = useTranslation(["cart", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -711,6 +735,9 @@ function FulfillmentReviewCard(props: {
   onDecision: (decision: "approve" | "reject") => Promise<void>;
 }) {
   const { t } = useTranslation(["cart", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const adjustment = props.item.fulfillmentAdjustment!;
   const proposedName = adjustment.replacementNameSnapshot ?? props.item.nameSnapshot;
   return (
@@ -753,6 +780,9 @@ function FulfillmentReviewCard(props: {
 
 function OrderSummaryCard(props: { order: OrderDetail }) {
   const { t } = useTranslation(["cart"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const { order } = props;
   return (
     <View style={styles.summaryCard}>
@@ -825,7 +855,10 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
 
 function StatusBadge(props: { status: OrderDetail["status"] | DeliveryStatusSummary["status"] }) {
   const { t } = useTranslation(["common"]);
-  const palette = tokenStatusPalette[statusFamily(props.status)];
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
+  const palette = statusPaletteFor(colors)[statusFamily(props.status)];
   return (
     <View style={[styles.statusBadge, { backgroundColor: palette.background }]}>
       <Text style={[styles.statusBadgeText, { color: palette.foreground }]}>{t(`status.${props.status}`, props.status.replace(/_/g, " "))}</Text>
@@ -835,12 +868,16 @@ function StatusBadge(props: { status: OrderDetail["status"] | DeliveryStatusSumm
 
 function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
   const { t } = useTranslation(["cart", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
+  const statusPalette = useMemo(() => statusPaletteFor(colors), [colors]);
   if (props.history.length === 0) return null;
   return (
     <View style={styles.summaryCard}>
       <Text style={styles.sectionTitle}>{t("detail.statusHistoryTitle")}</Text>
       {props.history.map((entry, index) => {
-        const palette = tokenStatusPalette[statusFamily(entry.toStatus)];
+        const palette = statusPalette[statusFamily(entry.toStatus)];
         return (
           <View key={entry.id} style={styles.timelineRow}>
             <View style={styles.timelineMarker}>
@@ -860,6 +897,9 @@ function StatusTimeline(props: { history: OrderDetail["statusHistory"] }) {
 
 function DeliveryProgressCard(props: { delivery: NonNullable<OrderDetail["delivery"]> }) {
   const { t } = useTranslation(["cart", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const { delivery } = props;
   return (
     <View style={styles.summaryCard}>
@@ -885,6 +925,9 @@ function DeliveryProgressCard(props: { delivery: NonNullable<OrderDetail["delive
 }
 
 function Header(props: { title: string; subtitle: string; onBack: () => void }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.header}>
       <Pressable accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
@@ -901,6 +944,9 @@ function Header(props: { title: string; subtitle: string; onBack: () => void }) 
 
 function ErrorState(props: { message: string; onRetry?: () => void }) {
   const { t } = useTranslation(["cart"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.errorBox}>
       <Text style={styles.errorText}>{props.message}</Text>
@@ -914,11 +960,17 @@ function ErrorState(props: { message: string; onRetry?: () => void }) {
 }
 
 function ErrorText({ message }: { message: string | null }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   if (!message) return null;
   return <Text style={styles.inlineErrorText}>{message}</Text>;
 }
 
 function PrimaryButton(props: { label: string; loading?: boolean; destructive?: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <Pressable
       disabled={props.loading}
@@ -935,6 +987,9 @@ function PrimaryButton(props: { label: string; loading?: boolean; destructive?: 
 }
 
 function SecondaryButton(props: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <Pressable onPress={props.onPress} style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}>
       <Text style={styles.secondaryButtonText}>{props.label}</Text>
@@ -969,7 +1024,7 @@ function formatDate(iso: string): string {
 }
 
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   header: {
     alignItems: "center",

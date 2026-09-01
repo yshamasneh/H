@@ -57,7 +57,8 @@
           "locationWhenInUsePermission": "JOVO uses your location only when you choose it to calculate delivery availability and pricing."
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "@maplibre/maplibre-react-native"
     ],
     "updates": {
       "enabled": false

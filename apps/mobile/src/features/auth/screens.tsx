@@ -46,6 +46,7 @@ import { text } from "../../theme/typography";
 import { strongPasswordPattern } from "./auth.rules";
 
 const logo = require("../../../assets/logo/jovo-wordmark.png");
+const mascot = require("../../../assets/logo/jovo_mascot_final.png");
 
 type LoginScreenProps = {
   prefill?: PhonePrefill;
@@ -487,7 +488,10 @@ function AuthLayout(props: { title: string; subtitle: string; children: ReactNod
       <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Image accessibilityLabel="JOVO" resizeMode="contain" source={logo} style={styles.logo} />
+          <View style={styles.brandLockup}>
+            <Image resizeMode="contain" source={mascot} style={styles.logoMascot} />
+            <Image accessibilityLabel="JOVO" resizeMode="contain" source={logo} style={styles.logo} />
+          </View>
           <Text style={styles.title}>{props.title}</Text>
           <Text style={styles.subtitle}>{props.subtitle}</Text>
           <View style={styles.panel}>{props.children}</View>
@@ -648,6 +652,8 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: spacing[6], paddingBottom: spacing[9] },
+  brandLockup: { alignItems: "center", alignSelf: "center", flexDirection: "row", gap: spacing[4] },
+  logoMascot: { height: 68, width: 66 },
   logo: { alignSelf: "center", height: 68, width: 220 },
   title: { ...text("h1", "bold"), color: colors.text, textAlign: "center" },
   subtitle: { ...text("body"), color: colors.textMuted, marginBottom: spacing[5], marginTop: spacing[2], textAlign: "center" },

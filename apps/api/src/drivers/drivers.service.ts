@@ -602,12 +602,16 @@ function toDeliveryView(delivery: DeliveryWithRelations): DeliveryView {
       deliveryLabel: delivery.order.deliveryLabel,
       deliveryAddressLine: delivery.order.deliveryAddressLine,
       totalMinor: delivery.order.totalMinor,
-      paymentMethod: delivery.order.paymentMethod
+      paymentMethod: delivery.order.paymentMethod,
+      latitude: delivery.order.deliveryLatitude,
+      longitude: delivery.order.deliveryLongitude
     },
     restaurant: {
       id: delivery.order.restaurant.id,
       name: delivery.order.restaurant.name,
-      addressLine: delivery.order.restaurant.addressLine
+      addressLine: delivery.order.restaurant.addressLine,
+      latitude: delivery.order.restaurant.latitude,
+      longitude: delivery.order.restaurant.longitude
     },
     assignedAt: delivery.assignedAt,
     pickedUpAt: delivery.pickedUpAt,

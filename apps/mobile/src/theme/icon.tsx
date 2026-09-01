@@ -3,7 +3,8 @@
 // several megabytes, none of it used — out of the bundle.
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type { ComponentProps } from "react";
-import { colors, iconSize, isRTL } from "./tokens";
+import { iconSize, isRTL } from "./tokens";
+import { useTheme } from "./theme-context";
 
 type GlyphName = ComponentProps<typeof Ionicons>["name"];
 
@@ -53,7 +54,8 @@ const registry = {
   chatbox: { outline: "chatbox-ellipses-outline" },
   shield: { outline: "shield-checkmark-outline" },
   card: { outline: "card-outline", filled: "card" },
-  pin: { outline: "pin-outline", filled: "pin" }
+  pin: { outline: "pin-outline", filled: "pin" },
+  contrast: { outline: "contrast-outline", filled: "contrast" }
 } satisfies Record<string, { outline: GlyphName; filled?: GlyphName }>;
 
 export type IconName = keyof typeof registry;
@@ -64,6 +66,7 @@ export function Icon(props: {
   size?: keyof typeof iconSize;
   color?: string;
 }) {
+  const { colors } = useTheme();
   const def: { outline: GlyphName; filled?: GlyphName } = registry[props.name];
   const glyph = props.active && def.filled ? def.filled : def.outline;
   return <Ionicons color={props.color ?? colors.text} name={glyph} size={iconSize[props.size ?? "md"]} />;

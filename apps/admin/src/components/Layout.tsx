@@ -22,6 +22,7 @@ const platformNav: NavItem[] = [
   { to: "/orders", labelKey: "layout.nav.orders", icon: "≡", permission: "VIEW_ALL_ORDERS" },
   { to: "/drivers", labelKey: "layout.nav.drivers", icon: "✈", permission: "MANAGE_DRIVERS" },
   { to: "/users", labelKey: "layout.nav.users", icon: "●", permission: "MANAGE_USERS" },
+  { to: "/landmarks", labelKey: "layout.nav.landmarks", icon: "⚑", permission: "MANAGE_LANDMARKS" },
   { to: "/accounting", labelKey: "layout.nav.accounting", icon: "₪", permission: "VIEW_ACCOUNTING" },
   { to: "/audit-log", labelKey: "layout.nav.auditLog", icon: "☷", permission: "VIEW_AUDIT_LOG" }
 ];

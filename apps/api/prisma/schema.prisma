@@ -489,6 +489,18 @@ model Offer {
   @@index([menuItemId])
 }
 
+/// A public reference point (e.g. a well-known roundabout) shown purely for
+/// orientation on the customer address map. Standalone: it has no relation to
+/// Restaurant and is unrelated to JOVO's own store data.
+model Landmark {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  latitude  Float
+  longitude Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model MenuCategory {
   id           String     @id @default(uuid()) @db.Uuid
   restaurantId String     @db.Uuid

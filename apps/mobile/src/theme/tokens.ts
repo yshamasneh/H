@@ -45,6 +45,59 @@ export const colors = {
 
 export type ColorToken = keyof typeof colors;
 
+/**
+ * The shape every palette shares. `colors` above is the light palette (the
+ * default); `darkColors` below is its dark-mode counterpart. Screens read the
+ * active one through the theme context (see src/theme/theme-context.tsx) so a
+ * Light/Dark toggle repaints them.
+ */
+export type ThemeColors = { [K in keyof typeof colors]: string };
+
+/* --- dark palette --------------------------------------------------------- */
+/* Same keys as `colors`, retuned for dark backgrounds. Primary stays the
+   recognisable JOVO orange (#F45A00) in both modes; neutrals invert, and the
+   semantic hues are lightened so they read against a near-black surface. */
+export const darkColors: ThemeColors = {
+  primary: "#F45A00",
+  primaryHover: "#FF6A00",
+  primaryPressed: "#D94A00",
+  primarySubtle: "#33190A",
+  primaryBorder: "#5A2E14",
+
+  background: "#0F0F0F",
+  surface: "#1A1A1A",
+  surfaceSunk: "#141414",
+  // `surfaceInverse` is used as a raised dark panel (hero cards, headers), so it
+  // stays dark in dark mode — an elevated tone above `surface`, not a light flip.
+  surfaceInverse: "#1F1F1F",
+  border: "#2A2A2A",
+  borderStrong: "#3A3A3A",
+  text: "#F5F5F5",
+  textMuted: "#A0A0A0",
+  // `textInverse` is "text on a coloured/dark surface" (primary buttons, hero
+  // panels) — white in both modes, not a literal inverse of `text`.
+  textInverse: "#FFFFFF",
+
+  success: "#34C759",
+  successSubtle: "#10281A",
+  warning: "#E0A44A",
+  warningSubtle: "#2E2410",
+  error: "#F26D6D",
+  errorSubtle: "#2E1414",
+  errorPressed: "#E05555",
+  info: "#5B9BF0",
+  infoSubtle: "#12203A",
+  neutral: "#A0A0A0",
+  neutralSubtle: "#242424"
+};
+
+export const lightColors: ThemeColors = colors;
+
+export const palettes: Record<"light" | "dark", ThemeColors> = {
+  light: colors,
+  dark: darkColors
+};
+
 /* --- spacing (4px base) ---------------------------------------------------- */
 export const spacing = {
   1: 4,
@@ -164,6 +217,21 @@ export const statusPalette: Record<StatusFamily, { background: string; foregroun
   failed: { background: colors.errorSubtle, foreground: colors.error },
   neutral: { background: colors.neutralSubtle, foreground: colors.neutral }
 };
+
+/** The status palette for an arbitrary (light or dark) palette, so themed screens
+ *  can colour status badges from the active mode. `statusPalette` above is the
+ *  light instance, kept for call sites not yet on the theme context. */
+export function statusPaletteFor(
+  activeColors: ThemeColors
+): Record<StatusFamily, { background: string; foreground: string }> {
+  return {
+    attention: { background: activeColors.primarySubtle, foreground: activeColors.primaryPressed },
+    inFlight: { background: activeColors.infoSubtle, foreground: activeColors.info },
+    done: { background: activeColors.successSubtle, foreground: activeColors.success },
+    failed: { background: activeColors.errorSubtle, foreground: activeColors.error },
+    neutral: { background: activeColors.neutralSubtle, foreground: activeColors.neutral }
+  };
+}
 
 /**
  * On native, I18nManager.isRTL is reconciled with the chosen language before

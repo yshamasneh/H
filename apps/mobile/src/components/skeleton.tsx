@@ -1,7 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, View, type DimensionValue, type ViewStyle } from "react-native";
 import { motionDuration, motionEasing, useReducedMotion } from "../theme/motion";
-import { colors, radius, spacing } from "../theme/tokens";
+import { radius, spacing, type ThemeColors } from "../theme/tokens";
+import { useTheme } from "../theme/theme-context";
+
+/** Themed skeleton stylesheets, rebuilt when the light/dark mode toggles. */
+function useSkeletonStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => ({ styles: createStyles(colors), cardStyles: createCardStyles(colors) }), [colors]);
+}
 
 /**
  * The one loading-placeholder primitive for the customer surface. A pulsing
@@ -10,6 +17,7 @@ import { colors, radius, spacing } from "../theme/tokens";
  * for reduced motion, so a skeleton is still legible without ever animating.
  */
 export function Skeleton(props: { width?: DimensionValue; height?: number; radius?: number; style?: ViewStyle }) {
+  const { styles } = useSkeletonStyles();
   const reducedMotion = useReducedMotion();
   const opacity = useRef(new Animated.Value(0.6)).current;
 
@@ -46,6 +54,7 @@ export function Skeleton(props: { width?: DimensionValue; height?: number; radiu
 
 /** One product-card placeholder — same shape for the home grid and the catalogue grid. */
 export function ProductCardSkeleton(props: { artworkHeight?: number }) {
+  const { cardStyles } = useSkeletonStyles();
   return (
     <View style={cardStyles.card}>
       <Skeleton height={props.artworkHeight ?? 100} radius={radius.md} style={cardStyles.artwork} />
@@ -61,6 +70,7 @@ export function ProductCardSkeleton(props: { artworkHeight?: number }) {
 }
 
 export function ProductGridSkeleton(props: { count?: number; artworkHeight?: number }) {
+  const { cardStyles } = useSkeletonStyles();
   const items = Array.from({ length: props.count ?? 6 });
   return (
     <View style={cardStyles.grid}>
@@ -72,6 +82,7 @@ export function ProductGridSkeleton(props: { count?: number; artworkHeight?: num
 }
 
 export function DepartmentStripSkeleton() {
+  const { cardStyles } = useSkeletonStyles();
   return (
     <View style={cardStyles.strip}>
       {[132, 132, 132, 110].map((width, index) => (
@@ -82,11 +93,13 @@ export function DepartmentStripSkeleton() {
 }
 
 export function OfferCardSkeleton() {
+  const { cardStyles } = useSkeletonStyles();
   return <Skeleton height={150} radius={radius.lg} style={cardStyles.offer} />;
 }
 
 /** One order-history row placeholder: icon block, title, subtitle, total. */
 export function OrderCardSkeleton() {
+  const { cardStyles } = useSkeletonStyles();
   return (
     <View style={cardStyles.orderCard}>
       <Skeleton height={42} radius={radius.md} width={42} />
@@ -98,6 +111,7 @@ export function OrderCardSkeleton() {
 }
 
 export function OrderListSkeleton(props: { count?: number }) {
+  const { cardStyles } = useSkeletonStyles();
   const items = Array.from({ length: props.count ?? 4 });
   return (
     <View style={cardStyles.listContent}>
@@ -110,6 +124,7 @@ export function OrderListSkeleton(props: { count?: number }) {
 
 /** The order-detail summary card placeholder: a title row plus several line-item rows. */
 export function OrderDetailSkeleton() {
+  const { cardStyles } = useSkeletonStyles();
   return (
     <View style={cardStyles.listContent}>
       <View style={cardStyles.summaryCard}>
@@ -140,6 +155,7 @@ export function OrderDetailSkeleton() {
 
 /** The product-detail screen placeholder: hero image, then the same text hierarchy the loaded screen uses. */
 export function ProductDetailSkeleton() {
+  const { cardStyles } = useSkeletonStyles();
   return (
     <View style={cardStyles.detailContent}>
       <Skeleton height={270} radius={radius.lg} />
@@ -152,11 +168,11 @@ export function ProductDetailSkeleton() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   base: { backgroundColor: colors.neutralSubtle }
 });
 
-const cardStyles = StyleSheet.create({
+const createCardStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderColor: colors.border,

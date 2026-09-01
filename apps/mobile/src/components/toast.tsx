@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { motionDuration, motionEasing, useReducedMotion } from "../theme/motion";
 import { Icon } from "../theme/icon";
-import { colors, radius, spacing, withAlpha } from "../theme/tokens";
+import { radius, spacing, withAlpha, type ThemeColors } from "../theme/tokens";
+import { useTheme } from "../theme/theme-context";
 import { text } from "../theme/typography";
 
 const displayMs = 2200;
@@ -50,6 +51,8 @@ export function useToast() {
 }
 
 function ToastHost(props: { toast: ToastState | null }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const translateY = useRef(new Animated.Value(-40)).current;
@@ -79,7 +82,7 @@ function ToastHost(props: { toast: ToastState | null }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   host: { alignItems: "center", end: 0, position: "absolute", start: 0, zIndex: 50 },
   toast: {
     alignItems: "center",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -14,15 +14,17 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LocationMap } from "../../components/location-map";
-import type { MapCoordinate } from "../../components/location-map.types";
+import { landmarkMarkerColor, type LocationMapMarker, type MapCoordinate } from "../../components/location-map.types";
 import { Skeleton } from "../../components/skeleton";
 import {
   createMyAddress,
   deleteMyAddress,
   getMyProfile,
+  listLandmarks,
   listMyAddresses,
   updateMyAddress,
   updateMyProfile,
+  type Landmark,
   type MyProfile,
   type PublicUser,
   type SavedAddress
@@ -32,11 +34,14 @@ import { getCurrentCoordinates, reverseGeocode } from "../../core/location";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
 import { Icon, backIconName } from "../../theme/icon";
-import { colors, radius, spacing } from "../../theme/tokens";
+import { radius, spacing, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
-import { customerTheme } from "./theme";
+import { useCustomerTheme, type CustomerTheme } from "./theme";
 
-const defaultCoordinate: MapCoordinate = { latitude: 31.9038, longitude: 35.2034 };
+// Default map center: the Biddu-enclave service area, used only until the
+// customer's saved/detected location is available.
+const defaultCoordinate: MapCoordinate = { latitude: 31.83804, longitude: 35.14047 };
 
 export function AccountScreen(props: {
   user: PublicUser;
@@ -46,8 +51,12 @@ export function AccountScreen(props: {
   onProfileUpdated: (user: PublicUser) => void;
 }) {
   const { t } = useTranslation(["customer", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
+  const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [fullName, setFullName] = useState(props.user.fullName);
   const [email, setEmail] = useState("");
   const [label, setLabel] = useState(() => t("account.defaultAddressLabel"));
@@ -57,6 +66,20 @@ export function AccountScreen(props: {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // Named landmarks render on the address map as static reference pins alongside
+  // the customer's own draggable coordinate.
+  const landmarkMarkers = useMemo<LocationMapMarker[]>(
+    () =>
+      landmarks.map((landmark) => ({
+        id: landmark.id,
+        title: landmark.name,
+        latitude: landmark.latitude,
+        longitude: landmark.longitude,
+        color: landmarkMarkerColor
+      })),
+    [landmarks]
+  );
 
   useEffect(() => {
     void load();
@@ -72,9 +95,16 @@ export function AccountScreen(props: {
     setError(null);
     try {
       const accessToken = await token();
-      const [nextProfile, nextAddresses] = await Promise.all([
+      // Fetch landmarks alongside profile/addresses rather than sequentially after
+      // them. All three then share the single coordinated token refresh on a 401
+      // (the well-tested "refresh storm" path); the old sequential call reused a
+      // token that a mid-load refresh could have already rotated, so on an expiring
+      // session its lone retry could fail and the map silently lost every landmark.
+      // Landmarks are orientation aids only, so their own failure stays non-fatal.
+      const [nextProfile, nextAddresses, nextLandmarks] = await Promise.all([
         getMyProfile(accessToken),
-        listMyAddresses(accessToken)
+        listMyAddresses(accessToken),
+        listLandmarks(accessToken).catch(() => [] as Landmark[])
       ]);
       setProfile(nextProfile);
       setFullName(nextProfile.fullName);
@@ -82,6 +112,7 @@ export function AccountScreen(props: {
       setAddresses(nextAddresses);
       const preferred = nextAddresses.find((item) => item.isDefault) ?? nextAddresses[0];
       if (preferred) setCoordinate(preferred);
+      setLandmarks(nextLandmarks);
     } catch (requestError) {
       setError(readError(requestError));
     }
@@ -240,7 +271,7 @@ export function AccountScreen(props: {
               <Text style={styles.subtitle}>{t("account.addNewAddressTitle")}</Text>
               <TextInput onChangeText={setLabel} placeholder={t("account.labelPlaceholder")} style={styles.input} value={label} />
               <TextInput multiline onChangeText={setAddressLine} placeholder={t("account.addressLinePlaceholder")} style={[styles.input, styles.multiline]} value={addressLine} />
-              <LocationMap coordinate={coordinate} onCoordinateChange={(value) => void selectCoordinate(value)} />
+              <LocationMap coordinate={coordinate} markers={landmarkMarkers} onCoordinateChange={(value) => void selectCoordinate(value)} />
               <SmallButton label={t("account.useCurrentLocationButton")} onPress={() => void useCurrentLocation()} />
               <Button disabled={busy} label={t("account.saveAddressButton")} onPress={() => void saveAddress()} />
             </View>
@@ -263,6 +294,9 @@ export function AccountScreen(props: {
 }
 
 function AccountCardSkeleton(props: { lines: number }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <View style={styles.card}>
       <Skeleton height={16} style={styles.skeletonTitle} width="45%" />
@@ -277,10 +311,16 @@ function AccountCardSkeleton(props: { lines: number }) {
 }
 
 function Button(props: { label: string; disabled?: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return <Pressable disabled={props.disabled} onPress={props.onPress} style={styles.button}><Text style={styles.buttonText}>{props.label}</Text></Pressable>;
 }
 
 function SmallButton(props: { label: string; danger?: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return <Pressable onPress={props.onPress} style={[styles.smallButton, props.danger && styles.smallDanger]}><Text style={[styles.smallText, props.danger && styles.smallDangerText]}>{props.label}</Text></Pressable>;
 }
 
@@ -294,7 +334,7 @@ async function confirmDialog(title: string, body: string, confirmLabel: string):
   ], { cancelable: true, onDismiss: () => resolve(false) }));
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   header: { alignItems: "center", borderBottomColor: customerTheme.colors.border, borderBottomWidth: 1, flexDirection: "row", padding: spacing[4] },
   back: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 42, justifyContent: "center", width: 42 },

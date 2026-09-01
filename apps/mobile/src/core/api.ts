@@ -306,12 +306,18 @@ export type DeliveryOrderSummary = {
   deliveryAddressLine: string;
   totalMinor: number;
   paymentMethod: OrderPaymentMethod;
+  // The customer's delivery destination (from checkout). Optional for older orders.
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type DeliveryRestaurantSummary = {
   id: string;
   name: string;
   addressLine: string;
+  // The pickup store's location. Optional if the store has no coordinates.
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type DeliveryView = {
@@ -424,6 +430,18 @@ export function updateMyAddress(
 
 export function deleteMyAddress(accessToken: string, addressId: string): Promise<void> {
   return request(`/api/v1/users/me/addresses/${addressId}`, { method: "DELETE", accessToken });
+}
+
+/** A public orientation point (e.g. a roundabout) shown on the address map for reference only. */
+export type Landmark = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+};
+
+export function listLandmarks(accessToken: string): Promise<Landmark[]> {
+  return request("/api/v1/landmarks", { accessToken });
 }
 
 export function registerMyPushToken(

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -26,7 +26,7 @@ import {
   type PublicUser
 } from "../../core/api";
 import { LocationMap } from "../../components/location-map";
-import type { MapCoordinate } from "../../components/location-map.types";
+import type { LocationMapPin, MapCoordinate } from "../../components/location-map.types";
 import { Skeleton } from "../../components/skeleton";
 import { readError } from "../../core/errors";
 import { getCurrentCoordinates } from "../../core/location";
@@ -37,7 +37,10 @@ import { text } from "../../theme/typography";
 import { activeDeliveryStatuses, nextDriverActionByStatus } from "./delivery.rules";
 
 const currencyCode = "ILS";
-const defaultCoordinate: MapCoordinate = { latitude: 31.9038, longitude: 35.2034 };
+// Default map center: the Biddu-enclave service area (Qatanna, Al-Qubeiba, Biddu,
+// Beit Anan, Beit Surik, Beit Ijza), used only until the driver's real GPS
+// coordinate is available.
+const defaultCoordinate: MapCoordinate = { latitude: 31.83804, longitude: 35.14047 };
 
 type DriverHomeScreenProps = {
   user: PublicUser;
@@ -59,6 +62,38 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const hasActiveDelivery = (mine?.length ?? 0) > 0;
+
+  // The active-delivery map shows three distinct, always-visible markers: the driver's
+  // own live position (blue dot), the pickup store (green dot), and the customer's
+  // destination (orange delivery pin). Store/destination only appear once an accepted
+  // delivery carries valid coordinates; older orders without them are skipped, not crashed.
+  const deliveryPins = useMemo<LocationMapPin[]>(() => {
+    const pins: LocationMapPin[] = [];
+    if (coordinate) {
+      pins.push({ id: "driver", latitude: coordinate.latitude, longitude: coordinate.longitude, title: t("home.youAreHere"), color: colors.info, shape: "dot" });
+    }
+    const active = mine && mine.length > 0 ? mine[0] : null;
+    if (active) {
+      const store = active.restaurant;
+      if (typeof store.latitude === "number" && typeof store.longitude === "number") {
+        pins.push({ id: "store", latitude: store.latitude, longitude: store.longitude, title: store.name, color: colors.success, shape: "dot" });
+      }
+      const destination = active.order;
+      if (typeof destination.latitude === "number" && typeof destination.longitude === "number") {
+        pins.push({ id: "destination", latitude: destination.latitude, longitude: destination.longitude, title: destination.deliveryAddressLine, color: colors.primary, shape: "pin" });
+      }
+    }
+    return pins;
+  }, [coordinate, mine, t]);
+
+  // Centre on the average of whatever markers we have so the driver, store and
+  // destination are framed together; fall back to the service-area default.
+  const mapCenter: MapCoordinate = deliveryPins.length
+    ? {
+        latitude: deliveryPins.reduce((sum, pin) => sum + pin.latitude, 0) / deliveryPins.length,
+        longitude: deliveryPins.reduce((sum, pin) => sum + pin.longitude, 0) / deliveryPins.length
+      }
+    : coordinate ?? defaultCoordinate;
 
   // Read the device location, show it on the map, and report it to the server so dispatch/admin can
   // see where the driver is. Location failures are non-fatal — the map falls back to a default pin.
@@ -174,11 +209,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
       >
         <Text style={styles.dashboardHeading}>{t("home.dashboardTitle")}</Text>
         <View style={styles.mapCard}>
-          <LocationMap
-            coordinate={coordinate ?? defaultCoordinate}
-            height={190}
-            markers={coordinate ? [{ id: "me", latitude: coordinate.latitude, longitude: coordinate.longitude, title: t("home.youAreHere"), color: colors.primary }] : []}
-          />
+          <LocationMap coordinate={mapCenter} height={190} pins={deliveryPins} />
         </View>
 
         <Pressable

@@ -64,6 +64,7 @@
       "orders": "Orders",
       "drivers": "Drivers",
       "users": "Users",
+      "landmarks": "Landmarks",
       "auditLog": "Audit Log",
       "liveOrders": "Live orders",
       "catalogue": "Products",
@@ -217,6 +218,25 @@
     "restoredReason": "Reactivated by an administrator",
     "makeSuperAdmin": "Make super admin",
     "removePlatformRole": "Remove platform role"
+  },
+  "landmarks": {
+    "title": "Landmarks",
+    "subtitle": "Public reference points shown on the customer address map for orientation",
+    "loadError": "Could not load landmarks.",
+    "createTitle": "Add a landmark",
+    "editTitle": "Edit landmark",
+    "namePlaceholder": "Landmark name (e.g. City Center Roundabout)",
+    "mapHint": "Tap the map to set the location, or drag the marker.",
+    "coordinates": "Selected: {{lat}}, {{lng}}",
+    "create": "Add landmark",
+    "saveChanges": "Save changes",
+    "nameRequired": "Enter a landmark name.",
+    "createdNotice": "Landmark added.",
+    "updatedNotice": "Landmark updated.",
+    "empty": "No landmarks yet.",
+    "name": "Name",
+    "latitude": "Latitude",
+    "longitude": "Longitude"
   },
   "auditLog": {
     "title": "Audit Log",

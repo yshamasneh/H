@@ -1,5 +1,5 @@
 import Constants from "expo-constants";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,7 +9,8 @@ import { clearStoredPushToken, getPushToken, getStoredPushToken, storePushToken 
 import { getAccessToken } from "../../core/session";
 import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { Icon, backIconName, disclosureIconName, type IconName } from "../../theme/icon";
-import { colors, radius, spacing } from "../../theme/tokens";
+import { radius, spacing, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 
 /**
@@ -32,6 +33,8 @@ export function SettingsScreen(props: {
   onDeleted?: () => Promise<void>;
 }) {
   const { t } = useTranslation(["customer", "common"]);
+  const { colors, isDark, setMode } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [loggingOut, setLoggingOut] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [togglingPush, setTogglingPush] = useState(false);
@@ -137,6 +140,21 @@ export function SettingsScreen(props: {
           <LanguageSwitcher />
         </SectionCard>
 
+        <SectionCard icon="contrast" title={t("settings.appearanceSectionTitle")}>
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleCopy}>
+              <Text style={styles.toggleLabel}>{t("settings.darkModeLabel")}</Text>
+              <Text style={styles.toggleHelper}>{t("settings.darkModeHelper")}</Text>
+            </View>
+            <Switch
+              onValueChange={(value) => setMode(value ? "dark" : "light")}
+              thumbColor={colors.surface}
+              trackColor={{ false: colors.neutralSubtle, true: colors.primary }}
+              value={isDark}
+            />
+          </View>
+        </SectionCard>
+
         <SectionCard icon="notifications" title={t("settings.notificationsSectionTitle")}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleCopy}>
@@ -198,6 +216,8 @@ export function SettingsScreen(props: {
 }
 
 function SectionCard(props: { icon: IconName; title: string; children: React.ReactNode }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -221,7 +241,7 @@ async function confirm(title: string, body: string, confirmLabel: string, cancel
   });
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   screen: { backgroundColor: colors.background, flex: 1 },
   header: {
     alignItems: "center",

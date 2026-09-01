@@ -64,6 +64,7 @@
       "orders": "الطلبات",
       "drivers": "السائقون",
       "users": "المستخدمون",
+      "landmarks": "المعالم",
       "auditLog": "سجل التدقيق",
       "liveOrders": "الطلبات المباشرة",
       "catalogue": "المنتجات",
@@ -217,6 +218,25 @@
     "restoredReason": "أعاد المسؤول تفعيل الحساب",
     "makeSuperAdmin": "تعيين مدير منصة",
     "removePlatformRole": "إزالة دور المنصة"
+  },
+  "landmarks": {
+    "title": "المعالم",
+    "subtitle": "نقاط مرجعية عامة تظهر على خريطة عنوان العميل للتوجيه",
+    "loadError": "تعذّر تحميل المعالم.",
+    "createTitle": "إضافة معلم",
+    "editTitle": "تعديل معلم",
+    "namePlaceholder": "اسم المعلم (مثال: دوار وسط المدينة)",
+    "mapHint": "انقر على الخريطة لتحديد الموقع، أو اسحب العلامة.",
+    "coordinates": "المحدَّد: {{lat}}، {{lng}}",
+    "create": "إضافة معلم",
+    "saveChanges": "حفظ التغييرات",
+    "nameRequired": "أدخل اسم المعلم.",
+    "createdNotice": "تمت إضافة المعلم.",
+    "updatedNotice": "تم تحديث المعلم.",
+    "empty": "لا توجد معالم بعد.",
+    "name": "الاسم",
+    "latitude": "خط العرض",
+    "longitude": "خط الطول"
   },
   "auditLog": {
     "title": "سجل التدقيق",

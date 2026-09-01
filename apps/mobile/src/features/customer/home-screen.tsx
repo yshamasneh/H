@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Image,
@@ -24,24 +24,28 @@ import {
 import { getAccessToken } from "../../core/session";
 import { DepartmentStripSkeleton, OfferCardSkeleton, ProductGridSkeleton } from "../../components/skeleton";
 import { Icon, disclosureIconName } from "../../theme/icon";
-import { colors, iconSize, radius, spacing } from "../../theme/tokens";
+import { iconSize, radius, spacing, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 import { cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
 import { forgetMarketStore, resolveMarketStore, type MarketStore } from "./market";
-import { customerTheme } from "./theme";
+import { useCustomerTheme, type CustomerTheme } from "./theme";
 
 /* On the dark hero/offer panels below (customerTheme.colors.secondary, which
    resolves to the same near-black as surfaceInverse), text hierarchy uses
    translucent white the same way apps/admin's dark sidebar does — there is
    no token for it there either, since it's a function of the specific panel
    colour rather than a reusable semantic. */
+// These sit on the always-dark hero/offer panels (customerTheme inverseSurface),
+// which stay dark in both light and dark mode, so the text stays white in both.
 const onDark = {
-  strong: colors.textInverse,
+  strong: "#FFFFFF",
   medium: "rgba(255, 255, 255, 0.72)",
   soft: "rgba(255, 255, 255, 0.55)"
 };
 
 const logo = require("../../../assets/logo/jovo-wordmark.png");
+const mascot = require("../../../assets/logo/jovo_mascot_final.png");
 
 const storefrontProductCount = 8;
 
@@ -72,6 +76,9 @@ export function CustomerHomeScreen(props: {
   onOpenNotifications: () => void;
 }) {
   const { t } = useTranslation(["customer", "common"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   // undefined while resolving, null when no supermarket is reachable.
   const [store, setStore] = useState<MarketStore | null | undefined>(undefined);
   const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
@@ -139,6 +146,61 @@ export function CustomerHomeScreen(props: {
         refreshControl={<RefreshControl onRefresh={() => void refresh()} refreshing={refreshing} tintColor={customerTheme.colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* Offers lead the screen: a horizontally scrollable row above the
+            greeting so a promotion is the first thing a returning customer sees. */}
+        <View style={[styles.sectionHeader, styles.firstSectionHeader]}>
+          <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
+        </View>
+        {visibleOffers === undefined ? (
+          <ScrollView
+            contentContainerStyle={styles.offersRowContent}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.offersRow}
+          >
+            <View style={styles.offerSlot}><OfferCardSkeleton /></View>
+            <View style={styles.offerSlot}><OfferCardSkeleton /></View>
+          </ScrollView>
+        ) : visibleOffers.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="star" size="lg" /></View>
+            <Text style={styles.emptyTitle}>{t("home.noOffersTitle")}</Text>
+            <Text style={styles.emptyText}>{t("home.noOffersTextMarket")}</Text>
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.offersRowContent}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.offersRow}
+          >
+            {visibleOffers.map((offer) => (
+              <Pressable
+                key={offer.id}
+                onPress={() => store && props.onOpenCatalog(store)}
+                style={styles.offerCard}
+              >
+                <View style={styles.offerVisual}>
+                  {offer.imageUrl ? (
+                    <Image resizeMode="cover" source={{ uri: offer.imageUrl }} style={styles.fullImage} />
+                  ) : (
+                    <Text style={styles.offerEmoji}>%</Text>
+                  )}
+                </View>
+                <View style={styles.offerCopy}>
+                  <Text style={styles.offerRestaurant}>{offer.restaurantName ?? t("home.tasawaqWideOffer")}</Text>
+                  <Text style={styles.offerTitle}>{offer.title}</Text>
+                  {offer.description ? <Text numberOfLines={2} style={styles.offerDescription}>{offer.description}</Text> : null}
+                  <Text style={styles.offerDiscount}>{offerLabel(offer, t)}</Text>
+                  {offer.endsAt ? (
+                    <Text style={styles.offerExpiry}>{t("home.offerEndsLabel", { date: new Date(offer.endsAt).toLocaleDateString() })}</Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
         <View style={styles.topBar}>
           <View>
             <Text style={styles.eyebrow}>JOVO</Text>
@@ -159,7 +221,10 @@ export function CustomerHomeScreen(props: {
             <Text style={styles.greeting}>{t("home.greeting", { name: firstName(props.user.fullName, t) })}</Text>
             <Text style={styles.greetingSubtitle}>{t("home.greetingSubtitleMarket")}</Text>
           </View>
-          <Image resizeMode="contain" source={logo} style={styles.logo} />
+          <View style={styles.brandLockup}>
+            <Image resizeMode="contain" source={mascot} style={styles.logoMascot} />
+            <Image resizeMode="contain" source={logo} style={styles.logo} />
+          </View>
         </View>
 
         {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
@@ -244,47 +309,6 @@ export function CustomerHomeScreen(props: {
           </>
         ) : null}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
-        </View>
-        {visibleOffers === undefined ? (
-          <>
-            <OfferCardSkeleton />
-            <OfferCardSkeleton />
-          </>
-        ) : visibleOffers.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="star" size="lg" /></View>
-            <Text style={styles.emptyTitle}>{t("home.noOffersTitle")}</Text>
-            <Text style={styles.emptyText}>{t("home.noOffersTextMarket")}</Text>
-          </View>
-        ) : (
-          visibleOffers.map((offer) => (
-            <Pressable
-              key={offer.id}
-              onPress={() => store && props.onOpenCatalog(store)}
-              style={styles.offerCard}
-            >
-              <View style={styles.offerVisual}>
-                {offer.imageUrl ? (
-                  <Image resizeMode="cover" source={{ uri: offer.imageUrl }} style={styles.fullImage} />
-                ) : (
-                  <Text style={styles.offerEmoji}>%</Text>
-                )}
-              </View>
-              <View style={styles.offerCopy}>
-                <Text style={styles.offerRestaurant}>{offer.restaurantName ?? t("home.tasawaqWideOffer")}</Text>
-                <Text style={styles.offerTitle}>{offer.title}</Text>
-                {offer.description ? <Text numberOfLines={2} style={styles.offerDescription}>{offer.description}</Text> : null}
-                <Text style={styles.offerDiscount}>{offerLabel(offer, t)}</Text>
-                {offer.endsAt ? (
-                  <Text style={styles.offerExpiry}>{t("home.offerEndsLabel", { date: new Date(offer.endsAt).toLocaleDateString() })}</Text>
-                ) : null}
-              </View>
-            </Pressable>
-          ))
-        )}
-
         {marketClosed ? null : (
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{t("home.marketProductsSectionTitle")}</Text>
@@ -342,6 +366,9 @@ function StorefrontProductCard(props: {
   onOpen: () => void;
 }) {
   const { t } = useTranslation(["customer"]);
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const { product } = props;
   return (
     <Pressable onPress={props.onOpen} style={styles.productCard}>
@@ -389,11 +416,13 @@ function offerLabel(offer: RestaurantOffer, t: (key: string, options?: Record<st
   return t("home.percentOffOrderLabel", { percent });
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
   contentWithCart: { paddingBottom: spacing[10] + spacing[8] },
   topBar: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  brandLockup: { alignItems: "center", flexDirection: "row", gap: spacing[2] },
+  logoMascot: { height: 34, width: 33 },
   eyebrow: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
   location: { ...text("bodySm", "bold"), color: customerTheme.colors.text, marginTop: spacing[1] },
   iconButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 46, justifyContent: "center", position: "relative", width: 46, ...customerTheme.shadow },
@@ -408,7 +437,7 @@ const styles = StyleSheet.create({
   searchIconSlot: { marginEnd: spacing[3] },
   searchText: { ...text("bodySm"), color: customerTheme.colors.textMuted, flex: 1 },
   filterButton: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
-  marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.secondary, borderRadius: radius.lg, flexDirection: "row", marginTop: spacing[5], minHeight: 112, padding: spacing[4], ...customerTheme.shadow },
+  marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.inverseSurface, borderRadius: radius.lg, flexDirection: "row", marginTop: spacing[5], minHeight: 112, padding: spacing[4], ...customerTheme.shadow },
   marketIcon: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, height: 70, justifyContent: "center", width: 70 },
   marketEmoji: { fontSize: iconSize.xl },
   marketCopy: { flex: 1, marginStart: spacing[4] },
@@ -416,6 +445,10 @@ const styles = StyleSheet.create({
   marketTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
   marketDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[4], marginTop: spacing[7] },
+  firstSectionHeader: { marginTop: 0 },
+  offersRow: { marginBottom: spacing[1] },
+  offersRowContent: { gap: spacing[4], paddingEnd: spacing[2] },
+  offerSlot: { width: 320 },
   sectionTitle: { ...text("h2", "bold"), color: customerTheme.colors.text },
   seeAll: { ...text("caption", "bold"), color: customerTheme.colors.primary },
   emptyCard: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, marginTop: spacing[4], padding: spacing[6] },
@@ -444,7 +477,7 @@ const styles = StyleSheet.create({
   },
   departmentName: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
   departmentCount: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
-  offerCard: { backgroundColor: customerTheme.colors.secondary, borderRadius: radius.lg, flexDirection: "row", marginBottom: spacing[4], minHeight: 150, overflow: "hidden", ...customerTheme.shadow },
+  offerCard: { backgroundColor: customerTheme.colors.inverseSurface, borderRadius: radius.lg, flexDirection: "row", minHeight: 150, overflow: "hidden", width: 320, ...customerTheme.shadow },
   offerVisual: { alignItems: "center", backgroundColor: colors.neutralSubtle, justifyContent: "center", minHeight: 150, width: "38%" },
   fullImage: { height: "100%", width: "100%" },
   offerEmoji: { color: customerTheme.colors.primary, fontSize: iconSize.xxxl, fontWeight: "900" },

@@ -10,6 +10,7 @@ import { LiveOrdersPage } from "./pages/business/LiveOrdersPage";
 import { StaffPage } from "./pages/business/StaffPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DriversPage } from "./pages/DriversPage";
+import { LandmarksPage } from "./pages/LandmarksPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -60,6 +61,7 @@ function PlatformRoutes() {
       <Route element={<OrderDetailPage />} path="/orders/:orderId" />
       <Route element={<DriversPage />} path="/drivers" />
       <Route element={<UsersPage />} path="/users" />
+      <Route element={<LandmarksPage />} path="/landmarks" />
       <Route element={<AccountingPage />} path="/accounting" />
       <Route element={<AuditLogPage />} path="/audit-log" />
       <Route element={<Navigate replace to="/" />} path="*" />

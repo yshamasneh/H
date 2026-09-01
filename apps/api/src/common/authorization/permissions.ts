@@ -14,6 +14,7 @@ export const platformPermissions = [
   "MANAGE_ROLES",
   "MANAGE_DRIVERS",
   "MANAGE_OFFERS",
+  "MANAGE_LANDMARKS",
   "VIEW_ACCOUNTING",
   "MANAGE_ACCOUNTING_SETTINGS",
   // Deciding a supermarket spend, taking a driver's cash, and paying a partner are three

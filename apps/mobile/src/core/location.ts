@@ -11,7 +11,7 @@ export async function getCurrentCoordinates(): Promise<CurrentCoordinates> {
     throw new Error("Location permission is required to calculate delivery availability and price.");
   }
 
-  const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+  const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
   return {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude

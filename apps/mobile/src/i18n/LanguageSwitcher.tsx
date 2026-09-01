@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supportedLanguages, type SupportedLanguage } from "../core/language";
-import { colors, radius, spacing } from "../theme/tokens";
+import { radius, spacing, type ThemeColors } from "../theme/tokens";
+import { useTheme } from "../theme/theme-context";
 import { text } from "../theme/typography";
 import { changeLanguage } from "./index";
 import { reconcileRTL, reloadApp } from "./rtl";
@@ -11,6 +12,8 @@ const languageLabels: Record<SupportedLanguage, string> = { ar: "العربية"
 
 export function LanguageSwitcher() {
   const { t, i18n } = useTranslation();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   // null = idle · "reloading" = auto-reload in progress · "manual" = auto-reload unavailable.
   const [restart, setRestart] = useState<"reloading" | "manual" | null>(null);
 
@@ -53,7 +56,7 @@ export function LanguageSwitcher() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     marginTop: spacing[3]
   },
