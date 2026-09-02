@@ -456,3 +456,16 @@ export function updateLandmark(
 export function deleteLandmark(id: string): Promise<{ id: string }> {
   return request(`/api/v1/admin/landmarks/${id}`, { method: "DELETE" });
 }
+
+export type PlatformSettings = {
+  substitutionOptionEnabled: boolean;
+  updatedAt: string;
+};
+
+export function getPlatformSettings(): Promise<PlatformSettings> {
+  return request("/api/v1/admin/settings");
+}
+
+export function updatePlatformSettings(body: { substitutionOptionEnabled: boolean }): Promise<PlatformSettings> {
+  return request("/api/v1/admin/settings", { method: "PATCH", body });
+}

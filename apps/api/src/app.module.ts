@@ -19,6 +19,7 @@ import { OrdersModule } from "./orders/orders.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { RestaurantsModule } from "./restaurants/restaurants.module";
+import { SettingsModule } from "./settings/settings.module";
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { RestaurantsModule } from "./restaurants/restaurants.module";
     OffersModule,
     LandmarksModule,
     AccountingModule,
+    SettingsModule,
     AdminModule
   ],
   providers: [

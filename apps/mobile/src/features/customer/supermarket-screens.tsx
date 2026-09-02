@@ -189,9 +189,6 @@ export function SupermarketProductScreen(props: {
             {product.offer ? <Text style={styles.oldPrice}>{formatPrice(product.priceMinor)}</Text> : null}
             <Text style={styles.detailPrice}>{formatPrice(product.effectivePriceMinor)}</Text>
           </View>
-          <Text style={styles.stockText}>
-            {product.stockQuantity === null ? t("supermarket.availableStock") : t("supermarket.inStock", { count: product.stockQuantity })}
-          </Text>
           <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: allowSubstitution }}
@@ -400,7 +397,6 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   detailPriceRow: { alignItems: "center", flexDirection: "row", gap: spacing[3], marginTop: spacing[5] },
   oldPrice: { ...text("body"), color: customerTheme.colors.textMuted, textDecorationLine: "line-through" },
   detailPrice: { ...text("h1", "bold"), color: customerTheme.colors.secondary },
-  stockText: { ...text("caption", "bold"), color: customerTheme.colors.success, marginTop: spacing[2] },
   quantityRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[6] },
   quantityLabel: { ...text("body", "bold"), color: customerTheme.colors.text },
   quantityStepper: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.md, flexDirection: "row", gap: spacing[3], padding: spacing[1] },

@@ -63,7 +63,7 @@ test("a rapid double-tap on Place order submits exactly one order", async () => 
   // createOrder stays pending so the screen doesn't navigate away mid-assertion.
   (createOrder as jest.Mock).mockReturnValue(new Promise(() => {}));
 
-  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} />);
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled={true} />);
 
   // Provide a valid delivery address, then get a delivery quote (Place order is gated on it).
   fireEvent.changeText(
@@ -87,7 +87,7 @@ test("a rapid double-tap on Place order submits exactly one order", async () => 
 
 test("Place order is refused until a delivery quote has been calculated", async () => {
   (createOrder as jest.Mock).mockResolvedValue({ id: "order-1" });
-  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} />);
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled={true} />);
 
   fireEvent.changeText(
     screen.getByPlaceholderText(i18n.t("cart:checkout.addressPlaceholder")),
@@ -115,7 +115,7 @@ const keyOfCall = (index: number) => (createOrder as jest.Mock).mock.calls[index
 
 test("the idempotency key is reused across retries within one checkout attempt (TC-081 mobile)", async () => {
   (createOrder as jest.Mock).mockRejectedValueOnce(new Error("network")).mockResolvedValue({ id: "order-1" });
-  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} />);
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled={true} />);
   await driveToQuote();
   const placeOrder = await screen.findByText(i18n.t("cart:checkout.placeOrder"));
 
@@ -135,7 +135,7 @@ test("the idempotency key is reused across retries within one checkout attempt (
 
 test("a new checkout attempt (different basket) mints a fresh idempotency key (TC-081 mobile)", async () => {
   (createOrder as jest.Mock).mockReturnValue(new Promise(() => {}));
-  const { unmount } = render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} />);
+  const { unmount } = render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled={true} />);
   await driveToQuote();
   await act(async () => {
     fireEvent.press(await screen.findByText(i18n.t("cart:checkout.placeOrder")));
@@ -147,7 +147,7 @@ test("a new checkout attempt (different basket) mints a fresh idempotency key (T
     ...cart,
     items: [{ ...cart.items[0], menuItemId: "m2", quantity: 3 }]
   };
-  render(<CheckoutScreen cart={differentCart} onBack={() => {}} onPlaced={() => {}} />);
+  render(<CheckoutScreen cart={differentCart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled={true} />);
   await driveToQuote();
   await act(async () => {
     fireEvent.press(await screen.findByText(i18n.t("cart:checkout.placeOrder")));

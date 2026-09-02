@@ -18,3 +18,7 @@ secrets/
 apps/api/src/generated/
 __pycache__/
 *.pyc
+
+deploy.ps1
+
+deploy.ps1

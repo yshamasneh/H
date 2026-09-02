@@ -501,6 +501,19 @@ model Landmark {
   updatedAt DateTime @updatedAt
 }
 
+/// Platform-wide configuration held as a single row (id = "singleton"). A
+/// dedicated settings table rather than a per-product flag: whether customers may
+/// request "no substitution" is a platform policy, not a property of any product.
+model PlatformSetting {
+  id String @id
+  /// When false, the customer app hides the "no substitution" choice at checkout,
+  /// so every order allows substitution. Does not alter the per-item
+  /// OrderItem.allowSubstitution field — it only governs whether customers can set it.
+  substitutionOptionEnabled Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
 model MenuCategory {
   id           String     @id @default(uuid()) @db.Uuid
   restaurantId String     @db.Uuid

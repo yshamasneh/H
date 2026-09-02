@@ -71,7 +71,8 @@
       "inventory": "Inventory",
       "staff": "Staff",
       "accounting": "Accounting",
-      "operatingCosts": "Operating costs"
+      "operatingCosts": "Operating costs",
+      "settings": "Settings"
     },
     "signedInAs": "Signed in as",
     "signOut": "Sign out",
@@ -237,6 +238,20 @@
     "name": "Name",
     "latitude": "Latitude",
     "longitude": "Longitude"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Platform-wide options that apply across the customer app",
+    "loadError": "Could not load settings.",
+    "savedNotice": "Settings saved.",
+    "substitution": {
+      "title": "Item substitution at checkout",
+      "description": "When enabled, customers can choose \"no substitution\" for each item at checkout. When disabled, that choice is hidden and every order allows substitution.",
+      "stateOn": "The \"no substitution\" option is available to customers.",
+      "stateOff": "The \"no substitution\" option is hidden from customers.",
+      "enable": "Enable the option",
+      "disable": "Disable the option"
+    }
   },
   "auditLog": {
     "title": "Audit Log",

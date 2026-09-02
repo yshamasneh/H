@@ -337,6 +337,7 @@ export class FakeRestaurantPrisma {
         (!where?.restaurantId || candidate.restaurantId === where.restaurantId) &&
         (!where?.sku || candidate.sku === where.sku) &&
         (!where?.isAvailable || candidate.isAvailable) &&
+        (where?.costPriceMinor?.not !== null || candidate.costPriceMinor !== null) &&
         (!where?.id?.not || candidate.id !== where.id.not)
       );
       if (!item) return null;
@@ -552,6 +553,8 @@ function menuItemMatchesCatalogWhere(item: MenuItemRecord, where: any): boolean 
     typeof value === "string" && value.toLowerCase().includes(String(needle).toLowerCase());
   if (where.restaurantId !== undefined && item.restaurantId !== where.restaurantId) return false;
   if (where.isAvailable !== undefined && item.isAvailable !== where.isAvailable) return false;
+  // `costPriceMinor: { not: null }` — a supermarket product with no cost price is not orderable.
+  if (where.costPriceMinor?.not === null && item.costPriceMinor === null) return false;
   if (where.isFeatured !== undefined && item.isFeatured !== where.isFeatured) return false;
   if (where.categoryId !== undefined) {
     if (typeof where.categoryId === "string") {

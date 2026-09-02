@@ -378,6 +378,10 @@ export class RestaurantsService {
     const where: Prisma.MenuItemWhereInput = {
       restaurantId: supermarketId,
       isAvailable: true,
+      // A supermarket product with no recorded cost price cannot be sold: calculateOrderQuote
+      // fail-closes on it (ORDER_ITEM_COST_PRICE_MISSING) to avoid misallocating the margin.
+      // Hide it from browse so it never appears orderable and then fails silently at cart-add.
+      costPriceMinor: { not: null },
       categoryId: query.categoryId ?? { in: departmentIds },
       isFeatured: query.featured,
       AND: [
@@ -406,6 +410,7 @@ export class RestaurantsService {
         where: {
           restaurantId: supermarketId,
           isAvailable: true,
+          costPriceMinor: { not: null },
           categoryId: { in: departmentIds },
           OR: [{ stockQuantity: null }, { stockQuantity: { gt: 0 } }]
         },
@@ -448,6 +453,9 @@ export class RestaurantsService {
         id: productId,
         restaurantId: supermarketId,
         isAvailable: true,
+        // Same fail-closed guard as the catalog: an item with no cost price is not orderable,
+        // so a direct link to its detail page must 404 rather than offer an un-cartable product.
+        costPriceMinor: { not: null },
         OR: [{ stockQuantity: null }, { stockQuantity: { gt: 0 } }],
         category: { isActive: true }
       },

@@ -146,9 +146,32 @@ export function CustomerHomeScreen(props: {
         refreshControl={<RefreshControl onRefresh={() => void refresh()} refreshing={refreshing} tintColor={customerTheme.colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Offers lead the screen: a horizontally scrollable row above the
-            greeting so a promotion is the first thing a returning customer sees. */}
-        <View style={[styles.sectionHeader, styles.firstSectionHeader]}>
+        {/* The identity block leads the screen: the notifications row and the greeting +
+            wordmark/mascot are the very first thing a returning customer sees. */}
+        <View style={styles.topBar}>
+          <Pressable
+            accessibilityLabel={t("common:notifications")}
+            onPress={props.onOpenNotifications}
+            style={styles.iconButton}
+          >
+            <Icon color={customerTheme.colors.text} name="notifications" size="md" />
+            {unreadCount > 0 ? <View style={styles.notificationDot} /> : null}
+          </Pressable>
+        </View>
+
+        <View style={styles.greetingRow}>
+          <View style={styles.greetingText}>
+            <Text style={styles.greeting}>{t("home.greeting", { name: firstName(props.user.fullName, t) })}</Text>
+            <Text style={styles.greetingSubtitle}>{t("home.greetingSubtitleMarket")}</Text>
+          </View>
+          <View style={styles.brandLockup}>
+            <Image resizeMode="contain" source={mascot} style={styles.logoMascot} />
+            <Image resizeMode="contain" source={logo} style={styles.logo} />
+          </View>
+        </View>
+
+        {/* Offers sit directly under the identity block: a horizontally scrollable promo row. */}
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
         </View>
         {visibleOffers === undefined ? (
@@ -200,32 +223,6 @@ export function CustomerHomeScreen(props: {
             ))}
           </ScrollView>
         )}
-
-        <View style={styles.topBar}>
-          <View>
-            <Text style={styles.eyebrow}>JOVO</Text>
-            <Text style={styles.location}>{storeName}</Text>
-          </View>
-          <Pressable
-            accessibilityLabel={t("common:notifications")}
-            onPress={props.onOpenNotifications}
-            style={styles.iconButton}
-          >
-            <Icon color={customerTheme.colors.text} name="notifications" size="md" />
-            {unreadCount > 0 ? <View style={styles.notificationDot} /> : null}
-          </Pressable>
-        </View>
-
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingText}>
-            <Text style={styles.greeting}>{t("home.greeting", { name: firstName(props.user.fullName, t) })}</Text>
-            <Text style={styles.greetingSubtitle}>{t("home.greetingSubtitleMarket")}</Text>
-          </View>
-          <View style={styles.brandLockup}>
-            <Image resizeMode="contain" source={mascot} style={styles.logoMascot} />
-            <Image resizeMode="contain" source={logo} style={styles.logo} />
-          </View>
-        </View>
 
         {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
 
@@ -420,11 +417,9 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
   contentWithCart: { paddingBottom: spacing[10] + spacing[8] },
-  topBar: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  topBar: { alignItems: "center", flexDirection: "row", justifyContent: "flex-end" },
   brandLockup: { alignItems: "center", flexDirection: "row", gap: spacing[2] },
   logoMascot: { height: 34, width: 33 },
-  eyebrow: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
-  location: { ...text("bodySm", "bold"), color: customerTheme.colors.text, marginTop: spacing[1] },
   iconButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 46, justifyContent: "center", position: "relative", width: 46, ...customerTheme.shadow },
   notificationDot: { backgroundColor: customerTheme.colors.primary, borderColor: colors.surface, borderRadius: 6, borderWidth: 2, height: 10, position: "absolute", end: 7, top: 7, width: 10 },
   greetingRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[6] },
@@ -437,15 +432,14 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   searchIconSlot: { marginEnd: spacing[3] },
   searchText: { ...text("bodySm"), color: customerTheme.colors.textMuted, flex: 1 },
   filterButton: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
-  marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.inverseSurface, borderRadius: radius.lg, flexDirection: "row", marginTop: spacing[5], minHeight: 112, padding: spacing[4], ...customerTheme.shadow },
+  marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.lg, flexDirection: "row", marginTop: spacing[5], minHeight: 112, padding: spacing[4], ...customerTheme.shadow },
   marketIcon: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, height: 70, justifyContent: "center", width: 70 },
   marketEmoji: { fontSize: iconSize.xl },
   marketCopy: { flex: 1, marginStart: spacing[4] },
-  marketEyebrow: { ...text("label", "bold"), color: customerTheme.colors.primary },
+  marketEyebrow: { ...text("label", "bold"), color: onDark.medium },
   marketTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
   marketDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[4], marginTop: spacing[7] },
-  firstSectionHeader: { marginTop: 0 },
   offersRow: { marginBottom: spacing[1] },
   offersRowContent: { gap: spacing[4], paddingEnd: spacing[2] },
   offerSlot: { width: 320 },

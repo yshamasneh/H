@@ -19,6 +19,7 @@ import { useAppFonts } from "./src/theme/fonts";
 import { colors } from "./src/theme/tokens";
 import {
   fetchCurrentUser,
+  getPlatformSettings,
   logout,
   type AuthResult,
   type MenuItemSummary,
@@ -184,6 +185,9 @@ function TasawaQApp() {
   // Gate cart persistence until the stored cart has been read, so the first render's
   // empty state can't overwrite a saved cart before we've loaded it (M-3).
   const [cartHydrated, setCartHydrated] = useState(false);
+  // Platform-wide "no substitution" policy. Defaults to true (option shown) so a slow or failed
+  // settings fetch never blocks checkout; refreshed each time the cart/checkout opens (see below).
+  const [substitutionEnabled, setSubstitutionEnabled] = useState(true);
   // Every screen after the splash renders text in Cairo/Inter, so the splash
   // (a logo image, no text) stays up until fonts are ready too — otherwise
   // the loading screen or first screen would flash in the system font.
@@ -226,11 +230,17 @@ function TasawaQApp() {
           // cached identity: keep the user in their app. Each screen surfaces its own
           // "couldn't load — pull to refresh" state instead of a forced logout.
           setScreen(homeForUser(outcome.user));
-        } else if (outcome.status === "signed-out" || outcome.status === "unauthenticated") {
-          // No usable session → fall through to login and don't carry a basket into the
-          // logged-out state (clearTokens already cleared the persisted copy on sign-out).
+        } else if (outcome.status === "signed-out") {
+          // A 401 actively rejected the session: restoreSession already cleared the persisted
+          // tokens *and* the saved cart (via clearTokens), so this only syncs React state to match.
           setCart(null);
         }
+        // "unauthenticated" (no token to confirm this launch) deliberately leaves the cart alone.
+        // It was rehydrated from durable storage above and nothing cleared it (no logout ran), so
+        // keeping it is what lets a saved basket survive a reload/relaunch (M-3) — the old
+        // unconditional setCart(null) here wiped exactly the cart the persistence exists to protect.
+        // This matters most on web, where tokens live in volatile sessionStorage but the cart lives
+        // in durable localStorage. An explicit logout (handleLogout → clearTokens) is what clears it.
       } finally {
         if (isMounted) {
           setCartHydrated(true);
@@ -252,6 +262,26 @@ function TasawaQApp() {
     if (!cartHydrated) return;
     void cartRepository.save(cart);
   }, [cart, cartHydrated]);
+
+  // Refresh the substitution policy each time the customer opens the cart or checkout — the only
+  // screens where it matters — so an admin toggling it is reflected the next time they go to pay.
+  useEffect(() => {
+    if (screen.name !== "cart" && screen.name !== "checkout") return;
+    let cancelled = false;
+    void (async () => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) return;
+      try {
+        const settings = await getPlatformSettings(accessToken);
+        if (!cancelled) setSubstitutionEnabled(settings.substitutionOptionEnabled);
+      } catch {
+        // Non-fatal: keep the current value (default shows the option) so checkout is never blocked.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [screen.name]);
 
   async function handleAuthenticated(result: AuthResult, notice?: string) {
     await saveTokens(result);
@@ -610,6 +640,7 @@ function TasawaQApp() {
             onIncrement={handleIncrementCartItem}
             onRemove={handleRemoveCartItem}
             onToggleSubstitution={handleToggleCartItemSubstitution}
+            substitutionEnabled={substitutionEnabled}
           />
         </CustomerTabShell>
       );
@@ -622,6 +653,7 @@ function TasawaQApp() {
             setCart(null);
             setScreen(orderToConfirmation(screen.user, order));
           }}
+          substitutionEnabled={substitutionEnabled}
         />
       );
     case "order-confirmation":

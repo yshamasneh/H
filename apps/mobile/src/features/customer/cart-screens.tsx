@@ -20,11 +20,13 @@ import {
   decideOrderFulfillment,
   getOrderQuote,
   getMyOrder,
+  listLandmarks,
   listMyAddresses,
   listMyOrders,
   orderPaymentMethods,
   type CreateOrderInput,
   type DeliveryStatusSummary,
+  type Landmark,
   type OrderDetail,
   type OrderQuote,
   type OrderPaymentMethod,
@@ -49,7 +51,7 @@ import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 import i18n from "../../i18n";
 import { LocationMap } from "../../components/location-map";
-import type { MapCoordinate } from "../../components/location-map.types";
+import { landmarkMarkerColor, type LocationMapMarker, type MapCoordinate } from "../../components/location-map.types";
 
 const currencyCode = "ILS";
 // Default checkout-map center: the Biddu-enclave service area, used only until
@@ -65,6 +67,8 @@ type CartScreenProps = {
   onRemove: (menuItemId: string) => void;
   onToggleSubstitution: (menuItemId: string, allowSubstitution: boolean) => void;
   onCheckout: () => void;
+  /** When false (admin-disabled platform-wide), the per-item substitution choice is hidden. */
+  substitutionEnabled: boolean;
 };
 
 export function CartScreen(props: CartScreenProps) {
@@ -98,15 +102,17 @@ export function CartScreen(props: CartScreenProps) {
                     <Text style={styles.cartRowName}>{item.name}</Text>
                     <Text style={styles.cartRowUnitPrice}>{t("cart.unitPriceLabel", { price: formatPrice(item.priceMinor), unit: item.unitLabel })}</Text>
                     <Text style={styles.cartRowLineTotal}>{formatPrice(item.priceMinor * item.quantity)}</Text>
-                    <Pressable
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: item.allowSubstitution }}
-                      onPress={() => props.onToggleSubstitution(item.menuItemId, !item.allowSubstitution)}
-                    >
-                      <Text style={styles.substitutionText}>
-                        {item.allowSubstitution ? t("cart.substitutionAllowed") : t("cart.substitutionNotAllowed")}
-                      </Text>
-                    </Pressable>
+                    {props.substitutionEnabled ? (
+                      <Pressable
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: item.allowSubstitution }}
+                        onPress={() => props.onToggleSubstitution(item.menuItemId, !item.allowSubstitution)}
+                      >
+                        <Text style={styles.substitutionText}>
+                          {item.allowSubstitution ? t("cart.substitutionAllowed") : t("cart.substitutionNotAllowed")}
+                        </Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   <Pressable
                     accessibilityLabel={t("cart.removeItemAccessibility", { name: item.name })}
@@ -154,6 +160,8 @@ type CheckoutScreenProps = {
   cart: Cart | null;
   onBack: () => void;
   onPlaced: (order: OrderDetail) => void;
+  /** Mirrors the platform setting; when false, substitution is always allowed (see buildOrderItems). */
+  substitutionEnabled: boolean;
 };
 
 export function CheckoutScreen(props: CheckoutScreenProps) {
@@ -161,6 +169,17 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   const { colors } = useTheme();
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
+
+  // The one place order lines are built for both the quote and the final order. When the admin has
+  // disabled the substitution option, the customer can't choose, so every line allows substitution
+  // (the permissive default) — the OrderItem.allowSubstitution field and its server logic are untouched.
+  function buildOrderItems() {
+    return (props.cart?.items ?? []).map((line) => ({
+      menuItemId: line.menuItemId,
+      quantity: line.quantity,
+      allowSubstitution: props.substitutionEnabled ? line.allowSubstitution : true
+    }));
+  }
   const [deliveryLabel, setDeliveryLabel] = useState(() => t("checkout.labelPlaceholder"));
   const [deliveryAddressLine, setDeliveryAddressLine] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>("CASH");
@@ -171,6 +190,20 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   const [coordinates, setCoordinates] = useState<CurrentCoordinates>(defaultMapCoordinate);
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [landmarks, setLandmarks] = useState<Landmark[]>([]);
+  // Named landmarks render on the checkout map as static orientation pins alongside the
+  // customer's own draggable delivery pin, matching the account address screen.
+  const landmarkMarkers = useMemo<LocationMapMarker[]>(
+    () =>
+      landmarks.map((landmark) => ({
+        id: landmark.id,
+        title: landmark.name,
+        latitude: landmark.latitude,
+        longitude: landmark.longitude,
+        color: landmarkMarkerColor
+      })),
+    [landmarks]
+  );
   // Synchronous double-submit guard. `loading` also disables the button, but that only
   // takes effect on the next render — two taps in the same frame both slip through before
   // then. This ref flips synchronously, so the second tap is refused immediately.
@@ -197,6 +230,15 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       .catch(() => setSavedAddresses([]));
   }, []);
 
+  // Landmarks are orientation aids only, so their own fetch stays non-fatal (mirrors
+  // account-screen.tsx): a failure just leaves the map without reference pins.
+  useEffect(() => {
+    getAccessToken()
+      .then((accessToken) => (accessToken ? listLandmarks(accessToken) : []))
+      .then(setLandmarks)
+      .catch(() => setLandmarks([]));
+  }, []);
+
   function selectSavedAddress(address: SavedAddress) {
     setDeliveryLabel(address.label);
     setDeliveryAddressLine(address.addressLine);
@@ -217,11 +259,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       if (!accessToken) throw new Error(t("common:sessionExpired"));
       setQuote(await getOrderQuote(accessToken, {
         restaurantId: props.cart.restaurantId,
-        items: props.cart.items.map((line) => ({
-          menuItemId: line.menuItemId,
-          quantity: line.quantity,
-          allowSubstitution: line.allowSubstitution
-        })),
+        items: buildOrderItems(),
         deliveryLabel: deliveryLabel.trim() || t("checkout.labelPlaceholder"),
         deliveryAddressLine: deliveryAddressLine.trim().length >= 3 ? deliveryAddressLine.trim() : t("checkout.selectedDeliveryLocationFallback"),
         deliveryLatitude: nextCoordinates.latitude,
@@ -263,11 +301,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       if (!accessToken) throw new Error(t("common:sessionExpired"));
       setQuote(await getOrderQuote(accessToken, {
         restaurantId: props.cart.restaurantId,
-        items: props.cart.items.map((line) => ({
-          menuItemId: line.menuItemId,
-          quantity: line.quantity,
-          allowSubstitution: line.allowSubstitution
-        })),
+        items: buildOrderItems(),
         deliveryLabel: deliveryLabel.trim() || t("checkout.labelPlaceholder"),
         deliveryAddressLine: deliveryAddressLine.trim(),
         deliveryLatitude: coordinates.latitude,
@@ -311,11 +345,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       }
       const input: CreateOrderInput = {
         restaurantId: props.cart.restaurantId,
-        items: props.cart.items.map((line) => ({
-          menuItemId: line.menuItemId,
-          quantity: line.quantity,
-          allowSubstitution: line.allowSubstitution
-        })),
+        items: buildOrderItems(),
         deliveryLabel: deliveryLabel.trim(),
         deliveryAddressLine: deliveryAddressLine.trim(),
         deliveryLatitude: coordinates.latitude,
@@ -399,7 +429,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           value={deliveryAddressLine}
         />
         <Text style={styles.locationNote}>{t("checkout.locationNoteMove")}</Text>
-        <LocationMap coordinate={coordinates} onCoordinateChange={(value) => void chooseMapLocation(value)} />
+        <LocationMap coordinate={coordinates} markers={landmarkMarkers} onCoordinateChange={(value) => void chooseMapLocation(value)} />
         <SecondaryButton
           label={locating ? t("checkout.findingLocation") : t("checkout.useCurrentLocation")}
           onPress={() => void chooseCurrentLocation()}

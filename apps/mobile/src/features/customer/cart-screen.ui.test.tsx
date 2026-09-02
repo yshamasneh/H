@@ -28,7 +28,7 @@ const cart: Cart = {
 
 const noop = () => {};
 
-function renderCart() {
+function renderCart(substitutionEnabled = true) {
   render(
     <CartScreen
       cart={cart}
@@ -39,6 +39,7 @@ function renderCart() {
       onRemove={noop}
       onToggleSubstitution={noop}
       onCheckout={noop}
+      substitutionEnabled={substitutionEnabled}
     />
   );
 }
@@ -55,6 +56,11 @@ test("the substitution toggle exposes a checkbox role and its checked state (TC-
   expect(checkboxes.length).toBeGreaterThanOrEqual(1);
   // allowSubstitution is false → the checkbox reports unchecked.
   expect(checkboxes[0].props.accessibilityState?.checked).toBe(false);
+});
+
+test("the substitution toggle is hidden when the platform option is disabled (TC-196)", () => {
+  renderCart(false);
+  expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
 });
 
 test("cart item controls carry accessible labels (TC-192)", () => {

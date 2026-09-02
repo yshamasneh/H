@@ -444,6 +444,15 @@ export function listLandmarks(accessToken: string): Promise<Landmark[]> {
   return request("/api/v1/landmarks", { accessToken });
 }
 
+export type PublicPlatformSettings = {
+  /** When false, the "no substitution" checkout choice is hidden platform-wide. */
+  substitutionOptionEnabled: boolean;
+};
+
+export function getPlatformSettings(accessToken: string): Promise<PublicPlatformSettings> {
+  return request("/api/v1/settings", { accessToken });
+}
+
 export function registerMyPushToken(
   accessToken: string,
   token: string,

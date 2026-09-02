@@ -395,6 +395,7 @@ async function seedCatalog(prisma: FakeRestaurantPrisma) {
         categoryId: department.id,
         name: "Product",
         priceMinor: 500,
+        costPriceMinor: 300,
         isAvailable: true,
         stockQuantity: 10,
         isFeatured: false,
@@ -445,6 +446,26 @@ test("catalog pagination respects page size, reports the true total, and tolerat
   const beyond = await service.getSupermarketCatalog(market.id, { page: 4, pageSize: 2 } as never);
   assert.equal(beyond.products.length, 0, "a page beyond the last is empty, not an error");
   assert.equal(beyond.total, 5);
+});
+
+test("catalog and detail hide a supermarket product with no cost price, matching the cart-add guard (TC-050)", async () => {
+  const { prisma, service } = createService();
+  const { market, addProduct } = await seedCatalog(prisma);
+  await addProduct({ name: "Priced Product", costPriceMinor: 300 });
+  const orphan = await addProduct({ name: "No Cost Product", costPriceMinor: null });
+
+  // calculateOrderQuote fail-closes on a supermarket item with no cost price, so browse must
+  // not present it as orderable. It is in stock (10) — this is a cost-price gap, not a stock-out.
+  const catalog = await service.getSupermarketCatalog(market.id, {} as never);
+  assert.equal(catalog.total, 1, "the no-cost product is excluded from the catalog total");
+  assert.deepEqual(catalog.products.map((product) => product.name), ["Priced Product"]);
+  assert.equal(catalog.departments[0].productCount, 1, "and from the per-department count");
+
+  await assert.rejects(
+    service.getSupermarketProduct(market.id, orphan.id),
+    hasCode("SUPERMARKET_PRODUCT_NOT_FOUND"),
+    "its detail page 404s instead of offering an un-cartable product"
+  );
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

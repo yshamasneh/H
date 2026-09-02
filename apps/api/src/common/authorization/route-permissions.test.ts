@@ -15,6 +15,7 @@ import { OrdersController } from "../../orders/orders.controller";
 import { RestaurantOrdersController } from "../../orders/restaurant-orders.controller";
 import { AdminRestaurantsController } from "../../restaurants/admin-restaurants.controller";
 import { RestaurantPortalController } from "../../restaurants/restaurant-portal.controller";
+import { AdminSettingsController } from "../../settings/admin-settings.controller";
 import { PERMISSIONS_KEY } from "../decorators/require-permission.decorator";
 import { PermissionsGuard } from "../guards/permissions.guard";
 import { allPermissions, type Permission } from "./permissions";
@@ -52,7 +53,8 @@ test("every platform administration controller is protected by a permission", ()
     [AdminOffersController, "MANAGE_OFFERS"],
     [AdminLandmarksController, "MANAGE_LANDMARKS"],
     [AdminRestaurantsController, "MANAGE_BUSINESSES"],
-    [AdminOrdersController, "VIEW_ALL_ORDERS"]
+    [AdminOrdersController, "VIEW_ALL_ORDERS"],
+    [AdminSettingsController, "MANAGE_PLATFORM_SETTINGS"]
   ];
 
   for (const [controller, permission] of expected) {
@@ -163,6 +165,7 @@ test("every permission a route requires exists in the catalogue", () => {
     AdminLandmarksController,
     AdminRestaurantsController,
     AdminOrdersController,
+    AdminSettingsController,
     AdminAccountingController,
     BusinessAccountingController,
     RestaurantPortalController,

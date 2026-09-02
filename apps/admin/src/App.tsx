@@ -16,6 +16,7 @@ import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { RestaurantDetailPage } from "./pages/RestaurantDetailPage";
 import { RestaurantsPage } from "./pages/RestaurantsPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { UsersPage } from "./pages/UsersPage";
 import { AccountingPage } from "./pages/AccountingPage";
 import { OperatingCostsPage } from "./pages/business/OperatingCostsPage";
@@ -63,6 +64,7 @@ function PlatformRoutes() {
       <Route element={<UsersPage />} path="/users" />
       <Route element={<LandmarksPage />} path="/landmarks" />
       <Route element={<AccountingPage />} path="/accounting" />
+      <Route element={<SettingsPage />} path="/settings" />
       <Route element={<AuditLogPage />} path="/audit-log" />
       <Route element={<Navigate replace to="/" />} path="*" />
     </Routes>
