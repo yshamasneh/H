@@ -164,6 +164,33 @@ $env:EXPO_PUBLIC_API_URL="http://YOUR_COMPUTER_LAN_IP:3000"
 npm run dev:mobile
 ```
 
+## Mobile OTA updates (EAS Update)
+
+`apps/mobile/app.json` has `updates.enabled: true` and a `runtimeVersion` policy of `appVersion`,
+so a build only accepts an OTA update published against the same `version` string as the build
+itself — bump `version` (and the native build numbers) for any change that isn't JS-only.
+
+`apps/mobile/eas.json`'s `preview` and `production` build profiles each declare an EAS
+`"environment"` (`preview` / `production`) instead of hardcoding `EXPO_PUBLIC_API_URL` in the
+file — a hardcoded dev tunnel URL (e.g. an ngrok host) goes dead the moment that tunnel session
+ends, silently bricking every APK built from it afterward. Configure the real value once per
+environment before building:
+
+```powershell
+eas env:create --environment preview --name EXPO_PUBLIC_API_URL --value https://your-preview-api.example.com --visibility plaintext
+eas env:create --environment production --name EXPO_PUBLIC_API_URL --value https://app.example.com --visibility plaintext
+```
+
+Without it, the build fails fast (`Production builds require an HTTPS EXPO_PUBLIC_API_URL`,
+`apps/mobile/src/core/api.ts`) instead of shipping an app that can never reach the API.
+
+Publish an OTA update after a JS-only change:
+
+```powershell
+eas update --branch preview --message "Describe the change"
+eas update --branch production --message "Describe the change"
+```
+
 ## Legacy admin web client
 
 `apps/admin` is preserved temporarily as the previous Vite implementation for reference, but it is not started by the unified command. The supported administration interface now lives inside the shared Expo application at `http://localhost:8081`; signing in with an `ADMIN` account opens it automatically.

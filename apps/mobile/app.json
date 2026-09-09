@@ -60,8 +60,13 @@
       "expo-localization",
       "@maplibre/maplibre-react-native"
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "updates": {
-      "enabled": false
+      "enabled": true,
+      "url": "https://u.expo.dev/46a8fe97-9509-4e20-b8b5-a2b11ba6d2e7",
+      "fallbackToCacheTimeout": 30000
     },
     "extra": {
       "eas": {

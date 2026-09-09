@@ -33,7 +33,7 @@ import { SettingsModule } from "./settings/settings.module";
       useFactory: (config: ConfigService) => [
         {
           ttl: config.get<number>("RATE_LIMIT_TTL_MS", 60_000),
-          limit: config.get<number>("RATE_LIMIT_LIMIT", 60)
+          limit: config.get<number>("RATE_LIMIT_LIMIT", 400)
         }
       ]
     }),

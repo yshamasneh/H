@@ -55,3 +55,25 @@ services:
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      args:
+        # The admin SPA's own public origin, same-origin-proxied to the API by this service's
+        # nginx (see deploy/nginx/admin.conf) — no cross-origin/CORS request is involved.
+        VITE_API_URL: ${ADMIN_APP_URL:?Set ADMIN_APP_URL in .env.production}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${ADMIN_HTTP_PORT:-8080}:80"
+      - "${ADMIN_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ${ADMIN_TLS_CERTIFICATE_PATH:-${TLS_CERTIFICATE_PATH}}:/etc/nginx/tls/fullchain.pem:ro
+      - ${ADMIN_TLS_PRIVATE_KEY_PATH:-${TLS_PRIVATE_KEY_PATH}}:/etc/nginx/tls/privkey.pem:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s

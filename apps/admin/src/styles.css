@@ -619,6 +619,13 @@ table.data-table {
   box-shadow: var(--shadow-3);
 }
 
+/* Leaflet's default divIcon wrapper carries a white background/border; LeafletPicker.tsx draws
+   its own pin shape, so that chrome is stripped here. */
+.picker-pin {
+  background: transparent;
+  border: 0;
+}
+
 .reason-modal h3 {
   margin: 0 0 var(--space-2);
   font-size: var(--fs-h3);

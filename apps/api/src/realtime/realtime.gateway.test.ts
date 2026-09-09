@@ -23,7 +23,8 @@ function createGateway(options: {
     refreshSession: { findUnique: async () => options.session ?? null },
     restaurant: { findUnique: async () => null }
   };
-  return new RealtimeGateway(jwt as never, config as never, prisma as never);
+  const pushSender = { sendToUser: async () => {} };
+  return new RealtimeGateway(jwt as never, config as never, prisma as never, pushSender as never);
 }
 
 function mockSocket(auth: Record<string, unknown> = {}) {
@@ -121,4 +122,18 @@ test("a revoked session is rejected even with a structurally valid token", async
   await gateway.handleConnection(socket as never);
 
   assert.equal(socket._isDisconnected(), true);
+});
+
+test("sendPush delegates to the push sender without awaiting it", () => {
+  const calls: { userId: string; message: unknown }[] = [];
+  const pushSender = {
+    sendToUser: async (userId: string, message: unknown) => {
+      calls.push({ userId, message });
+    }
+  };
+  const gateway = new RealtimeGateway({} as never, {} as never, {} as never, pushSender as never);
+
+  gateway.sendPush("user-1", { title: "New order", body: "You have a new order." });
+
+  assert.deepEqual(calls, [{ userId: "user-1", message: { title: "New order", body: "You have a new order." } }]);
 });

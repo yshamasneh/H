@@ -24,7 +24,7 @@ export type CreateBusinessNotificationInput = Omit<CreateNotificationInput, "use
  */
 export async function createNotification(
   tx: Prisma.TransactionClient,
-  gateway: Pick<RealtimeEmitter, "emitToUser">,
+  gateway: Pick<RealtimeEmitter, "emitToUser" | "sendPush">,
   input: CreateNotificationInput
 ): Promise<void> {
   const notification = await tx.notification.create({
@@ -46,6 +46,14 @@ export async function createNotification(
     isRead: notification.isRead,
     createdAt: notification.createdAt
   });
+  // A socket event only reaches an app that is already open; a device push is what reaches the
+  // business (or customer, or driver) when it is not. Most important case: a new order must wake
+  // up the business even with the app closed.
+  gateway.sendPush(input.userId, {
+    title: notification.title,
+    body: notification.body,
+    data: { type: notification.type, relatedEntityId: notification.relatedEntityId ?? undefined }
+  });
 }
 
 /**
@@ -55,7 +63,7 @@ export async function createNotification(
  */
 export async function createBusinessNotification(
   tx: Prisma.TransactionClient,
-  gateway: Pick<RealtimeEmitter, "emitToUser">,
+  gateway: Pick<RealtimeEmitter, "emitToUser" | "sendPush">,
   input: CreateBusinessNotificationInput
 ): Promise<void> {
   const members = await tx.businessMember.findMany({

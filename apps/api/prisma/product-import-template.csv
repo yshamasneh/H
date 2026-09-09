@@ -1,0 +1,4 @@
+sku,name,category,price,costPrice,description,brand,unitLabel,barcode,stockQuantity,isVariableWeight,isFeatured,reorderLevel
+FRUIT-APPLE-KG,Red Apples,Fresh Produce,7.50,5.00,Crisp red apples sold by weight.,,1 kg,7291000000201,50,true,true,15
+DAIRY-YOGURT-500G,Plain Yogurt,Dairy & Eggs,8.00,5.80,Full-fat plain yogurt.,Palestine Dairy,500 g tub,7291000000202,25,false,false,8
+PANTRY-OIL-1L,Olive Oil,Pantry,28.00,21.00,Extra virgin olive oil.,Golden Field,1 L bottle,7291000000203,20,false,true,5

@@ -1,44 +1,30 @@
 import { useEffect, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 /**
  * A Leaflet map the admin taps (or drags the marker on) to pick a coordinate.
  *
- * Leaflet is loaded once from the same CDN the mobile web map uses rather than
- * added as an npm dependency, so this stays self-contained. The base layer is
- * Esri World Imagery with a boundaries/places overlay — the same satellite +
- * labels pairing the customer sees on the mobile address map.
+ * Leaflet is bundled as a normal npm dependency (not loaded from a CDN) so the production
+ * build's `script-src 'self'` Content-Security-Policy never has to allow an external script
+ * host. The base layer is Esri World Imagery with a boundaries/places overlay — the same
+ * satellite + labels pairing the customer sees on the mobile address map.
  */
-
-const leafletCssUrl = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-const leafletJsUrl = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-
-type LeafletGlobal = typeof window & { L?: any };
-
-let leafletPromise: Promise<any> | null = null;
-
-function loadLeaflet(): Promise<any> {
-  const scope = window as LeafletGlobal;
-  if (scope.L) return Promise.resolve(scope.L);
-  if (leafletPromise) return leafletPromise;
-  leafletPromise = new Promise((resolve, reject) => {
-    if (!document.querySelector(`link[href="${leafletCssUrl}"]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = leafletCssUrl;
-      document.head.appendChild(link);
-    }
-    const script = document.createElement("script");
-    script.src = leafletJsUrl;
-    script.async = true;
-    script.onload = () => resolve(scope.L);
-    script.onerror = () => reject(new Error("Failed to load Leaflet"));
-    document.body.appendChild(script);
-  });
-  return leafletPromise;
-}
 
 export type PickerCoordinate = { latitude: number; longitude: number };
 export type PickerMarker = PickerCoordinate & { id: string; title: string };
+
+// An explicit icon, not Leaflet's own default marker: the default icon's PNG is referenced by a
+// relative `url(images/marker-icon.png)` inside leaflet.css, which Vite does not resolve/copy
+// when the CSS is bundled as a local module — it would silently render no pin at all in the
+// production build.
+function teardropIcon(color = "#F45A00"): L.DivIcon {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 22 30">` +
+    `<path d="M11 0C4.9 0 0 4.9 0 11c0 8.2 11 19 11 19s11-10.8 11-19C22 4.9 17.1 0 11 0Z" fill="${color}" stroke="#ffffff" stroke-width="1.5"/>` +
+    `<circle cx="11" cy="11" r="4" fill="#ffffff"/></svg>`;
+  return L.divIcon({ html: svg, className: "picker-pin", iconSize: [22, 30], iconAnchor: [11, 30], popupAnchor: [0, -26] });
+}
 
 export function LeafletPicker(props: {
   value: PickerCoordinate;
@@ -47,52 +33,41 @@ export function LeafletPicker(props: {
   height?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-  const extraLayersRef = useRef<any[]>([]);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const extraLayersRef = useRef<L.Layer[]>([]);
   // Keep the latest onChange without re-running the init effect.
   const onChangeRef = useRef(props.onChange);
   onChangeRef.current = props.onChange;
 
   useEffect(() => {
-    let cancelled = false;
-    void loadLeaflet()
-      .then((L) => {
-        if (cancelled || !containerRef.current || mapRef.current) return;
-        const map = L.map(containerRef.current).setView([props.value.latitude, props.value.longitude], 14);
-        L.tileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          { maxZoom: 19, attribution: "Tiles &copy; Esri" }
-        ).addTo(map);
-        L.tileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-          { maxZoom: 19, pane: "overlayPane" }
-        ).addTo(map);
-        const marker = L.marker([props.value.latitude, props.value.longitude], { draggable: true }).addTo(map);
-        marker.on("dragend", () => {
-          const latlng = marker.getLatLng();
-          onChangeRef.current({ latitude: latlng.lat, longitude: latlng.lng });
-        });
-        map.on("click", (event: any) => {
-          marker.setLatLng(event.latlng);
-          onChangeRef.current({ latitude: event.latlng.lat, longitude: event.latlng.lng });
-        });
-        mapRef.current = map;
-        markerRef.current = marker;
-        // Leaflet mis-measures inside a freshly mounted card; recompute once laid out.
-        setTimeout(() => map.invalidateSize(), 0);
-      })
-      .catch(() => {
-        // A blocked CDN just leaves the coordinate readout and manual dragging unavailable; the
-        // rest of the form still works.
-      });
+    if (!containerRef.current || mapRef.current) return;
+    const map = L.map(containerRef.current).setView([props.value.latitude, props.value.longitude], 14);
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, attribution: "Tiles &copy; Esri" }
+    ).addTo(map);
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, pane: "overlayPane" }
+    ).addTo(map);
+    const marker = L.marker([props.value.latitude, props.value.longitude], { draggable: true }).addTo(map);
+    marker.on("dragend", () => {
+      const latlng = marker.getLatLng();
+      onChangeRef.current({ latitude: latlng.lat, longitude: latlng.lng });
+    });
+    map.on("click", (event) => {
+      marker.setLatLng(event.latlng);
+      onChangeRef.current({ latitude: event.latlng.lat, longitude: event.latlng.lng });
+    });
+    mapRef.current = map;
+    markerRef.current = marker;
+    // Leaflet mis-measures inside a freshly mounted card; recompute once laid out.
+    setTimeout(() => map.invalidateSize(), 0);
     return () => {
-      cancelled = true;
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-        markerRef.current = null;
-      }
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
     };
     // Init runs once; value/markers are synced by the effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,12 +82,11 @@ export function LeafletPicker(props: {
 
   // Render the other existing landmarks as faint reference pins.
   useEffect(() => {
-    const scope = window as LeafletGlobal;
-    if (!mapRef.current || !scope.L) return;
-    const L = scope.L;
-    extraLayersRef.current.forEach((layer) => mapRef.current.removeLayer(layer));
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    extraLayersRef.current.forEach((layer) => map.removeLayer(layer));
     extraLayersRef.current = (props.markers ?? []).map((item) =>
-      L.marker([item.latitude, item.longitude], { opacity: 0.55 }).addTo(mapRef.current).bindPopup(item.title)
+      L.marker([item.latitude, item.longitude], { opacity: 0.55 }).addTo(map).bindPopup(item.title)
     );
   }, [props.markers]);
 

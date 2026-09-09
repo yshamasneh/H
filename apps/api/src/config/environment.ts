@@ -65,7 +65,10 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   environment.REQUIRE_HTTPS = readBoolean(environment, "REQUIRE_HTTPS", isProduction);
   environment.PORT = readPositiveInteger(environment, "PORT", 3000);
   environment.RATE_LIMIT_TTL_MS = readPositiveInteger(environment, "RATE_LIMIT_TTL_MS", 60_000);
-  environment.RATE_LIMIT_LIMIT = readPositiveInteger(environment, "RATE_LIMIT_LIMIT", 60);
+  // Palestinian mobile carriers use CGNAT heavily, so many customers share one public IP;
+  // a per-IP limit near typical single-user traffic would throttle unrelated customers against
+  // each other. Default well above that, still configurable per deployment.
+  environment.RATE_LIMIT_LIMIT = readPositiveInteger(environment, "RATE_LIMIT_LIMIT", 400);
   environment.DELIVERY_MIN_FEE_MINOR = readPositiveInteger(environment, "DELIVERY_MIN_FEE_MINOR", 1_000);
   environment.DELIVERY_INCLUDED_DISTANCE_METERS = readPositiveInteger(
     environment,

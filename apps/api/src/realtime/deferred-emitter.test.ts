@@ -59,3 +59,16 @@ test("every emit method the domain services use is buffered", () => {
     ["user:u", "restaurant:r", "order:o", "admins"]
   );
 });
+
+test("a push send is buffered like a socket emit, not dispatched until flush", () => {
+  const gateway = new FakeRealtimeGateway();
+  const emitter = new DeferredEmitter(gateway);
+
+  emitter.sendPush("user-1", { title: "New order", body: "You have a new order." });
+  assert.equal(gateway.pushed.length, 0);
+
+  emitter.flush();
+  assert.deepEqual(gateway.pushed, [
+    { userId: "user-1", message: { title: "New order", body: "You have a new order." } }
+  ]);
+});

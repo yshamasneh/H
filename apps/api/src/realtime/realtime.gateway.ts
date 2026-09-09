@@ -14,6 +14,7 @@ import type { Server, Socket } from "socket.io";
 import type { JwtPayload } from "../auth/auth.types";
 import { PrismaService } from "../prisma/prisma.service";
 import { UserRole } from "../generated/prisma/client";
+import { PushSenderService, type PushMessage } from "./push-sender.service";
 
 export type SocketUser = { id: string; role: UserRole };
 
@@ -36,7 +37,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly pushSender: PushSenderService
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -154,6 +156,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   emitToAdmins(event: string, payload: unknown): void {
     this.safeEmit(() => this.server.to("admins").emit(event, payload));
+  }
+
+  /**
+   * Fire-and-forget device push, deliberately not awaited by callers (see `DeferredEmitter`):
+   * a slow or failing Expo request must never hold up the HTTP response that triggered it.
+   * `PushSenderService` never throws, so nothing here needs to catch again.
+   */
+  sendPush(userId: string, message: PushMessage): void {
+    void this.pushSender.sendToUser(userId, message);
   }
 
   private safeEmit(emit: () => void): void {
