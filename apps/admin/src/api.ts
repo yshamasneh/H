@@ -26,9 +26,13 @@ export type RestaurantStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED"
 export type RestaurantProfile = {
   id: string;
   name: string;
+  businessType: "RESTAURANT" | "SUPERMARKET";
   description: string | null;
   phone: string;
   addressLine: string;
+  latitude: number | null;
+  longitude: number | null;
+  showLocationToCustomer: boolean;
   logoUrl: string | null;
   isOpen: boolean;
   status: RestaurantStatus;
@@ -259,8 +263,8 @@ export function approveRestaurant(id: string): Promise<RestaurantProfile> {
   return request(`/api/v1/admin/restaurants/${id}/approve`, { method: "POST" });
 }
 
-export function rejectRestaurant(id: string): Promise<RestaurantProfile> {
-  return request(`/api/v1/admin/restaurants/${id}/reject`, { method: "POST" });
+export function rejectRestaurant(id: string, reason: string): Promise<RestaurantProfile> {
+  return request(`/api/v1/admin/restaurants/${id}/reject`, { method: "POST", body: { reason } });
 }
 
 export function suspendRestaurant(id: string, reason: string): Promise<RestaurantProfile> {
@@ -269,6 +273,13 @@ export function suspendRestaurant(id: string, reason: string): Promise<Restauran
 
 export function reactivateRestaurant(id: string): Promise<RestaurantProfile> {
   return request(`/api/v1/admin/restaurants/${id}/reactivate`, { method: "POST" });
+}
+
+export function updateStoreLocation(
+  id: string,
+  payload: { addressLine?: string; latitude?: number; longitude?: number; showLocationToCustomer: boolean }
+): Promise<RestaurantProfile> {
+  return request(`/api/v1/admin/restaurants/${id}/location`, { method: "PATCH", body: payload });
 }
 
 export function listAdminOrders(

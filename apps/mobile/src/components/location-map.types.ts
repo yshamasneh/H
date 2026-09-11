@@ -14,6 +14,21 @@ export type LocationMapMarker = MapCoordinate & {
 // name label — rather than by colour. Shared so native and web stay in sync.
 export const landmarkMarkerColor = "#F45A00";
 
+// Turns the public landmark records (from GET /landmarks) into the flag+label map markers every
+// map uses — the customer address/checkout maps and the driver's active-delivery map — so all
+// three render landmarks identically instead of each rebuilding the same mapping.
+export function toLandmarkMarkers(
+  landmarks: { id: string; name: string; latitude: number; longitude: number }[]
+): LocationMapMarker[] {
+  return landmarks.map((landmark) => ({
+    id: landmark.id,
+    title: landmark.name,
+    latitude: landmark.latitude,
+    longitude: landmark.longitude,
+    color: landmarkMarkerColor
+  }));
+}
+
 // Landmark markers are hidden when the map is zoomed out past this level so a
 // wide-area view isn't cluttered; they reappear at neighbourhood/street zoom. The
 // value is a Web-Mercator zoom level, applied consistently by web (Leaflet's

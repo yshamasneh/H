@@ -186,6 +186,52 @@ export function setBusinessItemAvailability(itemId: string, isAvailable: boolean
   });
 }
 
+// ---- admin: manage ANY store's catalogue -------------------------------------------------------
+// These target a store by id (/admin/restaurants/:id/menu/*) so a platform admin can manage a
+// catalogue they do not own. The server guards them with the ADMIN role + MANAGE_BUSINESSES.
+
+const adminMenuBase = (restaurantId: string) => `/api/v1/admin/restaurants/${restaurantId}/menu`;
+
+export function listStoreCategories(restaurantId: string): Promise<MenuCategoryOwner[]> {
+  return request(`${adminMenuBase(restaurantId)}/categories`);
+}
+
+export function createStoreCategory(restaurantId: string, body: { name: string; sortOrder?: number }): Promise<MenuCategoryOwner> {
+  return request(`${adminMenuBase(restaurantId)}/categories`, { method: "POST", body });
+}
+
+export function updateStoreCategory(
+  restaurantId: string,
+  categoryId: string,
+  body: { name?: string; sortOrder?: number; isActive?: boolean }
+): Promise<MenuCategoryOwner> {
+  return request(`${adminMenuBase(restaurantId)}/categories/${categoryId}`, { method: "PATCH", body });
+}
+
+export function deleteStoreCategory(restaurantId: string, categoryId: string): Promise<{ message: string }> {
+  return request(`${adminMenuBase(restaurantId)}/categories/${categoryId}`, { method: "DELETE" });
+}
+
+export function listStoreItems(restaurantId: string): Promise<MenuItemOwner[]> {
+  return request(`${adminMenuBase(restaurantId)}/items`);
+}
+
+export function createStoreItem(restaurantId: string, body: Record<string, unknown>): Promise<MenuItemOwner> {
+  return request(`${adminMenuBase(restaurantId)}/items`, { method: "POST", body });
+}
+
+export function updateStoreItem(restaurantId: string, itemId: string, body: Record<string, unknown>): Promise<MenuItemOwner> {
+  return request(`${adminMenuBase(restaurantId)}/items/${itemId}`, { method: "PATCH", body });
+}
+
+export function deleteStoreItem(restaurantId: string, itemId: string): Promise<{ message: string }> {
+  return request(`${adminMenuBase(restaurantId)}/items/${itemId}`, { method: "DELETE" });
+}
+
+export function setStoreItemAvailability(restaurantId: string, itemId: string, isAvailable: boolean): Promise<MenuItemOwner> {
+  return request(`${adminMenuBase(restaurantId)}/items/${itemId}/availability`, { method: "PATCH", body: { isAvailable } });
+}
+
 // ---- inventory, suppliers, purchasing (supermarket only) ----
 
 export type InventoryRow = {

@@ -29,6 +29,7 @@ type RestaurantRecord = {
   addressLine: string;
   latitude: number | null;
   longitude: number | null;
+  showLocationToCustomer: boolean;
   logoUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -228,6 +229,7 @@ export class FakeRestaurantPrisma {
         addressLine: data.addressLine,
         latitude: data.latitude ?? null,
         longitude: data.longitude ?? null,
+        showLocationToCustomer: data.showLocationToCustomer ?? false,
         logoUrl: data.logoUrl ?? null,
         createdAt: now,
         updatedAt: now
@@ -244,6 +246,7 @@ export class FakeRestaurantPrisma {
       if (data.logoUrl !== undefined) restaurant.logoUrl = data.logoUrl;
       if (data.latitude !== undefined) restaurant.latitude = data.latitude;
       if (data.longitude !== undefined) restaurant.longitude = data.longitude;
+      if (data.showLocationToCustomer !== undefined) restaurant.showLocationToCustomer = data.showLocationToCustomer;
       if (data.isOpen !== undefined) restaurant.isOpen = data.isOpen;
       if (data.opensAt !== undefined) restaurant.opensAt = data.opensAt;
       if (data.closesAt !== undefined) restaurant.closesAt = data.closesAt;
@@ -523,6 +526,7 @@ export class FakeRestaurantPrisma {
       addressLine: "Al-Manara Square, Ramallah",
       latitude: 31.9038,
       longitude: 35.2034,
+      showLocationToCustomer: false,
       logoUrl: null,
       createdAt: now,
       updatedAt: now,

@@ -436,6 +436,10 @@ model Restaurant {
   addressLine          String
   latitude             Float?
   longitude            Float?
+  /// When false, the store's latitude/longitude are withheld from every customer-facing view, so
+  /// the app cannot show its location on the store profile. Admin-controlled per store — never a
+  /// global toggle. Independent of delivery tracking, which reads the coordinates server-side.
+  showLocationToCustomer Boolean              @default(false)
   logoUrl              String?
   /// A promotional partner pays the reduced commission rate and is not billed the monthly
   /// subscription. Stored on the business rather than inferred, and snapshotted onto every order.

@@ -419,6 +419,33 @@ export class RestaurantAdminActionReasonDto {
   reason!: string;
 }
 
+export class AdminStoreLocationDto {
+  @ApiPropertyOptional({ example: "Al-Manara Square, Ramallah" })
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(200)
+  addressLine?: string;
+
+  @ApiPropertyOptional({ example: 31.9038 })
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ApiPropertyOptional({ example: 35.2034 })
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+
+  @ApiProperty({ example: true, description: "Whether customers may see this store's location on its profile." })
+  @IsBoolean()
+  showLocationToCustomer!: boolean;
+}
+
 export class AdminCreateBusinessDto extends PhoneDto {
   @ApiProperty({ example: "Wasel Kitchen" })
   @IsString()

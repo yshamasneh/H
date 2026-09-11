@@ -20,7 +20,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
 import { isValidTimeOfDay, isWithinWeeklyHours, restaurantModerationTransitions } from "./restaurant.rules";
-import type { AdminCreateBusinessDto, AdminRestaurantsQueryDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
+import type { AdminCreateBusinessDto, AdminRestaurantsQueryDto, AdminStoreLocationDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
 import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantPeriodStats, RestaurantProfileView, RestaurantPublicView, RestaurantStatsView, SupermarketCatalogView, SupermarketProductView } from "./restaurants.types";
 
 @Injectable()
@@ -495,6 +495,18 @@ export class RestaurantsService {
     return { items: restaurants.map(toProfileView), page, pageSize, total };
   }
 
+  /**
+   * Cheap existence check for the admin product-management endpoints, which operate on a store by
+   * id rather than the caller's own business. Gives a clean 404 before a create would otherwise fail
+   * on a foreign key, and keeps the admin menu endpoints reading uniformly.
+   */
+  async assertStoreExists(restaurantId: string): Promise<void> {
+    const store = await this.prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { id: true } });
+    if (!store) {
+      throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
+    }
+  }
+
   async adminGetRestaurant(restaurantId: string): Promise<AdminRestaurantView> {
     const restaurant = await this.prisma.restaurant.findUnique({ where: { id: restaurantId }, include: { owner: true } });
     if (!restaurant) {
@@ -574,8 +586,8 @@ export class RestaurantsService {
     return this.transitionPendingStatus(adminUserId, restaurantId, RestaurantStatus.APPROVED, "RESTAURANT_APPROVED");
   }
 
-  async reject(adminUserId: string, restaurantId: string): Promise<RestaurantProfileView> {
-    return this.transitionPendingStatus(adminUserId, restaurantId, RestaurantStatus.REJECTED, "RESTAURANT_REJECTED");
+  async reject(adminUserId: string, restaurantId: string, reason: string): Promise<RestaurantProfileView> {
+    return this.transitionPendingStatus(adminUserId, restaurantId, RestaurantStatus.REJECTED, "RESTAURANT_REJECTED", reason);
   }
 
   async adminSuspend(adminUserId: string, restaurantId: string, reason: string): Promise<RestaurantProfileView> {
@@ -586,11 +598,59 @@ export class RestaurantsService {
     return this.adminStatusChange(adminUserId, restaurantId, RestaurantStatus.APPROVED, restaurantModerationTransitions.reactivate, "RESTAURANT_REACTIVATED", undefined);
   }
 
+  /**
+   * Sets a store's location and the per-store flag that governs whether customers may see it. The
+   * flag is deliberately admin-only (not part of the owner's UpdateRestaurantProfileDto): whether a
+   * store's address is public is a platform decision made per store, not something an owner flips.
+   * Latitude and longitude must be provided together or not at all, matching updateOwnProfile.
+   */
+  async adminUpdateStoreLocation(
+    adminUserId: string,
+    restaurantId: string,
+    input: AdminStoreLocationDto
+  ): Promise<RestaurantProfileView> {
+    if ((input.latitude === undefined) !== (input.longitude === undefined)) {
+      throw new ApiException(
+        400,
+        "RESTAURANT_COORDINATES_INCOMPLETE",
+        "Latitude and longitude must be updated together."
+      );
+    }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const restaurant = await tx.restaurant.findUnique({ where: { id: restaurantId } });
+      if (!restaurant) {
+        throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
+      }
+      const next = await tx.restaurant.update({
+        where: { id: restaurantId },
+        data: {
+          addressLine: input.addressLine?.trim(),
+          latitude: input.latitude,
+          longitude: input.longitude,
+          showLocationToCustomer: input.showLocationToCustomer
+        }
+      });
+      await writeAuditLog(tx, {
+        actorUserId: adminUserId,
+        action: "RESTAURANT_LOCATION_UPDATED",
+        entityType: "Restaurant",
+        entityId: restaurantId,
+        metadata: {
+          showLocationToCustomer: next.showLocationToCustomer,
+          hasCoordinates: next.latitude !== null && next.longitude !== null
+        }
+      });
+      return next;
+    });
+    return toProfileView(updated);
+  }
+
   private async transitionPendingStatus(
     adminUserId: string,
     restaurantId: string,
     status: RestaurantStatus,
-    auditAction: string
+    auditAction: string,
+    reason?: string
   ): Promise<RestaurantProfileView> {
     const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -611,15 +671,18 @@ export class RestaurantsService {
         action: auditAction,
         entityType: "Restaurant",
         entityId: restaurantId,
+        reason: reason ?? null,
         metadata: { fromStatus: restaurant.status, toStatus: status }
       });
+      const isApproval = status === RestaurantStatus.APPROVED;
       await createBusinessNotification(tx, emitter, {
         businessId: restaurant.id,
-        type: status === RestaurantStatus.APPROVED ? NotificationType.RESTAURANT_APPROVED : NotificationType.RESTAURANT_REJECTED,
-        title: status === RestaurantStatus.APPROVED ? "Your restaurant was approved" : "Your restaurant application was rejected",
-        body:
-          status === RestaurantStatus.APPROVED
-            ? "Congratulations! Your restaurant is now live and can start accepting orders."
+        type: isApproval ? NotificationType.RESTAURANT_APPROVED : NotificationType.RESTAURANT_REJECTED,
+        title: isApproval ? "Your restaurant was approved" : "Your restaurant application was rejected",
+        body: isApproval
+          ? "Congratulations! Your restaurant is now live and can start accepting orders."
+          : reason
+            ? `Your restaurant application was not approved. Reason: ${reason}`
             : "Your restaurant application was not approved. Please contact support for details.",
         relatedEntityId: restaurantId
       });
@@ -717,6 +780,10 @@ export class RestaurantsService {
 }
 
 function toPublicView(restaurant: Restaurant): RestaurantPublicView {
+  // The store's coordinates are only ever revealed to customers when the admin has opted this
+  // store in. When the flag is off they are nulled out here, so no customer-facing endpoint can
+  // leak them, and the app shows the location section only when it receives real coordinates.
+  const showLocation = restaurant.showLocationToCustomer;
   return {
     id: restaurant.id,
     name: restaurant.name,
@@ -724,8 +791,8 @@ function toPublicView(restaurant: Restaurant): RestaurantPublicView {
     description: restaurant.description,
     phone: restaurant.phone,
     addressLine: restaurant.addressLine,
-    latitude: restaurant.latitude,
-    longitude: restaurant.longitude,
+    latitude: showLocation ? restaurant.latitude : null,
+    longitude: showLocation ? restaurant.longitude : null,
     logoUrl: restaurant.logoUrl,
     isOpen: restaurant.isOpen,
     opensAt: restaurant.opensAt,
@@ -799,7 +866,17 @@ function toPublicItemView(
 }
 
 function toProfileView(restaurant: Restaurant): RestaurantProfileView {
-  return { ...toPublicView(restaurant), status: restaurant.status, createdAt: restaurant.createdAt };
+  // Owner/admin views always carry the real coordinates and the flag itself, regardless of whether
+  // customers can see the location — otherwise an admin could never review or edit a hidden store's
+  // position. Restores the coordinates that toPublicView withholds when the flag is off.
+  return {
+    ...toPublicView(restaurant),
+    latitude: restaurant.latitude,
+    longitude: restaurant.longitude,
+    status: restaurant.status,
+    createdAt: restaurant.createdAt,
+    showLocationToCustomer: restaurant.showLocationToCustomer
+  };
 }
 
 function phoneAlreadyRegistered(): ApiException {

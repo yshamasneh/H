@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   FlatList,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StatusBar,
@@ -28,6 +29,13 @@ import { iconSize, radius, spacing, withAlpha, type ThemeColors } from "../../th
 import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 import { useCustomerTheme, type CustomerTheme } from "./theme";
+
+/** Opens the platform's maps app with directions to the store. Uses the universal Google Maps
+ *  directions URL, which iOS and Android both resolve to their installed maps app. */
+function openDirections(latitude: number, longitude: number) {
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+  void Linking.openURL(url).catch(() => undefined);
+}
 
 /**
  * JOVO MARKET is the only supermarket partner at launch, so the customer lands
@@ -77,6 +85,22 @@ export function SupermarketCatalogScreen(props: {
         <View style={styles.headerCopy}>
           <Text style={styles.headerEyebrow}>{t("supermarket.supermarketLabel")}</Text>
           <Text numberOfLines={1} style={styles.catalogTitle}>{catalog?.supermarket.name ?? props.supermarketName}</Text>
+          {/* The store's location is only present here when an admin has opted this store in (the
+              API withholds the coordinates otherwise), so this whole row is the customer-facing
+              expression of the showLocationToCustomer flag. It is unrelated to delivery tracking. */}
+          {catalog && catalog.supermarket.latitude != null && catalog.supermarket.longitude != null ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                openDirections(catalog.supermarket.latitude as number, catalog.supermarket.longitude as number)
+              }
+              style={styles.locationRow}
+            >
+              <Icon color={customerTheme.colors.primary} name="location" size="xs" />
+              <Text numberOfLines={1} style={styles.locationAddress}>{catalog.supermarket.addressLine}</Text>
+              <Text style={styles.locationDirections}>{t("supermarket.getDirections")}</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
       <View style={styles.catalogSearchRow}>
@@ -329,6 +353,9 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   headerCopy: { flex: 1, marginStart: spacing[4] },
   headerEyebrow: { ...text("label", "bold"), color: customerTheme.colors.primary },
   catalogTitle: { ...text("h2", "bold"), color: colors.textInverse, marginTop: spacing[1] },
+  locationRow: { alignItems: "center", flexDirection: "row", gap: spacing[1], marginTop: spacing[1] },
+  locationAddress: { ...text("caption"), color: withAlpha(colors.textInverse, 0.85), flexShrink: 1 },
+  locationDirections: { ...text("caption", "bold"), color: customerTheme.colors.primary },
   backButton: { alignItems: "center", backgroundColor: withAlpha(colors.textInverse, 0.16), borderRadius: radius.lg, height: 44, justifyContent: "center", width: 44 },
   backText: { color: colors.textInverse, fontSize: iconSize.xl, marginTop: -4 },
   searchInput: { ...text("bodySm"), color: customerTheme.colors.text, flex: 1, outlineStyle: "none" } as never,

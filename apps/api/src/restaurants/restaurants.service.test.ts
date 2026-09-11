@@ -91,6 +91,82 @@ test("registering with mismatched passwords is rejected before touching the data
   assert.equal(prisma.users.length, 0);
 });
 
+test("a newly registered store hides its location from customers by default", async () => {
+  const { prisma, service } = createService();
+  await service.register(registerInput);
+  assert.equal(prisma.restaurants[0].showLocationToCustomer, false);
+});
+
+test("public views withhold a store's coordinates while its location is hidden, but reveal them once shown", async () => {
+  const { prisma, service } = createService();
+  const store = prisma.seedApprovedOpenRestaurant({
+    businessType: BusinessType.SUPERMARKET,
+    latitude: 31.9,
+    longitude: 35.2,
+    showLocationToCustomer: false
+  });
+
+  const hidden = await service.listPublicSupermarkets(1, 20);
+  assert.equal(hidden.items[0].latitude, null);
+  assert.equal(hidden.items[0].longitude, null);
+
+  store.showLocationToCustomer = true;
+  const shown = await service.listPublicSupermarkets(1, 20);
+  assert.equal(shown.items[0].latitude, 31.9);
+  assert.equal(shown.items[0].longitude, 35.2);
+});
+
+test("admin can set a store's location and flip the customer-visibility flag, recording an audit entry", async () => {
+  const { prisma, service } = createService();
+  const store = prisma.seedApprovedOpenRestaurant({ latitude: null, longitude: null, showLocationToCustomer: false });
+  const adminId = randomUUID();
+
+  const updated = await service.adminUpdateStoreLocation(adminId, store.id, {
+    addressLine: "New Plaza, Ramallah",
+    latitude: 32.1,
+    longitude: 35.3,
+    showLocationToCustomer: true
+  });
+
+  // The owner/admin profile view always carries the real coordinates plus the flag itself.
+  assert.equal(updated.latitude, 32.1);
+  assert.equal(updated.longitude, 35.3);
+  assert.equal(updated.showLocationToCustomer, true);
+  assert.equal(prisma.restaurants[0].addressLine, "New Plaza, Ramallah");
+
+  const auditEntry = prisma.auditLogs.find((entry) => entry.action === "RESTAURANT_LOCATION_UPDATED");
+  assert.ok(auditEntry);
+  assert.equal(auditEntry!.actorUserId, adminId);
+});
+
+test("admin location update rejects a half-set coordinate pair", async () => {
+  const { prisma, service } = createService();
+  const store = prisma.seedApprovedOpenRestaurant();
+  await assert.rejects(
+    service.adminUpdateStoreLocation(randomUUID(), store.id, { latitude: 32.1, showLocationToCustomer: true }),
+    hasCode("RESTAURANT_COORDINATES_INCOMPLETE")
+  );
+});
+
+test("hiding a store's location leaves its stored coordinates intact for delivery, only masking the customer view", async () => {
+  const { prisma, service } = createService();
+  const store = prisma.seedApprovedOpenRestaurant({
+    businessType: BusinessType.SUPERMARKET,
+    latitude: 31.5,
+    longitude: 35.1,
+    showLocationToCustomer: true
+  });
+
+  await service.adminUpdateStoreLocation(randomUUID(), store.id, { showLocationToCustomer: false });
+
+  // Delivery pricing reads the coordinates straight off the row (orders.service.ts), never the
+  // customer view, so they must survive the flag being turned off.
+  assert.equal(prisma.restaurants[0].latitude, 31.5);
+  assert.equal(prisma.restaurants[0].longitude, 35.1);
+  const publicView = await service.listPublicSupermarkets(1, 20, true);
+  assert.equal(publicView.items[0].latitude, null);
+});
+
 test("public listing only returns approved and open restaurants", async () => {
   const { prisma, service } = createService();
   const approvedOpen = prisma.seedApprovedOpenRestaurant({ name: "Approved Open" });
@@ -144,15 +220,25 @@ test("admin can approve a pending restaurant exactly once", async () => {
   assert.equal(approved.status, RestaurantStatus.APPROVED);
 
   await assert.rejects(service.approve(adminId, restaurant.id), hasCode("RESTAURANT_NOT_PENDING"));
-  await assert.rejects(service.reject(adminId, restaurant.id), hasCode("RESTAURANT_NOT_PENDING"));
+  await assert.rejects(service.reject(adminId, restaurant.id, "already decided"), hasCode("RESTAURANT_NOT_PENDING"));
 });
 
-test("admin can reject a pending restaurant", async () => {
+test("admin can reject a pending restaurant, recording the reason in the audit log and owner notification", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedApprovedOpenRestaurant({ status: RestaurantStatus.PENDING, isOpen: false });
+  const adminId = randomUUID();
 
-  const rejected = await service.reject(randomUUID(), restaurant.id);
+  const rejected = await service.reject(adminId, restaurant.id, "Incomplete licensing documents");
   assert.equal(rejected.status, RestaurantStatus.REJECTED);
+
+  const auditEntry = prisma.auditLogs.find((entry) => entry.entityId === restaurant.id && entry.action === "RESTAURANT_REJECTED");
+  assert.ok(auditEntry);
+  assert.equal(auditEntry!.reason, "Incomplete licensing documents");
+
+  const notification = prisma.notifications.find((entry) => entry.userId === restaurant.ownerUserId);
+  assert.ok(notification);
+  assert.equal(notification!.type, "RESTAURANT_REJECTED");
+  assert.match(notification!.body, /Incomplete licensing documents/);
 });
 
 test("approving a restaurant writes an AuditLog entry and notifies the owner", async () => {

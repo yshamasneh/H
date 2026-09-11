@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   acceptDelivery,
   listAvailableDeliveries,
+  listLandmarks,
   listMyDeliveries,
   listMyNotifications,
   setDriverOnlineStatus,
@@ -23,10 +24,11 @@ import {
   type DeliveryStatusValue,
   type DeliveryView,
   type DriverDeliveryStatusAction,
+  type Landmark,
   type PublicUser
 } from "../../core/api";
 import { LocationMap } from "../../components/location-map";
-import type { LocationMapPin, MapCoordinate } from "../../components/location-map.types";
+import { toLandmarkMarkers, type LocationMapMarker, type LocationMapPin, type MapCoordinate } from "../../components/location-map.types";
 import { Skeleton } from "../../components/skeleton";
 import { readError } from "../../core/errors";
 import { getCurrentCoordinates } from "../../core/location";
@@ -60,8 +62,15 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
+  const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const hasActiveDelivery = (mine?.length ?? 0) > 0;
+
+  // The same public landmarks the customer sees on their maps, rendered here as static
+  // orientation flags (brand-orange flag+label, zoom-gated by LocationMap) so a driver can
+  // navigate by the same reference points. They are separate from the always-visible delivery
+  // pins below and reuse the exact customer-side marker shape.
+  const landmarkMarkers = useMemo<LocationMapMarker[]>(() => toLandmarkMarkers(landmarks), [landmarks]);
 
   // The active-delivery map shows three distinct, always-visible markers: the driver's
   // own live position (blue dot), the pickup store (green dot), and the customer's
@@ -116,12 +125,16 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
         setError(t("common:sessionExpired"));
         return;
       }
-      const [availableDeliveries, ownDeliveries] = await Promise.all([
+      const [availableDeliveries, ownDeliveries, landmarkList] = await Promise.all([
         listAvailableDeliveries(accessToken),
-        listMyDeliveries(accessToken, 1, 20)
+        listMyDeliveries(accessToken, 1, 20),
+        // Landmarks are orientation-only; a failed fetch just leaves the map without reference
+        // flags, exactly as on the customer side, and must never block the delivery lists.
+        listLandmarks(accessToken).catch(() => [] as Landmark[])
       ]);
       setAvailable(availableDeliveries);
       setMine(ownDeliveries.items.filter((delivery) => activeDeliveryStatuses.includes(delivery.status)));
+      setLandmarks(landmarkList);
       try {
         const notifications = await listMyNotifications(accessToken, 1, 1);
         setUnreadCount(notifications.unreadCount);
@@ -209,7 +222,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
       >
         <Text style={styles.dashboardHeading}>{t("home.dashboardTitle")}</Text>
         <View style={styles.mapCard}>
-          <LocationMap coordinate={mapCenter} height={190} pins={deliveryPins} />
+          <LocationMap coordinate={mapCenter} height={190} markers={landmarkMarkers} pins={deliveryPins} />
         </View>
 
         <Pressable

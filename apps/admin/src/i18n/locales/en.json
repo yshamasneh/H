@@ -123,6 +123,9 @@
     "suspendTitle": "Suspend restaurant",
     "suspendConfirm": "Suspend restaurant",
     "suspendDescription": "Suspending \"{{name}}\" will close it to new orders immediately.",
+    "rejectTitle": "Reject application",
+    "rejectConfirm": "Reject application",
+    "rejectDescription": "Rejecting \"{{name}}\" will decline its application. The owner is notified with the reason you give.",
     "createTitle": "Create a business",
     "create": "Create",
     "createdNotice": "Business and owner account created. Give the owner their password.",
@@ -149,7 +152,14 @@
     "owner": "Owner",
     "recentOrders": "Recent orders",
     "noOrders": "No orders yet.",
-    "loadError": "Could not load this restaurant."
+    "loadError": "Could not load this restaurant.",
+    "products": "Products",
+    "locationTitle": "Location",
+    "locationHint": "Tap the map or drag the pin to set the store's location.",
+    "locationUnset": "No location set yet — tap the map to place the store.",
+    "showLocationToCustomer": "Show this store's location to customers",
+    "saveLocation": "Save location",
+    "locationSaved": "Location updated."
   },
   "orders": {
     "title": "Orders",

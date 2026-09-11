@@ -26,6 +26,7 @@ export function RestaurantsPage() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<RestaurantProfile | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<RestaurantProfile | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
@@ -119,7 +120,7 @@ export function RestaurantsPage() {
                           <button
                             className="btn btn-danger btn-sm"
                             disabled={busyId === restaurant.id}
-                            onClick={() => act(restaurant.id, () => rejectRestaurant(restaurant.id))}
+                            onClick={() => setRejectTarget(restaurant)}
                             type="button"
                           >
                             {t("common.reject")}
@@ -166,6 +167,20 @@ export function RestaurantsPage() {
             await load();
           }}
           title={t("restaurants.suspendTitle")}
+        />
+      ) : null}
+
+      {rejectTarget ? (
+        <ReasonModal
+          confirmLabel={t("restaurants.rejectConfirm")}
+          description={t("restaurants.rejectDescription", { name: rejectTarget.name })}
+          onCancel={() => setRejectTarget(null)}
+          onConfirm={async (reason) => {
+            await rejectRestaurant(rejectTarget.id, reason);
+            setRejectTarget(null);
+            await load();
+          }}
+          title={t("restaurants.rejectTitle")}
         />
       ) : null}
     </div>

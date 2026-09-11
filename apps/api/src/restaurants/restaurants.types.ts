@@ -21,6 +21,12 @@ export type RestaurantPublicView = {
 export type RestaurantProfileView = RestaurantPublicView & {
   status: RestaurantStatus;
   createdAt: Date;
+  /**
+   * Owner/admin-only. Whether the store's coordinates are exposed to customers. Never present on
+   * the customer-facing {@link RestaurantPublicView}; there, the flag is expressed by whether
+   * latitude/longitude are populated at all (they are nulled out when the flag is false).
+   */
+  showLocationToCustomer: boolean;
 };
 
 export type MenuItemPublicView = {
