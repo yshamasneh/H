@@ -359,6 +359,18 @@ test("restaurant owner rejects a placed order", async () => {
   assert.equal(rejected.status, "REJECTED");
 });
 
+test("rejecting a placed order restores its reserved tracked stock so the units become sellable again", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { stockQuantity: 10 });
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never); // qty 2
+  assert.equal(prisma.menuItems.find((item) => item.id === menuItem.id)!.stockQuantity, 8, "reserved on placement");
+
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "REJECTED", "Out of stock");
+
+  assert.equal(prisma.menuItems.find((item) => item.id === menuItem.id)!.stockQuantity, 10, "restored on rejection");
+});
+
 test("out-of-order transitions are rejected, e.g. PLACED cannot jump straight to READY_FOR_PICKUP", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();
@@ -627,6 +639,20 @@ test("admin cancels an ACCEPTED order with a reason, writing an AuditLog entry a
 
   assert.ok(prisma.notifications.some((entry) => entry.userId === customerId && entry.title === "Your order was cancelled"));
   assert.ok(prisma.notifications.some((entry) => entry.userId === restaurant.ownerUserId));
+});
+
+test("an admin cancellation restores the order's reserved tracked stock", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { stockQuantity: 10 });
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never); // qty 2
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+  assert.equal(prisma.menuItems.find((item) => item.id === menuItem.id)!.stockQuantity, 8);
+
+  await service.adminCancelOrder(randomUUID(), order.id, "Restaurant closed unexpectedly");
+
+  assert.equal(prisma.menuItems.find((item) => item.id === menuItem.id)!.stockQuantity, 10, "reserved units freed on admin cancel");
 });
 
 test("admin cannot cancel an already-DELIVERED order", async () => {
