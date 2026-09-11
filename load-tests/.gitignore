@@ -1,0 +1,5 @@
+# The k6 binary is downloaded locally per-machine, never committed.
+.bin/
+# Raw k6 JSON/CSV summary exports; RESULTS.md holds the curated numbers.
+*.summary.json
+results-raw/
