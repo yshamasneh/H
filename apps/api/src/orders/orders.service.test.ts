@@ -150,6 +150,40 @@ test("order creation is rejected when a requested item belongs to a different re
   assert.equal(prisma.orders.length, 0);
 });
 
+test("quote and checkout are rejected when the delivery address is outside the max delivery radius", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant(); // at (31.9038, 35.2034)
+  const menuItem = prisma.seedMenuItem(restaurant.id, { stockQuantity: 5 });
+  // ~55 km due north (0.5° latitude) — well beyond the 25 km default delivery radius.
+  const farInput = baseInput(restaurant.id, menuItem.id, {
+    deliveryLatitude: 32.4038,
+    deliveryLongitude: 35.2034
+  });
+
+  await assert.rejects(service.quoteOrder(farInput as never), hasCode("DELIVERY_OUT_OF_RANGE"));
+  await assert.rejects(service.createOrder(randomUUID(), farInput as never), hasCode("DELIVERY_OUT_OF_RANGE"));
+
+  // The rejected checkout must leave no order behind and touch no stock.
+  assert.equal(prisma.orders.length, 0);
+  assert.equal(prisma.menuItems.find((item) => item.id === menuItem.id)!.stockQuantity, 5);
+});
+
+test("a delivery just inside the max radius is accepted", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { stockQuantity: 5 });
+  // ~11 km north (0.1° latitude), comfortably inside the 25 km radius.
+  const nearInput = baseInput(restaurant.id, menuItem.id, {
+    deliveryLatitude: 32.0038,
+    deliveryLongitude: 35.2034
+  });
+
+  const quote = await service.quoteOrder(nearInput as never);
+  assert.ok(quote.deliveryDistanceMeters > 0 && quote.deliveryDistanceMeters <= 25_000);
+  const order = await service.createOrder(randomUUID(), nearInput as never);
+  assert.equal(order.status, "PLACED");
+});
+
 test("order totals match server-computed subtotal, fees, and total", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();

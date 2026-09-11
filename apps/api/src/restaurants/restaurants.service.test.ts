@@ -554,6 +554,24 @@ test("catalog and detail hide a supermarket product with no cost price, matching
   );
 });
 
+test("the supermarket catalog withholds the store's coordinates until location sharing is enabled (P2)", async () => {
+  const { prisma, service } = createService();
+  const { market, addProduct } = await seedCatalog(prisma);
+  await addProduct({ name: "Milk", costPriceMinor: 300 });
+
+  // Default: the seeded store has coordinates but sharing is off, so the customer-facing catalog
+  // detail must not leak them.
+  const hidden = await service.getSupermarketCatalog(market.id, {} as never);
+  assert.equal(hidden.supermarket.latitude, null);
+  assert.equal(hidden.supermarket.longitude, null);
+
+  // Admin turns location sharing on → the same endpoint now exposes the coordinates.
+  market.showLocationToCustomer = true;
+  const shown = await service.getSupermarketCatalog(market.id, {} as never);
+  assert.equal(shown.supermarket.latitude, 31.9038);
+  assert.equal(shown.supermarket.longitude, 35.2034);
+});
+
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }
