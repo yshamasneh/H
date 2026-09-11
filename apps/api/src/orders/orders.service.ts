@@ -1,4 +1,4 @@
-import { Injectable, Optional } from "@nestjs/common";
+import { Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { writeAuditLog } from "../common/audit-log.util";
 import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
@@ -55,6 +55,8 @@ type OrderWithRelations = Prisma.OrderGetPayload<{ include: typeof orderInclude 
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
@@ -70,7 +72,6 @@ export class OrdersService {
       if (existing) return existing;
     }
 
-    const emitter = new DeferredEmitter(this.realtime);
     let order: OrderWithRelations;
     try {
       order = await this.prisma.$transaction(async (tx) => {
@@ -127,13 +128,6 @@ export class OrdersService {
           changedByUserId: customerId
         }
       });
-      await createBusinessNotification(tx, emitter, {
-        businessId: restaurant.id,
-        type: NotificationType.ORDER_PLACED,
-        title: "New order received",
-        body: `A new order for ${formatPrice(created.totalMinor)} is waiting for your response.`,
-        relatedEntityId: created.id
-      });
       return { ...created, statusHistory: await tx.orderStatusHistory.findMany({ where: { orderId: created.id } }) };
       });
     } catch (error) {
@@ -146,7 +140,23 @@ export class OrdersService {
       }
       throw error;
     }
-    emitter.flush();
+
+    // Notify the business AFTER the order transaction commits, not inside it. Doing it inside meant
+    // the reserved-stock row lock (held until commit) also covered a businessMember lookup and one
+    // notification insert per member — serialising checkout of any hot product under load (this was
+    // the order-placement bottleneck the load test surfaced once the connection pool was widened).
+    // It is also more correct: a placed order must not roll back because a notification failed.
+    try {
+      await createBusinessNotification(this.prisma, this.realtime, {
+        businessId: order.restaurantId,
+        type: NotificationType.ORDER_PLACED,
+        title: "New order received",
+        body: `A new order for ${formatPrice(order.totalMinor)} is waiting for your response.`,
+        relatedEntityId: order.id
+      });
+    } catch (notifyError) {
+      this.logger.error(`Order ${order.id} placed but its business notification failed`, notifyError as Error);
+    }
 
     this.realtime.emitToRestaurant(order.restaurantId, "order.created", { orderId: order.id });
     this.realtime.emitToAdmins("order.created", { orderId: order.id, restaurantId: order.restaurantId, totalMinor: order.totalMinor });

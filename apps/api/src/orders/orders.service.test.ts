@@ -397,6 +397,24 @@ test("placing an order notifies the restaurant owner and emits a realtime event"
   void order;
 });
 
+test("an order is still placed and stock reserved when the post-commit notification fails", async () => {
+  // Regression: notifying the business now happens AFTER the order transaction commits, so a
+  // notification failure must never roll back a placed order or its stock reservation.
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { stockQuantity: 5 });
+  prisma.notification.create = async () => {
+    throw new Error("notification store unavailable");
+  };
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  assert.equal(order.status, "PLACED");
+  assert.ok(prisma.orders.find((entry) => entry.id === order.id), "order should be persisted");
+  const item = prisma.menuItems.find((entry) => entry.id === menuItem.id);
+  assert.equal(item!.stockQuantity, 3, "stock reserved exactly once despite the notification failure");
+});
+
 test("customer cancels their own PLACED order", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();
