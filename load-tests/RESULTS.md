@@ -133,6 +133,18 @@ avoid a risky reorder of financial-critical code for a load level far beyond lau
   run several API instances behind the load balancer (each with a pool sized so the sum stays under
   Postgres `max_connections`). That is a deployment change, not a code defect.
 
+## Combined ramp with admin + driver reads (`mixed-ramp.js`, after both fixes)
+
+One 3m30s run: customer flow ramping 10→50→100→250 VUs while 3 admin VUs poll the order list and 3
+driver VUs poll active + available deliveries throughout.
+
+- **16,086 orders placed**, `customer_errors` **0.10%** (17/16103 — a few order retries at the
+  250-VU peak), overall `http_req_failed` **0.02%**, checks 99.96% succeeded.
+- **Admin order list**: avg 206ms, p95 1.13s, **0 errors** (892 reads).
+- **Driver active-delivery fetch**: avg 112ms, p95 760ms, **0 errors** (871 reads).
+- The admin/driver read paths never errored — they just slow down in step with the customer write
+  load, as expected on a single shared instance.
+
 ### Degradation point (summary for the brief)
 - **Knee ≈ 50 VUs.** Below that, p95 < ~100ms. Throughput saturates ~400–450 req/s and does not rise
   with more VUs; past the knee, latency grows roughly linearly while error rate stays ~0 (requests
