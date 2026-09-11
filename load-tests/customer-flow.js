@@ -112,8 +112,14 @@ export default function (data) {
   flowErrors.add(!catOk);
   if (!catOk) return;
 
-  // 3. Build a small cart (1-2 line items across random products) and quote it (cart review)
-  const productId = PRODUCT_IDS[Math.floor(Math.random() * PRODUCT_IDS.length)];
+  // 3. Build a small cart (1-2 line items across random products) and quote it (cart review).
+  // Prefer real product ids from the catalog so the test spreads order writes across the whole
+  // catalogue (a realistic store has hundreds of SKUs); fall back to the seed's five.
+  const catalogProducts = catRes.json("products");
+  const pool = Array.isArray(catalogProducts) && catalogProducts.length > 0
+    ? catalogProducts.map((p) => p.id)
+    : PRODUCT_IDS;
+  const productId = pool[Math.floor(Math.random() * pool.length)];
   const items = [{ menuItemId: productId, quantity: 1 + Math.floor(Math.random() * 2) }];
   const orderBody = {
     restaurantId: supermarketId,

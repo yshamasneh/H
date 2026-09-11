@@ -60,4 +60,82 @@ Per-step p95 (ms):
   failed — they just got slow.
 
 **Root cause: DB connection pool capped at 10 (driver default), not tuned to the host/DB.**
-See the fix and re-test below.
+See the fixes and re-tests below.
+
+---
+
+## Fix 1 — make the DB connection pool configurable (default 20)
+
+`PrismaService` now passes `max` (and an optional acquisition timeout) to the `pg` pool, from the
+validated `DATABASE_POOL_MAX` env var (default 20, was the driver's 10). See
+`apps/api/src/prisma/prisma.service.ts` and `apps/api/src/config/environment.ts`; regression tests
+in `environment.test.ts`.
+
+Re-run with `DATABASE_POOL_MAX=50`, per-step p95 at 50 VUs — the **read path is no longer
+starved**:
+
+| step        | pool=10 (before) | pool=50 (after) |
+|-------------|-----------------:|----------------:|
+| browse      | 67ms  | 12ms |
+| catalog     | 127ms | 21ms |
+| quote       | 185ms | 23ms |
+| place order | 269ms | 1425ms |
+
+Widening the pool **shifted the bottleneck**: with only 10 connections the read requests queued,
+which throttled the overall rate and, as a side effect, kept order concurrency (and so order-row
+contention) low. With 50 connections the reads fly, more orders hit the DB at once, and *order
+placement* becomes the new limiter — see Fix 2 and the catalog analysis.
+
+## Fix 2 — run the "new order" notification after the order transaction commits
+
+`OrdersService.createOrder` reserved stock with a compare-and-swap `UPDATE` on the product row,
+whose **row lock is held until the transaction commits**. That lock previously also covered the
+business-notification work (a `businessMember` lookup + one insert per member). Moving the
+notification to *after* commit shortens the critical section and is also more correct: a placed
+order must never roll back because a notification failed. See `createOrder` and the regression test
+"an order is still placed and stock reserved when the post-commit notification fails".
+
+## Analysis — order placement is per-product-row lock contention (amplified by a tiny catalog)
+
+The test originally ordered from only the **5 seeded products**, so every order contended on 5 rows.
+Re-seeding the catalog to **205 products** (so the flow spreads orders across the 50 the catalog
+returns) — the same build, same VUs — order latency drops sharply:
+
+| VUs | place-order p95, 5 products | place-order p95, 50 products | error % (50 prod) |
+|----:|----------------------------:|-----------------------------:|------------------:|
+| 10  | 111ms  | 89ms  | 0.00% |
+| 50  | 1425ms | **537ms** | 0.00% |
+| 100 | 2144ms | 944ms | 0.00% |
+| 250 | 2659ms | 1729ms | 0.00% |
+
+Order tail latency fell ~2.7x at 50 VUs and the tail failures at 250 VUs vanished. This confirms the
+remaining order bottleneck is **per-product-row lock contention during checkout**, which the
+5-product test catalog concentrated ~10–40x. A production JOVO MARKET has hundreds of SKUs (bulk
+importer exists), spreading it much further — so this is largely a test artifact, not a production
+defect. A future optimisation, if a single product ever becomes that hot, is to acquire the stock
+lock as late as possible in the order transaction (reserve just before commit); not done here to
+avoid a risky reorder of financial-critical code for a load level far beyond launch needs.
+
+## Final picture (after Fix 1 + Fix 2, realistic 50-product catalog)
+
+| VUs | req/s | overall p95 | overall p99 | error % | orders placed (30s) |
+|----:|------:|------------:|------------:|--------:|--------------------:|
+| 10  | 415 | 70ms   | 91ms   | 0.00% | 3125 |
+| 50  | 401 | 405ms  | 565ms  | 0.00% | 3033 |
+| 100 | 323 | 763ms  | 967ms  | 0.00% | 2470 |
+| 250 | 348 | 1547ms | 1756ms | 0.00% | 2723 |
+
+- **Sustained ~400 req/s / ~100 orders/s with 0% errors**, degrading gracefully (higher latency, no
+  failures) as concurrency climbs well past any launch-realistic level. JOVO MARKET's initial
+  single-city launch will see a tiny fraction of this.
+- The remaining plateau is the **single-process ceiling**: one Node instance (one event-loop core)
+  plus Postgres plus the k6 generator all share this one machine. The scale-out fix is horizontal —
+  run several API instances behind the load balancer (each with a pool sized so the sum stays under
+  Postgres `max_connections`). That is a deployment change, not a code defect.
+
+### Degradation point (summary for the brief)
+- **Knee ≈ 50 VUs.** Below that, p95 < ~100ms. Throughput saturates ~400–450 req/s and does not rise
+  with more VUs; past the knee, latency grows roughly linearly while error rate stays ~0 (requests
+  queue, they don't fail) until very high concurrency.
+- No DB connection-pool exhaustion after Fix 1; no timeouts; Postgres never near its 100-connection
+  limit.
