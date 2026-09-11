@@ -67,11 +67,14 @@ export const options = {
   summaryTrendStats: ["avg", "min", "med", "p(95)", "p(99)", "max"]
 };
 
-// Module-scoped: in k6 each VU has its own JS runtime, so this persists per-VU across iterations —
-// the VU logs in once (realistic: a customer stays signed in) instead of on every iteration.
-let token = null;
-
-function login() {
+/**
+ * Authenticate ONCE in setup() and share the session token across all VUs. This is deliberate: the
+ * login route is (correctly) rate-limited to 10/min/IP as anti-brute-force, and a single-IP load
+ * generator would otherwise measure that throttle instead of the app tier. A real client also logs
+ * in once and then makes many requests on the same session — which is exactly what this models. The
+ * login step's own latency is measured here (once) and reported separately.
+ */
+export function setup() {
   const res = http.post(
     `${BASE_URL}/auth/login`,
     JSON.stringify({ countryCode: "+970", phoneNumber: "590000000", password: "Test@12345" }),
@@ -79,19 +82,12 @@ function login() {
   );
   loginTrend.add(res.timings.duration);
   const ok = check(res, { "login ok": (r) => r.status === 200 || r.status === 201 });
-  flowErrors.add(!ok);
-  if (!ok) return null;
-  return res.json("accessToken");
+  if (!ok) throw new Error(`setup login failed: HTTP ${res.status} ${res.body}`);
+  return { token: res.json("accessToken") };
 }
 
-export default function () {
-  if (!token) {
-    token = login();
-    if (!token) {
-      sleep(0.5);
-      return;
-    }
-  }
+export default function (data) {
+  const token = data.token;
   const authHeaders = { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } };
 
   // 1. Browse supermarkets

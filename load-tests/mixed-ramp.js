@@ -87,22 +87,23 @@ function loginAs(phoneNumber) {
   return res.status === 200 || res.status === 201 ? res.json("accessToken") : null;
 }
 
-// setup() logs in the shared admin + driver read accounts once; those tokens are safe to reuse
-// across the read-only scenarios. Customer VUs log in individually (below) to exercise auth.
+// setup() logs in the customer, admin and driver accounts once. Sharing one session per role is
+// deliberate: login is (correctly) throttled to 10/min/IP, so a single-IP generator must not put
+// login on the per-request hot path — a real client also logs in once, then reuses the session.
 export function setup() {
-  return { adminToken: loginAs("590000001"), driverToken: loginAs("590000003") };
+  return {
+    customerToken: loginAs("590000000"),
+    adminToken: loginAs("590000001"),
+    driverToken: loginAs("590000003")
+  };
 }
 
-let customerToken = null;
-
-export function customerFlow() {
+export function customerFlow(data) {
+  const customerToken = data.customerToken;
   if (!customerToken) {
-    customerToken = loginAs("590000000");
-    if (!customerToken) {
-      customerErrors.add(true);
-      sleep(0.5);
-      return;
-    }
+    customerErrors.add(true);
+    sleep(0.5);
+    return;
   }
   const h = { headers: { Authorization: `Bearer ${customerToken}`, "Content-Type": "application/json" } };
 
