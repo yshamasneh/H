@@ -69,6 +69,19 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   // a per-IP limit near typical single-user traffic would throttle unrelated customers against
   // each other. Default well above that, still configurable per deployment.
   environment.RATE_LIMIT_LIMIT = readPositiveInteger(environment, "RATE_LIMIT_LIMIT", 400);
+  // Postgres connection-pool size for this API instance. The pg driver's own default is only 10,
+  // which caps total concurrency well below what a multi-core host and Postgres can serve (load
+  // testing showed throughput plateauing at ~450 req/s with every endpoint queueing for a
+  // connection). Tune per deployment to min(cores * 2, postgres_max_connections / instances).
+  environment.DATABASE_POOL_MAX = readPositiveInteger(environment, "DATABASE_POOL_MAX", 20);
+  // How long a request waits for a free pooled connection before failing fast (ms). 0 = wait
+  // forever (the pg default), which turns pool exhaustion into unbounded latency; a finite value
+  // sheds load instead. Default 0 to preserve existing behaviour unless a deployment opts in.
+  environment.DATABASE_POOL_CONNECTION_TIMEOUT_MS = readNonNegativeInteger(
+    environment,
+    "DATABASE_POOL_CONNECTION_TIMEOUT_MS",
+    0
+  );
   environment.DELIVERY_MIN_FEE_MINOR = readPositiveInteger(environment, "DELIVERY_MIN_FEE_MINOR", 1_000);
   environment.DELIVERY_INCLUDED_DISTANCE_METERS = readPositiveInteger(
     environment,
@@ -179,6 +192,15 @@ function readPositiveInteger(input: Record<string, unknown>, key: string, fallba
   const value = typeof rawValue === "number" ? rawValue : Number(rawValue ?? fallback);
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${key} must be a positive integer`);
+  }
+  return value;
+}
+
+function readNonNegativeInteger(input: Record<string, unknown>, key: string, fallback: number): number {
+  const rawValue = input[key];
+  const value = typeof rawValue === "number" ? rawValue : Number(rawValue ?? fallback);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${key} must be a non-negative integer`);
   }
   return value;
 }

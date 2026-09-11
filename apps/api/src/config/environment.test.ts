@@ -37,6 +37,30 @@ test("production accepts explicit HTTPS integrations and secure secrets", () => 
   assert.equal(result.OTP_PROVIDER, "webhook");
 });
 
+test("the DB connection-pool size defaults sensibly and is tunable", () => {
+  // Regression for the load-test finding: the pool must not silently sit at the pg driver default
+  // of 10. Our validated default lifts it, and a deployment can tune it further.
+  assert.equal(validateEnvironment(base).DATABASE_POOL_MAX, 20);
+  assert.equal(validateEnvironment({ ...base, DATABASE_POOL_MAX: "50" }).DATABASE_POOL_MAX, 50);
+});
+
+test("a non-positive or non-integer DB pool size is rejected", () => {
+  assert.throws(() => validateEnvironment({ ...base, DATABASE_POOL_MAX: "0" }), /DATABASE_POOL_MAX/);
+  assert.throws(() => validateEnvironment({ ...base, DATABASE_POOL_MAX: "12.5" }), /DATABASE_POOL_MAX/);
+});
+
+test("the pool connection-acquisition timeout defaults to 0 (wait) and accepts a finite value", () => {
+  assert.equal(validateEnvironment(base).DATABASE_POOL_CONNECTION_TIMEOUT_MS, 0);
+  assert.equal(
+    validateEnvironment({ ...base, DATABASE_POOL_CONNECTION_TIMEOUT_MS: "5000" }).DATABASE_POOL_CONNECTION_TIMEOUT_MS,
+    5000
+  );
+  assert.throws(
+    () => validateEnvironment({ ...base, DATABASE_POOL_CONNECTION_TIMEOUT_MS: "-1" }),
+    /DATABASE_POOL_CONNECTION_TIMEOUT_MS/
+  );
+});
+
 test("production rejects wildcard CORS and the development OTP provider", () => {
   assert.throws(
     () => validateEnvironment({ ...base, NODE_ENV: "production", CORS_ORIGIN: "*" }),
