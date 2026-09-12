@@ -133,6 +133,21 @@ avoid a risky reorder of financial-critical code for a load level far beyond lau
   run several API instances behind the load balancer (each with a pool sized so the sum stays under
   Postgres `max_connections`). That is a deployment change, not a code defect.
 
+## Fix 3 — make the interactive-transaction timeout configurable (default 5s → 10s)
+
+The ~0.1% order failures at the 250-VU peak were not application logic: the API log showed 20
+`A query cannot be executed on an expired transaction` errors. Prisma's default interactive
+transaction timeout is **5000ms**, and under hot-product contention a few order transactions queued
+on the row lock and ran ~5.2s, so Prisma aborted them and the checkout hard-failed. `PrismaService`
+now sets a configurable `transactionOptions.timeout` (default **10s**) and `maxWait` (default 5s),
+from validated env vars (`DATABASE_TRANSACTION_TIMEOUT_MS` / `DATABASE_TRANSACTION_MAX_WAIT_MS`).
+
+Re-run at a constant 250 VUs for 45s after the fix: **0 expired-transaction errors** (was 20),
+order p95 1.17s, max latency 1.75s — comfortably under the ceiling, so no checkout is aborted for
+being slow. (A constant-250 burst still shows a couple percent of client-side connection failures
+at t=0 from slamming 250 sockets onto localhost at once — a load-generator artifact, no server error
+logged; the gradual `mixed-ramp` shows 0.10%.)
+
 ## Combined ramp with admin + driver reads (`mixed-ramp.js`, after both fixes)
 
 One 3m30s run: customer flow ramping 10→50→100→250 VUs while 3 admin VUs poll the order list and 3

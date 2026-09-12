@@ -29,6 +29,21 @@ Running log of what was tested, what was fixed, and what's still open. Newest fi
   catalog). Proved by re-seeding 205 products: order p95 @50 VUs 1425ms→537ms, 0% errors. Documented
   as largely test-amplified; a real catalog spreads it. RESULTS.md has the before/after.
 
+- **Fix 3 — interactive-transaction timeout.** The peak-load order failures were Prisma aborting
+  transactions at its default 5s ceiling under hot-row contention. Made it configurable
+  (`DATABASE_TRANSACTION_TIMEOUT_MS`, default now 10s) + `maxWait`. Re-run at constant 250 VUs: 0
+  expired-transaction errors (was 20), max latency 1.75s. Regression test added.
+
+### Part 3 — test coverage added
+- DB pool + transaction-timeout env validation (regression tests in `environment.test.ts`).
+- Order still placed + stock reserved when the post-commit notification fails.
+- `DELIVERY_OUT_OF_RANGE` rejected at quote + checkout (and a near address accepted).
+- P2 customer supermarket **catalog** withholds coordinates until sharing is enabled.
+- Reserved stock is **restored on order rejection and on admin cancel** (only customer-cancel was
+  covered before).
+- Confirmed the existing `route-permissions.test.ts` already locks the new P2/P3 admin routes behind
+  ADMIN + MANAGE_BUSINESSES (permission-bypass net).
+
 ### Open / not yet done
 - Order lock-window micro-opt (reserve stock just before commit) — noted as a future option, not
   done (risk vs. reward on financial code for load beyond launch needs).
