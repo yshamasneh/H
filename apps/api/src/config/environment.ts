@@ -82,6 +82,13 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     "DATABASE_POOL_CONNECTION_TIMEOUT_MS",
     0
   );
+  // Interactive-transaction ceiling. Prisma's own default is only 5000ms, which load testing showed
+  // a small fraction of checkouts exceed under heavy hot-product contention — the order transaction
+  // then aborts and the checkout hard-fails instead of just being slow. A more forgiving 10s default
+  // lets a slow-but-progressing order commit, while still bounding a genuinely stuck transaction.
+  environment.DATABASE_TRANSACTION_TIMEOUT_MS = readPositiveInteger(environment, "DATABASE_TRANSACTION_TIMEOUT_MS", 10_000);
+  // How long a transaction waits to be opened before giving up (Prisma default 2000ms).
+  environment.DATABASE_TRANSACTION_MAX_WAIT_MS = readPositiveInteger(environment, "DATABASE_TRANSACTION_MAX_WAIT_MS", 5_000);
   environment.DELIVERY_MIN_FEE_MINOR = readPositiveInteger(environment, "DELIVERY_MIN_FEE_MINOR", 1_000);
   environment.DELIVERY_INCLUDED_DISTANCE_METERS = readPositiveInteger(
     environment,

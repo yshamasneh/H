@@ -16,7 +16,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       max: config.get<number>("DATABASE_POOL_MAX", 20),
       ...(connectionTimeoutMillis > 0 ? { connectionTimeoutMillis } : {})
     });
-    super({ adapter });
+    super({
+      adapter,
+      // Prisma's default interactive-transaction timeout (5s) hard-fails checkouts that run long
+      // under hot-product contention; a more forgiving, configurable ceiling lets them commit.
+      transactionOptions: {
+        timeout: config.get<number>("DATABASE_TRANSACTION_TIMEOUT_MS", 10_000),
+        maxWait: config.get<number>("DATABASE_TRANSACTION_MAX_WAIT_MS", 5_000)
+      }
+    });
   }
 
   async onModuleInit(): Promise<void> {

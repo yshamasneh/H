@@ -61,6 +61,16 @@ test("the pool connection-acquisition timeout defaults to 0 (wait) and accepts a
   );
 });
 
+test("the interactive-transaction timeout defaults above Prisma's 5s and is tunable", () => {
+  // Regression for the load-test finding: a handful of checkouts exceeded Prisma's default 5s
+  // transaction timeout and hard-failed. The default is now more forgiving and configurable.
+  const result = validateEnvironment(base);
+  assert.equal(result.DATABASE_TRANSACTION_TIMEOUT_MS, 10_000);
+  assert.equal(result.DATABASE_TRANSACTION_MAX_WAIT_MS, 5_000);
+  assert.equal(validateEnvironment({ ...base, DATABASE_TRANSACTION_TIMEOUT_MS: "20000" }).DATABASE_TRANSACTION_TIMEOUT_MS, 20_000);
+  assert.throws(() => validateEnvironment({ ...base, DATABASE_TRANSACTION_TIMEOUT_MS: "0" }), /DATABASE_TRANSACTION_TIMEOUT_MS/);
+});
+
 test("production rejects wildcard CORS and the development OTP provider", () => {
   assert.throws(
     () => validateEnvironment({ ...base, NODE_ENV: "production", CORS_ORIGIN: "*" }),
