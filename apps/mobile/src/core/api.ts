@@ -1055,8 +1055,16 @@ export function approveAdminRestaurant(accessToken: string, restaurantId: string
   return request(`/api/v1/admin/restaurants/${restaurantId}/approve`, { method: "POST", accessToken });
 }
 
-export function rejectAdminRestaurant(accessToken: string, restaurantId: string): Promise<AdminRestaurant> {
-  return request(`/api/v1/admin/restaurants/${restaurantId}/reject`, { method: "POST", accessToken });
+export function rejectAdminRestaurant(
+  accessToken: string,
+  restaurantId: string,
+  reason: string
+): Promise<AdminRestaurant> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/reject`, {
+    method: "POST",
+    body: { reason: reason.trim() },
+    accessToken
+  });
 }
 
 export function suspendAdminRestaurant(

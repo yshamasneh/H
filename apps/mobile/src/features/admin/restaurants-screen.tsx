@@ -101,6 +101,7 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reasonError, setReasonError] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -116,7 +117,10 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
   }, [props.restaurantId]);
 
   async function act(action: (token: string) => Promise<unknown>) {
+    if (busy) return;
     setBusy(true);
+    setError(null);
+    setReasonError(null);
     try {
       await action(await requireToken());
       setReason("");
@@ -128,9 +132,18 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
     }
   }
 
+  async function rejectPendingRestaurant() {
+    const rejectionReason = reason.trim();
+    if (!rejectionReason) {
+      setReasonError(t("restaurantDetail.rejectReasonRequired"));
+      return;
+    }
+    await act((token) => rejectAdminRestaurant(token, props.restaurantId, rejectionReason));
+  }
+
   return (
     <AdminPage onBack={props.onBack} subtitle={t("restaurantDetail.subtitle")} title={restaurant?.name ?? t("restaurantDetail.notFoundTitle")}>
-      <ErrorBanner message={error} />
+      <ErrorBanner message={reasonError ?? error} />
       {!restaurant ? (
         error ? null : <LoadingState />
       ) : (
@@ -163,11 +176,30 @@ export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBac
             </View>
           ) : null}
 
+          {restaurant.status === "PENDING" ? (
+            <View style={adminStyles.reasonBox}>
+              <Input
+                multiline
+                onChangeText={(value) => {
+                  setReason(value);
+                  if (value.trim()) setReasonError(null);
+                }}
+                placeholder={t("restaurantDetail.rejectReasonPlaceholder")}
+                value={reason}
+              />
+            </View>
+          ) : null}
+
           <ActionRow>
             {restaurant.status === "PENDING" ? (
               <>
                 <ActionButton label={t("common:approve")} loading={busy} onPress={() => void act((token) => approveAdminRestaurant(token, restaurant.id))} />
-                <ActionButton label={t("common:reject")} loading={busy} onPress={() => void act((token) => rejectAdminRestaurant(token, restaurant.id))} variant="danger" />
+                <ActionButton
+                  label={t("restaurantDetail.rejectButton")}
+                  loading={busy}
+                  onPress={() => void rejectPendingRestaurant()}
+                  variant="danger"
+                />
               </>
             ) : null}
             {restaurant.status === "SUSPENDED" ? (

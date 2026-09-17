@@ -49,6 +49,9 @@
     "ordersLabel": "Orders",
     "revenueLabel": "Revenue",
     "createdLabel": "Created",
+    "rejectReasonPlaceholder": "Required rejection reason",
+    "rejectReasonRequired": "Enter a rejection reason before rejecting this store.",
+    "rejectButton": "Confirm rejection",
     "suspendReasonPlaceholder": "Required suspension reason",
     "suspendButton": "Suspend restaurant"
   },

@@ -49,6 +49,9 @@
     "ordersLabel": "الطلبات",
     "revenueLabel": "الإيرادات",
     "createdLabel": "تاريخ الإنشاء",
+    "rejectReasonPlaceholder": "سبب الرفض (مطلوب)",
+    "rejectReasonRequired": "أدخل سبب الرفض قبل رفض هذا المتجر.",
+    "rejectButton": "تأكيد الرفض",
     "suspendReasonPlaceholder": "سبب الإيقاف (مطلوب)",
     "suspendButton": "إيقاف المطعم"
   },

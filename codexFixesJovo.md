@@ -27,7 +27,7 @@
 - Task 2 completed: login and online session restoration reconcile the installation token with the authenticated user. The backend's unique-token upsert atomically reassigns the single row; unregister remains scoped to `userId + token`, preserving other devices.
 - Task 3 completed: both the live Expo notification-response listener and cold-start response API feed a deduplicating navigator that waits for session restoration, validates order payloads, verifies role-scoped API access, and opens the existing customer/business/admin order-detail route.
 - Task 3 completed: malformed/unsupported/logged-out responses are ignored safely; inaccessible or deleted orders remain on the current screen and show a localized fallback; listeners are removed on cleanup.
-- Mobile Admin rejection remains in progress.
+- Task 4 completed: the Expo Mobile Admin store detail now requires a rejection reason, reports empty-input/API errors, blocks repeat actions while pending, sends the exact `{ reason }` DTO, clears the form, and reloads the store after success. Backend validation, audit logging, and owner notification behavior were unchanged.
 
 ## Files changed
 
@@ -42,6 +42,10 @@
 - `apps/mobile/src/core/notification-navigation.ts` — validated response parsing, session queue, access check, role routing, deduplication, and listener attachment.
 - `apps/mobile/src/core/notification-navigation.test.ts` — live/background, cold-start, auth wait, payload, role, duplicate, logout, fallback, and cleanup coverage.
 - `apps/mobile/src/i18n/locales/en/common.json` and `ar/common.json` — inaccessible-order fallback copy.
+- `apps/mobile/src/core/api.ts` — rejection client accepts, trims, and sends the required reason body.
+- `apps/mobile/src/core/admin-api.ui.test.tsx` — request-contract regression test.
+- `apps/mobile/src/features/admin/restaurants-screen.tsx` — rejection reason UI, validation, pending guard, errors, and refresh.
+- `apps/mobile/src/i18n/locales/en/admin.json` and `ar/admin.json` — rejection field, validation, and action copy.
 - Pre-existing `codexReviewJovo.md` remains untracked and will not be included in commits.
 
 ## Tests added
@@ -49,6 +53,7 @@
 - 4 mobile lifecycle tests: authenticated reconciliation, disabled preference, offline unregister/logout cleanup, and unregister-before-session-revoke ordering.
 - 2 backend service tests: A-to-B token reassignment with repeat-registration deduplication, and prevention of unrelated-user deactivation.
 - 11 notification navigation tests covering live/background delivery, cold-start retrieval, session restoration, exact order ID, customer/business/admin routes, malformed/missing and unsupported payloads, duplicate suppression, logged-out behavior, inaccessible-order fallback, and listener cleanup.
+- 1 Mobile Admin API contract test proving that the trimmed rejection reason reaches the POST JSON body.
 
 ## Commands and results
 
@@ -63,12 +68,14 @@
 - Targeted API users-service test file: 13 passed, 0 failed (including 2 new Push Token tests).
 - `git diff --check` before the Task 2 commit reported three Markdown hard-break spaces in this progress file; they are removed in the next tracked update. No source-code whitespace error was reported.
 - Targeted notification-navigation test file: 11 passed, 0 failed.
+- Targeted Mobile Admin rejection request test: 1 passed, 0 failed.
 
 ## Commits
 
 - Task 1: no commit, because the only affected script is ignored/local-only and no tracked configuration requires a change.
 - Task 2: `7091c36a0964b51111fd34774959052beafd8f1c` (`Fix push token account isolation`).
-- Task 3: pending focused commit; SHA will be recorded immediately after creation.
+- Task 3: `f179d61197cfa1f87290ad9b054c70120bae1c7b` (`Open orders from push notification taps`).
+- Task 4: pending focused commit; SHA will be recorded immediately after creation.
 
 ## Deferred manual work
 
@@ -79,10 +86,10 @@
 
 ## Remaining issues
 
-- Task 4: Mobile Admin business rejection body/reason.
 - Final repository verification and normal push.
 
 ## Differences from the original readiness report
 
 - The original report correctly identified a plaintext local PostgreSQL URL, but this focused investigation now establishes that it is Azure Database for PostgreSQL, is ignored and untracked, and neither the exact literal nor its provider host appears in reachable Git history.
 - No evidence was found that the credential was ever committed. Its active/revoked state remains intentionally unverified because provider access is outside scope.
+- The Mobile Admin rejection finding was confirmed exactly as reported: the old client signature omitted `reason` and produced no JSON body. No backend contract change was necessary.
