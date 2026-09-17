@@ -201,8 +201,56 @@
 
 ### Commit SHA
 
-- Pending this task's focused commit; the exact SHA will be recorded immediately after creation.
+- `191a1938909346cf76e34e20c823c1842612b90e` (`Align mobile app with Expo Doctor`).
 
 ### Manual verification
 
 - Signed Android/iOS builds, EAS credentials, TestFlight, Google Play, and physical-device checks remain deferred by scope.
+
+## Task 3 — Partner-account readiness
+
+### Root cause
+
+- Startup attempted to upsert three required accounting identities and swallowed any failure. The readiness endpoint checked only `SELECT 1`, so the API could accept traffic even though order completion/settlement would later fail while resolving a required payee.
+- The exact invariant was implicit: `OWNER_A` and `OWNER_B` must each be an active, global `PLATFORM_OWNER`; `DELIVERY_OPS` must be an active, global `DELIVERY_OPS` account. Names and optional user links are mutable and are not readiness invariants.
+
+### Design chosen
+
+- Startup now validates and emits only sanitized structured issue codes; it no longer silently repairs existing financial reference rows.
+- `/health/live` remains process-only. `/health/ready` checks PostgreSQL and freshly validates the three reference identities on every call, so it returns a generic 503 on missing/duplicate/inactive/wrong-kind/business-scoped data and automatically recovers after correction.
+- A backward-safe data migration inserts missing identities with `ON CONFLICT (key) DO NOTHING`. Existing rows and all financial balances/earnings/settlements are untouched.
+- `npm run reconcile:partners -- --dry-run` is the default non-mutating operator check. Explicit `--apply` creates missing identities only, in a transaction with `createMany(..., skipDuplicates: true)` and the existing unique key, so concurrent invocations cannot duplicate them. Inconsistent existing rows are reported, never overwritten.
+
+### Files changed
+
+- Accounting invariant/service/module files and focused service tests.
+- Health controller/module and readiness tests.
+- `apps/api/prisma/reconcile-partner-accounts.ts`, API/root package scripts, and the operations runbook.
+
+### Migration created
+
+- `apps/api/prisma/migrations/20260918010000_seed_required_partner_accounts/migration.sql` inserts only missing `OWNER_A`, `OWNER_B`, and `DELIVERY_OPS` identities. It creates no balance or ledger row and does not update an existing account.
+
+### Tests added
+
+- Valid set passes; missing, duplicate, wrong-kind, inactive, and business-scoped accounts fail.
+- Liveness remains healthy while readiness fails for missing data or database unavailability.
+- Readiness recovers on the next request after correction.
+- Concurrent apply reconciliation creates one row per key; dry-run modifies nothing.
+- API failures and structured logs omit account names, balances, raw database errors, and financial values.
+
+### Commands and results
+
+- Targeted partner/readiness/accounting/driver tests: 84 passed, 0 failed.
+- Focused TypeScript check of the invariant, service, readiness controller, and command: passed.
+- Prisma schema validation: passed.
+- The reconciliation command was not pointed at any configured external database during this task.
+
+### Commit SHA
+
+- Pending this task's focused commit; the exact SHA will be recorded immediately after creation.
+
+### Manual verification
+
+- Applying both Round 2 migrations to clean PostgreSQL and executing the reconciliation command against that disposable database are deferred to final verification if Docker/PostgreSQL is available.
+- No production account, balance, settlement, or provider was accessed or modified.

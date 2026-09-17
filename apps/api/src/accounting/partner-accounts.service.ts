@@ -1,17 +1,15 @@
 import { Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import type { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
-import { partnerKeys } from "./accounting.rules";
+import {
+  inspectPartnerAccountInvariants,
+  requiredPartnerAccounts,
+  type PartnerAccountInvariantRow
+} from "./partner-account-invariants";
 
-/**
- * The fixed parties in the revenue model exist as rows, not as names in code.
- *
- * "Abdullah's third of the delivery remainder" is a share belonging to *delivery operations*, and
- * whoever holds that role. Seeding the accounts here means the split never has to name a person,
- * and a partner can be renamed, or linked to a login, without touching any arithmetic.
- *
- * Deliberately conservative, like SystemRolesService: missing accounts are created, and an
- * existing one is never rewritten. A name edited in an admin screen must survive the next deploy.
- */
+type PartnerAccountClient = Pick<Prisma.TransactionClient, "partnerAccount">;
+
+/** Validates and safely creates only the fixed reference identities used by the revenue model. */
 @Injectable()
 export class PartnerAccountsService implements OnModuleInit {
   private readonly logger = new Logger(PartnerAccountsService.name);
@@ -20,27 +18,57 @@ export class PartnerAccountsService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     try {
-      await this.reconcile();
-    } catch (error) {
-      // Reference data upkeep must never stop the API from starting.
-      this.logger.warn(`Could not reconcile partner accounts: ${(error as Error).message}`);
+      const result = await this.validate();
+      if (!result.ready) this.logInvalid(result.issues.map((issue) => issue.code));
+    } catch {
+      this.logger.warn(JSON.stringify({
+        event: "partner_account_validation_unavailable",
+        code: "REFERENCE_DATA_CHECK_FAILED"
+      }));
     }
   }
 
-  async reconcile(): Promise<void> {
-    const seeds = [
-      { key: partnerKeys.ownerA, name: "Mohammad (platform owner)", kind: "PLATFORM_OWNER" as const },
-      { key: partnerKeys.ownerB, name: "Khaldoun (platform owner)", kind: "PLATFORM_OWNER" as const },
-      { key: partnerKeys.deliveryOps, name: "Abdullah (delivery operations)", kind: "DELIVERY_OPS" as const }
-    ];
+  /** Read on every readiness request, so readiness automatically recovers after an operator fix. */
+  async validate(client: PartnerAccountClient = this.prisma) {
+    const rows = await client.partnerAccount.findMany({
+      where: { key: { in: requiredPartnerAccounts.map((account) => account.key) } },
+      select: { id: true, key: true, kind: true, isActive: true, businessId: true }
+    });
+    return inspectPartnerAccountInvariants(rows as PartnerAccountInvariantRow[]);
+  }
 
-    for (const seed of seeds) {
-      await this.prisma.partnerAccount.upsert({
-        where: { key: seed.key },
-        create: seed,
-        // Nothing to update: an existing account is left exactly as the business set it up.
-        update: {}
-      });
+  /**
+   * Dry-run by default. Apply mode creates missing identities only; it never changes an existing
+   * account, user link, balance, earning, settlement, name, kind, or active state.
+   */
+  async reconcile(options: { dryRun?: boolean } = {}) {
+    const dryRun = options.dryRun ?? true;
+    const before = await this.validate();
+    const missingKeys = before.issues
+      .filter((issue) => issue.code === "MISSING_REQUIRED_ACCOUNT")
+      .map((issue) => issue.key);
+
+    if (dryRun || missingKeys.length === 0) {
+      return { dryRun, created: 0, missingKeys, validation: before };
     }
+
+    return this.prisma.$transaction(async (tx) => {
+      const result = await tx.partnerAccount.createMany({
+        data: requiredPartnerAccounts
+          .filter((account) => missingKeys.includes(account.key))
+          .map((account) => ({ ...account })),
+        skipDuplicates: true
+      });
+      const validation = await this.validate(tx);
+      return { dryRun: false, created: result.count, missingKeys, validation };
+    });
+  }
+
+  logInvalid(issueCodes: string[]): void {
+    this.logger.warn(JSON.stringify({
+      event: "partner_account_invariant_failed",
+      issueCount: issueCodes.length,
+      issueCodes: [...new Set(issueCodes)].sort()
+    }));
   }
 }

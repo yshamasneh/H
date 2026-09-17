@@ -29,6 +29,19 @@ curl -fsS -H "x-monitoring-token: $MONITORING_TOKEN" https://YOUR_HOST/api/v1/me
 
 5. Run the four-role smoke test in `docs/launch-checklist.md` and watch structured logs/error tracking during the test.
 
+`/health/live` only confirms that the process is running. `/health/ready` also validates PostgreSQL
+and the fixed financial reference accounts. If readiness reports
+`FINANCIAL_REFERENCE_DATA_NOT_READY`, inspect without modifying data first:
+
+```bash
+npm run reconcile:partners -- --dry-run
+```
+
+If the report contains only missing required accounts, create those identities idempotently with
+`npm run reconcile:partners -- --apply`, then rerun the dry-run and readiness check. Apply mode does
+not change an existing account, linkage, balance, earning, settlement, kind, or active state. Any
+inconsistent existing row requires reviewed operator correction; do not bypass readiness.
+
 The API and mobile web bundle are immutable images. Swagger is disabled in production. PostgreSQL is external to the supplied production Compose file so database lifecycle and application lifecycle cannot accidentally erase each other.
 
 ## Monitoring and alerts

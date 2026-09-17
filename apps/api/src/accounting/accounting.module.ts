@@ -11,6 +11,6 @@ import { PartnerAccountsService } from "./partner-accounts.service";
   imports: [JwtModule.register({})],
   controllers: [AdminAccountingController, BusinessAccountingController],
   providers: [AccountingService, PartnerAccountsService, JwtAuthGuard, RolesGuard],
-  exports: [AccountingService]
+  exports: [AccountingService, PartnerAccountsService]
 })
 export class AccountingModule {}
