@@ -69,13 +69,22 @@
 - `git diff --check` before the Task 2 commit reported three Markdown hard-break spaces in this progress file; they are removed in the next tracked update. No source-code whitespace error was reported.
 - Targeted notification-navigation test file: 11 passed, 0 failed.
 - Targeted Mobile Admin rejection request test: 1 passed, 0 failed.
+- Full repository typecheck: pass for Admin, API, and Mobile.
+- Full repository test suite: 488 passed, 3 PostgreSQL-gated tests skipped, 0 failed. Existing React `act(...)` warnings from icon rendering remain non-failing and were not changed.
+- Prisma schema validation: pass.
+- Repository `lint`: pass; the current lint scripts are `tsc --noEmit`, not an independent ESLint check.
+- Non-production builds: pass for Vite Admin, Nest/Prisma API, and Expo Web/iOS/Android export. Vite reported its existing large-chunk warning (624.68 kB), not a failure.
+- Final build outputs were ignored; no generated artifact changed the tracked tree.
+- `git diff --check` across all changes from the starting commit: pass.
+- Final tracked-diff secret scan: zero private keys, credential-bearing database URLs, AWS keys, GitHub tokens, or JWT-shaped literals. Two Expo-token-shaped values are deterministic fake test fixtures (`shared-installation` / `owner-installation`), not real device tokens.
+- Final pre-documentation `git status`: only this tracked progress file was modified; the pre-existing untracked `codexReviewJovo.md` remained untouched and unstaged.
 
 ## Commits
 
 - Task 1: no commit, because the only affected script is ignored/local-only and no tracked configuration requires a change.
 - Task 2: `7091c36a0964b51111fd34774959052beafd8f1c` (`Fix push token account isolation`).
 - Task 3: `f179d61197cfa1f87290ad9b054c70120bae1c7b` (`Open orders from push notification taps`).
-- Task 4: pending focused commit; SHA will be recorded immediately after creation.
+- Task 4: `47d14d6259f38428db2b18414792b3fe92a1e861` (`Fix mobile admin store rejection`).
 
 ## Deferred manual work
 
@@ -86,10 +95,15 @@
 
 ## Remaining issues
 
-- Final repository verification and normal push.
+- No remaining code issue from Tasks 2–4.
+- Deferred external/manual work is listed above.
+- Final documentation commit, remote movement check, and normal push remain operational steps.
 
 ## Differences from the original readiness report
 
 - The original report correctly identified a plaintext local PostgreSQL URL, but this focused investigation now establishes that it is Azure Database for PostgreSQL, is ignored and untracked, and neither the exact literal nor its provider host appears in reachable Git history.
 - No evidence was found that the credential was ever committed. Its active/revoked state remains intentionally unverified because provider access is outside scope.
 - The Mobile Admin rejection finding was confirmed exactly as reported: the old client signature omitted `reason` and produced no JSON body. No backend contract change was necessary.
+- The original report's Push Token account-switch issue is now fixed by code and automated tests; real-device/provider verification remains deferred.
+- The original report's missing notification-tap navigation is now implemented and automatically tested for live and cold-start paths; real Android/iOS delivery remains deferred.
+- No attempt was made to address unrelated readiness findings (Expo Doctor configuration, dependency advisories, CI scope, branding, deployment, OTP provider, or infrastructure).
