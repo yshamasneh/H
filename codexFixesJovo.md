@@ -154,9 +154,55 @@
 
 ### Commit SHA
 
-- Pending this task's focused commit; the exact SHA will be recorded immediately after creation.
+- `f479dfc7885f07c2be62f30319fe8c5da86ebe54` (`Add durable push delivery outbox`).
 
 ### Manual verification
 
 - No real Expo request or physical-device delivery was performed. Production Expo/APNs/FCM credentials, Android/iOS background delivery, and provider dashboards remain deferred.
 - Apply the migration to a clean temporary PostgreSQL database during final verification if Docker/PostgreSQL is available.
+
+## Task 2 — Expo Doctor compatibility
+
+### Root cause
+
+- `android.usesCleartextTraffic` is not a valid Expo SDK 54 app-config field at that location, so schema validation failed even though the intended value was secure.
+- The installed `expo` and `expo-constants` packages were one patch behind the versions required by the current SDK 54 compatibility metadata.
+
+### Design chosen
+
+- Removed only the invalid app-config field. Android's modern platform default remains no cleartext traffic, and application code still rejects any non-HTTPS `EXPO_PUBLIC_API_URL` outside development.
+- Kept Expo SDK 54 and used `expo install` to move only `expo` to `~54.0.37` and `expo-constants` to `~18.0.14`, updating the npm lockfile with their compatible transitive graph.
+- Package name, bundle identifier, EAS project ID, app/build versions, release channels, permissions, and HTTPS runtime enforcement were preserved.
+
+### Files changed
+
+- `apps/mobile/app.json`.
+- `apps/mobile/package.json`.
+- `package-lock.json`.
+
+### Migration created
+
+- None.
+
+### Tests added
+
+- None; this task is configuration/dependency compatibility and is verified through Doctor, typecheck, existing tests, config introspection, and unsigned exports.
+
+### Commands and results
+
+- Before: `npx --yes expo-doctor@latest apps/mobile` reported `15/17`; failures were the invalid Android field plus patch mismatches (`expo` expected `~54.0.37`, found `54.0.36`; `expo-constants` expected `~18.0.14`, found `18.0.13`).
+- After: the same Doctor command reported `17/17 checks passed`. Doctor also reports that the repository's pre-existing `appConfigFieldsNotSyncedCheck` opt-out remains disabled; no new exclusion was added.
+- Mobile typecheck: passed.
+- Mobile tests: 87 unit tests and 18 Jest UI tests passed; existing non-failing React `act(...)` warnings from icon rendering remain unchanged.
+- `expo config --type public`: passed and confirmed the existing identifiers/version/EAS Update values were unchanged.
+- `expo config --type introspect`: passed.
+- Unsigned `expo export --platform all`: passed for Android, iOS, and Web.
+- npm reported 27 existing dependency advisories during install; broad advisory remediation is explicitly outside this round and no `npm audit fix` was run.
+
+### Commit SHA
+
+- Pending this task's focused commit; the exact SHA will be recorded immediately after creation.
+
+### Manual verification
+
+- Signed Android/iOS builds, EAS credentials, TestFlight, Google Play, and physical-device checks remain deferred by scope.
