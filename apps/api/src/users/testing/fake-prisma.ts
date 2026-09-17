@@ -36,7 +36,14 @@ type AddressRecord = {
   updatedAt: Date;
 };
 
-type PushTokenRecord = { id: string; userId: string; token: string; isActive: boolean };
+type PushTokenRecord = {
+  id: string;
+  userId: string;
+  token: string;
+  isActive: boolean;
+  platform?: string;
+  lastRegisteredAt?: Date;
+};
 type RefreshSessionRecord = { id: string; userId: string; revokedAt: Date | null };
 type AuditLogRecord = {
   id: string;
@@ -160,6 +167,37 @@ export class FakeUsersPrisma {
         if (this.pushTokens[index].userId === where.userId) this.pushTokens.splice(index, 1);
       }
       return { count: before - this.pushTokens.length };
+    };
+    this.pushToken.upsert = async ({ where, create, update }: any) => {
+      const existing = this.pushTokens.find((entry) => entry.token === where.token);
+      if (existing) {
+        existing.userId = update.userId;
+        existing.platform = update.platform;
+        existing.isActive = update.isActive;
+        existing.lastRegisteredAt = update.lastRegisteredAt;
+        return { ...existing };
+      }
+      const entry: PushTokenRecord = {
+        id: randomUUID(),
+        userId: create.userId,
+        token: create.token,
+        platform: create.platform,
+        isActive: true,
+        lastRegisteredAt: new Date()
+      };
+      this.pushTokens.push(entry);
+      return { ...entry };
+    };
+    this.pushToken.updateMany = async ({ where, data }: any) => {
+      const matches = this.pushTokens.filter(
+        (entry) =>
+          (where.userId === undefined || entry.userId === where.userId) &&
+          (where.token === undefined || entry.token === where.token)
+      );
+      for (const entry of matches) {
+        if (data.isActive !== undefined) entry.isActive = data.isActive;
+      }
+      return { count: matches.length };
     };
 
     this.refreshSession.updateMany = async ({ where, data }: any) => {

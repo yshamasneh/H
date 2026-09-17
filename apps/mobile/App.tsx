@@ -21,6 +21,8 @@ import {
   fetchCurrentUser,
   getPlatformSettings,
   logout,
+  registerMyPushToken,
+  unregisterMyPushToken,
   type AuthResult,
   type MenuItemSummary,
   type RestaurantSummary
@@ -104,6 +106,14 @@ import { NotificationInboxScreen } from "./src/features/shared/notification-scre
 import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/features/restaurant/order-screens";
 import { RestaurantListScreen, RestaurantMenuScreen } from "./src/features/customer/restaurant-screens";
 import { cartRepository, clearTokens, getAccessToken, getCachedUser, saveTokens } from "./src/core/session";
+import {
+  clearStoredPushTokenAssociation,
+  getPushToken,
+  getStoredPushToken,
+  isPushNotificationsEnabled,
+  storePushToken
+} from "./src/core/push-notifications";
+import { logoutWithPushCleanup, reconcilePushTokenForUser } from "./src/core/push-token-lifecycle";
 import { disconnectSocket } from "./src/core/socket";
 import { ErrorBoundary } from "./src/components/error-boundary";
 import { AdminDashboardScreen } from "./src/features/admin/dashboard-screen";
@@ -194,6 +204,18 @@ function TasawaQApp() {
   // fontError still releases the gate rather than hanging forever.
   const isSplashVisible = !minSplashElapsed || (!fontsReady && !fontError);
 
+  async function reconcilePushForAuthenticatedUser(user: AuthResult["user"]): Promise<void> {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+    const platform = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
+    await reconcilePushTokenForUser(accessToken, user.id, platform, {
+      isPushEnabled: isPushNotificationsEnabled,
+      getDevicePushToken: getPushToken,
+      registerPushToken: registerMyPushToken,
+      storePushAssociation: storePushToken
+    });
+  }
+
   useEffect(() => {
     let isMounted = true;
     const splashTimer = setTimeout(() => {
@@ -221,9 +243,19 @@ function TasawaQApp() {
         // 401 (H-1). Mid-session/expired access tokens are refreshed transparently inside
         // request() (H-2), so fetchCurrentUser only throws here when truly offline or when
         // the refresh token is itself dead.
-        const outcome = await restoreSession({ getAccessToken, fetchCurrentUser, getCachedUser, clearTokens });
+        const outcome = await restoreSession({
+          getAccessToken,
+          fetchCurrentUser,
+          getCachedUser,
+          clearTokens: async () => {
+            await clearStoredPushTokenAssociation().catch(() => undefined);
+            await clearTokens();
+          }
+        });
         if (!isMounted) return;
         if (outcome.status === "authenticated") {
+          await reconcilePushForAuthenticatedUser(outcome.user).catch(() => undefined);
+          if (!isMounted) return;
           setScreen(homeForUser(outcome.user));
         } else if (outcome.status === "offline" && outcome.user) {
           // Couldn't reach the server, but the stored tokens are intact and we have a
@@ -285,20 +317,20 @@ function TasawaQApp() {
 
   async function handleAuthenticated(result: AuthResult, notice?: string) {
     await saveTokens(result);
+    await reconcilePushForAuthenticatedUser(result.user).catch(() => undefined);
     const destination = authResultToHome(result);
     setScreen(destination.name === "home" ? { ...destination, notice } : destination);
   }
 
   async function handleLogout() {
-    const accessToken = await getAccessToken();
-    if (accessToken) {
-      try {
-        await logout(accessToken);
-      } catch {
-        // Local logout still clears credentials if the API is unavailable.
-      }
-    }
-    await clearTokens();
+    await logoutWithPushCleanup({
+      getAccessToken,
+      getStoredPushToken,
+      unregisterPushToken: unregisterMyPushToken,
+      logoutRemote: logout,
+      clearPushAssociation: clearStoredPushTokenAssociation,
+      clearSession: clearTokens
+    });
     disconnectSocket();
     setCart(null);
     setScreen(goToLogin());

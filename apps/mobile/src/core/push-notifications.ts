@@ -41,6 +41,8 @@ export async function getPushToken(): Promise<string> {
 }
 
 const pushTokenKey = "tasawaq.push-token";
+const pushTokenOwnerKey = "tasawaq.push-token-owner";
+const pushEnabledKey = "tasawaq.push-enabled";
 
 export function getStoredPushToken(): Promise<string | null> {
   if (Platform.OS === "web") {
@@ -49,20 +51,58 @@ export function getStoredPushToken(): Promise<string | null> {
   return SecureStore.getItemAsync(pushTokenKey);
 }
 
-export function storePushToken(token: string): Promise<void> {
+export function getStoredPushTokenOwner(): Promise<string | null> {
   if (Platform.OS === "web") {
-    writeWebToken(pushTokenKey, token);
-    return Promise.resolve();
+    return Promise.resolve(readWebToken(pushTokenOwnerKey));
   }
-  return SecureStore.setItemAsync(pushTokenKey, token);
+  return SecureStore.getItemAsync(pushTokenOwnerKey);
 }
 
-export function clearStoredPushToken(): Promise<void> {
+export async function isPushNotificationsEnabled(): Promise<boolean> {
+  const enabled = Platform.OS === "web"
+    ? readWebToken(pushEnabledKey)
+    : await SecureStore.getItemAsync(pushEnabledKey);
+  if (enabled === "true") return true;
+
+  // Existing installations predate the preference key. A stored token means the user had
+  // explicitly enabled notifications, so preserve that choice and reconcile it after login.
+  return Boolean(await getStoredPushToken());
+}
+
+export async function storePushToken(token: string, ownerUserId: string): Promise<void> {
+  if (Platform.OS === "web") {
+    writeWebToken(pushTokenKey, token);
+    writeWebToken(pushTokenOwnerKey, ownerUserId);
+    writeWebToken(pushEnabledKey, "true");
+    return;
+  }
+  await Promise.all([
+    SecureStore.setItemAsync(pushTokenKey, token),
+    SecureStore.setItemAsync(pushTokenOwnerKey, ownerUserId),
+    SecureStore.setItemAsync(pushEnabledKey, "true")
+  ]);
+}
+
+export async function clearStoredPushTokenAssociation(): Promise<void> {
   if (Platform.OS === "web") {
     deleteWebToken(pushTokenKey);
-    return Promise.resolve();
+    deleteWebToken(pushTokenOwnerKey);
+    return;
   }
-  return SecureStore.deleteItemAsync(pushTokenKey);
+  await Promise.all([
+    SecureStore.deleteItemAsync(pushTokenKey),
+    SecureStore.deleteItemAsync(pushTokenOwnerKey)
+  ]);
+}
+
+/** Clears both the current account association and the user's device-level opt-in. */
+export async function clearStoredPushToken(): Promise<void> {
+  await clearStoredPushTokenAssociation();
+  if (Platform.OS === "web") {
+    deleteWebToken(pushEnabledKey);
+    return;
+  }
+  await SecureStore.deleteItemAsync(pushEnabledKey);
 }
 
 function readWebToken(key: string): string | null {

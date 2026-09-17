@@ -105,6 +105,48 @@ test("deleteMyAccount rejects an already-deleted (inactive) account", async () =
   await assert.rejects(service.deleteMyAccount(user.id), hasCode("USER_NOT_FOUND"));
 });
 
+// --- Push-token account isolation -------------------------------------------------
+
+test("a device token moves from account A to B without duplicates or active ownership for A", async () => {
+  const { prisma, service } = createService();
+  const accountA = prisma.seedUser();
+  const accountB = prisma.seedUser();
+  const token = "ExponentPushToken[shared-installation-123]";
+
+  await service.registerPushToken(accountA.id, { token, platform: "android" });
+  assert.equal(prisma.pushTokens.length, 1);
+  assert.equal(prisma.pushTokens[0].userId, accountA.id);
+  assert.equal(prisma.pushTokens[0].isActive, true);
+
+  await service.unregisterPushToken(accountA.id, token);
+  assert.equal(prisma.pushTokens[0].isActive, false);
+
+  await service.registerPushToken(accountB.id, { token, platform: "android" });
+  await service.registerPushToken(accountB.id, { token, platform: "android" });
+
+  assert.equal(prisma.pushTokens.length, 1, "repeated registration must upsert, not duplicate");
+  assert.equal(prisma.pushTokens[0].userId, accountB.id);
+  assert.equal(prisma.pushTokens[0].isActive, true);
+  assert.equal(
+    prisma.pushTokens.some((entry) => entry.userId === accountA.id && entry.isActive),
+    false
+  );
+});
+
+test("one user cannot deactivate another user's device token", async () => {
+  const { prisma, service } = createService();
+  const owner = prisma.seedUser();
+  const unrelatedUser = prisma.seedUser();
+  const token = "ExponentPushToken[owner-installation-456]";
+
+  await service.registerPushToken(owner.id, { token, platform: "ios" });
+  await service.unregisterPushToken(unrelatedUser.id, token);
+
+  assert.equal(prisma.pushTokens.length, 1);
+  assert.equal(prisma.pushTokens[0].userId, owner.id);
+  assert.equal(prisma.pushTokens[0].isActive, true);
+});
+
 // --- Saved address CRUD + default selection --------------------------------------
 
 test("the first saved address is forced to be the default even without asking", async () => {

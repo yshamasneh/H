@@ -5,7 +5,13 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StatusBar, S
 import { SafeAreaView } from "react-native-safe-area-context";
 import { deleteMyAccount, registerMyPushToken, unregisterMyPushToken, type PublicUser } from "../../core/api";
 import { readError } from "../../core/errors";
-import { clearStoredPushToken, getPushToken, getStoredPushToken, storePushToken } from "../../core/push-notifications";
+import {
+  clearStoredPushToken,
+  getPushToken,
+  getStoredPushToken,
+  getStoredPushTokenOwner,
+  storePushToken
+} from "../../core/push-notifications";
 import { getAccessToken } from "../../core/session";
 import { LanguageSwitcher } from "../../i18n/LanguageSwitcher";
 import { Icon, backIconName, disclosureIconName, type IconName } from "../../theme/icon";
@@ -43,8 +49,10 @@ export function SettingsScreen(props: {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
-    void getStoredPushToken().then((stored) => setPushEnabled(Boolean(stored)));
-  }, []);
+    void Promise.all([getStoredPushToken(), getStoredPushTokenOwner()]).then(([stored, ownerUserId]) => {
+      setPushEnabled(Boolean(stored) && (!ownerUserId || ownerUserId === props.user.id));
+    });
+  }, [props.user.id]);
 
   async function confirmLogout() {
     const proceed = await confirm(
@@ -92,7 +100,7 @@ export function SettingsScreen(props: {
       const accessToken = await getAccessToken();
       if (!accessToken) throw new Error(t("common:sessionExpired"));
       const existing = await getStoredPushToken();
-      if (existing) {
+      if (pushEnabled && existing) {
         await unregisterMyPushToken(accessToken, existing);
         await clearStoredPushToken();
         setPushEnabled(false);
@@ -100,7 +108,7 @@ export function SettingsScreen(props: {
         const next = await getPushToken();
         const platform = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
         await registerMyPushToken(accessToken, next, platform);
-        await storePushToken(next);
+        await storePushToken(next, props.user.id);
         setPushEnabled(true);
       }
     } catch (requestError) {
