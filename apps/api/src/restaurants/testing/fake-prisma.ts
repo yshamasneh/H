@@ -124,12 +124,14 @@ export class FakeRestaurantPrisma {
   readonly orderItem = {} as any;
   readonly order = {} as any;
   readonly notification = {} as any;
+  readonly pushToken = {} as any;
   readonly auditLog = {} as any;
   readonly offer = {} as any;
   readonly role = {} as any;
   readonly businessMember = {} as any;
 
   constructor() {
+    this.pushToken.findMany = async () => [];
     this.offer.findMany = async () => this.offers;
     this.role.findUnique = async ({ where }: any) =>
       this.roles.find((role) => (where.key ? role.key === where.key : role.id === where.id)) ?? null;

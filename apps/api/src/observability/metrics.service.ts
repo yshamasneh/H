@@ -6,6 +6,8 @@ export class MetricsService {
   private readonly startedAt = Date.now();
   private readonly counts = new Map<string, number>();
   private readonly durationsMs = new Map<string, number>();
+  private readonly pushDeliveryCounts = new Map<string, number>();
+  private pushDeliveriesPending = 0;
   private inFlight = 0;
 
   constructor(private readonly config: ConfigService) {}
@@ -19,6 +21,14 @@ export class MetricsService {
     const key = `${method.toUpperCase()}|${Math.floor(statusCode / 100)}xx`;
     this.counts.set(key, (this.counts.get(key) ?? 0) + 1);
     this.durationsMs.set(key, (this.durationsMs.get(key) ?? 0) + durationMs);
+  }
+
+  incrementPushDeliveries(outcome: "delivered" | "retried" | "permanently_failed" | "invalid_tokens", count = 1): void {
+    this.pushDeliveryCounts.set(outcome, (this.pushDeliveryCounts.get(outcome) ?? 0) + count);
+  }
+
+  setPushDeliveriesPending(count: number): void {
+    this.pushDeliveriesPending = Math.max(0, count);
   }
 
   renderPrometheus(): string {
@@ -39,6 +49,14 @@ export class MetricsService {
     lines.push("# HELP tasawaq_http_requests_in_flight Current HTTP requests in flight.");
     lines.push("# TYPE tasawaq_http_requests_in_flight gauge");
     lines.push(`tasawaq_http_requests_in_flight ${this.inFlight}`);
+    lines.push("# HELP tasawaq_push_deliveries_total Push delivery worker outcomes.");
+    lines.push("# TYPE tasawaq_push_deliveries_total counter");
+    for (const outcome of ["delivered", "retried", "permanently_failed", "invalid_tokens"]) {
+      lines.push(`tasawaq_push_deliveries_total{outcome="${outcome}"} ${this.pushDeliveryCounts.get(outcome) ?? 0}`);
+    }
+    lines.push("# HELP tasawaq_push_deliveries_pending Current unfinished push deliveries.");
+    lines.push("# TYPE tasawaq_push_deliveries_pending gauge");
+    lines.push(`tasawaq_push_deliveries_pending ${this.pushDeliveriesPending}`);
     lines.push("# HELP tasawaq_process_uptime_seconds Process uptime in seconds.");
     lines.push("# TYPE tasawaq_process_uptime_seconds gauge");
     lines.push(`tasawaq_process_uptime_seconds ${Math.floor((Date.now() - this.startedAt) / 1_000)}`);

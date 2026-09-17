@@ -136,6 +136,15 @@ type NotificationRecord = {
   createdAt: Date;
 };
 
+type PushTokenRecord = { id: string; userId: string; token: string; isActive: boolean };
+type PushDeliveryRecord = {
+  id: string;
+  notificationId: string;
+  pushTokenId: string;
+  deduplicationKey: string;
+  status: "PENDING";
+};
+
 type AuditLogRecord = {
   id: string;
   actorUserId: string;
@@ -166,6 +175,8 @@ export class FakeOrdersPrisma {
   readonly orderStatusHistories: OrderStatusHistoryRecord[] = [];
   readonly deliveries: DeliveryRecord[] = [];
   readonly notifications: NotificationRecord[] = [];
+  readonly pushTokens: PushTokenRecord[] = [];
+  readonly pushDeliveries: PushDeliveryRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
   readonly offers: any[] = [];
   readonly fulfillmentAdjustments: FulfillmentAdjustmentRecord[] = [];
@@ -187,6 +198,8 @@ export class FakeOrdersPrisma {
   readonly delivery = {} as any;
   readonly driverProfile = {} as any;
   readonly notification = {} as any;
+  readonly pushToken = {} as any;
+  readonly pushDelivery = {} as any;
   readonly auditLog = {} as any;
   readonly offer = {} as any;
   readonly fulfillmentAdjustment = {} as any;
@@ -203,6 +216,19 @@ export class FakeOrdersPrisma {
           (where?.businessId === undefined || member.businessId === where.businessId) &&
           (where?.isActive === undefined || member.isActive === where.isActive)
       );
+    this.pushToken.findMany = async ({ where }: any) =>
+      this.pushTokens
+        .filter((token) => token.userId === where.userId && token.isActive === where.isActive)
+        .map((token) => ({ id: token.id }));
+    this.pushDelivery.createMany = async ({ data, skipDuplicates }: any) => {
+      let count = 0;
+      for (const entry of data) {
+        if (skipDuplicates && this.pushDeliveries.some((item) => item.deduplicationKey === entry.deduplicationKey)) continue;
+        this.pushDeliveries.push({ id: randomUUID(), status: "PENDING", ...entry });
+        count += 1;
+      }
+      return { count };
+    };
 
     this.restaurant.findUnique = async ({ where }: any) =>
       this.restaurants.find((restaurant) =>
@@ -572,8 +598,26 @@ export class FakeOrdersPrisma {
       release = resolve;
     });
     await previous;
+    const rollbackState = [
+      this.menuItems,
+      this.orders,
+      this.orderItems,
+      this.orderStatusHistories,
+      this.notifications,
+      this.pushDeliveries,
+      this.inventoryMovements
+    ].map((records) => ({ records, snapshot: structuredClone(records) }));
     try {
       return await operation(this);
+    } catch (error) {
+      for (const { records, snapshot } of rollbackState) {
+        records.splice(snapshot.length);
+        for (let index = 0; index < snapshot.length; index += 1) {
+          if (records[index]) Object.assign(records[index], snapshot[index]);
+          else records.push(snapshot[index] as never);
+        }
+      }
+      throw error;
     } finally {
       release();
     }
@@ -623,6 +667,12 @@ export class FakeOrdersPrisma {
   seedBusinessMember(businessId: string, userId: string = randomUUID()): { businessId: string; userId: string } {
     this.businessMembers.push({ businessId, userId, isActive: true });
     return { businessId, userId };
+  }
+
+  seedPushToken(userId: string, token = `ExponentPushToken[${randomUUID()}]`): PushTokenRecord {
+    const record = { id: randomUUID(), userId, token, isActive: true };
+    this.pushTokens.push(record);
+    return record;
   }
 
   seedMenuItem(restaurantId: string, overrides: Partial<MenuItemRecord> = {}): MenuItemRecord {

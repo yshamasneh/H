@@ -107,3 +107,56 @@
 - The original report's Push Token account-switch issue is now fixed by code and automated tests; real-device/provider verification remains deferred.
 - The original report's missing notification-tap navigation is now implemented and automatically tested for live and cold-start paths; real Android/iOS delivery remains deferred.
 - No attempt was made to address unrelated readiness findings (Expo Doctor configuration, dependency advisories, CI scope, branding, deployment, OTP provider, or infrastructure).
+
+# Round 2 — Push reliability, Expo Doctor and readiness
+
+## Task 1 — Push delivery reliability
+
+### Root cause
+
+- `createNotification` delegated directly to a fire-and-forget Expo sender after the database write. Network, timeout, and Expo 5xx failures were only logged, so there was no durable state to retry.
+- Expo tickets were inspected only for immediate `DeviceNotRegistered`; ticket IDs were not stored and receipts were never polled.
+- New-order notifications were written after the order transaction, so a committed order could exist with neither a notification nor a durable delivery job.
+
+### Design chosen
+
+- Added a small Prisma `PushDelivery` outbox with a stable unique key per notification/device and explicit `PENDING`, `PROCESSING`, `AWAITING_RECEIPT`, `DELIVERED`, `RETRYABLE_FAILED`, and `PERMANENT_FAILED` states.
+- Notification creation now inserts per-active-device outbox rows in the same transaction. New-order notification/outbox creation is inside the order transaction; only socket emission is deferred until commit. Expo is contacted solely by the background worker after commit.
+- The in-process worker uses compare-and-set row claims, 100-message Expo batches, bounded exponential backoff with jitter, request timeout, maximum send/receipt attempts, stale-claim recovery, ticket persistence, receipt polling, and graceful shutdown. Multiple API instances can safely poll the same table.
+- Permanent malformed-token/payload failures are not retried. `DeviceNotRegistered` deactivates only the affected token. Token reassignment terminally closes unfinished jobs for the former owner before the token is activated for the new owner.
+- Logs contain delivery IDs and sanitized error codes only. Prometheus output now exposes pending, delivered, retried, permanent-failure, and invalid-token metrics.
+
+### Files changed
+
+- Prisma: `apps/api/prisma/schema.prisma` and migration `20260918000000_add_push_delivery_outbox`.
+- Delivery path: notification utility, Push sender/worker, realtime gateway/emitter, order creation, token registration, environment validation/examples, and metrics service.
+- Tests/fakes: Push worker, orders, users, realtime, and affected domain Prisma doubles.
+
+### Migration created
+
+- `apps/api/prisma/migrations/20260918000000_add_push_delivery_outbox/migration.sql` creates the enum/table, unique deduplication key, due-work indexes, and cascading notification/token foreign keys. It does not alter or delete existing notification rows.
+- Clean PostgreSQL application is deferred to final verification; Prisma schema validation passed.
+
+### Tests added
+
+- Successful ticket and receipt delivery; provider timeout; transient 5xx followed by success; retry/backoff; maximum attempts; stale-processing recovery; concurrent worker claim exclusion; >100 batching; pending/later-success receipts; token-scoped `DeviceNotRegistered`; malformed-token permanence; sanitized logs.
+- Order tests prove a committed order creates one pending outbox job, idempotent checkout does not duplicate it, and rollback leaves no order/notification/outbox row.
+- Token-isolation regression now also proves unfinished jobs for account A are terminally closed before the installation is assigned to account B.
+
+### Commands and results
+
+- Targeted API tests across Push, orders, users, drivers, restaurants, realtime gateway/emitter: 178 tests, 177 passed initially; one fake-transaction reference bug was found and corrected.
+- Targeted rerun for Push/orders/users/environment: 108 passed, 0 failed.
+- Focused TypeScript check of modified production files: passed.
+- `npm run prisma:validate --workspace @wasel/api`: passed.
+- `git diff --check`: passed after removing two trailing blank lines.
+- Tracked-diff credential scan: no real credential or connection-string literal; Expo-shaped values are generated/fixed test data only.
+
+### Commit SHA
+
+- Pending this task's focused commit; the exact SHA will be recorded immediately after creation.
+
+### Manual verification
+
+- No real Expo request or physical-device delivery was performed. Production Expo/APNs/FCM credentials, Android/iOS background delivery, and provider dashboards remain deferred.
+- Apply the migration to a clean temporary PostgreSQL database during final verification if Docker/PostgreSQL is available.

@@ -88,10 +88,28 @@ export class UsersService {
   async registerPushToken(userId: string, input: RegisterPushTokenDto) {
     await this.requireUser(userId);
     const token = input.token.trim();
-    await this.prisma.pushToken.upsert({
-      where: { token },
-      create: { userId, token, platform: input.platform },
-      update: { userId, platform: input.platform, isActive: true, lastRegisteredAt: new Date() }
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.pushToken.findUnique({ where: { token }, select: { id: true, userId: true } });
+      if (existing && existing.userId !== userId) {
+        // A queued notification for account A must never be delivered after the installation is
+        // reassigned to account B. Preserve the history, but terminally close unfinished jobs.
+        await tx.pushDelivery.updateMany({
+          where: {
+            pushTokenId: existing.id,
+            status: { in: ["PENDING", "PROCESSING", "AWAITING_RECEIPT", "RETRYABLE_FAILED"] }
+          },
+          data: {
+            status: "PERMANENT_FAILED",
+            processingStartedAt: null,
+            lastErrorCode: "TOKEN_OWNERSHIP_CHANGED"
+          }
+        });
+      }
+      await tx.pushToken.upsert({
+        where: { token },
+        create: { userId, token, platform: input.platform },
+        update: { userId, platform: input.platform, isActive: true, lastRegisteredAt: new Date() }
+      });
     });
     return { registered: true };
   }

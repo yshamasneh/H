@@ -117,6 +117,7 @@ test("a device token moves from account A to B without duplicates or active owne
   assert.equal(prisma.pushTokens.length, 1);
   assert.equal(prisma.pushTokens[0].userId, accountA.id);
   assert.equal(prisma.pushTokens[0].isActive, true);
+  prisma.pushDeliveries.push({ pushTokenId: prisma.pushTokens[0].id, status: "PENDING" });
 
   await service.unregisterPushToken(accountA.id, token);
   assert.equal(prisma.pushTokens[0].isActive, false);
@@ -127,6 +128,8 @@ test("a device token moves from account A to B without duplicates or active owne
   assert.equal(prisma.pushTokens.length, 1, "repeated registration must upsert, not duplicate");
   assert.equal(prisma.pushTokens[0].userId, accountB.id);
   assert.equal(prisma.pushTokens[0].isActive, true);
+  assert.equal(prisma.pushDeliveries[0].status, "PERMANENT_FAILED");
+  assert.equal(prisma.pushDeliveries[0].lastErrorCode, "TOKEN_OWNERSHIP_CHANGED");
   assert.equal(
     prisma.pushTokens.some((entry) => entry.userId === accountA.id && entry.isActive),
     false

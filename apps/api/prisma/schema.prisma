@@ -55,6 +55,15 @@ enum NotificationType {
   ADMIN_ALERT
 }
 
+enum PushDeliveryStatus {
+  PENDING
+  PROCESSING
+  AWAITING_RECEIPT
+  DELIVERED
+  RETRYABLE_FAILED
+  PERMANENT_FAILED
+}
+
 enum OrderPaymentMethod {
   CASH
 }
@@ -415,6 +424,7 @@ model PushToken {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushDeliveries   PushDelivery[]
 
   @@index([userId, isActive])
 }
@@ -829,9 +839,37 @@ model Notification {
   createdAt       DateTime         @default(now())
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   business        Restaurant?      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  pushDeliveries  PushDelivery[]
 
   @@index([userId, isRead, createdAt])
   @@index([businessId, isRead, createdAt])
+}
+
+/// Durable, per-device delivery state for a user-facing notification. A row is created in the
+/// same transaction as its Notification; the background worker is the only code that contacts
+/// Expo. The unique key prevents two workers or a retried domain operation from enqueuing the
+/// same logical notification for the same device twice.
+model PushDelivery {
+  id                  String             @id @default(uuid()) @db.Uuid
+  notificationId      String             @db.Uuid
+  pushTokenId         String             @db.Uuid
+  deduplicationKey    String             @unique
+  status              PushDeliveryStatus @default(PENDING)
+  attemptCount        Int                @default(0)
+  receiptAttemptCount Int                @default(0)
+  nextAttemptAt       DateTime           @default(now())
+  processingStartedAt DateTime?
+  expoTicketId        String?
+  lastErrorCode       String?
+  deliveredAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  notification        Notification       @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  pushToken           PushToken          @relation(fields: [pushTokenId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([expoTicketId])
+  @@index([pushTokenId, status])
 }
 
 // ---------------------------------------------------------------------------------------------

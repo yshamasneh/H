@@ -146,6 +146,7 @@ export class FakeDriversPrisma {
   readonly orderStatusHistory = {} as any;
   readonly delivery = {} as any;
   readonly notification = {} as any;
+  readonly pushToken = {} as any;
   readonly auditLog = {} as any;
   readonly financialRateSet = this.accounting.financialRateSet;
   readonly partnerAccount = this.accounting.partnerAccount;
@@ -155,6 +156,7 @@ export class FakeDriversPrisma {
   readonly partnerSettlement = this.accounting.partnerSettlement;
 
   constructor() {
+    this.pushToken.findMany = async () => [];
     this.user.findUnique = async ({ where }: any) =>
       this.users.find((user) => (where.phone ? user.phone === where.phone : user.id === where.id)) ?? null;
     this.user.create = async ({ data }: any) => {

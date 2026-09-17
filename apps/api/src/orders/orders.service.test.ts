@@ -432,33 +432,40 @@ test("placing an order notifies the restaurant owner and emits a realtime event"
   const { prisma, realtime, service } = createService();
   const restaurant = prisma.seedRestaurant();
   const menuItem = prisma.seedMenuItem(restaurant.id);
+  const token = prisma.seedPushToken(restaurant.ownerUserId);
 
   const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
 
   const notification = prisma.notifications.find((entry) => entry.userId === restaurant.ownerUserId);
   assert.ok(notification);
   assert.equal(notification!.type, "ORDER_PLACED");
+  assert.ok(
+    prisma.pushDeliveries.some(
+      (delivery) => delivery.notificationId === notification!.id && delivery.pushTokenId === token.id
+    ),
+    "the durable push job must commit with the order notification"
+  );
   assert.ok(realtime.emitted.some((event) => event.room === `restaurant:${restaurant.id}` && event.event === "order.created"));
   assert.ok(realtime.emitted.some((event) => event.room === "admins" && event.event === "order.created"));
   void order;
 });
 
-test("an order is still placed and stock reserved when the post-commit notification fails", async () => {
-  // Regression: notifying the business now happens AFTER the order transaction commits, so a
-  // notification failure must never roll back a placed order or its stock reservation.
+test("a rolled-back order does not leave a notification or push outbox job", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();
   const menuItem = prisma.seedMenuItem(restaurant.id, { stockQuantity: 5 });
+  prisma.seedPushToken(restaurant.ownerUserId);
   prisma.notification.create = async () => {
     throw new Error("notification store unavailable");
   };
 
-  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  await assert.rejects(service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never));
 
-  assert.equal(order.status, "PLACED");
-  assert.ok(prisma.orders.find((entry) => entry.id === order.id), "order should be persisted");
+  assert.equal(prisma.orders.length, 0);
+  assert.equal(prisma.notifications.length, 0);
+  assert.equal(prisma.pushDeliveries.length, 0);
   const item = prisma.menuItems.find((entry) => entry.id === menuItem.id);
-  assert.equal(item!.stockQuantity, 3, "stock reserved exactly once despite the notification failure");
+  assert.equal(item!.stockQuantity, 5, "stock reservation must roll back with the failed transaction");
 });
 
 test("customer cancels their own PLACED order", async () => {
@@ -1204,6 +1211,7 @@ test("a repeated checkout with the same idempotency key returns the original ord
   const item = prisma.seedMenuItem(restaurant.id, { stockQuantity: 10 });
   const customerId = randomUUID();
   const key = randomUUID();
+  prisma.seedPushToken(restaurant.ownerUserId);
   const input = baseInput(restaurant.id, item.id, { idempotencyKey: key });
 
   const first = await service.createOrder(customerId, input as never);
@@ -1211,6 +1219,7 @@ test("a repeated checkout with the same idempotency key returns the original ord
 
   assert.equal(first.id, second.id, "the same order is returned on the retry");
   assert.equal(prisma.orders.length, 1, "no duplicate order is created");
+  assert.equal(prisma.pushDeliveries.length, 1, "no duplicate logical push job is created");
   assert.equal(item.stockQuantity, 8, "stock is decremented exactly once (quantity 2)");
 });
 

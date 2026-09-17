@@ -115,6 +115,16 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   environment.OTP_MAX_GLOBAL_PER_DAY = readPositiveInteger(environment, "OTP_MAX_GLOBAL_PER_DAY", 2_000);
   environment.OTP_WEBHOOK_TIMEOUT_MS = readPositiveInteger(environment, "OTP_WEBHOOK_TIMEOUT_MS", 5_000);
   environment.ERROR_TRACKING_TIMEOUT_MS = readPositiveInteger(environment, "ERROR_TRACKING_TIMEOUT_MS", 3_000);
+  environment.PUSH_WORKER_ENABLED = readBoolean(environment, "PUSH_WORKER_ENABLED", true);
+  environment.PUSH_WORKER_POLL_INTERVAL_MS = readPositiveInteger(environment, "PUSH_WORKER_POLL_INTERVAL_MS", 5_000);
+  environment.PUSH_WORKER_MAX_BATCHES_PER_RUN = readPositiveInteger(environment, "PUSH_WORKER_MAX_BATCHES_PER_RUN", 10);
+  environment.PUSH_PROVIDER_TIMEOUT_MS = readPositiveInteger(environment, "PUSH_PROVIDER_TIMEOUT_MS", 5_000);
+  environment.PUSH_PROCESSING_STALE_MS = readPositiveInteger(environment, "PUSH_PROCESSING_STALE_MS", 120_000);
+  environment.PUSH_MAX_ATTEMPTS = readPositiveInteger(environment, "PUSH_MAX_ATTEMPTS", 6);
+  environment.PUSH_MAX_RECEIPT_ATTEMPTS = readPositiveInteger(environment, "PUSH_MAX_RECEIPT_ATTEMPTS", 10);
+  environment.PUSH_RECEIPT_DELAY_MS = readPositiveInteger(environment, "PUSH_RECEIPT_DELAY_MS", 60_000);
+  environment.PUSH_RETRY_BASE_MS = readPositiveInteger(environment, "PUSH_RETRY_BASE_MS", 5_000);
+  environment.PUSH_RETRY_MAX_MS = readPositiveInteger(environment, "PUSH_RETRY_MAX_MS", 900_000);
   environment.PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES = readPositiveInteger(
     environment,
     "PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES",

@@ -24,7 +24,7 @@ export type CreateBusinessNotificationInput = Omit<CreateNotificationInput, "use
  */
 export async function createNotification(
   tx: Prisma.TransactionClient,
-  gateway: Pick<RealtimeEmitter, "emitToUser" | "sendPush">,
+  gateway: Pick<RealtimeEmitter, "emitToUser">,
   input: CreateNotificationInput
 ): Promise<void> {
   const notification = await tx.notification.create({
@@ -37,6 +37,20 @@ export async function createNotification(
       relatedEntityId: input.relatedEntityId ?? null
     }
   });
+  const tokens = await tx.pushToken.findMany({
+    where: { userId: input.userId, isActive: true },
+    select: { id: true }
+  });
+  if (tokens.length > 0) {
+    await tx.pushDelivery.createMany({
+      data: tokens.map((token) => ({
+        notificationId: notification.id,
+        pushTokenId: token.id,
+        deduplicationKey: `${notification.id}:${token.id}`
+      })),
+      skipDuplicates: true
+    });
+  }
   gateway.emitToUser(input.userId, "notification.created", {
     id: notification.id,
     type: notification.type,
@@ -45,14 +59,6 @@ export async function createNotification(
     relatedEntityId: notification.relatedEntityId,
     isRead: notification.isRead,
     createdAt: notification.createdAt
-  });
-  // A socket event only reaches an app that is already open; a device push is what reaches the
-  // business (or customer, or driver) when it is not. Most important case: a new order must wake
-  // up the business even with the app closed.
-  gateway.sendPush(input.userId, {
-    title: notification.title,
-    body: notification.body,
-    data: { type: notification.type, relatedEntityId: notification.relatedEntityId ?? undefined }
   });
 }
 
@@ -63,7 +69,7 @@ export async function createNotification(
  */
 export async function createBusinessNotification(
   tx: Prisma.TransactionClient,
-  gateway: Pick<RealtimeEmitter, "emitToUser" | "sendPush">,
+  gateway: Pick<RealtimeEmitter, "emitToUser">,
   input: CreateBusinessNotificationInput
 ): Promise<void> {
   const members = await tx.businessMember.findMany({

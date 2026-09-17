@@ -44,6 +44,7 @@ type PushTokenRecord = {
   platform?: string;
   lastRegisteredAt?: Date;
 };
+type PushDeliveryRecord = { pushTokenId: string; status: string; lastErrorCode?: string | null };
 type RefreshSessionRecord = { id: string; userId: string; revokedAt: Date | null };
 type AuditLogRecord = {
   id: string;
@@ -61,6 +62,7 @@ export class FakeUsersPrisma {
   readonly users: UserRecord[] = [];
   readonly addresses: AddressRecord[] = [];
   readonly pushTokens: PushTokenRecord[] = [];
+  readonly pushDeliveries: PushDeliveryRecord[] = [];
   readonly refreshSessions: RefreshSessionRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
   private sequence = 0;
@@ -68,6 +70,7 @@ export class FakeUsersPrisma {
   readonly user = {} as any;
   readonly address = {} as any;
   readonly pushToken = {} as any;
+  readonly pushDelivery = {} as any;
   readonly refreshSession = {} as any;
   readonly auditLog = {} as any;
 
@@ -168,6 +171,10 @@ export class FakeUsersPrisma {
       }
       return { count: before - this.pushTokens.length };
     };
+    this.pushToken.findUnique = async ({ where }: any) => {
+      const entry = this.pushTokens.find((candidate) => candidate.token === where.token) ?? null;
+      return entry ? { id: entry.id, userId: entry.userId } : null;
+    };
     this.pushToken.upsert = async ({ where, create, update }: any) => {
       const existing = this.pushTokens.find((entry) => entry.token === where.token);
       if (existing) {
@@ -197,6 +204,13 @@ export class FakeUsersPrisma {
       for (const entry of matches) {
         if (data.isActive !== undefined) entry.isActive = data.isActive;
       }
+      return { count: matches.length };
+    };
+    this.pushDelivery.updateMany = async ({ where, data }: any) => {
+      const matches = this.pushDeliveries.filter(
+        (entry) => entry.pushTokenId === where.pushTokenId && where.status.in.includes(entry.status)
+      );
+      for (const entry of matches) Object.assign(entry, data);
       return { count: matches.length };
     };
 
