@@ -135,7 +135,7 @@
 ### Migration created
 
 - `apps/api/prisma/migrations/20260918000000_add_push_delivery_outbox/migration.sql` creates the enum/table, unique deduplication key, due-work indexes, and cascading notification/token foreign keys. It does not alter or delete existing notification rows.
-- Clean PostgreSQL application is deferred to final verification; Prisma schema validation passed.
+- Both Round 2 migrations were applied successfully with all prior migrations to a clean disposable PostgreSQL 16 database; Prisma schema validation also passed.
 
 ### Tests added
 
@@ -159,7 +159,7 @@
 ### Manual verification
 
 - No real Expo request or physical-device delivery was performed. Production Expo/APNs/FCM credentials, Android/iOS background delivery, and provider dashboards remain deferred.
-- Apply the migration to a clean temporary PostgreSQL database during final verification if Docker/PostgreSQL is available.
+- Migration structure and the existing PostgreSQL E2E suite were verified against a disposable local container; provider delivery remains deferred.
 
 ## Task 2 — Expo Doctor compatibility
 
@@ -244,13 +244,39 @@
 - Targeted partner/readiness/accounting/driver tests: 84 passed, 0 failed.
 - Focused TypeScript check of the invariant, service, readiness controller, and command: passed.
 - Prisma schema validation: passed.
-- The reconciliation command was not pointed at any configured external database during this task.
+- Clean PostgreSQL 16 validation: all 29 migrations applied, reconciliation dry-run returned ready with no missing identities, and the existing database E2E suite passed 22/22.
 
 ### Commit SHA
 
-- Pending this task's focused commit; the exact SHA will be recorded immediately after creation.
+- `439e96331b85d099b13e49087b05dca0fef6b5f5` (`Gate readiness on partner accounts`).
 
 ### Manual verification
 
-- Applying both Round 2 migrations to clean PostgreSQL and executing the reconciliation command against that disposable database are deferred to final verification if Docker/PostgreSQL is available.
-- No production account, balance, settlement, or provider was accessed or modified.
+- No production account, balance, settlement, database, or provider was accessed or modified.
+
+## Round 2 final verification
+
+- Full repository typecheck: passed for Admin, API, and Mobile.
+- Full repository tests: 501 passed, 3 PostgreSQL-gated tests skipped, 0 failed. The three gated tests were then run separately against clean PostgreSQL and all 22 nested E2E assertions passed.
+- Prisma validation: passed.
+- Repository lint: passed; as before, the repository's lint scripts invoke TypeScript checks rather than an independent ESLint configuration.
+- Expo Doctor: `17/17 checks passed`; the pre-existing native-config sync-check opt-out remains explicitly reported by Doctor.
+- Non-production builds: Admin Vite build, API Prisma/TypeScript build, and Android/iOS/Web Expo exports passed. Vite's existing 624.68 kB chunk warning is non-failing.
+- Clean PostgreSQL: all 29 migrations, including both Round 2 migrations, applied successfully; partner dry-run was ready; database E2E passed. The first disposable database name was intentionally rejected by the existing E2E safety guard because it lacked the word `test`; the corrected clean database run passed. Both temporary containers were removed.
+- Existing non-failing warnings retained: React icon-test `act(...)` warnings and `pg` query deprecation warnings inside database E2E.
+- `git diff --check`: passed. Final tracked-diff scan found zero private keys, AWS/GitHub tokens, JWT literals, or credential-bearing connection strings. Nine Expo-shaped strings are generated/deterministic test fixtures only; no real Push Token is present.
+- Generated build output remained ignored. Before this documentation commit, `git status` contained only this tracked progress file plus the pre-existing untracked `codexReviewJovo.md`, which remains untouched.
+- Remote movement check and push are recorded after this final documentation commit.
+
+## Round 2 deferred manual work
+
+- Real Expo/APNs/FCM delivery, tickets/receipts from production credentials, physical Android/iPhone background and terminated-app behavior, and multi-device field verification.
+- Signed EAS builds, TestFlight, Google Play internal testing, and store submission.
+- Production/staging deployment, DNS/TLS, real OTP provider, Azure credential rotation, load/stress testing, and broad dependency-advisory remediation remain outside this round.
+
+## Round 2 differences from the original readiness report
+
+- Push delivery is no longer fire-and-forget: delivery state, retry, stale recovery, Expo tickets/receipts, token invalidation, metrics, and transactional new-order enqueueing now exist and are automatically tested.
+- Expo Doctor moved from `15/17` to `17/17` on the same SDK major; the invalid Android field and the two patch mismatches were corrected.
+- Financial reference data now gates readiness independently of liveness, with a safe dry-run/apply operator command and an idempotent migration. It no longer depends on a swallowed startup reconciliation attempt.
+- These changes do not establish production or real-device readiness; all external/manual items above remain deferred.
