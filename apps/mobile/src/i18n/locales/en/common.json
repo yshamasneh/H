@@ -32,6 +32,7 @@
   "pushRequiresDevice": "Push notifications require a physical device.",
   "pushPermissionDenied": "Notification permission was not granted.",
   "pushProjectIdMissing": "EAS project ID is required before push notifications can be enabled.",
+  "notificationOrderUnavailable": "This order is no longer available for this account.",
   "networkError": "Could not reach the server. Check your internet connection.",
   "requestTimeout": "The request took too long. Please check your connection and try again.",
   "invalidResponse": "The server returned an invalid response.",

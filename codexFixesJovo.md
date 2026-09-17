@@ -1,8 +1,8 @@
 # JOVO — Targeted Code Fixes
 
-> Repository: `yshamasneh/H`  
-> Branch: `agent/phase-15-and-jovo-brand`  
-> Starting commit: `cc939c4a881f50fcba678249bbc2cd038111abbb`  
+> Repository: `yshamasneh/H`
+> Branch: `agent/phase-15-and-jovo-brand`
+> Starting commit: `cc939c4a881f50fcba678249bbc2cd038111abbb`
 > Started: 2026-09-17 (Asia/Jerusalem)
 
 ## Credential investigation
@@ -25,7 +25,9 @@
 - Credential investigation completed.
 - Task 2 completed: logout now performs best-effort authenticated Push Token deactivation before session logout, always clears local push ownership and local credentials, and preserves the device opt-in for safe reassociation after the next authenticated login.
 - Task 2 completed: login and online session restoration reconcile the installation token with the authenticated user. The backend's unique-token upsert atomically reassigns the single row; unregister remains scoped to `userId + token`, preserving other devices.
-- Notification navigation and Mobile Admin rejection remain in progress.
+- Task 3 completed: both the live Expo notification-response listener and cold-start response API feed a deduplicating navigator that waits for session restoration, validates order payloads, verifies role-scoped API access, and opens the existing customer/business/admin order-detail route.
+- Task 3 completed: malformed/unsupported/logged-out responses are ignored safely; inaccessible or deleted orders remain on the current screen and show a localized fallback; listeners are removed on cleanup.
+- Mobile Admin rejection remains in progress.
 
 ## Files changed
 
@@ -37,12 +39,16 @@
 - `apps/mobile/src/features/shared/settings-screen.tsx` — owner-aware toggle state and registration.
 - `apps/api/src/users/testing/fake-prisma.ts` — faithful PushToken upsert/updateMany test double.
 - `apps/api/src/users/users.service.test.ts` — account transfer/deduplication/authorization coverage.
+- `apps/mobile/src/core/notification-navigation.ts` — validated response parsing, session queue, access check, role routing, deduplication, and listener attachment.
+- `apps/mobile/src/core/notification-navigation.test.ts` — live/background, cold-start, auth wait, payload, role, duplicate, logout, fallback, and cleanup coverage.
+- `apps/mobile/src/i18n/locales/en/common.json` and `ar/common.json` — inaccessible-order fallback copy.
 - Pre-existing `codexReviewJovo.md` remains untracked and will not be included in commits.
 
 ## Tests added
 
 - 4 mobile lifecycle tests: authenticated reconciliation, disabled preference, offline unregister/logout cleanup, and unregister-before-session-revoke ordering.
 - 2 backend service tests: A-to-B token reassignment with repeat-registration deduplication, and prevention of unrelated-user deactivation.
+- 11 notification navigation tests covering live/background delivery, cold-start retrieval, session restoration, exact order ID, customer/business/admin routes, malformed/missing and unsupported payloads, duplicate suppression, logged-out behavior, inaccessible-order fallback, and listener cleanup.
 
 ## Commands and results
 
@@ -55,21 +61,24 @@
 - Current tracked-tree exact credential/provider-host scans: zero matches.
 - Targeted mobile lifecycle test: 4 passed, 0 failed.
 - Targeted API users-service test file: 13 passed, 0 failed (including 2 new Push Token tests).
-- `git diff --check` after Task 2: pass.
+- `git diff --check` before the Task 2 commit reported three Markdown hard-break spaces in this progress file; they are removed in the next tracked update. No source-code whitespace error was reported.
+- Targeted notification-navigation test file: 11 passed, 0 failed.
 
 ## Commits
 
 - Task 1: no commit, because the only affected script is ignored/local-only and no tracked configuration requires a change.
-- Task 2: pending commit creation; SHA will be recorded immediately after commit.
+- Task 2: `7091c36a0964b51111fd34774959052beafd8f1c` (`Fix push token account isolation`).
+- Task 3: pending focused commit; SHA will be recorded immediately after creation.
 
 ## Deferred manual work
 
 - Confirm with the authorized Azure/PostgreSQL owner whether the local credential is active; if active, perform the provider-side password reset described above and update the deployment secret manager.
 - Do not add `deploy.ps1` to Git.
+- Android real-device verification (deferred): install a credentialed release/internal build on a physical Android device; sign in as a customer with a known accessible order; background the app; send `ORDER_STATUS_CHANGED` with that order UUID and tap it; confirm the correct detail opens once. Repeat after force-stop/cold start, then with malformed data, an inaccessible order, and while logged out. Repeat for a RESTAURANT and ADMIN account using orders each role can access.
+- iOS real-device verification (deferred): install a credentialed TestFlight/release build on a physical iPhone; grant notifications; repeat the foreground-to-background tap, terminated-app tap, malformed/inaccessible order, duplicate tap, logged-out, RESTAURANT, and ADMIN scenarios; confirm APNs delivery and that the listener is not duplicated after remount.
 
 ## Remaining issues
 
-- Task 3: notification-response navigation.
 - Task 4: Mobile Admin business rejection body/reason.
 - Final repository verification and normal push.
 

@@ -32,6 +32,7 @@
   "pushRequiresDevice": "تتطلب الإشعارات الفورية جهازًا حقيقيًا.",
   "pushPermissionDenied": "لم يتم منح إذن الإشعارات.",
   "pushProjectIdMissing": "معرّف مشروع EAS مطلوب قبل تفعيل الإشعارات الفورية.",
+  "notificationOrderUnavailable": "لم يعد هذا الطلب متاحًا لهذا الحساب.",
   "networkError": "تعذّر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.",
   "requestTimeout": "استغرق الطلب وقتًا طويلًا. تحقق من اتصالك وحاول مرة أخرى.",
   "invalidResponse": "استجاب الخادم برد غير صالح.",

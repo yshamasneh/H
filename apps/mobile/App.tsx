@@ -1,5 +1,6 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import * as Notifications from "expo-notifications";
 import {
   ActivityIndicator,
   Alert,
@@ -19,7 +20,10 @@ import { useAppFonts } from "./src/theme/fonts";
 import { colors } from "./src/theme/tokens";
 import {
   fetchCurrentUser,
+  getAdminOrder,
+  getMyOrder,
   getPlatformSettings,
+  getRestaurantOrder,
   logout,
   registerMyPushToken,
   unregisterMyPushToken,
@@ -114,6 +118,10 @@ import {
   storePushToken
 } from "./src/core/push-notifications";
 import { logoutWithPushCleanup, reconcilePushTokenForUser } from "./src/core/push-token-lifecycle";
+import {
+  attachNotificationResponseHandlers,
+  NotificationOrderNavigator
+} from "./src/core/notification-navigation";
 import { disconnectSocket } from "./src/core/socket";
 import { ErrorBoundary } from "./src/components/error-boundary";
 import { AdminDashboardScreen } from "./src/features/admin/dashboard-screen";
@@ -198,6 +206,23 @@ function TasawaQApp() {
   // Platform-wide "no substitution" policy. Defaults to true (option shown) so a slow or failed
   // settings fetch never blocks checkout; refreshed each time the cart/checkout opens (see below).
   const [substitutionEnabled, setSubstitutionEnabled] = useState(true);
+  const notificationNavigatorRef = useRef<NotificationOrderNavigator | null>(null);
+  if (!notificationNavigatorRef.current) {
+    notificationNavigatorRef.current = new NotificationOrderNavigator({
+      canAccessOrder: async (session, orderId) => {
+        if (session.user.role === "CUSTOMER") await getMyOrder(session.accessToken, orderId);
+        else if (session.user.role === "RESTAURANT") await getRestaurantOrder(session.accessToken, orderId);
+        else if (session.user.role === "ADMIN") await getAdminOrder(session.accessToken, orderId);
+        else return false;
+        return true;
+      },
+      navigate: setScreen,
+      showUnavailable: () => {
+        Alert.alert(i18n.t("common:notifications"), i18n.t("common:notificationOrderUnavailable"));
+      }
+    });
+  }
+  const notificationNavigator = notificationNavigatorRef.current;
   // Every screen after the splash renders text in Cairo/Inter, so the splash
   // (a logo image, no text) stays up until fonts are ready too — otherwise
   // the loading screen or first screen would flash in the system font.
@@ -215,6 +240,15 @@ function TasawaQApp() {
       storePushAssociation: storePushToken
     });
   }
+
+  useEffect(() => attachNotificationResponseHandlers(
+    {
+      addNotificationResponseReceivedListener: (listener) =>
+        Notifications.addNotificationResponseReceivedListener((response) => listener(response)),
+      getLastNotificationResponseAsync: () => Notifications.getLastNotificationResponseAsync()
+    },
+    (response) => notificationNavigator.handleResponse(response)
+  ), [notificationNavigator]);
 
   useEffect(() => {
     let isMounted = true;
@@ -257,15 +291,26 @@ function TasawaQApp() {
           await reconcilePushForAuthenticatedUser(outcome.user).catch(() => undefined);
           if (!isMounted) return;
           setScreen(homeForUser(outcome.user));
+          const activeAccessToken = await getAccessToken();
+          await notificationNavigator.setSession(
+            activeAccessToken ? { accessToken: activeAccessToken, user: outcome.user } : null
+          );
         } else if (outcome.status === "offline" && outcome.user) {
           // Couldn't reach the server, but the stored tokens are intact and we have a
           // cached identity: keep the user in their app. Each screen surfaces its own
           // "couldn't load — pull to refresh" state instead of a forced logout.
           setScreen(homeForUser(outcome.user));
+          const activeAccessToken = await getAccessToken();
+          await notificationNavigator.setSession(
+            activeAccessToken ? { accessToken: activeAccessToken, user: outcome.user } : null
+          );
         } else if (outcome.status === "signed-out") {
           // A 401 actively rejected the session: restoreSession already cleared the persisted
           // tokens *and* the saved cart (via clearTokens), so this only syncs React state to match.
           setCart(null);
+          await notificationNavigator.setSession(null);
+        } else {
+          await notificationNavigator.setSession(null);
         }
         // "unauthenticated" (no token to confirm this launch) deliberately leaves the cart alone.
         // It was rehydrated from durable storage above and nothing cleared it (no logout ran), so
@@ -320,6 +365,10 @@ function TasawaQApp() {
     await reconcilePushForAuthenticatedUser(result.user).catch(() => undefined);
     const destination = authResultToHome(result);
     setScreen(destination.name === "home" ? { ...destination, notice } : destination);
+    const activeAccessToken = await getAccessToken();
+    await notificationNavigator.setSession(
+      activeAccessToken ? { accessToken: activeAccessToken, user: result.user } : null
+    );
   }
 
   async function handleLogout() {
@@ -331,6 +380,7 @@ function TasawaQApp() {
       clearPushAssociation: clearStoredPushTokenAssociation,
       clearSession: clearTokens
     });
+    await notificationNavigator.setSession(null);
     disconnectSocket();
     setCart(null);
     setScreen(goToLogin());
