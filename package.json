@@ -62,5 +62,9 @@
     "prisma": {
       "mysql2": "3.24.4"
     }
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.62.4",
+    "lightningcss-linux-x64-gnu": "1.33.0"
   }
 }

@@ -362,6 +362,13 @@
 
 - `3673b49af8ad51949a32f3768122dbfe462bc215` (`Enforce release gates in GitHub Actions`).
 
+### Hosted-run corrective follow-up
+
+- The first pushed workflow run (`35307216998`) validated the database and quality/security jobs, but exposed npm's cross-platform optional-dependency lockfile bug: the Windows-generated lockfile omitted Rollup and Lightning CSS Linux binaries. Consequently the Admin, Mobile export, and Web image steps failed on Ubuntu even though the same builds passed on Windows.
+- Root `optionalDependencies` now pin the exact Linux x64/glibc binaries matching the existing `rollup@4.62.4` and `lightningcss@1.33.0`; the lockfile contains their integrity/platform records. This is not a framework upgrade or an override. The now-redundant one-off Rollup install was removed from the Admin Dockerfile, so all consumers use reproducible `npm ci` alone.
+- Verification after correction: Windows `npm ci`, Admin build, Mobile all-platform export, Expo Doctor `17/17`, Prisma validation, and production audit passed. Clean Linux Docker builds for Admin and Mobile Web passed using the final lockfile; production advisory counts remained 0 Critical / 11 High / 14 Moderate / 0 Low.
+- Corrective commit SHA: pending until this focused regression fix is committed.
+
 ## Task 3 — Migration test with representative legacy data
 
 ### Baseline
@@ -460,5 +467,5 @@
 
 ## Round 3 remaining confirmation
 
-- Confirm the first hosted GitHub Actions run, PostgreSQL service networking, cache/artifact behavior, and required-check selection in the Actions UI after push.
+- The first hosted run confirmed PostgreSQL service networking, clean/legacy migrations, E2E, lint, types, tests, audit, secret scan, Doctor, native consistency, and failure propagation. A second hosted run must confirm the corrected Linux build jobs and final all-green workflow.
 - Repeat the native Android Gradle build from a short filesystem path and perform an iOS native build on macOS. Signed builds, EAS credentials, store submission, external services, physical devices, and deployment remain deferred as required.
