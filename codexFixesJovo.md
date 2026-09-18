@@ -443,3 +443,22 @@
 ### Commit SHA
 
 - `b3a0e6510d11e496606dee0dd3772407bf605886` (`Guard Expo native configuration sync`).
+
+## Round 3 final verification
+
+- Full repository typecheck: passed for Admin, API, and Mobile.
+- Full repository test suite: 501 passed, 3 PostgreSQL-gated tests skipped in the general run, and 0 failed. The gated tests then passed separately against PostgreSQL 17 with 22/22 nested assertions.
+- Clean PostgreSQL 17: all 29 migrations applied, partner reconciliation dry-run returned ready, and the disposable database/container was removed after verification.
+- Legacy upgrade: passed again from migration 27 to 29 with 18 representative rows preserved, no historical Push job, unchanged financial invariant, three valid required partner accounts, and an idempotent deployment rerun.
+- Prisma schema validation and repository lint: passed. The repository lint commands remain TypeScript checks rather than a separate ESLint/Prettier migration, which is explicitly outside this round.
+- Expo Doctor: `17/17 checks passed`; the intentional native-config sync opt-out is now documented and guarded by `check:native-config`.
+- Builds: Admin Vite, API Prisma/TypeScript, and unsigned Android/iOS/Web Expo exports passed. The existing 624.68 kB Admin chunk warning remains non-failing.
+- A direct Android Gradle debug build could not finish in the long OneDrive workspace because generated C++ output exceeded the Windows 260-character path limit. It must be confirmed from a short Windows checkout or GitHub/Linux; no code or configuration compilation error was reported before that filesystem failure.
+- Final production dependency gate: 0 Critical / 11 High / 14 Moderate / 0 Low affected nodes, with only the three exact reviewed tooling advisory roots accepted. This is an explicit accepted-risk gate, not a claim of zero advisories.
+- `actionlint 1.7.7`, the tracked-secret scan (503 files), native consistency check, committed-range `git diff --check`, and working-tree `git diff --check`: passed.
+- Generated exports/build output remained ignored. `codexReviewJovo.md` remains the sole untracked file and was not read, changed, staged, or committed in this round.
+
+## Round 3 remaining confirmation
+
+- Confirm the first hosted GitHub Actions run, PostgreSQL service networking, cache/artifact behavior, and required-check selection in the Actions UI after push.
+- Repeat the native Android Gradle build from a short filesystem path and perform an iOS native build on macOS. Signed builds, EAS credentials, store submission, external services, physical devices, and deployment remain deferred as required.
