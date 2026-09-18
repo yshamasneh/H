@@ -368,6 +368,7 @@
 - Root `optionalDependencies` now pin the exact Linux x64/glibc binaries matching the existing `rollup@4.62.4` and `lightningcss@1.33.0`; the lockfile contains their integrity/platform records. This is not a framework upgrade or an override. The now-redundant one-off Rollup install was removed from the Admin Dockerfile, so all consumers use reproducible `npm ci` alone.
 - Verification after correction: Windows `npm ci`, Admin build, Mobile all-platform export, Expo Doctor `17/17`, Prisma validation, and production audit passed. Clean Linux Docker builds for Admin and Mobile Web passed using the final lockfile; production advisory counts remained 0 Critical / 11 High / 14 Moderate / 0 Low.
 - Corrective commit SHA: `1262e2acf0cc780b5a0042b21abcfa3b25b29ac2` (`Make CI native dependencies reproducible`).
+- Hosted workflow run `35308214741` then passed all five jobs on the corrective head: quality/security, PostgreSQL clean and legacy migration E2E, API/Admin builds, Expo Doctor/unsigned exports, and both runtime container builds.
 
 ## Task 3 — Migration test with representative legacy data
 
@@ -467,5 +468,5 @@
 
 ## Round 3 remaining confirmation
 
-- The first hosted run confirmed PostgreSQL service networking, clean/legacy migrations, E2E, lint, types, tests, audit, secret scan, Doctor, native consistency, and failure propagation. A second hosted run must confirm the corrected Linux build jobs and final all-green workflow.
+- GitHub Actions run `35308214741` confirmed PostgreSQL service networking, clean/legacy migrations, E2E, lint, types, tests, audit, secret scan, Doctor, native consistency, API/Admin/Mobile builds, container builds, and failure propagation. Repository branch-protection settings were not changed or audited through the API.
 - Repeat the native Android Gradle build from a short filesystem path and perform an iOS native build on macOS. Signed builds, EAS credentials, store submission, external services, physical devices, and deployment remain deferred as required.
