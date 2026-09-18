@@ -1,6 +1,6 @@
 # Production dependency security review
 
-Review date: 2026-09-18  
+Review date: 2026-09-18
 Scope: `npm audit --omit=dev` at the monorepo root (all npm workspaces)
 
 ## Result

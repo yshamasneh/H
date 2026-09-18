@@ -319,4 +319,4 @@
 
 ### Commit SHA
 
-- Pending until the focused Task 1 commit is created.
+- `bbb9c9d0e2cb4c1dea866865f49d933318032b57` (`Triage production dependency advisories`).
