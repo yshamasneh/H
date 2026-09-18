@@ -280,3 +280,43 @@
 - Expo Doctor moved from `15/17` to `17/17` on the same SDK major; the invalid Android field and the two patch mismatches were corrected.
 - Financial reference data now gates readiness independently of liveness, with a safe dry-run/apply operator command and an idempotent migration. It no longer depends on a swallowed startup reconciliation attempt.
 - These changes do not establish production or real-device readiness; all external/manual items above remain deferred.
+
+# Round 3 — Dependencies, CI, legacy migrations and native config
+
+## Task 1 — Production dependency-security triage
+
+### Baseline
+
+- `npm audit --omit=dev` at the workspace root reported 0 Critical, 22 High, 14 Moderate, and 0 Low affected package nodes (36 total). Of the High nodes, 7 were direct and 15 transitive; parent propagation means these are not 22 distinct advisories.
+- High roots affected API/Nest (`multer`), API Prisma tooling (`mysql2`, `deepmerge-ts`), and Mobile Expo/Metro/config tooling (`fast-uri`, `js-yaml`, `postcss`, `@xmldom/xmldom`, and `image-size`). Paths, advisory IDs, patched versions, reachability, and mitigations are recorded in `docs/dependency-security-review.md`.
+
+### Root cause or gap
+
+- Compatible patched transitive releases existed but the lockfile retained earlier vulnerable versions. Three upstream packages pinned vulnerable exact versions and required narrowly scoped same-major overrides.
+- Expo SDK 54's pinned Metro graph still requires `image-size@1`; Prisma 7.9/7.10 still pins `deepmerge-ts@7`. Their fixes require incompatible major dependency/framework changes and were deliberately not forced.
+
+### Files changed
+
+- `package.json`: same-major overrides for `multer@2.4.0`, `mysql2@3.24.4`, and `postcss@8.5.28`.
+- `package-lock.json`: compatible updates for the overrides plus `fast-uri@3.1.8`, `qs@6.16.0`, `js-yaml@3.15.2/4.3.2`, and `@xmldom/xmldom@0.8.15/0.9.12`.
+- `docs/dependency-security-review.md`: tracked baseline, every Critical/High path, reachability, remediation, and accepted risk.
+
+### Tests performed
+
+- API typecheck, 396 tests (393 passed, 3 database-gated skipped), API build, and Prisma validation: passed.
+- Mobile typecheck, unit/UI tests, and unsigned all-platform Expo export: passed; existing non-failing React `act(...)` warnings remain.
+- Expo Doctor: `17/17 checks passed` on the unchanged Expo SDK major.
+- `git diff --check`: passed.
+
+### Before/after result
+
+- Before: 0 Critical / 22 High / 14 Moderate / 0 Low (36 total).
+- After: 0 Critical / 11 High / 14 Moderate / 0 Low (25 total). The affected `multer`, `mysql2`, `postcss`, `fast-uri`, `qs`, XML, and YAML paths are gone; no direct framework major changed.
+
+### Remaining risk
+
+- Two High advisory roots remain: `image-size@1.2.1` in Metro build tooling and `deepmerge-ts@7.1.5` in Prisma config/CLI tooling. Both are outside application-controlled request paths, but they still require an upstream-compatible Expo/Metro or Prisma resolution and must not be represented as fixed.
+
+### Commit SHA
+
+- Pending until the focused Task 1 commit is created.

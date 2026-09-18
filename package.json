@@ -49,6 +49,15 @@
     "prisma@7.9.1": true
   },
   "overrides": {
-    "nanoid": "^3.3.18"
+    "nanoid": "^3.3.18",
+    "@expo/metro-config": {
+      "postcss": "8.5.28"
+    },
+    "@nestjs/platform-express": {
+      "multer": "2.4.0"
+    },
+    "prisma": {
+      "mysql2": "3.24.4"
+    }
   }
 }
