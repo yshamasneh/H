@@ -92,6 +92,10 @@ jobs:
         run: npm run reconcile:partners -- --dry-run 2>&1 | tee -a migrations.log
       - name: PostgreSQL-backed E2E
         run: npm run test:e2e 2>&1 | tee database-e2e.log
+      - name: Upgrade representative legacy data
+        run: npm run test:migrations:legacy 2>&1 | tee legacy-migration.log
+        env:
+          LEGACY_MIGRATION_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
       - name: Upload database logs on failure
         if: failure()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -100,6 +104,7 @@ jobs:
           path: |
             migrations.log
             database-e2e.log
+            legacy-migration.log
           if-no-files-found: ignore
           retention-days: 7
 

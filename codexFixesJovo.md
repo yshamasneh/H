@@ -361,3 +361,44 @@
 ### Commit SHA
 
 - `3673b49af8ad51949a32f3768122dbfe462bc215` (`Enforce release gates in GitHub Actions`).
+
+## Task 3 — Migration test with representative legacy data
+
+### Baseline
+
+- Round 2 had proved all 29 migrations on an empty PostgreSQL database, but had not exercised the upgrade from the 27-migration pre-outbox/pre-reference-account schema with populated relational and financial data.
+
+### Root cause or gap
+
+- A clean-database migration cannot detect destructive defaults, historical backfills, changed relationships, duplicate fixed accounts, unexpected outbox creation, or balance changes against rows that already exist.
+
+### Files changed
+
+- `apps/api/prisma/test-legacy-migration-upgrade.ts`: isolated PostgreSQL upgrade harness with guarded database creation/drop and representative legacy fixtures.
+- Root and API `package.json`: `test:migrations:legacy` commands.
+- `.github/workflows/ci.yml`: the PostgreSQL job now runs the legacy upgrade test and retains its log on failure.
+
+### Migration created
+
+- None. This task tests the existing `20260918000000_add_push_delivery_outbox` and `20260918010000_seed_required_partner_accounts` migrations without changing them.
+
+### Tests performed
+
+- PostgreSQL 17 disposable-container run: passed. The harness applied 27 migrations through `20260911000000_add_store_show_location_to_customer`, inserted 18 representative rows, applied the final two migrations, and reran deployment with no pending migration.
+- Fixtures cover users/session, supermarket and membership, category/product/stock movement, historical delivered order/item/status/delivery, notification/PushToken, an existing `OWNER_A`, financial record, and partner earning.
+- Assertions passed for row counts, fixed IDs/relationships, PushToken uniqueness/ownership, unchanged 300-minor-unit legacy balance, preservation of the existing `OWNER_A` identity/name, exactly three valid required accounts, zero historical Push jobs, readiness, and idempotent redeploy.
+- API typecheck and `actionlint 1.7.7`: passed. A production-mode invocation was rejected before database access. The disposable container and generated database were removed.
+
+### Before/after result
+
+- Before: clean-schema migration coverage only.
+- After: automated populated-schema upgrade coverage from migration 27 to 29, included in the PostgreSQL CI gate through `npm run test:migrations:legacy`.
+
+### Remaining risk
+
+- The test uses synthetic representative rows, not Production data. It cannot model every historical data distribution; a separately authorized, sanitized staging clone rehearsal remains advisable before deployment.
+- The harness intentionally accepts only a local PostgreSQL host and a source database whose name contains `test`; it creates and drops only its generated `jovo_legacy_test_*` database. It never drops the supplied source database.
+
+### Commit SHA
+
+- Pending until the focused Task 3 commit is created.
