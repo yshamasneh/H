@@ -29,6 +29,8 @@
     "db:backup": "node scripts/backup-database.mjs",
     "db:restore": "node scripts/restore-database.mjs",
     "check:financial": "node scripts/check-financial-integrity.mjs",
+    "security:audit:production": "node scripts/check-production-audit.mjs",
+    "security:scan": "node scripts/scan-tracked-secrets.mjs",
     "release:check": "node scripts/release-readiness.mjs",
     "prod:config": "docker compose --env-file .env.production -f docker-compose.production.yml config",
     "prod:up": "docker compose --env-file .env.production -f docker-compose.production.yml up -d --build",

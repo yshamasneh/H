@@ -1,20 +1,23 @@
-name: CI
+name: Release gates
 
 on:
   push:
-    branches: [main, agent/customer-phone-auth]
+    branches:
+      - main
+      - "release/**"
+      - agent/phase-15-and-jovo-brand
   pull_request:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: release-gates-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
   NODE_ENV: test
-  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/tasawaq_test?schema=public
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jovo_ci_test?schema=public
   JWT_ACCESS_SECRET: ci-access-secret-that-is-longer-than-thirty-two-characters
   JWT_REFRESH_SECRET: ci-refresh-secret-that-is-longer-than-thirty-two-characters
   OTP_HASH_SECRET: ci-otp-secret-that-is-longer-than-thirty-two-characters
@@ -24,48 +27,123 @@ env:
 
 jobs:
   quality:
+    name: Lint, types, unit tests and security
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run prisma:validate
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Unit tests
+        run: npm test 2>&1 | tee unit-tests.log
+      - run: npm run security:audit:production
+      - run: npm run security:scan
+      - name: Whitespace sanity check
+        run: git diff --check
+      - name: Upload unit-test log on failure
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: unit-test-log
+          path: unit-tests.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  database:
+    name: PostgreSQL migrations, readiness and E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: tasawaq_test
+          POSTGRES_DB: jovo_ci_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d tasawaq_test"
+          --health-cmd "pg_isready -U postgres -d jovo_ci_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
-
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run prisma:generate
-      - run: npm run prisma:deploy
-      - run: npm run prisma:validate
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: npm run test:e2e
-      - run: npm audit --omit=dev --workspace @wasel/api --audit-level=high
+      - name: Apply all migrations to a clean database
+        run: npm run prisma:deploy 2>&1 | tee migrations.log
+      - name: Validate partner-account readiness
+        run: npm run reconcile:partners -- --dry-run 2>&1 | tee -a migrations.log
+      - name: PostgreSQL-backed E2E
+        run: npm run test:e2e 2>&1 | tee database-e2e.log
+      - name: Upload database logs on failure
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: database-gate-logs
+          path: |
+            migrations.log
+            database-e2e.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  application-builds:
+    name: API and Admin builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @wasel/api
+      - run: npm run build --workspace @wasel/admin
+
+  mobile:
+    name: Expo Doctor and unsigned exports
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx --yes expo-doctor@latest apps/mobile
+      - run: npm run build --workspace @wasel/mobile
 
   containers:
+    name: Runtime container builds
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: Build API runtime image
-        run: docker build --target runtime -t tasawaq-api:ci .
+        run: docker build --target runtime -t jovo-api:ci .
       - name: Build web image
-        run: docker build -f apps/mobile/Dockerfile.web --build-arg EXPO_PUBLIC_API_URL=https://app.example.test -t tasawaq-web:ci .
+        run: docker build -f apps/mobile/Dockerfile.web --build-arg EXPO_PUBLIC_API_URL=https://app.example.test -t jovo-web:ci .

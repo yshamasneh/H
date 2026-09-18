@@ -320,3 +320,44 @@
 ### Commit SHA
 
 - `bbb9c9d0e2cb4c1dea866865f49d933318032b57` (`Triage production dependency advisories`).
+
+## Task 2 — GitHub Actions release gates
+
+### Baseline
+
+- The existing CI ran one monolithic PostgreSQL job plus container builds. Push filtering still targeted `agent/customer-phone-auth`, the production audit covered only the API workspace, there was no Expo Doctor or tracked-secret gate, action references were floating major tags, and a failure log was not retained.
+- Clean migration deployment, partner dry-run, and PostgreSQL E2E already existed in the job, but they were not separated from unit/type/build work and did not gate the requested branch.
+
+### Root cause or gap
+
+- Release-branch coverage and security checks had not been updated with the current JOVO branch and Round 2 verification commands.
+- A normal `npm audit --audit-level=high` cannot be a useful green gate while the three explicitly documented, tooling-only advisory roots remain upstream-blocked. A repository check now rejects every Critical and every High advisory except those exact reviewed URLs; a new High therefore fails CI.
+
+### Files changed
+
+- `.github/workflows/ci.yml`: five bounded jobs for quality/security, PostgreSQL, API/Admin builds, Expo Doctor/unsigned exports, and runtime container builds.
+- `scripts/check-production-audit.mjs`: all-workspace production audit policy with an exact three-advisory allowlist documented in the security review.
+- `scripts/scan-tracked-secrets.mjs`: high-confidence scan of tracked files that reports only file/line/rule and never prints a matched value.
+- `package.json`: `security:audit:production` and `security:scan` commands.
+
+### Tests performed
+
+- Reproducible `npm ci`, Prisma generate/validate, both security commands, and `git diff --check`: passed.
+- Production audit gate observed 0 Critical / 11 High / 14 Moderate / 0 Low nodes and exactly the three reviewed High advisory roots.
+- Secret scan passed across 498 currently tracked files. Known example/documentation database URLs were classified as placeholders without printing their values.
+- API, Admin, and unsigned Android/iOS/Web Mobile builds passed after a clean install; the existing Admin chunk-size warning remains non-failing.
+- Workflow YAML parsed locally with `js-yaml`; `actionlint 1.7.7` passed in its pinned Docker image.
+
+### Before/after result
+
+- Before: no gate on `agent/phase-15-and-jovo-brand`; one duplicated monolithic job; API-only audit; no secret scan, Doctor gate, timeout, pinned action SHAs, or failure artifacts.
+- After: pushes to `main`, `release/**`, and the target branch plus all pull requests run least-privilege, cancelable, timed jobs using lockfile installs. PostgreSQL 17 applies all migrations to a clean test database, validates partner readiness, and runs database E2E; independent jobs gate lint/types/unit tests/security, API/Admin builds, Expo Doctor/exports, and containers.
+
+### Remaining risk
+
+- Workflow syntax and shell semantics passed locally, but the first hosted run, service-container networking, cache behavior, and required-check selection must be confirmed in the GitHub Actions UI. No repository settings or branch protection were changed.
+- CI uses only explicit disposable test values and receives no Production credentials on pull requests.
+
+### Commit SHA
+
+- Pending until the focused Task 2 commit is created.
