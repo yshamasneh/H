@@ -8,6 +8,7 @@
     "web": "expo start --web",
     "android": "expo run:android",
     "android:prebuild": "expo prebuild --platform android",
+    "check:native-config": "node scripts/check-native-config.cjs",
     "ios": "expo run:ios",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",

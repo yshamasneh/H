@@ -137,6 +137,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run check:native-config --workspace @wasel/mobile
       - run: npx --yes expo-doctor@latest apps/mobile
       - run: npm run build --workspace @wasel/mobile
 

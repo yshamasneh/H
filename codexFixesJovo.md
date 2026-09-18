@@ -402,3 +402,44 @@
 ### Commit SHA
 
 - `5d509f567fea4c513cee4dda4a78cd2223c37547` (`Test migrations against legacy data`).
+
+## Task 4 — Expo native configuration synchronization
+
+### Baseline
+
+- Expo Doctor reported `17/17`, but `expo.doctor.appConfigFieldsNotSyncedCheck` was disabled while a tracked Android project and app configuration both declared production-critical values.
+- The project has a maintained `apps/mobile/android` project and no checked-in iOS project. Existing architecture notes and the Android post-prebuild script confirm that Android is intentionally hand-maintained while iOS uses Expo Continuous Native Generation.
+
+### Root cause or gap
+
+- The Doctor opt-out is intentional: a normal Android prebuild would undo deliberate release hardening by restoring debug signing, disabling resource/code shrinking, and enabling the development network inspector. Removing the opt-out would therefore misrepresent the ownership model rather than make it safer.
+- The evaluated Expo configuration and Android native project agreed on identifiers, schemes, permissions, versioning, update URL/runtime, notification channel, and release hardening. One real drift was found: `updates.fallbackToCacheTimeout` evaluates to 30000 ms, while the Android manifest still used 0 ms.
+
+### Files changed
+
+- `apps/mobile/android/app/src/main/AndroidManifest.xml`: synchronized the Expo Updates launch wait to 30000 ms.
+- `apps/mobile/scripts/check-native-config.cjs` and `apps/mobile/package.json`: added a fail-fast consistency check for identifiers, versions, schemes, permissions, Expo Updates/EAS values, release hardening, notification channel, and required native assets.
+- `.github/workflows/ci.yml`: runs the native consistency check before Expo Doctor/export.
+- `apps/mobile/NATIVE_CONFIGURATION.md`: documents the mixed ownership model, authoritative files, critical synchronization rules, and a safe temporary-prebuild comparison process.
+
+### Tests performed
+
+- Native consistency check: passed for `com.jovo.app`, version `0.13.0`/13, five granted and four blocked Android permissions.
+- Expo public configuration and configuration introspection: evaluated successfully.
+- Expo Doctor: `17/17 checks passed` with the intentional opt-out retained.
+- Mobile typecheck, 87 unit tests, 18 UI tests, and unsigned Android/iOS/Web Expo exports: passed; existing non-failing React `act(...)` warnings remain.
+- A direct Gradle `:app:assembleDebug` reached native C++ compilation but could not complete from this OneDrive workspace because a generated object path exceeded the Windows 260-character limit. This is an environment/path constraint, not a compile error in the changed configuration; the exact build must be repeated from a short path on Windows or on CI/Linux.
+
+### Before/after result
+
+- Before: the intentional opt-out had no executable guard, and Android's Expo Updates launch wait had drifted from the evaluated app configuration.
+- After: the opt-out remains for the documented hand-maintained Android project, the known drift is corrected, and CI fails if critical declarative/native values diverge. iOS remains generated from app configuration and was verified by the unsigned Expo iOS export rather than a maintained native directory.
+
+### Remaining risk
+
+- A native Android Gradle build from a short filesystem path and an iOS native build on macOS still require CI or a suitable local host. No signed build, EAS credential, physical-device behavior, update-channel delivery, or store submission was exercised.
+- The hand-maintained Android manifest intentionally pins the production update channel. Developers must use an explicit native flavor/override before treating a bare preview build as preview-channel equivalent.
+
+### Commit SHA
+
+- Pending until this focused task is committed.
