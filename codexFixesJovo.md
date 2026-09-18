@@ -401,4 +401,4 @@
 
 ### Commit SHA
 
-- Pending until the focused Task 3 commit is created.
+- `5d509f567fea4c513cee4dda4a78cd2223c37547` (`Test migrations against legacy data`).
