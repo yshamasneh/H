@@ -3,7 +3,10 @@
     "cors": {
       "corsRules": [
         {
-          "allowedOrigins": ["http://localhost:5173"],
+          "allowedOrigins": [
+            "http://localhost:5173",
+            "https://jovo-market-web.vercel.app"
+          ],
           "allowedMethods": ["PUT", "OPTIONS"],
           "allowedHeaders": ["content-type", "x-ms-blob-type"],
           "exposedHeaders": ["etag", "x-ms-request-id"],
