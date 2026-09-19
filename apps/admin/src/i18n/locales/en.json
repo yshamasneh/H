@@ -443,7 +443,35 @@
     "unitCost": "Unit cost (agorot)",
     "reference": "Reference",
     "totalCost": "Total cost",
-    "receive": "Receive"
+    "receive": "Receive",
+    "unitCostShekel": "Unit cost (₪)",
+    "invalidCost": "Enter a valid cost with at most two decimals.",
+    "invalidQuantity": "Enter a whole quantity above zero.",
+    "barcodeTitle": "Barcode lookup",
+    "barcodePlaceholder": "Scan or type the barcode",
+    "barcodeLookup": "Look up",
+    "barcodeNotFound": "No product in your store uses this barcode.",
+    "barcodeResult": "{{name}} — {{stock}} on hand",
+    "barcodeOpenHistory": "Show this product's movements",
+    "movementsTitle": "Stock movements",
+    "movementsFor": "Movements: {{name}}",
+    "allProducts": "All products",
+    "movementsEmpty": "No stock movements yet.",
+    "movementsLoadError": "Could not load stock movements.",
+    "when": "When",
+    "product": "Product",
+    "movementType": "Type",
+    "change": "Change",
+    "stockAfter": "Stock after",
+    "movement": {
+      "ORDER_RESERVATION": "Reserved for an order",
+      "ORDER_RESTORE": "Returned from a cancelled order",
+      "FULFILLMENT_RESERVATION": "Reserved while packing",
+      "FULFILLMENT_RELEASE": "Released while packing",
+      "MANUAL_ADJUSTMENT": "Manual adjustment",
+      "PURCHASE_RECEIPT": "Purchase received"
+    },
+    "history": "History"
   },
   "staff": {
     "title": "Staff",
@@ -815,5 +843,69 @@
       "endInvalid": "The end date is not valid.",
       "endBeforeStart": "The end must be after the start."
     }
+  },
+  "businessSettings": {
+    "title": "Store profile",
+    "subtitle": "Name, address, delivery starting point and opening hours.",
+    "loadError": "Could not load the store profile.",
+    "name": "Store name",
+    "description": "Description",
+    "address": "Address",
+    "location": "Delivery starting point",
+    "locationHint": "Tap the map or drag the pin to the store. Delivery distance and fee are measured from this point, and the store cannot open for orders until it is set.",
+    "locationUnset": "No location set yet.",
+    "setLocation": "Set the location on the map",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "hours": "Weekly opening hours",
+    "hoursHint": "Applies every day. Leave both empty for no schedule. The closing time may fall after midnight.",
+    "opensAt": "Opens",
+    "closesAt": "Closes",
+    "clearHours": "Clear the schedule",
+    "save": "Save changes",
+    "nothingToSave": "There is nothing to save.",
+    "readOnly": "You do not have permission to edit the store profile.",
+    "errors": {
+      "nameInvalid": "The name must be 2 to 120 characters.",
+      "descriptionTooLong": "The description is at most 500 characters.",
+      "addressInvalid": "The address must be 3 to 200 characters.",
+      "coordinatesInvalid": "The coordinates are not valid.",
+      "hoursIncomplete": "Set both the opening and closing time, or clear both.",
+      "hoursInvalid": "Enter a valid time as HH:mm.",
+      "hoursSame": "Opening and closing cannot be the same time."
+    }
+  },
+  "businessReports": {
+    "title": "Sales",
+    "subtitle": "A snapshot of sales and order volume.",
+    "loadError": "Could not load sales.",
+    "today": "Today",
+    "month": "This month",
+    "total": "All time",
+    "sales": "Sales",
+    "orders": "Orders",
+    "note": "Sales are the total of delivered orders only, including delivery and service fees. The order count includes every status, cancelled and rejected included.",
+    "refresh": "Refresh"
+  },
+  "orderFinancial": {
+    "title": "Order financial record",
+    "loadError": "Could not load the financial record.",
+    "outcome": "Outcome",
+    "outcomes": {
+      "DELIVERED": "Delivered",
+      "DELIVERY_FAILED": "Delivery failed"
+    },
+    "rateVersion": "Rate version applied",
+    "commissionRate": "Commission rate",
+    "itemSubtotal": "Item subtotal",
+    "merchandiseDiscount": "Merchandise discount",
+    "deliveryFee": "Delivery fee",
+    "cashCollected": "Cash collected",
+    "commission": "Commission",
+    "driverShare": "Driver share",
+    "costIncomplete": "This order was valued without a cost price on at least one line, so the shares may be wrong. Add the cost price, then record an adjustment.",
+    "entries": "What each party was credited",
+    "reconciliation": "Ledger reconciliation",
+    "correct": "Record a correction for this order"
   }
 }

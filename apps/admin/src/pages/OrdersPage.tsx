@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ApiError, listAdminOrders, type OrderDetail } from "../api";
+import { Pager } from "../components/Pager";
 import { StatusBadge } from "../components/StatusBadge";
 import { useRealtimeEvent } from "../socket";
 
@@ -18,6 +19,8 @@ const statusOptions = [
   "CANCELLED"
 ];
 
+const listPageSize = 20;
+
 export function OrdersPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -26,15 +29,20 @@ export function OrdersPage() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   async function load() {
     try {
-      const page = await listAdminOrders({
+      const result = await listAdminOrders({
+        page,
+        pageSize: listPageSize,
         status: status || undefined,
         fromDate: fromDate ? new Date(fromDate).toISOString() : undefined,
         toDate: toDate ? new Date(toDate).toISOString() : undefined
       });
-      setOrders(page.items);
+      setOrders(result.items);
+      setTotal(result.total);
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : t("orders.loadError"));
     }
@@ -43,6 +51,11 @@ export function OrdersPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, fromDate, toDate, page]);
+
+  // A new filter starts again from the first page.
+  useEffect(() => {
+    setPage(1);
   }, [status, fromDate, toDate]);
 
   useRealtimeEvent("order.created", () => void load());
@@ -102,6 +115,7 @@ export function OrdersPage() {
             </tbody>
           </table>
         )}
+        <Pager onPage={setPage} page={page} pageSize={listPageSize} total={total} />
       </div>
     </div>
   );

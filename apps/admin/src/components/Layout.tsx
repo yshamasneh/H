@@ -46,6 +46,8 @@ const businessNav: NavItem[] = [
     permission: "PROPOSE_OPERATING_COSTS",
     businessType: "SUPERMARKET"
   },
+  { to: "/business/reports", labelKey: "layout.nav.reports", icon: "▥", permission: "MANAGE_BUSINESS_SETTINGS" },
+  { to: "/business/settings", labelKey: "layout.nav.businessSettings", icon: "⚙", permission: "MANAGE_BUSINESS_SETTINGS" },
   { to: "/business/staff", labelKey: "layout.nav.staff", icon: "◍", permission: "MANAGE_BUSINESS_STAFF" }
 ];
 

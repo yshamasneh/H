@@ -443,7 +443,35 @@
     "unitCost": "سعر الوحدة (بالأغورة)",
     "reference": "المرجع",
     "totalCost": "التكلفة الإجمالية",
-    "receive": "تأكيد الاستلام"
+    "receive": "تأكيد الاستلام",
+    "unitCostShekel": "سعر الوحدة (₪)",
+    "invalidCost": "أدخل تكلفة صحيحة بمنزلتين عشريتين كحد أقصى.",
+    "invalidQuantity": "أدخل كمية صحيحة أكبر من صفر.",
+    "barcodeTitle": "البحث بالباركود",
+    "barcodePlaceholder": "امسح الباركود أو اكتبه",
+    "barcodeLookup": "بحث",
+    "barcodeNotFound": "لا يوجد منتج بهذا الباركود في متجرك.",
+    "barcodeResult": "{{name}} — المتوفر {{stock}}",
+    "barcodeOpenHistory": "عرض حركة هذا المنتج",
+    "movementsTitle": "حركة المخزون",
+    "movementsFor": "حركة: {{name}}",
+    "allProducts": "كل المنتجات",
+    "movementsEmpty": "لا توجد حركات مخزون بعد.",
+    "movementsLoadError": "تعذّر تحميل حركة المخزون.",
+    "when": "الوقت",
+    "product": "المنتج",
+    "movementType": "النوع",
+    "change": "التغيّر",
+    "stockAfter": "الرصيد بعدها",
+    "movement": {
+      "ORDER_RESERVATION": "حجز لطلب",
+      "ORDER_RESTORE": "إعادة من طلب ملغى",
+      "FULFILLMENT_RESERVATION": "حجز عند التجهيز",
+      "FULFILLMENT_RELEASE": "إفراج عند التجهيز",
+      "MANUAL_ADJUSTMENT": "تعديل يدوي",
+      "PURCHASE_RECEIPT": "استلام مشتريات"
+    },
+    "history": "السجل"
   },
   "staff": {
     "title": "الموظفون",
@@ -815,5 +843,69 @@
       "endInvalid": "تاريخ الانتهاء غير صحيح.",
       "endBeforeStart": "يجب أن يكون الانتهاء بعد البدء."
     }
+  },
+  "businessSettings": {
+    "title": "بيانات المتجر",
+    "subtitle": "الاسم والعنوان وموقع الانطلاق للتوصيل وساعات العمل.",
+    "loadError": "تعذّر تحميل بيانات المتجر.",
+    "name": "اسم المتجر",
+    "description": "الوصف",
+    "address": "العنوان",
+    "location": "موقع الانطلاق للتوصيل",
+    "locationHint": "اضغط على الخريطة أو اسحب الدبوس إلى موقع المتجر. يُحسب سعر التوصيل والمسافة انطلاقاً من هذه النقطة، ولا يمكن فتح المتجر للطلبات قبل تحديدها.",
+    "locationUnset": "لم يُحدَّد الموقع بعد.",
+    "setLocation": "تحديد الموقع على الخريطة",
+    "latitude": "خط العرض",
+    "longitude": "خط الطول",
+    "hours": "ساعات العمل الأسبوعية",
+    "hoursHint": "تُطبَّق كل يوم. اترك الخانتين فارغتين لعدم تحديد جدول. يمكن أن ينتهي الدوام بعد منتصف الليل.",
+    "opensAt": "يفتح",
+    "closesAt": "يغلق",
+    "clearHours": "مسح الجدول",
+    "save": "حفظ التغييرات",
+    "nothingToSave": "لا توجد تغييرات لحفظها.",
+    "readOnly": "ليست لديك صلاحية تعديل بيانات المتجر.",
+    "errors": {
+      "nameInvalid": "اسم المتجر من حرفين إلى ١٢٠ حرفاً.",
+      "descriptionTooLong": "الوصف لا يتجاوز ٥٠٠ حرف.",
+      "addressInvalid": "العنوان من ٣ إلى ٢٠٠ حرف.",
+      "coordinatesInvalid": "الإحداثيات غير صحيحة.",
+      "hoursIncomplete": "حدّد وقت الفتح والإغلاق معاً أو اتركهما فارغين.",
+      "hoursInvalid": "أدخل وقتاً صحيحاً بصيغة ساعة:دقيقة.",
+      "hoursSame": "لا يمكن أن يتطابق وقت الفتح مع الإغلاق."
+    }
+  },
+  "businessReports": {
+    "title": "المبيعات",
+    "subtitle": "لمحة عن المبيعات وعدد الطلبات.",
+    "loadError": "تعذّر تحميل المبيعات.",
+    "today": "اليوم",
+    "month": "هذا الشهر",
+    "total": "منذ البداية",
+    "sales": "المبيعات",
+    "orders": "عدد الطلبات",
+    "note": "المبيعات هي مجموع الطلبات المُسلَّمة فقط، وتشمل رسوم التوصيل والخدمة. عدد الطلبات يشمل كل الحالات بما فيها الملغاة والمرفوضة.",
+    "refresh": "تحديث"
+  },
+  "orderFinancial": {
+    "title": "السجل المالي للطلب",
+    "loadError": "تعذّر تحميل السجل المالي.",
+    "outcome": "النتيجة",
+    "outcomes": {
+      "DELIVERED": "مُسلَّم",
+      "DELIVERY_FAILED": "توصيل فاشل"
+    },
+    "rateVersion": "نسخة النسب المطبّقة",
+    "commissionRate": "نسبة العمولة",
+    "itemSubtotal": "قيمة الأصناف",
+    "merchandiseDiscount": "خصم على الأصناف",
+    "deliveryFee": "رسوم التوصيل",
+    "cashCollected": "النقد المحصّل",
+    "commission": "العمولة",
+    "driverShare": "حصة السائق",
+    "costIncomplete": "احتُسب هذا الطلب دون سعر تكلفة لبند واحد على الأقل، فقد تكون الحصص خاطئة. أضف سعر التكلفة ثم سجّل تصحيحاً.",
+    "entries": "ما استحقّه كل طرف",
+    "reconciliation": "مطابقة الدفتر",
+    "correct": "تسجيل تصحيح لهذا الطلب"
   }
 }

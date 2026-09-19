@@ -14,8 +14,11 @@ import {
   type PurchaseOrderView,
   type Supplier
 } from "../../api.business";
+import { parsePositiveMoneyToMinor, parseWholeNumber } from "../../money";
+import { BarcodeLookup, MovementsCard } from "./InventoryMovements";
 
 const currencyCode = "ILS";
+const stockPageSize = 30;
 
 /**
  * Stock, suppliers, and purchasing for a supermarket. The API for all of this already existed with
@@ -30,16 +33,23 @@ export function InventoryPage() {
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [supplierName, setSupplierName] = useState("");
-  const [draft, setDraft] = useState({ supplierId: "", menuItemId: "", quantity: "", unitCostMinor: "" });
+  // The unit cost is typed in shekels, like everywhere else in the console; it is converted to minor
+  // units exactly once, when the purchase order is built.
+  const [draft, setDraft] = useState({ supplierId: "", menuItemId: "", quantity: "", unitCost: "" });
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [historyProduct, setHistoryProduct] = useState<InventoryRow | null>(null);
+  const [movementsToken, setMovementsToken] = useState(0);
 
   async function load() {
     try {
       const [inventory, nextSuppliers, nextOrders] = await Promise.all([
-        listInventory({ search: search || undefined, lowStock: lowStockOnly || undefined }),
+        listInventory({ search: search || undefined, lowStock: lowStockOnly || undefined, page, pageSize: stockPageSize }),
         listSuppliers(),
         listPurchaseOrders()
       ]);
       setRows(inventory.items);
+      setTotal(inventory.total);
       setSuppliers(nextSuppliers);
       setPurchaseOrders(nextOrders);
       setError(null);
@@ -51,12 +61,18 @@ export function InventoryPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, lowStockOnly, page]);
+
+  // A new search or filter starts again from the first page.
+  useEffect(() => {
+    setPage(1);
   }, [search, lowStockOnly]);
 
   async function run(action: () => Promise<unknown>) {
     try {
       await action();
       await load();
+      setMovementsToken((token) => token + 1);
       setError(null);
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
@@ -73,6 +89,13 @@ export function InventoryPage() {
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
+
+      <BarcodeLookup
+        onShowHistory={(product) => {
+          setHistoryProduct(product);
+          document.getElementById("inventory-movements")?.scrollIntoView({ behavior: "smooth" });
+        }}
+      />
 
       <div className="card">
         <h2 className="card-title">{t("inventory.stock")}</h2>
@@ -119,6 +142,22 @@ export function InventoryPage() {
             </table>
           </div>
         )}
+        {total > stockPageSize ? (
+          <div className="pagination-row">
+            <button className="btn btn-outline btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)} type="button">
+              {t("common.previous")}
+            </button>
+            <span>{t("common.pageOf", { page, pages: Math.ceil(total / stockPageSize) })}</span>
+            <button
+              className="btn btn-outline btn-sm"
+              disabled={page >= Math.ceil(total / stockPageSize)}
+              onClick={() => setPage(page + 1)}
+              type="button"
+            >
+              {t("common.next")}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="card">
@@ -200,32 +239,31 @@ export function InventoryPage() {
               className="text-input"
               onChange={(event) => setDraft({ ...draft, quantity: event.target.value })}
               placeholder={t("inventory.quantity")}
-              type="number"
+              inputMode="numeric"
               value={draft.quantity}
             />
             <input
               className="text-input"
-              onChange={(event) => setDraft({ ...draft, unitCostMinor: event.target.value })}
-              placeholder={t("inventory.unitCost")}
-              type="number"
-              value={draft.unitCostMinor}
+              onChange={(event) => setDraft({ ...draft, unitCost: event.target.value })}
+              placeholder={t("inventory.unitCostShekel")}
+              dir="ltr"
+              inputMode="decimal"
+              value={draft.unitCost}
             />
             <button
               className="btn btn-primary btn-sm"
-              disabled={!draft.quantity || !draft.unitCostMinor}
+              disabled={!draft.quantity || !draft.unitCost}
               onClick={() =>
                 void run(async () => {
+                  const quantity = parseWholeNumber(draft.quantity, 1);
+                  const unitCostMinor = parsePositiveMoneyToMinor(draft.unitCost);
+                  if (quantity === null) throw new ApiError(400, "INVALID_QUANTITY", t("inventory.invalidQuantity"));
+                  if (unitCostMinor === null) throw new ApiError(400, "INVALID_COST", t("inventory.invalidCost"));
                   await createPurchaseOrder({
                     supplierId: draft.supplierId || suppliers[0].id,
-                    items: [
-                      {
-                        menuItemId: draft.menuItemId || rows[0].id,
-                        quantity: Number(draft.quantity),
-                        unitCostMinor: Number(draft.unitCostMinor)
-                      }
-                    ]
+                    items: [{ menuItemId: draft.menuItemId || rows[0].id, quantity, unitCostMinor }]
                   });
-                  setDraft({ supplierId: "", menuItemId: "", quantity: "", unitCostMinor: "" });
+                  setDraft({ supplierId: "", menuItemId: "", quantity: "", unitCost: "" });
                 })
               }
               type="button"
@@ -284,6 +322,13 @@ export function InventoryPage() {
           </div>
         )}
       </div>
+
+      <MovementsCard
+        onProductChange={(menuItemId) => setHistoryProduct(rows.find((row) => row.id === menuItemId) ?? null)}
+        product={historyProduct}
+        products={rows}
+        reloadToken={movementsToken}
+      />
     </div>
   );
 }
@@ -312,7 +357,7 @@ function AdjustStockControl({ onSubmit }: { onSubmit: (quantityDelta: number, re
       />
       <button
         className="btn btn-outline btn-sm"
-        disabled={!delta || !reason.trim()}
+        disabled={!Number.isInteger(Number(delta)) || Number(delta) === 0 || !reason.trim()}
         onClick={() =>
           void onSubmit(Number(delta), reason.trim()).then(() => {
             setDelta("");

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Pager } from "../components/Pager";
 import { useNavigate } from "react-router-dom";
 import {
   ApiError,
@@ -18,12 +19,16 @@ import { useRealtimeEvent } from "../socket";
 
 const statusOptions = ["", "PENDING", "APPROVED", "REJECTED", "SUSPENDED"];
 
+const listPageSize = 20;
+
 export function RestaurantsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { can } = useAuth();
   const [restaurants, setRestaurants] = useState<RestaurantProfile[] | null>(null);
   const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<RestaurantProfile | null>(null);
   const [rejectTarget, setRejectTarget] = useState<RestaurantProfile | null>(null);
@@ -31,8 +36,9 @@ export function RestaurantsPage() {
 
   async function load() {
     try {
-      const page = await listAdminRestaurants(status ? { status } : {});
-      setRestaurants(page.items);
+      const result = await listAdminRestaurants({ ...(status ? { status } : {}), page, pageSize: listPageSize });
+      setRestaurants(result.items);
+      setTotal(result.total);
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : t("restaurants.loadError"));
     }
@@ -41,6 +47,10 @@ export function RestaurantsPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, page]);
+
+  useEffect(() => {
+    setPage(1);
   }, [status]);
 
   useRealtimeEvent("restaurant.pending.created", () => void load());
@@ -154,6 +164,7 @@ export function RestaurantsPage() {
             </tbody>
           </table>
         )}
+        <Pager onPage={setPage} page={page} pageSize={listPageSize} total={total} />
       </div>
 
       {suspendTarget ? (

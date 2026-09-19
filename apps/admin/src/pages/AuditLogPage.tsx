@@ -1,23 +1,33 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Pager } from "../components/Pager";
 import { ApiError, listAuditLog, type AuditLogEntry } from "../api";
+
+const listPageSize = 20;
 
 export function AuditLogPage() {
   const { t } = useTranslation();
   const [entries, setEntries] = useState<AuditLogEntry[] | null>(null);
   const [action, setAction] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const page = await listAuditLog({ action: action || undefined });
-        setEntries(page.items);
+        const result = await listAuditLog({ action: action || undefined, page, pageSize: listPageSize });
+        setEntries(result.items);
+        setTotal(result.total);
       } catch (requestError) {
         setError(requestError instanceof ApiError ? requestError.message : t("auditLog.loadError"));
       }
     }
     void load();
+  }, [action, page]);
+
+  useEffect(() => {
+    setPage(1);
   }, [action]);
 
   return (
@@ -71,6 +81,7 @@ export function AuditLogPage() {
             </tbody>
           </table>
         )}
+        <Pager onPage={setPage} page={page} pageSize={listPageSize} total={total} />
       </div>
     </div>
   );

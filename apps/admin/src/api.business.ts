@@ -1,3 +1,4 @@
+import type { ProfileBody } from "./business-profile";
 import { request, toQuery, type OrderDetail, type Page, type RestaurantProfile, type RestaurantStatus } from "./api";
 
 /**
@@ -114,6 +115,17 @@ export type BusinessProfile = RestaurantProfile & { businessType: BusinessType }
 
 export function getBusinessProfile(): Promise<BusinessProfile> {
   return request("/api/v1/restaurant/me");
+}
+
+export function updateBusinessProfile(body: ProfileBody): Promise<BusinessProfile> {
+  return request("/api/v1/restaurant/me", { method: "PATCH", body });
+}
+
+export type PeriodStats = { salesMinor: number; ordersCount: number };
+export type BusinessStats = { today: PeriodStats; month: PeriodStats; total: PeriodStats };
+
+export function getBusinessStats(): Promise<BusinessStats> {
+  return request("/api/v1/restaurant/me/stats");
 }
 
 export function setBusinessOpenStatus(isOpen: boolean): Promise<BusinessProfile> {
@@ -244,8 +256,39 @@ export type InventoryRow = {
   isLowStock?: boolean;
 };
 
-export function listInventory(params: { search?: string; lowStock?: boolean } = {}): Promise<Page<InventoryRow>> {
+export function listInventory(
+  params: { search?: string; lowStock?: boolean; page?: number; pageSize?: number } = {}
+): Promise<Page<InventoryRow>> {
   return request(`/api/v1/restaurant/me/inventory${toQuery(params)}`);
+}
+
+export type InventoryMovementType =
+  | "ORDER_RESERVATION"
+  | "ORDER_RESTORE"
+  | "FULFILLMENT_RESERVATION"
+  | "FULFILLMENT_RELEASE"
+  | "MANUAL_ADJUSTMENT"
+  | "PURCHASE_RECEIPT";
+
+export type InventoryMovement = {
+  id: string;
+  menuItemId: string;
+  type: InventoryMovementType;
+  quantityDelta: number;
+  stockAfter: number;
+  reason: string | null;
+  createdAt: string;
+  menuItem: { name: string; sku: string | null };
+};
+
+export function listInventoryMovements(
+  params: { menuItemId?: string; page?: number; pageSize?: number } = {}
+): Promise<Page<InventoryMovement>> {
+  return request(`/api/v1/restaurant/me/inventory/movements${toQuery(params)}`);
+}
+
+export function lookupInventoryBarcode(barcode: string): Promise<InventoryRow> {
+  return request(`/api/v1/restaurant/me/inventory/barcode/${encodeURIComponent(barcode.trim())}`);
 }
 
 export function adjustInventory(itemId: string, body: { quantityDelta: number; reason: string }): Promise<unknown> {

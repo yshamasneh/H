@@ -4,6 +4,8 @@ import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { AuditLogPage } from "./pages/AuditLogPage";
 import { BusinessOrderPage } from "./pages/business/BusinessOrderPage";
+import { BusinessReportsPage } from "./pages/business/BusinessReportsPage";
+import { BusinessSettingsPage } from "./pages/business/BusinessSettingsPage";
 import { CataloguePage } from "./pages/business/CataloguePage";
 import { InventoryPage } from "./pages/business/InventoryPage";
 import { LiveOrdersPage } from "./pages/business/LiveOrdersPage";
@@ -47,6 +49,8 @@ function BusinessRoutes() {
       <Route element={<CataloguePage />} path="/business/catalogue" />
       <Route element={<InventoryPage />} path="/business/inventory" />
       <Route element={<OperatingCostsPage />} path="/business/operating-costs" />
+      <Route element={<BusinessReportsPage />} path="/business/reports" />
+      <Route element={<BusinessSettingsPage />} path="/business/settings" />
       <Route element={<StaffPage />} path="/business/staff" />
       <Route element={<Navigate replace to="/business" />} path="*" />
     </Routes>

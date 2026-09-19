@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError, cancelAdminOrder, getAdminOrder, type OrderDetail } from "../api";
+import { OrderFinancialCard } from "../components/OrderFinancialCard";
 import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { useRealtimeEvent } from "../socket";
@@ -122,6 +123,8 @@ export function OrderDetailPage() {
               ) : null}
             </div>
           ) : null}
+
+          <OrderFinancialCard orderId={order.id} />
 
           {cancellableStatuses.includes(order.status) ? (
             <button className="btn btn-danger" onClick={() => setShowCancelModal(true)} type="button">

@@ -34,6 +34,9 @@ export type RestaurantProfile = {
   longitude: number | null;
   showLocationToCustomer: boolean;
   logoUrl: string | null;
+  /** Weekly opening hours, "HH:mm" (24h); both null when no schedule is set. */
+  opensAt?: string | null;
+  closesAt?: string | null;
   isOpen: boolean;
   status: RestaurantStatus;
   createdAt: string;
@@ -285,7 +288,7 @@ export function updateStoreLocation(
 }
 
 export function listAdminOrders(
-  params: { status?: string; restaurantId?: string; customerId?: string; fromDate?: string; toDate?: string; page?: number } = {}
+  params: { status?: string; restaurantId?: string; customerId?: string; fromDate?: string; toDate?: string; page?: number; pageSize?: number } = {}
 ): Promise<Page<OrderDetail>> {
   return request(`/api/v1/admin/orders${toQuery(params)}`);
 }
@@ -318,12 +321,12 @@ export function reactivateDriver(userId: string): Promise<AdminDriverView> {
   return request(`/api/v1/admin/drivers/${userId}/reactivate`, { method: "POST" });
 }
 
-export function listAdminUsers(params: { role?: string; search?: string } = {}): Promise<Page<AdminUserView>> {
+export function listAdminUsers(params: { role?: string; search?: string; page?: number; pageSize?: number } = {}): Promise<Page<AdminUserView>> {
   return request(`/api/v1/admin/users${toQuery(params)}`);
 }
 
 export function listAuditLog(
-  params: { actorUserId?: string; action?: string; fromDate?: string; toDate?: string; page?: number } = {}
+  params: { actorUserId?: string; action?: string; fromDate?: string; toDate?: string; page?: number; pageSize?: number } = {}
 ): Promise<Page<AuditLogEntry>> {
   return request(`/api/v1/admin/audit-log${toQuery(params)}`);
 }

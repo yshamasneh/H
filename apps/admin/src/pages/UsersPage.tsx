@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Pager } from "../components/Pager";
 import {
   ApiError,
   assignPlatformRole,
@@ -13,6 +14,8 @@ import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
 
 const roleOptions = ["", "CUSTOMER", "RESTAURANT", "DRIVER", "ADMIN"];
+
+const listPageSize = 20;
 
 export function UsersPage() {
   const { t } = useTranslation();
@@ -31,12 +34,20 @@ export function UsersPage() {
     makeSuperAdmin: false
   });
 
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const canManageAdmins = can("MANAGE_ADMINS");
 
   async function load() {
     try {
-      const page = await listAdminUsers({ role: role || undefined, search: search || undefined });
-      setUsers(page.items);
+      const result = await listAdminUsers({
+        role: role || undefined,
+        search: search || undefined,
+        page,
+        pageSize: listPageSize
+      });
+      setUsers(result.items);
+      setTotal(result.total);
       setError(null);
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : t("users.loadError"));
@@ -47,6 +58,10 @@ export function UsersPage() {
     const timeout = setTimeout(() => void load(), 250);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, search, page]);
+
+  useEffect(() => {
+    setPage(1);
   }, [role, search]);
 
   async function run(action: () => Promise<unknown>) {
@@ -236,6 +251,7 @@ export function UsersPage() {
             </table>
           </div>
         )}
+        <Pager onPage={setPage} page={page} pageSize={listPageSize} total={total} />
       </div>
 
       {pendingSuspension ? (
