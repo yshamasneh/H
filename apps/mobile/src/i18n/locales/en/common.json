@@ -84,5 +84,19 @@
   },
   "unexpectedErrorTitle": "Something went wrong",
   "unexpectedErrorBody": "The app hit an unexpected problem on this screen. Your account and any placed order are safe.",
-  "backToHome": "Back to home"
+  "backToHome": "Back to home",
+  "imageUpload": {
+    "add": "Add image",
+    "change": "Change image",
+    "camera": "Use camera",
+    "remove": "Remove image",
+    "removeTitle": "Remove image?",
+    "removeMessage": "The image will be removed when you save this form.",
+    "uploading": "Uploading {{percent}}%",
+    "permissionTitle": "Permission required",
+    "permissionMessage": "Allow access to the camera or photo library to choose an image.",
+    "invalidTitle": "Image not selected",
+    "tooLarge": "Choose an image no larger than 5 MB.",
+    "processingFailed": "The image could not be prepared. Try another JPEG, PNG, or WebP file."
+  }
 }

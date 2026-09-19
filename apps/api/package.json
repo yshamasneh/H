@@ -23,6 +23,8 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@azure/identity": "4.13.3",
+    "@azure/storage-blob": "12.33.0",
     "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.28",

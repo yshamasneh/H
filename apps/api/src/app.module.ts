@@ -20,6 +20,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { RestaurantsModule } from "./restaurants/restaurants.module";
 import { SettingsModule } from "./settings/settings.module";
+import { UploadsModule } from "./uploads/uploads.module";
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { SettingsModule } from "./settings/settings.module";
     LandmarksModule,
     AccountingModule,
     SettingsModule,
+    UploadsModule,
     AdminModule
   ],
   providers: [

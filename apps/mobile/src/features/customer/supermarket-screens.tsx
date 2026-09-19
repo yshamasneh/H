@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   FlatList,
-  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { RemoteImage } from "../../components/remote-image";
 // Expo's safe-area module, not React Native's deprecated built-in `SafeAreaView`
 // (iOS-only, a no-op on Android) — matching every other screen in this app.
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -196,7 +196,7 @@ export function SupermarketProductScreen(props: {
         <ProductDetailSkeleton />
       ) : (
         <ScrollView contentContainerStyle={[styles.detailContent, showCart && styles.productGridWithCart]}>
-          <View style={styles.detailArtwork}>{product.imageUrl ? <Image resizeMode="contain" source={{ uri: product.imageUrl }} style={styles.image} /> : <Text style={styles.detailEmoji}>🥫</Text>}</View>
+          <View style={styles.detailArtwork}><RemoteImage resizeMode="cover" uri={product.imageUrl} style={styles.image} /></View>
           <Text style={styles.detailDepartment}>{product.categoryName}</Text>
           <Text style={styles.detailName}>{product.name}</Text>
           {product.brand ? <Text style={styles.detailBrand}>{product.brand}</Text> : null}
@@ -274,7 +274,7 @@ function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpe
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <Pressable onPress={props.onOpen} style={({ pressed }) => [styles.productCard, pressed && styles.pressed]}>
-      <View style={styles.productArtwork}>{props.item.imageUrl ? <Image resizeMode="cover" source={{ uri: props.item.imageUrl }} style={styles.image} /> : <Text style={styles.productEmoji}>🥫</Text>}</View>
+      <View style={styles.productArtwork}><RemoteImage resizeMode="cover" uri={props.item.imageUrl} style={styles.image} /></View>
       <Text style={styles.productDepartment}>{props.item.categoryName}</Text>
       {props.item.brand ? <Text numberOfLines={1} style={styles.productBrand}>{props.item.brand}</Text> : null}
       <Text numberOfLines={2} style={styles.productName}>{props.item.name}</Text>

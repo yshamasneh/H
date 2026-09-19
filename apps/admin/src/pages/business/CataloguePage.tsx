@@ -53,6 +53,7 @@ export function CataloguePage() {
 
       <CatalogueManager
         api={api}
+        restaurantId={access?.business?.id ?? ""}
         capabilities={{
           isSupermarket,
           canManagePrices: can("MANAGE_PRICES"),

@@ -142,6 +142,7 @@
     "minimumSubtotalPlaceholder": "Minimum subtotal in ILS, e.g. 50",
     "maxDiscountPlaceholder": "Maximum discount in ILS (optional)",
     "imageUrlPlaceholder": "Campaign image URL (optional)",
+    "imageLabel": "Campaign image",
     "startDatePlaceholder": "Start ISO date (blank = now)",
     "endDatePlaceholder": "End ISO date (optional)",
     "publishButton": "Publish offer",

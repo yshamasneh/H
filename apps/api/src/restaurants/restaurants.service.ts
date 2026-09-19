@@ -19,6 +19,7 @@ import { createBusinessNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import { ManagedImageUrlService } from "../uploads/managed-image-url.service";
 import { isValidTimeOfDay, isWithinWeeklyHours, restaurantModerationTransitions } from "./restaurant.rules";
 import type { AdminCreateBusinessDto, AdminRestaurantsQueryDto, AdminStoreLocationDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
 import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantPeriodStats, RestaurantProfileView, RestaurantPublicView, RestaurantStatsView, SupermarketCatalogView, SupermarketProductView } from "./restaurants.types";
@@ -28,7 +29,8 @@ export class RestaurantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
-    @Optional() private readonly config?: ConfigService
+    @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly managedImages?: ManagedImageUrlService
   ) {}
 
   /** The restaurant vertical's own public launch gate; see orders.service.ts's copy of the same flag. */
@@ -200,6 +202,12 @@ export class RestaurantsService {
 
   async updateOwnProfile(ownerUserId: string, input: UpdateRestaurantProfileDto): Promise<RestaurantProfileView> {
     const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    this.managedImages?.assertAllowedChange({
+      previousUrl: restaurant.logoUrl,
+      nextUrl: input.logoUrl,
+      purpose: "LOGO",
+      restaurantId: restaurant.id
+    });
     if ((input.latitude === undefined) !== (input.longitude === undefined)) {
       throw new ApiException(
         400,

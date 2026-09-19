@@ -494,6 +494,52 @@ table.data-table {
   margin-bottom: var(--space-4);
 }
 
+.image-upload-field {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 18px;
+  max-width: 360px;
+}
+
+.image-upload-preview {
+  aspect-ratio: 1 / 1;
+  background: var(--surface-muted, #f7f3f0);
+  border: 1px solid var(--border, #e5ddd7);
+  border-radius: 12px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.catalogue-thumbnail {
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  height: 56px;
+  object-fit: cover;
+  width: 56px;
+}
+
+.image-upload-progress {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  gap: 8px;
+}
+
+.image-upload-progress progress {
+  accent-color: var(--primary, #f45a00);
+  flex: 1;
+}
+
+.field-error {
+  color: var(--danger, #c02626);
+  font-size: 0.875rem;
+}
+
+.btn.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .login-screen {
   min-height: 100vh;
   display: flex;

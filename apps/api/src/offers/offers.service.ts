@@ -4,6 +4,7 @@ import { writeAuditLog } from "../common/audit-log.util";
 import { ApiException } from "../common/api.exception";
 import { BusinessType, OfferType, type Offer, type Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { ManagedImageUrlService } from "../uploads/managed-image-url.service";
 import type { CreateOfferDto, UpdateOfferDto } from "./offers.dto";
 import type { AppliedPromotion, OfferView, PromotionCalculation } from "./offers.types";
 
@@ -14,7 +15,8 @@ type OfferWithRelations = Prisma.OfferGetPayload<{ include: typeof offerInclude 
 export class OffersService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly config?: ConfigService
+    @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly managedImages?: ManagedImageUrlService
   ) {}
 
   async listPublicOffers(): Promise<OfferView[]> {
@@ -56,6 +58,11 @@ export class OffersService {
 
   async adminCreate(adminUserId: string, input: CreateOfferDto): Promise<OfferView> {
     const normalized = await this.validateAndNormalize(input);
+    this.managedImages?.assertAllowedChange({
+      nextUrl: normalized.imageUrl,
+      purpose: "OFFER",
+      restaurantId: normalized.restaurantId
+    });
     const created = await this.prisma.$transaction(async (tx) => {
       const offer = await tx.offer.create({ data: { ...normalized, createdByUserId: adminUserId }, include: offerInclude });
       await writeAuditLog(tx, {
@@ -74,6 +81,12 @@ export class OffersService {
     const existing = await this.prisma.offer.findUnique({ where: { id: offerId } });
     if (!existing) throw new ApiException(404, "OFFER_NOT_FOUND", "This offer does not exist.");
     const normalized = await this.validateAndNormalize(input);
+    this.managedImages?.assertAllowedChange({
+      previousUrl: existing.imageUrl,
+      nextUrl: normalized.imageUrl,
+      purpose: "OFFER",
+      restaurantId: normalized.restaurantId
+    });
     const updated = await this.prisma.$transaction(async (tx) => {
       const offer = await tx.offer.update({ where: { id: offerId }, data: normalized, include: offerInclude });
       await writeAuditLog(tx, {

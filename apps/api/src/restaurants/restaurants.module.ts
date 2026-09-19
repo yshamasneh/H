@@ -3,6 +3,7 @@ import { JwtModule } from "@nestjs/jwt";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { OffersModule } from "../offers/offers.module";
+import { UploadsModule } from "../uploads/uploads.module";
 import { AdminRestaurantsController } from "./admin-restaurants.controller";
 import { BusinessStaffController } from "./business-staff.controller";
 import { BusinessStaffService } from "./business-staff.service";
@@ -13,7 +14,7 @@ import { SupermarketsController } from "./supermarkets.controller";
 import { RestaurantsService } from "./restaurants.service";
 
 @Module({
-  imports: [JwtModule.register({}), OffersModule],
+  imports: [JwtModule.register({}), OffersModule, UploadsModule],
   controllers: [
     RestaurantsController,
     SupermarketsController,

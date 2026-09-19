@@ -9,6 +9,12 @@ const base = {
   OTP_HASH_SECRET: "otp-hash-secret-value-that-is-at-least-32-characters-long"
 };
 
+const imageStorage = {
+  AZURE_STORAGE_ACCOUNT_NAME: "jovoimages",
+  AZURE_STORAGE_PUBLIC_CONTAINER_NAME: "product-images",
+  AZURE_STORAGE_UPLOAD_CONTAINER_NAME: "image-uploads"
+};
+
 test("development defaults remain local-friendly", () => {
   const result = validateEnvironment(base);
   assert.equal(result.NODE_ENV, "development");
@@ -21,6 +27,7 @@ test("development defaults remain local-friendly", () => {
 test("production accepts explicit HTTPS integrations and secure secrets", () => {
   const result = validateEnvironment({
     ...base,
+    ...imageStorage,
     NODE_ENV: "production",
     APP_VERSION: "0.8.0",
     CORS_ORIGIN: "https://app.example.com,https://admin.example.com",
@@ -73,22 +80,37 @@ test("the interactive-transaction timeout defaults above Prisma's 5s and is tuna
 
 test("production rejects wildcard CORS and the development OTP provider", () => {
   assert.throws(
-    () => validateEnvironment({ ...base, NODE_ENV: "production", CORS_ORIGIN: "*" }),
+    () => validateEnvironment({ ...base, ...imageStorage, NODE_ENV: "production", CORS_ORIGIN: "*" }),
     /explicit HTTPS origins/
   );
   assert.throws(
-    () => validateEnvironment({ ...base, NODE_ENV: "production", CORS_ORIGIN: "https://app.example.com" }),
+    () => validateEnvironment({ ...base, ...imageStorage, NODE_ENV: "production", CORS_ORIGIN: "https://app.example.com" }),
     /OTP_PROVIDER=webhook/
   );
 });
 
 test("production rejects placeholder values and reused secrets", () => {
   assert.throws(
-    () => validateEnvironment({ ...base, NODE_ENV: "production", JWT_ACCESS_SECRET: "replace_with_a_random_secret_at_least_32_characters" }),
+    () => validateEnvironment({ ...base, ...imageStorage, NODE_ENV: "production", JWT_ACCESS_SECRET: "replace_with_a_random_secret_at_least_32_characters" }),
     /placeholder/
   );
   assert.throws(
     () => validateEnvironment({ ...base, JWT_REFRESH_SECRET: base.JWT_ACCESS_SECRET }),
     /must be different/
+  );
+});
+
+test("image storage is complete, named safely, and bounded to five-minute/five-megabyte uploads", () => {
+  assert.throws(
+    () => validateEnvironment({ ...base, AZURE_STORAGE_ACCOUNT_NAME: "jovoimages" }),
+    /must be configured together/
+  );
+  assert.throws(
+    () => validateEnvironment({ ...base, ...imageStorage, UPLOAD_SAS_TTL_SECONDS: "301" }),
+    /cannot exceed 300/
+  );
+  assert.throws(
+    () => validateEnvironment({ ...base, ...imageStorage, UPLOAD_MAX_IMAGE_BYTES: String(5 * 1024 * 1024 + 1) }),
+    /cannot exceed 5242880/
   );
 });

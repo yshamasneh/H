@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "../api";
 import { type MenuCategoryOwner, type MenuItemOwner } from "../api.business";
 import { ConfirmModal } from "./ConfirmModal";
+import { FallbackImage } from "./FallbackImage";
+import { ImageUploadField } from "./ImageUploadField";
+import { removeUploadedImage, uploadImage } from "../image-upload";
 
 const currencyCode = "ILS";
 
@@ -66,7 +69,7 @@ const emptyDraft: ItemDraft = {
   isVariableWeight: false
 };
 
-export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; capabilities: CatalogueCapabilities }) {
+export function CatalogueManager({ api, capabilities, restaurantId }: { api: CatalogueApi; capabilities: CatalogueCapabilities; restaurantId: string }) {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<MenuCategoryOwner[]>([]);
   const [items, setItems] = useState<MenuItemOwner[]>([]);
@@ -75,6 +78,8 @@ export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; cap
   const [draft, setDraft] = useState<ItemDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<MenuItemOwner | null>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null | undefined>(undefined);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const { isSupermarket, canManagePrices, canManageProducts, canManageMenu, canManageOrders } = capabilities;
 
@@ -125,11 +130,13 @@ export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; cap
       isFeatured: item.isFeatured,
       isVariableWeight: item.isVariableWeight
     });
+    setSelectedImage(undefined);
   }
 
   function cancelEdit() {
     setEditingId(null);
     setDraft(emptyDraft);
+    setSelectedImage(undefined);
     setError(null);
   }
 
@@ -148,49 +155,61 @@ export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; cap
     return null;
   }
 
-  function submitItem() {
+  async function submitItem() {
     const validationError = validateDraft();
     if (validationError) {
       setError(validationError);
       return;
     }
 
-    const body: Record<string, unknown> = {
-      categoryId: draft.categoryId || categories[0]?.id,
-      name: draft.name.trim(),
-      description: draft.description.trim() || undefined,
-      imageUrl: draft.imageUrl.trim() || undefined,
-      unitLabel: draft.unitLabel.trim() || "item"
-    };
-    // Price and cost price are only ever sent by someone allowed to set prices, and the API
-    // enforces the same rule independently.
-    if (canManagePrices && draft.price) {
-      body.priceMinor = Math.round(Number(draft.price.replace(",", ".")) * 100);
-      body.costPriceMinor = draft.costPrice.trim()
-        ? Math.round(Number(draft.costPrice.replace(",", ".")) * 100)
-        : editingId
-          ? null
-          : undefined;
-    }
-    if (isSupermarket) {
-      if (draft.brand.trim()) body.brand = draft.brand.trim();
-      if (draft.sku.trim()) body.sku = draft.sku.trim();
-      if (draft.barcode.trim()) body.barcode = draft.barcode.trim();
-      body.stockQuantity = draft.stockQuantity.trim()
-        ? Math.max(0, Number.parseInt(draft.stockQuantity, 10) || 0)
-        : editingId
-          ? null
-          : undefined;
-      body.reorderLevel = draft.reorderLevel.trim()
-        ? Math.max(0, Number.parseInt(draft.reorderLevel, 10) || 0)
-        : editingId
-          ? null
-          : undefined;
-      body.isFeatured = draft.isFeatured;
-      body.isVariableWeight = draft.isVariableWeight;
-    }
+    let uploadedUrl: string | null = null;
+    const previousUrl = editingId ? items.find((item) => item.id === editingId)?.imageUrl ?? null : null;
+    try {
+      if (selectedImage instanceof File) {
+        setUploadProgress(0);
+        uploadedUrl = await uploadImage({
+          file: selectedImage,
+          purpose: "PRODUCT",
+          restaurantId,
+          onProgress: setUploadProgress
+        });
+      }
 
-    void (async () => {
+      const body: Record<string, unknown> = {
+        categoryId: draft.categoryId || categories[0]?.id,
+        name: draft.name.trim(),
+        description: draft.description.trim() || undefined,
+        imageUrl: selectedImage === null ? "" : uploadedUrl ?? (draft.imageUrl.trim() || undefined),
+        unitLabel: draft.unitLabel.trim() || "item"
+      };
+      // Price and cost price are only ever sent by someone allowed to set prices, and the API
+      // enforces the same rule independently.
+      if (canManagePrices && draft.price) {
+        body.priceMinor = Math.round(Number(draft.price.replace(",", ".")) * 100);
+        body.costPriceMinor = draft.costPrice.trim()
+          ? Math.round(Number(draft.costPrice.replace(",", ".")) * 100)
+          : editingId
+            ? null
+            : undefined;
+      }
+      if (isSupermarket) {
+        if (draft.brand.trim()) body.brand = draft.brand.trim();
+        if (draft.sku.trim()) body.sku = draft.sku.trim();
+        if (draft.barcode.trim()) body.barcode = draft.barcode.trim();
+        body.stockQuantity = draft.stockQuantity.trim()
+          ? Math.max(0, Number.parseInt(draft.stockQuantity, 10) || 0)
+          : editingId
+            ? null
+            : undefined;
+        body.reorderLevel = draft.reorderLevel.trim()
+          ? Math.max(0, Number.parseInt(draft.reorderLevel, 10) || 0)
+          : editingId
+            ? null
+            : undefined;
+        body.isFeatured = draft.isFeatured;
+        body.isVariableWeight = draft.isVariableWeight;
+      }
+
       const success = await run(async () => {
         if (editingId) await api.updateItem(editingId, body);
         else {
@@ -201,10 +220,21 @@ export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; cap
         }
       });
       if (success) {
+        if (previousUrl && previousUrl !== uploadedUrl && selectedImage !== undefined) {
+          await removeUploadedImage({ purpose: "PRODUCT", restaurantId, imageUrl: previousUrl });
+        }
         setDraft(emptyDraft);
         setEditingId(null);
+        setSelectedImage(undefined);
+      } else if (uploadedUrl) {
+        await removeUploadedImage({ purpose: "PRODUCT", restaurantId, imageUrl: uploadedUrl });
       }
-    })();
+    } catch (requestError) {
+      if (uploadedUrl) await removeUploadedImage({ purpose: "PRODUCT", restaurantId, imageUrl: uploadedUrl });
+      setError(requestError instanceof ApiError ? requestError.message : t("catalogue.uploadError"));
+    } finally {
+      setUploadProgress(null);
+    }
   }
 
   return (
@@ -334,13 +364,14 @@ export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; cap
               placeholder={t("catalogue.description")}
               value={draft.description}
             />
-            <input
-              className="text-input"
-              onChange={(event) => setDraft({ ...draft, imageUrl: event.target.value })}
-              placeholder={t("catalogue.imageUrl")}
-              value={draft.imageUrl}
-            />
           </div>
+          <ImageUploadField
+            currentUrl={draft.imageUrl}
+            disabled={uploadProgress !== null}
+            onChange={setSelectedImage}
+            progress={uploadProgress}
+            selection={selectedImage}
+          />
           {isSupermarket ? (
             <>
               <div className="filters-row">
@@ -396,7 +427,7 @@ export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; cap
             </>
           ) : null}
           <div className="filters-row">
-            <button className="btn btn-primary btn-sm" onClick={submitItem} type="button">
+            <button className="btn btn-primary btn-sm" disabled={uploadProgress !== null} onClick={() => void submitItem()} type="button">
               {editingId ? t("common.save") : t("catalogue.addProduct")}
             </button>
             {editingId ? (
@@ -418,6 +449,7 @@ export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; cap
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>{t("catalogue.image")}</th>
                   <th>{t("common.name")}</th>
                   <th>{t("catalogue.category")}</th>
                   <th>{t("catalogue.price")}</th>
@@ -430,6 +462,7 @@ export function CatalogueManager({ api, capabilities }: { api: CatalogueApi; cap
               <tbody>
                 {items.map((item) => (
                   <tr key={item.id}>
+                    <td><FallbackImage alt="" className="catalogue-thumbnail" src={item.imageUrl ?? undefined} /></td>
                     <td>{item.name}</td>
                     <td>{categories.find((category) => category.id === item.categoryId)?.name ?? "—"}</td>
                     <td className="num">{formatPrice(item.priceMinor)}</td>

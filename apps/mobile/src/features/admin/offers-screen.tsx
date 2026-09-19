@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ImageUploadField } from "../../components/image-upload-field";
+import { RemoteImage } from "../../components/remote-image";
 import i18n from "../../i18n";
 import {
   createAdminOffer,
@@ -16,6 +18,7 @@ import {
   type RestaurantOffer
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import { removeUploadedImage, uploadPreparedImage, type PreparedImage } from "../../core/image-upload";
 import {
   ActionButton,
   ActionRow,
@@ -64,7 +67,8 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
   const [discountPercent, setDiscountPercent] = useState("20");
   const [minimumSubtotal, setMinimumSubtotal] = useState("0");
   const [maxDiscount, setMaxDiscount] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageSelection, setImageSelection] = useState<PreparedImage | null | undefined>(undefined);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -126,8 +130,20 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
     setBusy(true);
     setError(null);
     setNotice(null);
+    let uploadedUrl: string | null = null;
     try {
-      await createAdminOffer(await requireToken(), {
+      const token = await requireToken();
+      if (imageSelection) {
+        setUploadProgress(0);
+        uploadedUrl = await uploadPreparedImage({
+          accessToken: token,
+          purpose: "OFFER",
+          restaurantId: restaurantId ?? undefined,
+          image: imageSelection,
+          onProgress: setUploadProgress
+        });
+      }
+      await createAdminOffer(token, {
         type,
         restaurantId: restaurantId ?? undefined,
         menuItemId: type === "PRODUCT_PERCENTAGE" ? menuItemId ?? undefined : undefined,
@@ -136,20 +152,29 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
         discountPercent: type === "FREE_DELIVERY" ? undefined : parsePositive(discountPercent),
         minimumSubtotalMinor: parseMoney(minimumSubtotal) ?? 0,
         maxDiscountMinor: type === "FREE_DELIVERY" ? undefined : parseMoney(maxDiscount),
-        imageUrl: imageUrl.trim() || undefined,
+        imageUrl: uploadedUrl ?? undefined,
         startsAt: startsAt.trim() || undefined,
         endsAt: endsAt.trim() || undefined,
         isActive: true
       });
       setTitle("");
       setDescription("");
-      setImageUrl("");
+      setImageSelection(undefined);
       setEndsAt("");
       setNotice(t("offers.publishSuccess"));
       await load();
     } catch (requestError) {
+      if (uploadedUrl) {
+        const token = await getAccessToken();
+        if (token) await removeUploadedImage(token, {
+          purpose: "OFFER",
+          restaurantId: restaurantId ?? undefined,
+          imageUrl: uploadedUrl
+        });
+      }
       setError(readAdminError(requestError));
     } finally {
+      setUploadProgress(null);
       setBusy(false);
     }
   }
@@ -234,7 +259,13 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
         {type !== "FREE_DELIVERY" ? (
           <Input onChangeText={setMaxDiscount} placeholder={t("offers.maxDiscountPlaceholder")} value={maxDiscount} />
         ) : null}
-        <Input onChangeText={setImageUrl} placeholder={t("offers.imageUrlPlaceholder")} value={imageUrl} />
+        <Text style={styles.label}>{t("offers.imageLabel")}</Text>
+        <ImageUploadField
+          disabled={busy}
+          onChange={setImageSelection}
+          progress={uploadProgress}
+          uri={imageSelection?.uri ?? null}
+        />
         <Input onChangeText={setStartsAt} placeholder={t("offers.startDatePlaceholder")} value={startsAt} />
         <Input onChangeText={setEndsAt} placeholder={t("offers.endDatePlaceholder")} value={endsAt} />
         <ActionButton disabled={busy} label={t("offers.publishButton")} loading={busy} onPress={() => void create()} />
@@ -248,6 +279,7 @@ export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
       ) : (
         offers.map((offer) => (
           <Card key={offer.id}>
+            <RemoteImage resizeMode="cover" uri={offer.imageUrl} style={styles.offerImage} />
             <View style={styles.row}>
               <View style={styles.copy}>
                 <CardTitle>{offer.title}</CardTitle>
@@ -318,5 +350,6 @@ const styles = StyleSheet.create({
   choiceWrap: { flexDirection: "row", flexWrap: "wrap", marginBottom: spacing[1] },
   label: { ...text("caption", "medium"), color: colors.text, marginBottom: spacing[2], marginTop: spacing[3] },
   notice: { backgroundColor: colors.successSubtle, borderRadius: radius.md, color: colors.success, padding: spacing[3], ...text("bodySm") },
+  offerImage: { aspectRatio: 1, borderRadius: radius.md, marginBottom: spacing[3], width: "100%" },
   row: { alignItems: "flex-start", flexDirection: "row", gap: spacing[3], justifyContent: "space-between" }
 });

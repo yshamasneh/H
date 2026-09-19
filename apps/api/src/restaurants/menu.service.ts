@@ -1,7 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { ApiException } from "../common/api.exception";
 import { BusinessType, type MenuCategory, type MenuItem } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { ManagedImageUrlService } from "../uploads/managed-image-url.service";
 import type {
   CreateMenuCategoryDto,
   CreateMenuItemDto,
@@ -12,7 +13,10 @@ import type { MenuCategoryOwnerView, MenuItemOwnerView } from "./restaurants.typ
 
 @Injectable()
 export class MenuService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly managedImages?: ManagedImageUrlService
+  ) {}
 
   async listCategories(restaurantId: string): Promise<MenuCategoryOwnerView[]> {
     const categories = await this.prisma.menuCategory.findMany({
@@ -74,6 +78,11 @@ export class MenuService {
     if (await this.isSupermarket(restaurantId)) {
       assertSupermarketCostPrice(input.costPriceMinor);
     }
+    this.managedImages?.assertAllowedChange({
+      nextUrl: input.imageUrl,
+      purpose: "PRODUCT",
+      restaurantId
+    });
     const item = await this.prisma.menuItem.create({
       data: {
         restaurantId,
@@ -103,6 +112,12 @@ export class MenuService {
     capabilities: { canManagePrices: boolean }
   ): Promise<MenuItemOwnerView> {
     const item = await this.requireOwnItem(restaurantId, itemId);
+    this.managedImages?.assertAllowedChange({
+      previousUrl: item.imageUrl,
+      nextUrl: input.imageUrl,
+      purpose: "PRODUCT",
+      restaurantId
+    });
     // MANAGE_PRODUCTS lets someone edit a product; changing what it costs — either the sale price
     // or the store's own cost price, which reveals margin — is a separate permission. Compared
     // against the stored value so resending an unchanged price is not treated as a price change —

@@ -480,3 +480,40 @@ export function getPlatformSettings(): Promise<PlatformSettings> {
 export function updatePlatformSettings(body: { substitutionOptionEnabled: boolean }): Promise<PlatformSettings> {
   return request("/api/v1/admin/settings", { method: "PATCH", body });
 }
+
+export type ImagePurpose = "PRODUCT" | "OFFER" | "LOGO";
+export type ImageContentType = "image/jpeg" | "image/png" | "image/webp";
+export type ImageUploadTicket = {
+  purpose: ImagePurpose;
+  restaurantId: string | null;
+  uploadId: string;
+  uploadUrl: string;
+  expiresAt: string;
+  headers: Record<string, string>;
+};
+
+export function createImageUploadUrl(input: {
+  purpose: ImagePurpose;
+  restaurantId?: string;
+  contentType: ImageContentType;
+  size: number;
+}): Promise<ImageUploadTicket> {
+  return request("/api/v1/uploads/image-upload-url", { method: "POST", body: input });
+}
+
+export function completeImageUpload(input: {
+  uploadId: string;
+  purpose: ImagePurpose;
+  restaurantId?: string;
+  contentType: ImageContentType;
+}): Promise<{ imageUrl: string; blobName: string }> {
+  return request("/api/v1/uploads/complete", { method: "POST", body: input });
+}
+
+export function deleteUploadedImage(input: {
+  purpose: ImagePurpose;
+  restaurantId?: string;
+  imageUrl: string;
+}): Promise<{ deleted: boolean }> {
+  return request("/api/v1/uploads/image", { method: "DELETE", body: input });
+}

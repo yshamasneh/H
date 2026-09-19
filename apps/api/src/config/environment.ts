@@ -9,9 +9,33 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const isProduction = nodeEnv === "production";
   const otpProvider = readChoice(environment, "OTP_PROVIDER", "development", ["development", "webhook"] as const);
   const databaseUrl = readString(environment, "DATABASE_URL", "");
+  const storageAccountName = readString(environment, "AZURE_STORAGE_ACCOUNT_NAME", "");
+  const storagePublicContainer = readString(environment, "AZURE_STORAGE_PUBLIC_CONTAINER_NAME", "");
+  const storageUploadContainer = readString(environment, "AZURE_STORAGE_UPLOAD_CONTAINER_NAME", "");
 
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required");
+  }
+
+  const storageValues = [storageAccountName, storagePublicContainer, storageUploadContainer];
+  if (storageValues.some(Boolean) && !storageValues.every(Boolean)) {
+    throw new Error(
+      "AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_PUBLIC_CONTAINER_NAME, and AZURE_STORAGE_UPLOAD_CONTAINER_NAME must be configured together"
+    );
+  }
+  if (isProduction && !storageValues.every(Boolean)) {
+    throw new Error("Azure image storage configuration is required in production");
+  }
+  if (storageAccountName && !/^[a-z0-9]{3,24}$/.test(storageAccountName)) {
+    throw new Error("AZURE_STORAGE_ACCOUNT_NAME must be a valid Storage Account name");
+  }
+  for (const [key, value] of [
+    ["AZURE_STORAGE_PUBLIC_CONTAINER_NAME", storagePublicContainer],
+    ["AZURE_STORAGE_UPLOAD_CONTAINER_NAME", storageUploadContainer]
+  ] as const) {
+    if (value && !/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/.test(value)) {
+      throw new Error(`${key} must be a valid Blob container name`);
+    }
   }
 
   for (const key of requiredSecrets) {
@@ -134,6 +158,17 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   // soon" card). This gates both public restaurant browsing and restaurant order creation
   // server-side, so launch is a config flip, not a rebuild. Supermarket ordering is unaffected.
   environment.RESTAURANT_ORDERING_ENABLED = readBoolean(environment, "RESTAURANT_ORDERING_ENABLED", false);
+  environment.AZURE_STORAGE_ACCOUNT_NAME = storageAccountName;
+  environment.AZURE_STORAGE_PUBLIC_CONTAINER_NAME = storagePublicContainer;
+  environment.AZURE_STORAGE_UPLOAD_CONTAINER_NAME = storageUploadContainer;
+  environment.UPLOAD_MAX_IMAGE_BYTES = readPositiveInteger(environment, "UPLOAD_MAX_IMAGE_BYTES", 5 * 1024 * 1024);
+  environment.UPLOAD_SAS_TTL_SECONDS = readPositiveInteger(environment, "UPLOAD_SAS_TTL_SECONDS", 300);
+  if ((environment.UPLOAD_MAX_IMAGE_BYTES as number) > 5 * 1024 * 1024) {
+    throw new Error("UPLOAD_MAX_IMAGE_BYTES cannot exceed 5242880");
+  }
+  if ((environment.UPLOAD_SAS_TTL_SECONDS as number) > 300) {
+    throw new Error("UPLOAD_SAS_TTL_SECONDS cannot exceed 300");
+  }
   return environment;
 }
 

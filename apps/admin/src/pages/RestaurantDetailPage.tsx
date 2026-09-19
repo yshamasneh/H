@@ -140,6 +140,7 @@ export function RestaurantDetailPage() {
           sees in their own portal; the admin always holds full price control. */}
       <CatalogueManager
         api={catalogueApi}
+        restaurantId={restaurantId}
         capabilities={{
           isSupermarket: restaurant.businessType === "SUPERMARKET",
           canManagePrices: true,

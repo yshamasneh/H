@@ -11,6 +11,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ImageUploadField } from "../../components/image-upload-field";
 import {
   createRestaurantMenuCategory,
   createRestaurantMenuItem,
@@ -29,6 +30,7 @@ import {
 import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates } from "../../core/location";
+import { removeUploadedImage, uploadPreparedImage, type PreparedImage } from "../../core/image-upload";
 import i18n from "../../i18n";
 import { Icon } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
@@ -169,6 +171,7 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings, initialEdit
           {section === "items" ? (
             <ItemsSection
               businessType={profile?.businessType ?? "RESTAURANT"}
+              restaurantId={profile?.id ?? ""}
               busy={busy}
               categories={categories}
               items={items}
@@ -205,7 +208,7 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings, initialEdit
 function ProfileSection(props: {
   profile: RestaurantOwnerProfile;
   busy: boolean;
-  onSave: (input: { name: string; description: string; addressLine: string; logoUrl: string; latitude?: number; longitude?: number; opensAt: string; closesAt: string }) => void;
+  onSave: (input: { name: string; description: string; addressLine: string; logoUrl: string; latitude?: number; longitude?: number; opensAt: string; closesAt: string }) => Promise<boolean>;
   onToggleOpen: () => void;
 }) {
   const { t } = useTranslation(["restaurantOps"]);
@@ -213,12 +216,62 @@ function ProfileSection(props: {
   const [description, setDescription] = useState(props.profile.description ?? "");
   const [addressLine, setAddressLine] = useState(props.profile.addressLine);
   const [logoUrl, setLogoUrl] = useState(props.profile.logoUrl ?? "");
+  const [logoSelection, setLogoSelection] = useState<PreparedImage | null | undefined>(undefined);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [opensAt, setOpensAt] = useState(props.profile.opensAt ?? "");
   const [closesAt, setClosesAt] = useState(props.profile.closesAt ?? "");
   const [latitude, setLatitude] = useState<number | null>(props.profile.latitude);
   const [longitude, setLongitude] = useState<number | null>(props.profile.longitude);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  async function saveProfile() {
+    let uploadedUrl: string | null = null;
+    const oldUrl = logoUrl;
+    try {
+      const token = await requireToken();
+      if (logoSelection) {
+        setUploadProgress(0);
+        uploadedUrl = await uploadPreparedImage({
+          accessToken: token,
+          purpose: "LOGO",
+          restaurantId: props.profile.id,
+          image: logoSelection,
+          onProgress: setUploadProgress
+        });
+      }
+      const nextLogoUrl = logoSelection === null ? "" : uploadedUrl ?? logoUrl;
+      const saved = await props.onSave({
+        name: name.trim(),
+        description: description.trim(),
+        addressLine: addressLine.trim(),
+        logoUrl: nextLogoUrl,
+        latitude: latitude ?? undefined,
+        longitude: longitude ?? undefined,
+        opensAt: opensAt.trim(),
+        closesAt: closesAt.trim()
+      });
+      if (!saved) {
+        if (uploadedUrl) await removeUploadedImage(token, { purpose: "LOGO", restaurantId: props.profile.id, imageUrl: uploadedUrl });
+        return;
+      }
+      setLogoUrl(nextLogoUrl);
+      setLogoSelection(undefined);
+      setImageError(null);
+      if (oldUrl && oldUrl !== nextLogoUrl) {
+        await removeUploadedImage(token, { purpose: "LOGO", restaurantId: props.profile.id, imageUrl: oldUrl });
+      }
+    } catch (requestError) {
+      if (uploadedUrl) {
+        const token = await getAccessToken();
+        if (token) await removeUploadedImage(token, { purpose: "LOGO", restaurantId: props.profile.id, imageUrl: uploadedUrl });
+      }
+      setImageError(readError(requestError));
+    } finally {
+      setUploadProgress(null);
+    }
+  }
 
   async function useCurrentLocation() {
     setLocating(true);
@@ -252,7 +305,14 @@ function ProfileSection(props: {
       />
       <Field label={t("management.descriptionLabel")} value={description} onChangeText={setDescription} multiline />
       <Field label={t("management.addressLabel")} value={addressLine} onChangeText={setAddressLine} multiline />
-      <Field label={t("management.logoUrlLabel")} value={logoUrl} onChangeText={setLogoUrl} />
+      <Text style={styles.label}>{t("management.logoImageLabel")}</Text>
+      <ImageUploadField
+        disabled={props.busy}
+        onChange={setLogoSelection}
+        progress={uploadProgress}
+        uri={logoSelection === null ? null : logoSelection?.uri ?? logoUrl}
+      />
+      {imageError ? <Message tone="error" text={imageError} /> : null}
       <Text style={styles.label}>{t("management.workingHoursTitle")}</Text>
       <View style={styles.hoursRow}>
         <View style={styles.hoursField}>
@@ -281,18 +341,9 @@ function ProfileSection(props: {
         secondary
       />
       <ActionButton
-        disabled={props.busy || name.trim().length < 2 || addressLine.trim().length < 3}
+        disabled={props.busy || uploadProgress !== null || name.trim().length < 2 || addressLine.trim().length < 3}
         label={t("management.saveProfileButton")}
-        onPress={() => props.onSave({
-          name: name.trim(),
-          description: description.trim(),
-          addressLine: addressLine.trim(),
-          logoUrl: logoUrl.trim(),
-          latitude: latitude ?? undefined,
-          longitude: longitude ?? undefined,
-          opensAt: opensAt.trim(),
-          closesAt: closesAt.trim()
-        })}
+        onPress={() => void saveProfile()}
       />
       <ActionButton
         disabled={props.busy || props.profile.status !== "APPROVED" || latitude === null || longitude === null}
@@ -386,6 +437,7 @@ type ItemDraft = {
 
 function ItemsSection(props: {
   businessType: "RESTAURANT" | "SUPERMARKET";
+  restaurantId: string;
   categories: MenuCategoryOwner[];
   items: MenuItemOwner[];
   busy: boolean;
@@ -403,6 +455,8 @@ function ItemsSection(props: {
   const [costPrice, setCostPrice] = useState("");
   const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imageSelection, setImageSelection] = useState<PreparedImage | null | undefined>(undefined);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [sku, setSku] = useState("");
   const [brand, setBrand] = useState("");
   const [unitLabel, setUnitLabel] = useState("item");
@@ -422,6 +476,7 @@ function ItemsSection(props: {
     setCostPrice("");
     setDescription("");
     setImageUrl("");
+    setImageSelection(undefined);
     setSku("");
     setBrand("");
     setUnitLabel("item");
@@ -441,6 +496,7 @@ function ItemsSection(props: {
     setCostPrice(item.costPriceMinor === null ? "" : (item.costPriceMinor / 100).toFixed(2));
     setDescription(item.description ?? "");
     setImageUrl(item.imageUrl ?? "");
+    setImageSelection(undefined);
     setSku(item.sku ?? "");
     setBrand(item.brand ?? "");
     setUnitLabel(item.unitLabel);
@@ -474,6 +530,66 @@ function ItemsSection(props: {
     return null;
   }
 
+  async function saveItem() {
+    const validationError = validate();
+    if (validationError) {
+      setLocalError(validationError);
+      return;
+    }
+    setLocalError(null);
+    const previousUrl = editingId ? props.items.find((item) => item.id === editingId)?.imageUrl ?? null : null;
+    let uploadedUrl: string | null = null;
+    try {
+      const token = await requireToken();
+      if (imageSelection) {
+        setUploadProgress(0);
+        uploadedUrl = await uploadPreparedImage({
+          accessToken: token,
+          purpose: "PRODUCT",
+          restaurantId: props.restaurantId,
+          image: imageSelection,
+          onProgress: setUploadProgress
+        });
+      }
+      const success = await props.onSave({
+        categoryId,
+        name: name.trim(),
+        priceMinor,
+        costPriceMinor: costPrice.trim() ? costPriceMinor : editingId ? null : undefined,
+        description: description.trim() || undefined,
+        imageUrl: imageSelection === null ? "" : (uploadedUrl ?? (imageUrl.trim() || undefined)),
+        sku: props.businessType === "SUPERMARKET" ? sku.trim() || undefined : undefined,
+        brand: props.businessType === "SUPERMARKET" ? brand.trim() || undefined : undefined,
+        unitLabel: props.businessType === "SUPERMARKET" ? unitLabel.trim() || "item" : undefined,
+        stockQuantity: props.businessType === "SUPERMARKET"
+          ? stockQuantity.trim() ? Math.max(0, Number.parseInt(stockQuantity, 10) || 0) : editingId ? null : undefined
+          : undefined,
+        isFeatured: props.businessType === "SUPERMARKET" ? isFeatured : undefined,
+        isVariableWeight: props.businessType === "SUPERMARKET" ? isVariableWeight : undefined,
+        barcode: props.businessType === "SUPERMARKET" ? barcode.trim() || undefined : undefined,
+        reorderLevel: props.businessType === "SUPERMARKET"
+          ? reorderLevel.trim() ? Math.max(0, Number.parseInt(reorderLevel, 10) || 0) : editingId ? null : undefined
+          : undefined
+      }, editingId);
+      if (!success) {
+        if (uploadedUrl) await removeUploadedImage(token, { purpose: "PRODUCT", restaurantId: props.restaurantId, imageUrl: uploadedUrl });
+        return;
+      }
+      if (previousUrl && previousUrl !== uploadedUrl && imageSelection !== undefined) {
+        await removeUploadedImage(token, { purpose: "PRODUCT", restaurantId: props.restaurantId, imageUrl: previousUrl });
+      }
+      reset();
+    } catch (requestError) {
+      if (uploadedUrl) {
+        const token = await getAccessToken();
+        if (token) await removeUploadedImage(token, { purpose: "PRODUCT", restaurantId: props.restaurantId, imageUrl: uploadedUrl });
+      }
+      setLocalError(readError(requestError));
+    } finally {
+      setUploadProgress(null);
+    }
+  }
+
   if (props.categories.length === 0) return <Empty text={t("management.createCategoryFirstEmpty")} />;
 
   return (
@@ -501,7 +617,13 @@ function ItemsSection(props: {
         <Field label={t("management.priceLabel")} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
         <Field label={t("management.costPriceLabel")} value={costPrice} onChangeText={setCostPrice} keyboardType="decimal-pad" />
         <Field label={t("management.descriptionLabel")} value={description} onChangeText={setDescription} multiline />
-        <Field label={t("management.imageUrlLabel")} value={imageUrl} onChangeText={setImageUrl} />
+        <Text style={styles.label}>{t("management.productImageLabel")}</Text>
+        <ImageUploadField
+          disabled={props.busy}
+          onChange={setImageSelection}
+          progress={uploadProgress}
+          uri={imageSelection === null ? null : imageSelection?.uri ?? imageUrl}
+        />
         {props.businessType === "SUPERMARKET" ? (
           <>
             <Field label={t("management.brandLabel")} value={brand} onChangeText={setBrand} />
@@ -530,41 +652,9 @@ function ItemsSection(props: {
         ) : null}
         {localError ? <Message tone="error" text={localError} /> : null}
         <ActionButton
-          disabled={props.busy}
+          disabled={props.busy || uploadProgress !== null}
           label={editingId ? t("management.saveChangesButton") : t("management.addItemButton")}
-          onPress={() => {
-            const validationError = validate();
-            if (validationError) {
-              setLocalError(validationError);
-              return;
-            }
-            setLocalError(null);
-            void (async () => {
-              const success = await props.onSave({
-                categoryId,
-                name: name.trim(),
-                priceMinor,
-                costPriceMinor: costPrice.trim() ? costPriceMinor : editingId ? null : undefined,
-                description: description.trim() || undefined,
-                imageUrl: imageUrl.trim() || undefined,
-                sku: props.businessType === "SUPERMARKET" ? sku.trim() || undefined : undefined,
-                brand: props.businessType === "SUPERMARKET" ? brand.trim() || undefined : undefined,
-                unitLabel: props.businessType === "SUPERMARKET" ? unitLabel.trim() || "item" : undefined,
-                stockQuantity: props.businessType === "SUPERMARKET"
-                  ? stockQuantity.trim()
-                    ? Math.max(0, Number.parseInt(stockQuantity, 10) || 0)
-                    : editingId ? null : undefined
-                  : undefined,
-                isFeatured: props.businessType === "SUPERMARKET" ? isFeatured : undefined,
-                isVariableWeight: props.businessType === "SUPERMARKET" ? isVariableWeight : undefined,
-                barcode: props.businessType === "SUPERMARKET" ? barcode.trim() || undefined : undefined,
-                reorderLevel: props.businessType === "SUPERMARKET"
-                  ? reorderLevel.trim() ? Math.max(0, Number.parseInt(reorderLevel, 10) || 0) : editingId ? null : undefined
-                  : undefined
-              }, editingId);
-              if (success) reset();
-            })();
-          }}
+          onPress={() => void saveItem()}
         />
         {editingId ? <ActionButton label={t("management.cancelEditingButton")} onPress={reset} secondary /> : null}
       </View>

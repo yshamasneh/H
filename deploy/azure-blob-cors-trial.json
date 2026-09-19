@@ -1,0 +1,15 @@
+{
+  "properties": {
+    "cors": {
+      "corsRules": [
+        {
+          "allowedOrigins": ["http://localhost:5173"],
+          "allowedMethods": ["PUT", "OPTIONS"],
+          "allowedHeaders": ["content-type", "x-ms-blob-type"],
+          "exposedHeaders": ["etag", "x-ms-request-id"],
+          "maxAgeInSeconds": 300
+        }
+      ]
+    }
+  }
+}

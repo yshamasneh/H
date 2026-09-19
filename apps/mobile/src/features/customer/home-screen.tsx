@@ -11,6 +11,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { RemoteImage } from "../../components/remote-image";
 import {
   getSupermarketCatalog,
   listActiveRestaurantOffers,
@@ -204,11 +205,7 @@ export function CustomerHomeScreen(props: {
                 style={styles.offerCard}
               >
                 <View style={styles.offerVisual}>
-                  {offer.imageUrl ? (
-                    <Image resizeMode="cover" source={{ uri: offer.imageUrl }} style={styles.fullImage} />
-                  ) : (
-                    <Text style={styles.offerEmoji}>%</Text>
-                  )}
+                  <RemoteImage resizeMode="cover" uri={offer.imageUrl} style={styles.fullImage} />
                 </View>
                 <View style={styles.offerCopy}>
                   <Text style={styles.offerRestaurant}>{offer.restaurantName ?? t("home.tasawaqWideOffer")}</Text>
@@ -370,11 +367,7 @@ function StorefrontProductCard(props: {
   return (
     <Pressable onPress={props.onOpen} style={styles.productCard}>
       <View style={styles.productArtwork}>
-        {product.imageUrl ? (
-          <Image resizeMode="cover" source={{ uri: product.imageUrl }} style={styles.fullImage} />
-        ) : (
-          <Text style={styles.productEmoji}>🥫</Text>
-        )}
+        <RemoteImage resizeMode="cover" uri={product.imageUrl} style={styles.fullImage} />
       </View>
       <Text style={styles.productDepartment}>{product.categoryName}</Text>
       <Text numberOfLines={2} style={styles.productName}>{product.name}</Text>

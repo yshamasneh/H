@@ -142,6 +142,7 @@
     "minimumSubtotalPlaceholder": "الحد الأدنى للمجموع الفرعي بالشيكل، مثال 50",
     "maxDiscountPlaceholder": "الحد الأقصى للخصم بالشيكل (اختياري)",
     "imageUrlPlaceholder": "رابط صورة الحملة (اختياري)",
+    "imageLabel": "صورة الحملة",
     "startDatePlaceholder": "تاريخ البدء (فارغ = الآن)",
     "endDatePlaceholder": "تاريخ الانتهاء (اختياري)",
     "publishButton": "نشر العرض",

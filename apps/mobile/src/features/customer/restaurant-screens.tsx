@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -14,6 +13,7 @@ import {
   TextInput,
   View
 } from "react-native";
+import { RemoteImage } from "../../components/remote-image";
 import {
   getRestaurantMenu,
   listRestaurants,
@@ -125,11 +125,7 @@ function RestaurantCard(props: { restaurant: RestaurantSummary; index: number; o
   return (
     <Pressable onPress={props.onPress} style={({ pressed }) => [styles.restaurantCard, pressed && styles.pressed]}>
       <View style={styles.restaurantImage}>
-        {props.restaurant.logoUrl ? (
-          <Image resizeMode="cover" source={{ uri: props.restaurant.logoUrl }} style={styles.fullImage} />
-        ) : (
-          <Text style={styles.restaurantEmoji}>{props.index % 2 ? "🍲" : "🥘"}</Text>
-        )}
+        <RemoteImage resizeMode="cover" uri={props.restaurant.logoUrl} style={styles.fullImage} />
       </View>
       <View style={styles.restaurantBody}>
         <Text numberOfLines={1} style={styles.restaurantName}>{props.restaurant.name}</Text>
@@ -257,7 +253,7 @@ function MenuCategorySection(props: { category: MenuCategorySummary; onAddItem: 
             </View>
           </View>
           <View style={styles.itemVisual}>
-            {item.imageUrl ? <Image resizeMode="cover" source={{ uri: item.imageUrl }} style={styles.fullImage} /> : <Text style={styles.itemEmoji}>{index % 2 ? "🥗" : "🍛"}</Text>}
+            <RemoteImage resizeMode="cover" uri={item.imageUrl} style={styles.fullImage} />
             <Pressable onPress={() => props.onAddItem(item)} style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}>
               <Text style={styles.addButtonText}>＋</Text>
             </Pressable>

@@ -56,6 +56,14 @@
           "locationWhenInUsePermission": "JOVO uses your location only when you choose it to calculate delivery availability and pricing."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "JOVO accesses your photos only when you choose an image to upload.",
+          "cameraPermission": "JOVO accesses the camera only when you choose to take an image.",
+          "microphonePermission": false
+        }
+      ],
       "expo-localization",
       "@maplibre/maplibre-react-native"
     ],
