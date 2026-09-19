@@ -43,6 +43,7 @@ import { newUuid } from "../../core/uuid";
 import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
 import { OrderDetailSkeleton, OrderListSkeleton } from "../../components/skeleton";
+import { RemoteImage } from "../../components/remote-image";
 import { useCustomerTheme, type CustomerTheme } from "./theme";
 import { Icon, backIconName } from "../../theme/icon";
 import { motionDuration, motionEasing, useReducedMotion } from "../../theme/motion";
@@ -97,7 +98,15 @@ export function CartScreen(props: CartScreenProps) {
             renderItem={({ item }) => (
               <View style={styles.cartRow}>
                 <View style={styles.cartItemTop}>
-                  <View style={styles.cartItemVisual}><Text style={styles.cartItemEmoji}>🥫</Text></View>
+                  <View style={styles.cartItemVisual}>
+                    <RemoteImage
+                      accessibilityIgnoresInvertColors
+                      fallback={<Text style={styles.cartItemEmoji}>🥫</Text>}
+                      resizeMode="cover"
+                      style={styles.cartItemImage}
+                      uri={item.imageUrl}
+                    />
+                  </View>
                   <View style={styles.cartRowInfo}>
                     <Text style={styles.cartRowName}>{item.name}</Text>
                     <Text style={styles.cartRowUnitPrice}>{t("cart.unitPriceLabel", { price: formatPrice(item.priceMinor), unit: item.unitLabel })}</Text>
@@ -1115,8 +1124,9 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
     ...customerTheme.shadow
   },
   cartItemTop: { alignItems: "center", flexDirection: "row" },
-  cartItemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.lg, height: 72, justifyContent: "center", marginEnd: spacing[3], width: 72 },
+  cartItemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.lg, overflow: "hidden", height: 72, justifyContent: "center", marginEnd: spacing[3], width: 72 },
   cartItemEmoji: { fontSize: iconSize.xl },
+  cartItemImage: { borderRadius: radius.lg, height: 72, width: 72 },
   cartRowInfo: { flex: 1 },
   cartRowName: { ...text("body", "bold"), color: customerTheme.colors.text },
   cartRowUnitPrice: { ...text("caption"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },

@@ -75,11 +75,13 @@ export class FakeAdminPrisma {
   readonly order = {} as any;
   readonly delivery = {} as any;
   readonly driverProfile = {} as any;
+  readonly menuItem = {} as any;
+  readonly menuItems: { isAvailable: boolean }[] = [];
   readonly orderStatusHistory = {} as any;
   readonly auditLog = {} as any;
 
   constructor() {
-    this.order.count = async ({ where }: any) =>
+    this.order.count = async ({ where }: any = {}) =>
       this.orders.filter((order) => (!where?.createdAt?.gte || order.createdAt >= where.createdAt.gte)).length;
     this.order.findMany = async ({ where, select }: any) => {
       const matches = this.orders.filter(
@@ -106,7 +108,7 @@ export class FakeAdminPrisma {
     this.delivery.count = async ({ where }: any) =>
       this.deliveries.filter((delivery) => inFilter(delivery.status, where?.status)).length;
 
-    this.restaurant.count = async ({ where }: any) =>
+    this.restaurant.count = async ({ where }: any = {}) =>
       this.restaurants.filter((restaurant) => !where?.status || restaurant.status === where.status).length;
 
     this.driverProfile.count = async ({ where }: any) =>
@@ -115,6 +117,9 @@ export class FakeAdminPrisma {
           (where?.isOnline === undefined || profile.isOnline === where.isOnline) &&
           (!where?.status || profile.status === where.status)
       ).length;
+
+    this.menuItem.count = async ({ where }: any = {}) =>
+      this.menuItems.filter((item) => where?.isAvailable === undefined || item.isAvailable === where.isAvailable).length;
 
     this.role.findUnique = async ({ where }: any) =>
       this.roles.find((role) => (where.key ? role.key === where.key : role.id === where.id)) ?? null;
@@ -148,7 +153,7 @@ export class FakeAdminPrisma {
       return user;
     };
 
-    this.user.count = async ({ where }: any) =>
+    this.user.count = async ({ where }: any = {}) =>
       this.users.filter(
         (user) =>
           (!where?.role || user.role === where.role) &&
@@ -261,6 +266,10 @@ export class FakeAdminPrisma {
     const delivery: DeliveryRecord = { id: randomUUID(), status: DeliveryStatus.ASSIGNED, ...overrides };
     this.deliveries.push(delivery);
     return delivery;
+  }
+
+  seedMenuItem(isAvailable = true) {
+    this.menuItems.push({ isAvailable });
   }
 
   seedDriverProfile(overrides: Partial<DriverProfileRecord> = {}): DriverProfileRecord {

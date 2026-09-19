@@ -37,6 +37,14 @@ export class AdminService {
       pendingRestaurantApprovals,
       onlineDriversCount,
       newCustomerSignupsToday,
+      businesses,
+      approvedBusinesses,
+      suspendedBusinesses,
+      products,
+      hiddenProducts,
+      customers,
+      ordersTotal,
+      approvedDrivers,
       activity
     ] = await Promise.all([
       this.prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
@@ -59,6 +67,14 @@ export class AdminService {
       this.prisma.restaurant.count({ where: { status: RestaurantStatus.PENDING } }),
       this.prisma.driverProfile.count({ where: { isOnline: true, status: DriverApprovalStatus.APPROVED } }),
       this.prisma.user.count({ where: { role: UserRole.CUSTOMER, createdAt: { gte: startOfToday } } }),
+      this.prisma.restaurant.count(),
+      this.prisma.restaurant.count({ where: { status: RestaurantStatus.APPROVED } }),
+      this.prisma.restaurant.count({ where: { status: RestaurantStatus.SUSPENDED } }),
+      this.prisma.menuItem.count(),
+      this.prisma.menuItem.count({ where: { isAvailable: false } }),
+      this.prisma.user.count({ where: { role: UserRole.CUSTOMER } }),
+      this.prisma.order.count(),
+      this.prisma.driverProfile.count({ where: { status: DriverApprovalStatus.APPROVED } }),
       this.prisma.orderStatusHistory.findMany({
         orderBy: { createdAt: "desc" },
         take: 20,
@@ -75,6 +91,16 @@ export class AdminService {
       pendingRestaurantApprovals,
       onlineDriversCount,
       newCustomerSignupsToday,
+      totals: {
+        businesses,
+        approvedBusinesses,
+        suspendedBusinesses,
+        products,
+        hiddenProducts,
+        customers,
+        orders: ordersTotal,
+        approvedDrivers
+      },
       activityFeed: activity.map((entry) => ({
         id: entry.id,
         orderId: entry.orderId,

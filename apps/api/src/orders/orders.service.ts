@@ -41,7 +41,7 @@ import { resolveCurrentRateSet } from "../accounting/order-financials.util";
 import { calculateOrderFees, defaultDeliveryPricing, type DeliveryPricingConfig } from "./pricing";
 
 const orderInclude = {
-  items: { include: { fulfillmentAdjustment: true } },
+  items: { include: { fulfillmentAdjustment: true, menuItem: { select: { imageUrl: true } } } },
   restaurant: true,
   acceptedBy: { select: { id: true, fullName: true } },
   statusHistory: { orderBy: { createdAt: "asc" as const } },
@@ -1181,6 +1181,10 @@ function toOrderDetailView(
         menuItemId: item.menuItemId,
         nameSnapshot: item.nameSnapshot,
         priceMinorSnapshot: item.priceMinorSnapshot,
+        // The product's picture *now*, for display only. Unlike the name, price and cost it is not
+        // a financial fact, so it is read live rather than frozen: a corrected image should show on
+        // old orders too, and nothing about it can affect what was charged.
+        imageUrl: item.menuItem?.imageUrl ?? null,
         quantity: item.quantity,
         unitLabelSnapshot: item.unitLabelSnapshot,
         allowSubstitution: item.allowSubstitution,

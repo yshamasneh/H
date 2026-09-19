@@ -6,6 +6,13 @@ export type CartItem = {
   quantity: number;
   unitLabel: string;
   allowSubstitution: boolean;
+  /**
+   * The product picture as it was when the line was added. Display-only: it is never sent to the
+   * order API (the order snapshots name, price and cost server-side), so a stale or missing URL
+   * cannot affect what is charged. Kept on the line so the cart can show it without refetching the
+   * menu, and so it survives a reload via the persisted cart.
+   */
+  imageUrl?: string | null;
 };
 
 export type Cart = {
@@ -21,6 +28,7 @@ export type CartCandidateItem = {
   effectivePriceMinor?: number;
   unitLabel?: string;
   allowSubstitution?: boolean;
+  imageUrl?: string | null;
 };
 export type CartCandidateRestaurant = { id: string; name: string };
 
@@ -34,7 +42,8 @@ export function startCart(restaurant: CartCandidateRestaurant, item: CartCandida
       priceMinor: item.effectivePriceMinor ?? item.priceMinor,
       quantity: Math.max(1, Math.floor(quantity)),
       unitLabel: item.unitLabel ?? "item",
-      allowSubstitution: item.allowSubstitution ?? false
+      allowSubstitution: item.allowSubstitution ?? false,
+      imageUrl: item.imageUrl ?? null
     }]
   };
 }
@@ -58,7 +67,8 @@ export function addCartItem(cart: Cart, item: CartCandidateItem, quantity = 1): 
       priceMinor: item.effectivePriceMinor ?? item.priceMinor,
       quantity: amount,
       unitLabel: item.unitLabel ?? "item",
-      allowSubstitution: item.allowSubstitution ?? false
+      allowSubstitution: item.allowSubstitution ?? false,
+      imageUrl: item.imageUrl ?? null
     }]
   };
 }

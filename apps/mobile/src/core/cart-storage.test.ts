@@ -144,3 +144,39 @@ test("a storage read failure degrades to an empty cart", async () => {
   const repo = createCartRepository(store);
   assert.equal(await repo.load(), null);
 });
+
+test("a product picture survives a simulated restart and reload", async () => {
+  const pictured: Cart = {
+    ...sampleCart,
+    items: [{ ...sampleCart.items[0], imageUrl: "https://cdn.example/milk.jpg" }, sampleCart.items[1]]
+  };
+  const { store } = memoryStore();
+  await createCartRepository(store).save(pictured);
+  const loaded = await createCartRepository(store).load();
+  assert.equal(loaded?.items[0].imageUrl, "https://cdn.example/milk.jpg");
+  assert.equal("imageUrl" in (loaded?.items[1] ?? {}), false);
+});
+
+test("a cart saved before pictures were stored still loads, without a picture", () => {
+  const legacy = JSON.stringify({
+    restaurantId: "store-1",
+    restaurantName: "JOVO MARKET",
+    items: [{ menuItemId: "m1", name: "Milk", priceMinor: 750, quantity: 1, unitLabel: "carton", allowSubstitution: false }]
+  });
+  const cart = deserializeCart(legacy);
+  assert.ok(cart);
+  assert.equal(cart.items[0].imageUrl, undefined);
+});
+
+test("a malformed picture value is dropped but the cart is kept", () => {
+  for (const bad of [42, {}, ["x"], "   "]) {
+    const raw = JSON.stringify({
+      restaurantId: "store-1",
+      restaurantName: "JOVO MARKET",
+      items: [{ menuItemId: "m1", name: "Milk", priceMinor: 750, quantity: 1, unitLabel: "carton", allowSubstitution: false, imageUrl: bad }]
+    });
+    const cart = deserializeCart(raw);
+    assert.ok(cart, `cart must survive imageUrl=${JSON.stringify(bad)}`);
+    assert.equal(cart.items[0].imageUrl, undefined);
+  }
+});

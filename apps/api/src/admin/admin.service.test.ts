@@ -53,6 +53,35 @@ test("dashboard counts active deliveries, pending restaurants, and online approv
   assert.equal(dashboard.onlineDriversCount, 1);
 });
 
+test("dashboard totals are all-time counts from the tables, independent of today", async () => {
+  const { prisma, service } = createService();
+  prisma.seedRestaurant({ status: RestaurantStatus.APPROVED });
+  prisma.seedRestaurant({ status: RestaurantStatus.APPROVED });
+  prisma.seedRestaurant({ status: RestaurantStatus.SUSPENDED });
+  prisma.seedMenuItem(true);
+  prisma.seedMenuItem(true);
+  prisma.seedMenuItem(false);
+  prisma.seedUser({ role: UserRole.CUSTOMER });
+  prisma.seedUser({ role: UserRole.DRIVER });
+  prisma.seedDriverProfile({ isOnline: false, status: "APPROVED" as never });
+  const restaurant = prisma.seedRestaurant({ status: RestaurantStatus.APPROVED });
+  // Created long before today: absent from every "today" figure, present in the totals.
+  prisma.seedOrder(restaurant.id, { createdAt: new Date("2020-01-01T00:00:00Z") } as never);
+
+  const { totals, ordersToday } = await service.getDashboard();
+  assert.equal(ordersToday, 0);
+  assert.deepEqual(totals, {
+    businesses: 4,
+    approvedBusinesses: 3,
+    suspendedBusinesses: 1,
+    products: 3,
+    hiddenProducts: 1,
+    customers: 1,
+    orders: 1,
+    approvedDrivers: 1
+  });
+});
+
 test("dashboard activity feed surfaces recent order status history with restaurant names", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant({ name: "Test Kitchen" });

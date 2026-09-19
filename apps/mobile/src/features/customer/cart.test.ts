@@ -73,3 +73,24 @@ test("a grocery line keeps its unit and substitution preference", () => {
   const updated = setCartItemSubstitution(cart, sandwich.id, false);
   assert.equal(updated.items[0].allowSubstitution, false);
 });
+
+test("the product picture is kept on the line when a cart is started and when items are added", () => {
+  const pictured = { ...sandwich, imageUrl: "https://cdn.example/falafel.jpg" };
+  let cart = startCart(restaurant, pictured);
+  assert.equal(cart.items[0].imageUrl, "https://cdn.example/falafel.jpg");
+
+  cart = addCartItem(cart, { ...hummus, imageUrl: "https://cdn.example/hummus.jpg" });
+  assert.equal(cart.items[1].imageUrl, "https://cdn.example/hummus.jpg");
+
+  // A product with no picture is a null, not a missing key, and adding it again never overwrites.
+  cart = addCartItem(cart, { id: "i3", name: "Tea", priceMinor: 500 });
+  assert.equal(cart.items[2].imageUrl, null);
+  cart = addCartItem(cart, { ...pictured, imageUrl: "https://cdn.example/other.jpg" });
+  assert.equal(cart.items[0].imageUrl, "https://cdn.example/falafel.jpg");
+});
+
+test("the picture never changes what the cart charges", () => {
+  const a = startCart(restaurant, { ...sandwich, imageUrl: "https://cdn.example/a.jpg" });
+  const b = startCart(restaurant, sandwich);
+  assert.equal(cartSubtotalMinor(a), cartSubtotalMinor(b));
+});

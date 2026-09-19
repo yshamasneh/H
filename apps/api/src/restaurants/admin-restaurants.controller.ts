@@ -17,7 +17,8 @@ import {
   RestaurantAdminActionReasonDto,
   SetItemAvailabilityDto,
   UpdateMenuCategoryDto,
-  UpdateMenuItemDto
+  UpdateMenuItemDto,
+  UpdateRestaurantProfileDto
 } from "./restaurants.dto";
 import { RestaurantsService } from "./restaurants.service";
 import { OrdersPaginationQueryDto } from "../orders/orders.dto";
@@ -50,6 +51,18 @@ export class AdminRestaurantsController {
   @ApiOperation({ summary: "Get a restaurant's admin profile, including order-count and revenue stats" })
   getOne(@Param("restaurantId", new ParseUUIDPipe()) restaurantId: string) {
     return this.restaurants.adminGetRestaurant(restaurantId);
+  }
+
+  @Patch(":restaurantId")
+  @ApiOperation({
+    summary: "Edit a store's name, description, address, coordinates and opening hours. Status changes use approve / suspend / reactivate."
+  })
+  updateProfile(
+    @Req() request: AuthenticatedRequest,
+    @Param("restaurantId", new ParseUUIDPipe()) restaurantId: string,
+    @Body() input: UpdateRestaurantProfileDto
+  ) {
+    return this.restaurants.adminUpdateProfile(request.user.id, restaurantId, input);
   }
 
   @Get(":restaurantId/menu")

@@ -148,6 +148,45 @@ test("admin location update rejects a half-set coordinate pair", async () => {
   );
 });
 
+test("admin can rename a store and edit its details, recording an audit entry that names the fields", async () => {
+  const { prisma, service } = createService();
+  const store = prisma.seedApprovedOpenRestaurant();
+  const adminId = randomUUID();
+
+  const updated = await service.adminUpdateProfile(adminId, store.id, {
+    name: "  Renamed Kitchen ",
+    description: "New description",
+    opensAt: "08:00",
+    closesAt: "23:00"
+  });
+
+  assert.equal(updated.name, "Renamed Kitchen");
+  assert.equal(prisma.restaurants[0].description, "New description");
+  assert.equal(prisma.restaurants[0].opensAt, "08:00");
+  // Editing details never touches approval status or ownership.
+  assert.equal(prisma.restaurants[0].status, store.status);
+  assert.equal(prisma.restaurants[0].ownerUserId, store.ownerUserId);
+
+  const entry = prisma.auditLogs.find((row) => row.action === "RESTAURANT_PROFILE_UPDATED");
+  assert.ok(entry);
+  assert.equal(entry!.actorUserId, adminId);
+  assert.deepEqual((entry!.metadataJson as { fields: string[] }).fields.sort(), ["closesAt", "description", "name", "opensAt"]);
+});
+
+test("admin profile edit shares the owner's validation and refuses a missing store", async () => {
+  const { prisma, service } = createService();
+  const store = prisma.seedApprovedOpenRestaurant();
+  await assert.rejects(
+    service.adminUpdateProfile(randomUUID(), store.id, { latitude: 32.1 }),
+    hasCode("RESTAURANT_COORDINATES_INCOMPLETE")
+  );
+  await assert.rejects(
+    service.adminUpdateProfile(randomUUID(), store.id, { opensAt: "09:00" }),
+    hasCode("RESTAURANT_HOURS_INCOMPLETE")
+  );
+  await assert.rejects(service.adminUpdateProfile(randomUUID(), randomUUID(), { name: "Ghost" }), hasCode("RESTAURANT_NOT_FOUND"));
+});
+
 test("hiding a store's location leaves its stored coordinates intact for delivery, only masking the customer view", async () => {
   const { prisma, service } = createService();
   const store = prisma.seedApprovedOpenRestaurant({

@@ -62,7 +62,12 @@ export function deserializeCart(raw: string | null): Cart | null {
       priceMinor: line.priceMinor,
       quantity: line.quantity,
       unitLabel: line.unitLabel,
-      allowSubstitution: line.allowSubstitution
+      allowSubstitution: line.allowSubstitution,
+      // This loop rebuilds each line field by field so a corrupt entry cannot smuggle in junk. A
+      // field that is not named here is silently dropped on every reload — which is how the
+      // picture vanished from the cart after a refresh. It is optional and display-only, so a
+      // missing or malformed value degrades to "no picture" rather than discarding the whole cart.
+      ...(typeof line.imageUrl === "string" && line.imageUrl.trim() ? { imageUrl: line.imageUrl } : {})
     });
   }
   if (items.length === 0) return null;

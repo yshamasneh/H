@@ -202,6 +202,37 @@ export class RestaurantsService {
 
   async updateOwnProfile(ownerUserId: string, input: UpdateRestaurantProfileDto): Promise<RestaurantProfileView> {
     const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    return this.applyProfileUpdate(restaurant, input);
+  }
+
+  /**
+   * A platform admin editing any store's profile (name, description, address, coordinates, hours).
+   * Same validation and write path as the owner's own edit — one implementation, so the two can
+   * never disagree about what a valid profile is — plus an audit entry naming who changed it.
+   * Status, ownership and open/closed are deliberately not editable here; those have their own
+   * approve / suspend / reactivate actions.
+   */
+  async adminUpdateProfile(
+    adminUserId: string,
+    restaurantId: string,
+    input: UpdateRestaurantProfileDto
+  ): Promise<RestaurantProfileView> {
+    const restaurant = await this.prisma.restaurant.findUnique({ where: { id: restaurantId } });
+    if (!restaurant) {
+      throw new ApiException(404, "RESTAURANT_NOT_FOUND", "This restaurant does not exist.");
+    }
+    const updated = await this.applyProfileUpdate(restaurant, input);
+    await writeAuditLog(this.prisma, {
+      actorUserId: adminUserId,
+      action: "RESTAURANT_PROFILE_UPDATED",
+      entityType: "Restaurant",
+      entityId: restaurantId,
+      metadata: { fields: Object.keys(input).filter((key) => (input as Record<string, unknown>)[key] !== undefined) }
+    });
+    return updated;
+  }
+
+  private async applyProfileUpdate(restaurant: Restaurant, input: UpdateRestaurantProfileDto): Promise<RestaurantProfileView> {
     this.managedImages?.assertAllowedChange({
       previousUrl: restaurant.logoUrl,
       nextUrl: input.logoUrl,
