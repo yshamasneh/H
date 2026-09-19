@@ -24,6 +24,7 @@
     "bootstrap:admin": "npm run bootstrap:admin --workspace @wasel/api --",
     "reconcile:partners": "npm run reconcile:partners --workspace @wasel/api --",
     "import:products": "npm run import:products --workspace @wasel/api --",
+    "import:product-images": "npm run import:product-images --workspace @wasel/api --",
     "prisma:validate": "npm run prisma:validate --workspace @wasel/api",
     "prisma:studio": "npm run prisma:studio --workspace @wasel/api",
     "db:backup": "node scripts/backup-database.mjs",

@@ -19,6 +19,7 @@
     "bootstrap:admin": "tsx prisma/bootstrap-admin.ts",
     "reconcile:partners": "tsx prisma/reconcile-partner-accounts.ts",
     "import:products": "tsx prisma/import-products.ts",
+    "import:product-images": "tsx prisma/import-product-images.ts",
     "prisma:validate": "prisma validate",
     "prisma:studio": "prisma studio"
   },
