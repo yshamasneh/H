@@ -2683,3 +2683,130 @@ known gaps in `TRIAL_DEPLOY_CHECK.md` and prior audit passes.
   resolved for `rollup` in `package-lock.json`; a future `rollup` bump needs
   that version bumped alongside it, or the same "Cannot find module" failure
   returns.
+
+## 2026-09-19: Admin console audit and completion (accounting, offers, store profile, inventory)
+
+Branch `agent/phase-15-and-jovo-brand`. Everything below is in `apps/admin`; no backend, schema, auth or
+routing-architecture change. Image upload was left alone on purpose (no file inputs, no `imageUrl` UI).
+
+### Done
+
+**Accounting (`/accounting`, six tabs — `pages/AccountingPage.tsx` + `pages/accounting/*`)**
+- **Financial adjustment form** (`accounting/AdjustmentsSection.tsx`, logic in `accounting-forms.ts`): the only
+  way to correct the immutable ledger. Positive amount + explicit credit/charge direction (no typed signs),
+  parties are *picked* (partner keys / stores / drivers), optional link to an order's financial record, a
+  running net, and an explicit acknowledgement when the entries do not net to zero (that changes the ledger's
+  total and shows up as "imbalance" in the overview). Confirmation modal before posting. Reachable from an
+  order's detail page: `/accounting?tab=adjustments&order=<orderId>`.
+- **Publish a rate set** and **generate monthly subscriptions** (`accounting/RatesSection.tsx`): seeded from the
+  set in force, sends only changed fields, mirrors the DB CHECK constraints (margin split and cost split each
+  total 100%, weights not all zero) and refuses an effective date on/before the current set (it would never
+  apply). The rates table now shows the commission and delivery-remainder weights it was hiding.
+- **History tab** (`accounting/HistorySection.tsx`): recorded payouts and driver cash handovers. Both list
+  endpoints existed in the client and nothing read them.
+- **Payout form**: exact string money parsing, idempotency reference generated once per form (retry-safe),
+  method, note, refuses more than is owed with the amount in shekels, local error next to the form.
+- **Driver cash handover**: counted-vs-expected difference shown live, a reason is required when they differ,
+  optional per-order selection (`custodyIds`), note, generated reference.
+- **Operating costs**: approve now confirms (it writes the ledger split); reject uses the reason modal and the
+  reason is stored as the decision note; status filter added.
+- **Bug fixed**: `AccountingPage` and the store's `OperatingCostsPage` used CSS classes that never existed
+  (`primary-button`, `secondary-button`, `status-pill status-*`, `checkbox-row`), so their buttons and pills
+  rendered unstyled. Now `btn` / `badge` from the existing style system. A fragment without `key` was fixed too.
+- **Bug fixed**: amounts in RTL. `-15.05` renders as `15.05-` in Arabic without a bidi isolate. New
+  `components/Money.tsx` (`.money` = `direction:ltr; unicode-bidi:isolate`) is used for every amount.
+
+**Offers (`/offers`: `pages/OffersPage.tsx`, `offer-form.ts`, `api.offers.ts`)**: list, create, edit, pause/resume,
+status badges (active / paused / scheduled / expired). The update endpoint is a **full replace**, so an edit
+hands the existing `imageUrl`, `startsAt` and `endsAt` back untouched (verified live: a bare PATCH nulls the
+image and resets the start to "now"). Nav item gated on `MANAGE_OFFERS`.
+
+**Store shell (`/business/*`)**
+- `/business/settings` (`BusinessSettingsPage.tsx`, `business-profile.ts`): name, description, address,
+  delivery-origin coordinates (Leaflet picker), weekly opening hours. Partial update, only changed fields; the
+  logo is never sent.
+- `/business/reports` (`BusinessReportsPage.tsx`): today / month / all-time sales and order counts, with the
+  API's definitions stated on the page.
+- Inventory: stock-movement ledger (per product, paginated), barcode lookup (scanner-friendly, Enter submits),
+  stock table pagination (**only the first 30 products were reachable**), unit cost typed in shekels (it took
+  raw agorot), whole-number checks on quantity and adjustment.
+
+**Cross-cutting**
+- Shared `Pager` (`components/Pager.tsx`): Restaurants, Orders, Users and Audit log showed only the first
+  20 rows with no way to see more, so a 21st pending business could not be approved. `fetchAllPages` in `api.ts`
+  for pickers that need every row.
+- `OrderFinancialCard` on the order detail page: valuation, per-party entries, reconciliation.
+- `money.ts`: string-based parsing (Arabic-Indic digits and the Arabic decimal separator accepted, ambiguity
+  refused), no float multiplication anywhere near money.
+- New shared `Field`, `Money`, `Pager`; a small CSS block appended to `styles.css`, built from existing tokens.
+- i18n: Arabic written first for every new string, English alongside; ar/en key sets identical; every static
+  and enumerated dynamic key verified present.
+
+### Verified
+
+- `npm run typecheck`, `npm test` (**42 pass**: money 9, accounting forms 12, offers 9, store profile 6, plus the
+  existing auth-retry / image-upload), and `npm run build` for `@wasel/admin` are clean.
+- **Live against the running API** (real HTTP, seeded admin and seeded store owner), using the forms' own
+  builders to produce the payloads: subscription generation and its idempotent re-run; rate-set publish
+  (accepted) and a bad split (API returns a bare 500, which is why the client guard exists); balanced
+  adjustment (overview stays balanced), unbalanced adjustment (overview shows the imbalance), reversal
+  (balanced again); payout above balance refused 409, exact payout 201, same reference refused 409; offer
+  create, pause, edit keeps `imageUrl` and `startsAt`; store profile partial PATCH (hours) leaves name and
+  logo alone, half a schedule refused 400; stats 200; the four paginated list endpoints honour `page`/`pageSize`.
+- **Not verified in a browser.** The browser tool was available, but signing in means typing the seeded admin
+  password into the login form, which the assistant does not do; nothing was clicked through. See the checklist.
+
+### Local dev database side effects (append-only, so they cannot be removed short of a reset)
+
+Subscription charge for 2026-09 (150.00 owed by Wasel Demo Kitchen); three adjustments (a balanced 1.15
+move, then +10.00 and its exact reversal, net zero); one 1.00 payout to a platform owner; rate set v2 dated
+2027-01-01 (18% commission); one paused offer titled "live-check offer (edited)" with a dummy image URL.
+`prisma migrate reset --force` plus the seed clears it.
+
+### Not done / partial
+
+- **Browser click-through** of every new screen in Arabic RTL and English (checklist below).
+- Driver cash handover was not exercised against live data (no delivered cash order in the dev DB; the API's own
+  `accounting.e2e.test.ts` covers the endpoint, and the form sends the same shape).
+- Not audited in depth: `DashboardPage`, `DriversPage`, `LandmarksPage`, `SettingsPage`, `CatalogueManager`,
+  `StaffPage`, `LiveOrdersPage`, `BusinessOrderPage` (only checked for pagination and dead CSS classes).
+- The sidebar is `display:none` below 860px and nothing replaces it, so the console has no navigation on a phone.
+- Purchase orders still take a single product line; suppliers cannot be edited or deactivated in the UI.
+- A platform admin cannot edit another store's name/description/hours: there is no admin endpoint for it
+  (only `PATCH /admin/restaurants/:id/location`). Needs a backend decision.
+- No React component tests (admin has no testing-library setup); coverage is on the pure logic modules.
+
+### Findings in the backend (flagged, not changed)
+
+1. `POST /admin/accounting/rates` with margin or cost shares not totalling 10000 returns a bare **500**
+   (the DB CHECK fires; the service does not pre-validate although the DTO says "must total 10000").
+2. `POST /admin/accounting/settlements` over-balance message is in raw minor units ("owed 7615 minor units").
+3. `GET /restaurant/me/stats` requires `MANAGE_BUSINESS_SETTINGS`; `VIEW_SALES` / `VIEW_REPORTS` exist but
+   gate nothing, so a staff role holding only those cannot see sales.
+4. Stats "sales" is the sum of delivered orders' **total** (delivery and service fees included), not the store's
+   merchandise revenue; "orders" counts every status including cancelled and rejected.
+5. `POST /admin/accounting/adjustments` does not require entries to net to zero, and `createRateSet` does not
+   check the effective date against the current set. The console guards both.
+
+### Browser verification checklist (needs a signed-in admin; about 10 minutes)
+
+Run `npm run db:up`, `npm run dev:api`, `npm run dev:admin`; sign in as the seeded admin (`+970590000001`).
+For each item, check Arabic (the default) and English, and that nothing overlaps or reverses in RTL.
+1. `/accounting` > Adjustments: pick Driver + Owner A, 5.00 each way, submit, confirm; the overview stays
+   "balanced". Try a single credit: the amber warning and checkbox appear and posting is blocked until ticked.
+2. `/accounting` > Rates: "Publish a new version", set commission to 18, confirm; then try 34 in a margin field.
+3. `/accounting` > Balances: pay a partner, then History shows it; a negative balance shows red with the minus
+   on the correct side in Arabic.
+4. `/offers`: create an order discount, pause it, edit it, reload.
+5. Sign in as the store owner `+970590000002`: `/business/settings` (set hours, drag the pin, save) and
+   `/business/reports`. A supermarket owner also has Inventory (barcode, movements, unit cost in shekels).
+
+### Resume prompt
+
+> Continue on branch `agent/phase-15-and-jovo-brand` (pull first, confirm in sync). Read the
+> "2026-09-19: Admin console audit and completion" section at the end of `docs/progress.md`.
+> With Docker up and the API and admin dev servers running, sign in as the seeded admin and work through the
+> browser verification checklist there, fixing anything that looks wrong in Arabic RTL. Then take the
+> "Not done / partial" list in order: audit the pages not yet audited in depth, add a mobile navigation for
+> `.sidebar` below 860px, multi-line purchase orders, supplier edit/deactivate. Do not touch image upload,
+> backend business logic, schema, auth or routing architecture without flagging it. Commit and push as you go.
