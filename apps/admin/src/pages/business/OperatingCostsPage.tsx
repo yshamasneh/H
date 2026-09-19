@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, request } from "../../api";
-import { formatMinor, type OperatingCostEntry } from "../../api.accounting";
+import { type OperatingCostEntry } from "../../api.accounting";
+import { Money } from "../../components/Money";
+import { parsePositiveMoneyToMinor } from "../../money";
 
 /**
  * What the supermarket side does with costs: report them, and see what was decided.
@@ -51,13 +53,19 @@ export function OperatingCostsPage() {
 
   const submit = async () => {
     setError(null);
-    const amountMinor = Math.round(Number(draft.amount) * 100);
-    if (!Number.isFinite(amountMinor) || amountMinor <= 0) {
+    const amountMinor = parsePositiveMoneyToMinor(draft.amount);
+    if (amountMinor === null) {
       setError(t("operatingCosts.invalidAmount"));
       return;
     }
     if (draft.description.trim().length < 3) {
       setError(t("operatingCosts.descriptionRequired"));
+      return;
+    }
+    // A recurring cost is keyed by its month, so a malformed label would reach the server as a 400
+    // (or worse, be accepted as some other month).
+    if (draft.isRecurring && !/^\d{4}-(0[1-9]|1[0-2])$/.test(draft.periodLabel)) {
+      setError(t("operatingCosts.periodInvalid"));
       return;
     }
     setBusy(true);
@@ -92,7 +100,7 @@ export function OperatingCostsPage() {
       {error ? <div className="error-banner">{error}</div> : null}
 
       <div className="card">
-        <h3>{t("operatingCosts.reportTitle")}</h3>
+        <h3 className="card-title">{t("operatingCosts.reportTitle")}</h3>
         <div className="filters-row">
           <select
             className="text-input"
@@ -113,6 +121,8 @@ export function OperatingCostsPage() {
           />
           <input
             className="text-input"
+            dir="ltr"
+            inputMode="decimal"
             onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
             placeholder={t("operatingCosts.amountPlaceholder")}
             value={draft.amount}
@@ -123,22 +133,24 @@ export function OperatingCostsPage() {
             type="date"
             value={draft.incurredOn}
           />
-          <button
-            className={draft.isRecurring ? "primary-button" : "secondary-button"}
-            onClick={() => setDraft({ ...draft, isRecurring: !draft.isRecurring })}
-            type="button"
-          >
+          <label className="checkbox-row">
+            <input
+              checked={draft.isRecurring}
+              onChange={(event) => setDraft({ ...draft, isRecurring: event.target.checked })}
+              type="checkbox"
+            />
             {t("operatingCosts.monthly")}
-          </button>
+          </label>
           {draft.isRecurring ? (
             <input
               className="text-input"
+              dir="ltr"
               onChange={(event) => setDraft({ ...draft, periodLabel: event.target.value })}
               placeholder="YYYY-MM"
               value={draft.periodLabel}
             />
           ) : null}
-          <button className="primary-button" disabled={busy} onClick={() => void submit()} type="button">
+          <button className="btn btn-primary" disabled={busy} onClick={() => void submit()} type="button">
             {busy ? t("common.working") : t("operatingCosts.submit")}
           </button>
         </div>
@@ -169,7 +181,9 @@ export function OperatingCostsPage() {
                   <tr key={entry.id}>
                     <td>{t(`accounting.costCategory.${entry.category}`, entry.category)}</td>
                     <td>{entry.description}</td>
-                    <td>{formatMinor(entry.amountMinor)}</td>
+                    <td>
+                      <Money minor={entry.amountMinor} />
+                    </td>
                     <td>{entry.periodLabel ?? new Date(entry.incurredOn).toLocaleDateString()}</td>
                     <td>
                       {t(`accounting.costStatus.${entry.status}`)}
@@ -180,7 +194,7 @@ export function OperatingCostsPage() {
                         </>
                       ) : null}
                     </td>
-                    <td>{ownShare ? formatMinor(ownShare.amountMinor) : t("common.dash")}</td>
+                    <td>{ownShare ? <Money minor={ownShare.amountMinor} /> : t("common.dash")}</td>
                   </tr>
                 );
               })}

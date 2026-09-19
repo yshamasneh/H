@@ -5,6 +5,8 @@ type ConfirmModalProps = {
   title: string;
   description: string;
   confirmLabel: string;
+  /** `danger` (the default) for destructive actions; `primary` for a confirmation that only commits. */
+  tone?: "danger" | "primary";
   onCancel: () => void;
   onConfirm: () => Promise<void>;
 };
@@ -37,7 +39,7 @@ export function ConfirmModal(props: ConfirmModalProps) {
           <button className="btn btn-outline" onClick={props.onCancel} type="button">
             {t("common.cancel")}
           </button>
-          <button className="btn btn-danger" disabled={submitting} onClick={() => void confirm()} type="button">
+          <button className={`btn ${props.tone === "primary" ? "btn-primary" : "btn-danger"}`} disabled={submitting} onClick={() => void confirm()} type="button">
             {submitting ? t("common.working") : props.confirmLabel}
           </button>
         </div>

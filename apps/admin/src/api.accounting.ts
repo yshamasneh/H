@@ -1,3 +1,4 @@
+import type { AdjustmentBody, RateSetBody } from "./accounting-forms";
 import { request } from "./api";
 
 /**
@@ -136,6 +137,11 @@ export type RateSet = {
   ownerACostBp: number;
   ownerBCostBp: number;
   driverDeliveryShareBp: number;
+  commissionOwnerAWeight: number;
+  commissionOwnerBWeight: number;
+  deliveryOpsRemainderWeight: number;
+  ownerADeliveryRemainderWeight: number;
+  ownerBDeliveryRemainderWeight: number;
   isCurrent: boolean;
 };
 
@@ -172,6 +178,9 @@ export type OrderFinancialRecord = {
 
 const base = "/api/v1/admin/accounting";
 
+export type AdjustmentResponse = { id: string };
+export type SubscriptionRun = { created: number; skipped: number; totalMinor: number };
+
 export const getAccountingOverview = () => request<AccountingOverview>(`${base}/overview`);
 export const listPartnerBalances = () => request<PartnerBalance[]>(`${base}/balances`);
 export const listPendingSettlements = () => request<PartnerBalance[]>(`${base}/balances/pending`);
@@ -198,6 +207,14 @@ export const recordCashSettlement = (body: {
 export const decideOperatingCost = (entryId: string, body: { approve: boolean; note?: string }) =>
   request<OperatingCostEntry>(`${base}/operating-costs/${entryId}/decision`, { method: "POST", body });
 
+export const recordAdjustment = (body: AdjustmentBody) =>
+  request<AdjustmentResponse>(`${base}/adjustments`, { method: "POST", body });
+
+export const createRateSet = (body: RateSetBody) => request<RateSet>(`${base}/rates`, { method: "POST", body });
+
+export const generateSubscriptions = (body: { periodYear: number; periodMonth: number }) =>
+  request<SubscriptionRun>(`${base}/subscriptions/generate`, { method: "POST", body });
+
 export const recordPartnerSettlement = (body: {
   partnerAccountId?: string;
   businessId?: string;
@@ -208,15 +225,4 @@ export const recordPartnerSettlement = (body: {
   note?: string;
 }) => request<PartnerSettlement>(`${base}/settlements`, { method: "POST", body });
 
-/** Minor units to a readable amount. One conversion, at the edge, so nothing rounds twice. */
-export function formatMinor(amountMinor: number): string {
-  const sign = amountMinor < 0 ? "-" : "";
-  const absolute = Math.abs(amountMinor);
-  return `${sign}${Math.floor(absolute / 100)}.${String(absolute % 100).padStart(2, "0")}`;
-}
-
-/** Basis points as a percentage, e.g. 2000 -> "20%". */
-export function formatBp(bp: number): string {
-  const percent = bp / 100;
-  return `${Number.isInteger(percent) ? percent : percent.toFixed(2)}%`;
-}
+export { formatBp, formatMinor } from "./money";

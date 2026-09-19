@@ -19,6 +19,7 @@ import { RestaurantsPage } from "./pages/RestaurantsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { UsersPage } from "./pages/UsersPage";
 import { AccountingPage } from "./pages/AccountingPage";
+import { OffersPage } from "./pages/OffersPage";
 import { OperatingCostsPage } from "./pages/business/OperatingCostsPage";
 
 export default function App() {
@@ -63,6 +64,7 @@ function PlatformRoutes() {
       <Route element={<DriversPage />} path="/drivers" />
       <Route element={<UsersPage />} path="/users" />
       <Route element={<LandmarksPage />} path="/landmarks" />
+      <Route element={<OffersPage />} path="/offers" />
       <Route element={<AccountingPage />} path="/accounting" />
       <Route element={<SettingsPage />} path="/settings" />
       <Route element={<AuditLogPage />} path="/audit-log" />

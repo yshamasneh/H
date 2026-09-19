@@ -243,7 +243,9 @@ export function getDashboard(): Promise<DashboardOverview> {
   return request("/api/v1/admin/dashboard");
 }
 
-export function listAdminRestaurants(params: { status?: string; isOpen?: boolean } = {}): Promise<Page<RestaurantProfile>> {
+export function listAdminRestaurants(
+  params: { status?: string; isOpen?: boolean; page?: number; pageSize?: number } = {}
+): Promise<Page<RestaurantProfile>> {
   return request(`/api/v1/admin/restaurants${toQuery(params)}`);
 }
 
@@ -324,6 +326,20 @@ export function listAuditLog(
   params: { actorUserId?: string; action?: string; fromDate?: string; toDate?: string; page?: number } = {}
 ): Promise<Page<AuditLogEntry>> {
   return request(`/api/v1/admin/audit-log${toQuery(params)}`);
+}
+
+/**
+ * Every row of a paginated list, for the pickers that need the whole set rather than a screen of
+ * it. The API caps a page, so "fetch page 1" silently drops everything past the cap.
+ */
+export async function fetchAllPages<T>(fetchPage: (page: number, pageSize: number) => Promise<Page<T>>): Promise<T[]> {
+  const pageSize = 50;
+  const items: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const result = await fetchPage(page, pageSize);
+    items.push(...result.items);
+    if (items.length >= result.total || result.items.length === 0) return items;
+  }
 }
 
 export function toQuery(params: Record<string, unknown>): string {

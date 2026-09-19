@@ -761,3 +761,75 @@ textarea.text-input { width: 100%; min-height: 80px; resize: vertical; font-fami
 
 .sidebar-user { color: var(--text-inverse); font-weight: var(--fw-medium); }
 .stat-value-sm { font-size: var(--fs-h3); }
+
+/* ----------------------------------------------------------------------------
+   Forms and money. Additions for the accounting, offers and settings screens;
+   every value comes from the tokens above.
+   -------------------------------------------------------------------------- */
+
+/* An amount is a left-to-right island inside right-to-left text. Without the isolate the minus
+   sign of "-15.05" is reordered to the wrong side of the digits in Arabic. */
+.money {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.money-negative { color: var(--error); }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.form-grid .span-all { grid-column: 1 / -1; }
+.form-grid .text-input, .form-grid .select { width: 100%; }
+.form-section-title {
+  font-size: var(--fs-body-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text);
+  margin: var(--space-5) 0 var(--space-1);
+}
+.field-hint { color: var(--text-muted); font-size: var(--fs-caption); margin-top: var(--space-1); }
+.field-error { margin-top: var(--space-1); }
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-body-sm);
+  margin: var(--space-2) 0;
+}
+
+.notice-banner, .warning-banner {
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-body-sm);
+  margin-bottom: var(--space-4);
+}
+.notice-banner { background: var(--success-subtle); color: var(--success); }
+.warning-banner { background: var(--warning-subtle); color: var(--warning); }
+
+.tab-row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: var(--space-4) 0;
+}
+
+.row-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+
+.entry-row {
+  display: grid;
+  grid-template-columns: 130px minmax(160px, 1.4fr) 120px 130px auto;
+  gap: var(--space-2);
+  align-items: start;
+  margin-bottom: var(--space-2);
+}
+@media (max-width: 860px) {
+  .entry-row { grid-template-columns: 1fr 1fr; }
+}
+.entry-row .text-input, .entry-row .select { width: 100%; }
+
+.map-block { margin: var(--space-3) 0 var(--space-4); max-width: 640px; }
