@@ -5,7 +5,8 @@
         {
           "allowedOrigins": [
             "http://localhost:5173",
-            "https://jovo-market-web.vercel.app"
+            "https://jovo-market-web.vercel.app",
+            "https://adminpage-pink.vercel.app"
           ],
           "allowedMethods": ["PUT", "OPTIONS"],
           "allowedHeaders": ["content-type", "x-ms-blob-type"],
