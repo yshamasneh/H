@@ -77,6 +77,12 @@ export class DriverPortalController {
     return this.drivers.listOwnDeliveries(request.user.id, query.page ?? 1, query.pageSize ?? 20);
   }
 
+  @Get("me/deliveries/:deliveryId/route")
+  @ApiOperation({ summary: "The road route from the pickup store to the customer for one of the driver's own deliveries" })
+  getRoute(@Req() request: AuthenticatedRequest, @Param("deliveryId", new ParseUUIDPipe()) deliveryId: string) {
+    return this.drivers.getDeliveryRoute(request.user.id, deliveryId);
+  }
+
   @Post("me/deliveries/:deliveryId/accept")
   @ApiOperation({ summary: "Claim an unassigned delivery; only one driver can succeed per delivery" })
   accept(@Req() request: AuthenticatedRequest, @Param("deliveryId", new ParseUUIDPipe()) deliveryId: string) {

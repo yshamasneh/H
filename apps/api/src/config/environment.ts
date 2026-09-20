@@ -139,6 +139,9 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   environment.OTP_MAX_GLOBAL_PER_DAY = readPositiveInteger(environment, "OTP_MAX_GLOBAL_PER_DAY", 2_000);
   environment.OTP_WEBHOOK_TIMEOUT_MS = readPositiveInteger(environment, "OTP_WEBHOOK_TIMEOUT_MS", 5_000);
   environment.ERROR_TRACKING_TIMEOUT_MS = readPositiveInteger(environment, "ERROR_TRACKING_TIMEOUT_MS", 3_000);
+  // Road routes for the driver's map come from any OSRM-compatible service (routing/routing.service.ts).
+  environment.ROUTING_ENABLED = readBoolean(environment, "ROUTING_ENABLED", true);
+  environment.ROUTING_TIMEOUT_MS = readPositiveInteger(environment, "ROUTING_TIMEOUT_MS", 4_000);
   // How long a driver's app report counts as proof the app is running (drivers/presence.rules.ts).
   environment.DRIVER_PRESENCE_FOREGROUND_LEASE_SECONDS = readPositiveInteger(environment, "DRIVER_PRESENCE_FOREGROUND_LEASE_SECONDS", 120);
   environment.DRIVER_PRESENCE_BACKGROUND_GRACE_MINUTES = readPositiveInteger(environment, "DRIVER_PRESENCE_BACKGROUND_GRACE_MINUTES", 30);

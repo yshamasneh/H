@@ -57,7 +57,9 @@
     "OFFLINE": "Offline",
     "INACTIVE": "Inactive",
     "DELIVERY_FAILED": "Delivery failed",
-    "FAILED": "Failed"
+    "FAILED": "Failed",
+    "CONNECTED": "Connected",
+    "APP_CLOSED": "App closed"
   },
   "role": {
     "CUSTOMER": "Customer",
@@ -230,7 +232,12 @@
     "rejectTitle": "Reject driver",
     "suspendTitle": "Suspend driver",
     "rejectDescription": "This will reject {{name}}'s driver account.",
-    "suspendDescription": "This will suspend {{name}}'s driver account."
+    "suspendDescription": "This will suspend {{name}}'s driver account.",
+    "connection": "Connection",
+    "connectedCount": "connected: on shift with the app running (they receive alerts)",
+    "appClosedCount": "online but app closed (no alerts are sent)",
+    "offlineCount": "off shift",
+    "connectionHelp": "Approved is not the same as connected. A driver is alerted only while marked online AND their app is running."
   },
   "users": {
     "title": "Users",
@@ -986,7 +993,10 @@
       "minutes_other": "{{count}} minutes ago",
       "hours_one": "{{count}} hour ago",
       "hours_other": "{{count}} hours ago"
-    }
+    },
+    "connectedCount": "connected",
+    "appClosedCount": "online, app closed",
+    "connectionHelp": "Only connected drivers hear delivery alerts."
   },
   "tracking": {
     "title": "Driver location",

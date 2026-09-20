@@ -57,7 +57,9 @@
     "OFFLINE": "غير متصل",
     "INACTIVE": "غير نشط",
     "DELIVERY_FAILED": "فشل التوصيل",
-    "FAILED": "فشل"
+    "FAILED": "فشل",
+    "CONNECTED": "متصل",
+    "APP_CLOSED": "التطبيق مغلق"
   },
   "role": {
     "CUSTOMER": "زبون",
@@ -230,7 +232,12 @@
     "rejectTitle": "رفض السائق",
     "suspendTitle": "إيقاف السائق",
     "rejectDescription": "سيؤدي هذا إلى رفض حساب السائق {{name}}.",
-    "suspendDescription": "سيؤدي هذا إلى إيقاف حساب السائق {{name}}."
+    "suspendDescription": "سيؤدي هذا إلى إيقاف حساب السائق {{name}}.",
+    "connection": "الاتصال",
+    "connectedCount": "متصل: في الخدمة والتطبيق يعمل (تصله التنبيهات)",
+    "appClosedCount": "متصل بالخدمة لكن التطبيق مغلق (لا تُرسل تنبيهات)",
+    "offlineCount": "خارج الخدمة",
+    "connectionHelp": "«معتمد» لا يعني «متصل». يُنبَّه السائق فقط وهو في الخدمة وتطبيقه يعمل."
   },
   "users": {
     "title": "المستخدمون",
@@ -998,7 +1005,10 @@
       "hours_few": "منذ {{count}} ساعات",
       "hours_many": "منذ {{count}} ساعة",
       "hours_other": "منذ {{count}} ساعة"
-    }
+    },
+    "connectedCount": "متصل",
+    "appClosedCount": "في الخدمة والتطبيق مغلق",
+    "connectionHelp": "المتصلون فقط تصلهم تنبيهات التوصيل."
   },
   "tracking": {
     "title": "موقع السائق",

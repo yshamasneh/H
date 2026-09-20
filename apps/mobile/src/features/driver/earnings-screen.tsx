@@ -13,14 +13,15 @@ import { text } from "../../theme/typography";
 const periods: DriverCashPeriod[] = ["SHIFT", "TODAY", "WEEK", "MONTH", "ALL"];
 
 /**
- * The driver's money, as three facts that must never be confused:
+ * The driver's money, as facts that must never be confused.
  *
- *   - cash collected: what was taken from customers (the driver is physically holding it),
- *   - earnings: the driver's own share of the delivery fees, which the platform pays separately,
- *   - owed to the platform: the cash still to be handed over at settlement.
+ * At the top, always, and independent of the period chips: ONE number, the cash to hand over to JOVO.
+ * Cash is settled gross, so that number is everything the driver is holding from customers; their own
+ * earnings are not part of it and are paid separately, and the screen says so in words beside the
+ * number. Underneath, the orders that make it up, so the number can be checked against the cash in
+ * hand. Below that, for the chosen period: cash collected, and the driver's earnings.
  *
- * All three come from the accounting ledger via /driver/me/cash-summary; the screen adds nothing up
- * itself. Cash is settled gross, so "owed" is not reduced by earnings, and the screen says so.
+ * Everything comes from the accounting ledger via /driver/me/cash-summary; the screen adds nothing up.
  */
 export function DriverEarningsScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation(["driver", "common"]);
@@ -76,28 +77,9 @@ export function DriverEarningsScreen({ onBack }: { onBack: () => void }) {
           />
         }
       >
-        <ScrollView
-          accessibilityLabel={t("earnings.periodsLabel")}
-          contentContainerStyle={styles.periodRow}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-        >
-          {periods.map((option) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: option === period }}
-              key={option}
-              onPress={() => setPeriod(option)}
-              style={[styles.periodChip, option === period && styles.periodChipOn]}
-            >
-              <Text style={[styles.periodText, option === period && styles.periodTextOn]}>{t(`earnings.periods.${option}`)}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {loading ? (
+        {loading && !summary ? (
           <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>
-        ) : error ? (
+        ) : error && !summary ? (
           <View style={styles.center}>
             <Text style={styles.errorText}>{error}</Text>
             <Pressable onPress={() => void load(period, "initial")} style={styles.retryButton}>
@@ -105,14 +87,83 @@ export function DriverEarningsScreen({ onBack }: { onBack: () => void }) {
             </Pressable>
           </View>
         ) : summary ? (
-          <SummaryBody summary={summary} />
+          <>
+            {/* 3 — the standing balance. Not affected by the period below. */}
+            <HandOverCard summary={summary} />
+
+            <ScrollView
+              accessibilityLabel={t("earnings.periodsLabel")}
+              contentContainerStyle={styles.periodRow}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              {periods.map((option) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: option === period }}
+                  key={option}
+                  onPress={() => setPeriod(option)}
+                  style={[styles.periodChip, option === period && styles.periodChipOn]}
+                >
+                  <Text style={[styles.periodText, option === period && styles.periodTextOn]}>{t(`earnings.periods.${option}`)}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            <PeriodActivity summary={summary} />
+          </>
         ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SummaryBody({ summary }: { summary: DriverCashSummary }) {
+/**
+ * The one number: what to hand over. It is deliberately the largest thing on the screen, sits above
+ * the period chips (so changing period cannot change it), says what it is in a sentence, says what
+ * it is NOT (the driver's earnings), and lists the orders that add up to it.
+ */
+function HandOverCard({ summary }: { summary: DriverCashSummary }) {
+  const { t } = useTranslation(["driver"]);
+  const { balance } = summary;
+  const holding = balance.cashOwedToPlatformMinor > 0;
+  return (
+    <View accessibilityLabel={t("earnings.owed.label")} style={styles.handOverCard}>
+      <Text style={styles.handOverEyebrow}>{t("earnings.owed.label")}</Text>
+      <Text style={styles.handOverTitle}>{t("earnings.owed.handOver")}</Text>
+      <Text style={styles.handOverValue}>{formatMoney(balance.cashOwedToPlatformMinor)}</Text>
+      <Text style={styles.handOverLine}>
+        {holding ? t("earnings.owed.holding", { amount: formatMoney(balance.cashOwedToPlatformMinor) }) : t("earnings.owed.holdingNone")}
+      </Text>
+      {holding ? <Text style={styles.handOverNotYours}>{t("earnings.owed.notYours")}</Text> : null}
+
+      {holding ? (
+        <View style={styles.handOverOrders}>
+          <Text style={styles.handOverOrdersTitle}>
+            {t("earnings.owed.orders", { count: balance.unsettledOrderCount })}
+            {balance.oldestUnsettledAt ? ` · ${t("earnings.owed.oldest", { date: formatDate(balance.oldestUnsettledAt) })}` : ""}
+          </Text>
+          {balance.openOrders.map((line) => (
+            <View key={line.orderId} style={styles.handOverOrderRow}>
+              <View style={styles.handOverOrderCopy}>
+                <Text numberOfLines={1} style={styles.handOverOrderName}>{line.restaurantName ?? `#${line.orderId.slice(0, 8).toUpperCase()}`}</Text>
+                <Text style={styles.handOverOrderMeta}>{[line.deliveryLabel, formatDate(line.occurredAt)].filter(Boolean).join(" · ")}</Text>
+              </View>
+              <Text style={styles.handOverOrderAmount}>{formatMoney(line.cashOwedToPlatformMinor)}</Text>
+            </View>
+          ))}
+          {balance.openOrdersTruncated ? <Text style={styles.handOverOrderMeta}>{t("earnings.owed.moreOrders")}</Text> : null}
+          <View style={styles.handOverSum}>
+            <Text style={styles.handOverSumLabel}>{t("earnings.owed.total")}</Text>
+            <Text style={styles.handOverSumValue}>{formatMoney(balance.cashOwedToPlatformMinor)}</Text>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PeriodActivity({ summary }: { summary: DriverCashSummary }) {
   const { t } = useTranslation(["driver"]);
   const { balance } = summary;
 
@@ -124,7 +175,7 @@ function SummaryBody({ summary }: { summary: DriverCashSummary }) {
           : t("earnings.noHandoverYet")}
       </Text>
 
-      {/* 1 — cash: what the driver took from customers. */}
+      {/* 1 — cash: what the driver took from customers in the period. */}
       <View accessibilityLabel={t("earnings.collected.label")} style={[styles.card, styles.collectedCard]}>
         <Text style={styles.cardLabel}>{t("earnings.collected.label")}</Text>
         <Text style={styles.collectedValue}>{formatMoney(summary.cashCollectedMinor)}</Text>
@@ -138,26 +189,6 @@ function SummaryBody({ summary }: { summary: DriverCashSummary }) {
         <Text style={styles.earnedValue}>{formatMoney(summary.earningsMinor)}</Text>
         <Text style={styles.cardHelp}>{t("earnings.earned.help")}</Text>
         <Text style={styles.cardSub}>{t("earnings.earned.unpaid", { amount: formatMoney(balance.earningsOwedToDriverMinor) })}</Text>
-      </View>
-
-      {/* 3 — what has to go back: the standing balance, whatever period is selected. */}
-      <View accessibilityLabel={t("earnings.owed.label")} style={[styles.card, styles.owedCard]}>
-        <Text style={styles.cardLabel}>{t("earnings.owed.label")}</Text>
-        <Text style={styles.owedValue}>{formatMoney(balance.cashOwedToPlatformMinor)}</Text>
-        <Text style={styles.cardHelp}>{t("earnings.owed.help")}</Text>
-        {balance.unsettledOrderCount > 0 ? (
-          <>
-            <Text style={styles.cardSub}>{t("earnings.owed.orders", { count: balance.unsettledOrderCount })}</Text>
-            {balance.oldestUnsettledAt ? (
-              <Text style={styles.cardSub}>{t("earnings.owed.oldest", { date: formatDate(balance.oldestUnsettledAt) })}</Text>
-            ) : null}
-            {balance.cashOwedFromBeforePeriodMinor > 0 ? (
-              <Text style={styles.cardSub}>{t("earnings.owed.fromBefore", { amount: formatMoney(balance.cashOwedFromBeforePeriodMinor) })}</Text>
-            ) : null}
-          </>
-        ) : (
-          <Text style={styles.cardSub}>{t("earnings.owed.none")}</Text>
-        )}
       </View>
 
       <Text style={styles.metaLine}>{t("earnings.counts", { delivered: summary.deliveredCount, failed: summary.failedCount })}</Text>
@@ -237,6 +268,22 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 44 },
   center: { alignItems: "center", gap: spacing[4], justifyContent: "center", padding: spacing[6] },
   content: { alignSelf: "center", maxWidth: 640, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
+  handOverCard: { backgroundColor: colors.primarySubtle, borderColor: colors.primary, borderRadius: radius.lg, borderWidth: 2, marginBottom: spacing[5], padding: spacing[5] },
+  handOverEyebrow: { ...text("caption", "bold"), color: colors.primaryPressed },
+  handOverTitle: { ...text("h2", "bold"), color: colors.text, marginTop: spacing[1] },
+  handOverValue: { ...text("display", "bold"), color: colors.primary, fontSize: 44, lineHeight: 52, marginTop: spacing[2] },
+  handOverLine: { ...text("bodySm", "bold"), color: colors.text, marginTop: spacing[2] },
+  handOverNotYours: { ...text("bodySm"), color: colors.text, marginTop: spacing[2] },
+  handOverOrders: { borderTopColor: colors.primary, borderTopWidth: 1, marginTop: spacing[4], paddingTop: spacing[3] },
+  handOverOrdersTitle: { ...text("caption", "bold"), color: colors.primaryPressed, marginBottom: spacing[2] },
+  handOverOrderRow: { alignItems: "center", flexDirection: "row", gap: spacing[3], paddingVertical: spacing[2] },
+  handOverOrderCopy: { flex: 1 },
+  handOverOrderName: { ...text("bodySm", "bold"), color: colors.text },
+  handOverOrderMeta: { ...text("caption"), color: colors.textMuted },
+  handOverOrderAmount: { ...text("bodySm", "bold"), color: colors.text },
+  handOverSum: { alignItems: "center", borderTopColor: colors.primary, borderTopWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: spacing[2], paddingTop: spacing[3] },
+  handOverSumLabel: { ...text("bodySm", "bold"), color: colors.text },
+  handOverSumValue: { ...text("h3", "bold"), color: colors.primary },
   periodRow: { gap: spacing[2], paddingBottom: spacing[4] },
   periodChip: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.pill, borderWidth: 1, justifyContent: "center", minHeight: 40, paddingHorizontal: spacing[4] },
   periodChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -244,14 +291,12 @@ const styles = StyleSheet.create({
   periodTextOn: { color: colors.textInverse },
   metaLine: { ...text("caption"), color: colors.textMuted, marginBottom: spacing[3], textAlign: "center" },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[3], padding: spacing[5] },
-  // Three visibly different cards, so cash, pay and debt are not mistaken for one another at a glance.
+  // Cash and pay are visibly different cards, so they are not mistaken for one another at a glance.
   collectedCard: { borderColor: colors.info },
   earnedCard: { backgroundColor: colors.successSubtle, borderColor: colors.success },
-  owedCard: { backgroundColor: colors.primarySubtle, borderColor: colors.primary, borderWidth: 2 },
   cardLabel: { ...text("bodySm", "bold"), color: colors.text },
   collectedValue: { ...text("display", "bold"), color: colors.info, marginTop: spacing[2] },
   earnedValue: { ...text("display", "bold"), color: colors.success, marginTop: spacing[2] },
-  owedValue: { ...text("display", "bold"), color: colors.primary, marginTop: spacing[2] },
   cardHelp: { ...text("caption"), color: colors.textMuted, marginTop: spacing[2] },
   cardSub: { ...text("caption", "bold"), color: colors.text, marginTop: spacing[2] },
   sectionTitle: { ...text("h3", "bold"), color: colors.text, marginBottom: spacing[3], marginTop: spacing[3] },

@@ -123,6 +123,8 @@ import {
   NotificationOrderNavigator
 } from "./src/core/notification-navigation";
 import { disconnectSocket } from "./src/core/socket";
+import { stopDeliveryTracking, trackingController } from "./src/core/background-location";
+import { closeDriverPresence, useDriverPresence } from "./src/features/driver/use-driver-presence";
 import { ErrorBoundary } from "./src/components/error-boundary";
 import { AdminDashboardScreen } from "./src/features/admin/dashboard-screen";
 import { AdminRestaurantsScreen, AdminRestaurantDetailScreen } from "./src/features/admin/restaurants-screen";
@@ -223,6 +225,8 @@ function TasawaQApp() {
     });
   }
   const notificationNavigator = notificationNavigatorRef.current;
+  // Tells the server this driver's app is running, so alerts are only attempted while it is.
+  useDriverPresence("user" in screen && screen.user.role === "DRIVER" ? screen.user.id : null);
   // Every screen after the splash renders text in Cairo/Inter, so the splash
   // (a logo image, no text) stays up until fonts are ready too — otherwise
   // the loading screen or first screen would flash in the system font.
@@ -372,6 +376,11 @@ function TasawaQApp() {
   }
 
   async function handleLogout() {
+    // Before the session is thrown away: tell the server this app is closed (so no more delivery
+    // alerts are attempted for it) and stop background location outright.
+    await closeDriverPresence().catch(() => undefined);
+    await trackingController.stopNow().catch(() => undefined);
+    await stopDeliveryTracking().catch(() => undefined);
     await logoutWithPushCleanup({
       getAccessToken,
       getStoredPushToken,
@@ -802,7 +811,11 @@ function TasawaQApp() {
       return <DriverEarningsScreen onBack={() => setScreen(goToDriverHome(screen.user))} />;
     case "delivery-detail":
       return (
-        <DeliveryDetailScreen deliveryId={screen.deliveryId} onBack={() => setScreen(goToDriverHome(screen.user))} />
+        <DeliveryDetailScreen
+          deliveryId={screen.deliveryId}
+          onBack={() => setScreen(goToDriverHome(screen.user))}
+          onOpenCash={() => setScreen(goToDriverStats(screen.user))}
+        />
       );
     case "admin-dashboard":
       return (

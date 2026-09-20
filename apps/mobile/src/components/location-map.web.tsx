@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import type LeafletNamespace from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { boundsForCoordinates, followZoom } from "./location-map.camera";
-import { landmarkMarkerColor, landmarkVisibilityMinZoom, type LocationMapProps } from "./location-map.types";
+import { landmarkMarkerColor, landmarkVisibilityMinZoom, routeLineColor, type LocationMapProps } from "./location-map.types";
 import { radius, spacing, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/theme-context";
 
@@ -122,6 +122,7 @@ export function LocationMap(props: LocationMapProps) {
   const markerRef = useRef<LeafletNamespace.Marker | null>(null);
   const landmarkLayersRef = useRef<LeafletNamespace.Layer[]>([]);
   const pinLayersRef = useRef<LeafletNamespace.Layer[]>([]);
+  const routeLayersRef = useRef<LeafletNamespace.Layer[]>([]);
   const onChangeRef = useRef(props.onCoordinateChange);
   onChangeRef.current = props.onCoordinateChange;
   const onUserPanRef = useRef(props.onUserPan);
@@ -185,6 +186,7 @@ export function LocationMap(props: LocationMapProps) {
         markerRef.current = null;
         landmarkLayersRef.current = [];
         pinLayersRef.current = [];
+        routeLayersRef.current = [];
       }
     };
     // Init runs once; coordinate/markers/pins are synced by the effects below.
@@ -241,6 +243,22 @@ export function LocationMap(props: LocationMapProps) {
       if (mapRef.current) applyPins(L, mapRef.current, pinLayersRef, props.pins ?? []);
     });
   }, [props.pins]);
+
+  // The road route: a white casing under a blue line, redrawn only when the route itself changes.
+  useEffect(() => {
+    void loadLeaflet().then((L) => {
+      const map = mapRef.current;
+      if (!map) return;
+      routeLayersRef.current.forEach((layer) => map.removeLayer(layer));
+      routeLayersRef.current = [];
+      if (!props.route || props.route.length < 2) return;
+      const points = props.route.map((point) => [point.latitude, point.longitude] as [number, number]);
+      routeLayersRef.current = [
+        L.polyline(points, { color: "#ffffff", weight: 9, opacity: 0.9, lineCap: "round", lineJoin: "round" }).addTo(map),
+        L.polyline(points, { color: routeLineColor, weight: 5, opacity: 1, lineCap: "round", lineJoin: "round" }).addTo(map)
+      ];
+    });
+  }, [props.route]);
 
   return (
     <View style={[styles.frame, { height: props.height ?? 300 }]}>

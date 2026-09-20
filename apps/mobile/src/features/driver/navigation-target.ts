@@ -92,6 +92,27 @@ export function deliveryPins(
   return pins;
 }
 
+/** Route points as map coordinates. A route with fewer than two points is not a route. */
+export function routeCoordinates(points: [number, number][] | null | undefined): MapCoordinate[] | undefined {
+  if (!points || points.length < 2) return undefined;
+  return points.map(([latitude, longitude]) => ({ latitude, longitude }));
+}
+
+/** "8 min" / "1 h 5 min", with the locale's own digits and unit words. */
+export function formatDuration(seconds: number, locale?: string): string {
+  const arabic = locale?.startsWith("ar");
+  const number = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const minuteUnit = arabic ? "د" : "min";
+  const hourUnit = arabic ? "س" : "h";
+  if (hours === 0) return `${number.format(minutes)} ${minuteUnit}`;
+  return minutes === 0
+    ? `${number.format(hours)} ${hourUnit}`
+    : `${number.format(hours)} ${hourUnit} ${number.format(minutes)} ${minuteUnit}`;
+}
+
 const earthRadiusMeters = 6_371_000;
 
 /** Great-circle distance in metres. A straight line, not a driving distance. */

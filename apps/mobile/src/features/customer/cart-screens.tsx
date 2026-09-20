@@ -34,6 +34,7 @@ import {
   type SavedAddress
 } from "../../core/api";
 import { ApiError } from "../../core/api-error";
+import { cashDueMinorOf, cashRoundingMinorOf } from "../../core/cash";
 import {
   cartItemCount,
   cartSubtotalMinor,
@@ -593,7 +594,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
               </View>
             ))}
             <View style={styles.summaryDivider} />
-            <View style={styles.summaryRow}><Text style={styles.summaryRowLabelBold}>{t("checkout.cashDueOnDelivery")}</Text><Text style={styles.summaryRowValueBold}>{formatPrice(quote.totalMinor)}</Text></View>
+            {cashRoundingMinorOf(quote) > 0 ? (
+              <>
+                <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>{t("checkout.orderTotal")}</Text><Text style={styles.summaryRowValue}>{formatPrice(quote.totalMinor)}</Text></View>
+                <View style={styles.summaryRow}><Text style={styles.summaryRowLabel}>{t("checkout.roundedUp")}</Text><Text style={styles.summaryRowValue}>+{formatPrice(cashRoundingMinorOf(quote))}</Text></View>
+              </>
+            ) : null}
+            <View style={styles.summaryRow}><Text style={styles.summaryRowLabelBold}>{t("checkout.cashDueOnDelivery")}</Text><Text style={styles.summaryRowValueBold}>{formatPrice(cashDueMinorOf(quote))}</Text></View>
+            {cashRoundingMinorOf(quote) > 0 ? <Text style={styles.footerNote}>{t("checkout.roundedUpNote")}</Text> : null}
           </View>
         ) : null}
 
@@ -671,7 +679,7 @@ export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
           <Text style={styles.sectionTitle}>{t("confirmation.nextStepsTitle")}</Text>
           <NextStep index={1} label={t("confirmation.nextStepOne")} />
           <NextStep index={2} label={t("confirmation.nextStepTwo")} />
-          <NextStep index={3} label={t("confirmation.nextStepThree", { total: formatPrice(order.totalMinor) })} />
+          <NextStep index={3} label={t("confirmation.nextStepThree", { total: formatPrice(cashDueMinorOf(order)) })} />
           <Text style={styles.footerNote}>{t("confirmation.trackHint")}</Text>
         </View>
 
@@ -1012,9 +1020,21 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
       ))}
       <View style={styles.summaryDivider} />
       <View style={styles.summaryRow}>
-        <Text style={styles.summaryRowLabelBold}>{t("detail.totalLabel")}</Text>
-        <Text style={styles.summaryRowValueBold}>{formatPrice(order.totalMinor)}</Text>
+        <Text style={cashRoundingMinorOf(order) > 0 ? styles.summaryRowLabel : styles.summaryRowLabelBold}>{t("detail.totalLabel")}</Text>
+        <Text style={cashRoundingMinorOf(order) > 0 ? styles.summaryRowValue : styles.summaryRowValueBold}>{formatPrice(order.totalMinor)}</Text>
       </View>
+      {cashRoundingMinorOf(order) > 0 ? (
+        <>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryRowLabel}>{t("detail.roundedUpLabel")}</Text>
+            <Text style={styles.summaryRowValue}>+{formatPrice(cashRoundingMinorOf(order))}</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryRowLabelBold}>{t("detail.cashToPayLabel")}</Text>
+            <Text style={styles.summaryRowValueBold}>{formatPrice(cashDueMinorOf(order))}</Text>
+          </View>
+        </>
+      ) : null}
       <View style={styles.summaryDivider} />
       <Text style={styles.label}>{t("detail.deliveryAddressLabel")}</Text>
       <Text style={styles.addressText}>

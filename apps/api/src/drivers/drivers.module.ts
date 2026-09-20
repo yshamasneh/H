@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { RoutingModule } from "../routing/routing.module";
 import { JwtModule } from "@nestjs/jwt";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
@@ -8,7 +9,7 @@ import { DriversController } from "./drivers.controller";
 import { DriversService } from "./drivers.service";
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), RoutingModule],
   controllers: [DriversController, DriverPortalController, AdminDriversController],
   providers: [DriversService, JwtAuthGuard, RolesGuard]
 })

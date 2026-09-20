@@ -56,7 +56,10 @@
     "priceChanged": "The price changed. Review the updated total and confirm it before placing your order.",
     "confirmUpdatedPrice": "Confirm updated price",
     "cashOnDelivery": "Cash on Delivery",
-    "selectedDeliveryLocationFallback": "Selected delivery location"
+    "selectedDeliveryLocationFallback": "Selected delivery location",
+    "orderTotal": "Order total",
+    "roundedUp": "Rounded up to a whole shekel",
+    "roundedUpNote": "Cash is collected in whole shekels, so the amount is rounded up. The extra is only ever the difference to the next shekel."
   },
   "confirmation": {
     "title": "Order Placed",
@@ -104,6 +107,8 @@
     "onTheWayAt": "On the way: {{date}}",
     "deliveredAt": "Delivered: {{date}}",
     "statusHistoryTitle": "Status history",
-    "tryAgain": "Try Again"
+    "tryAgain": "Try Again",
+    "roundedUpLabel": "Rounded up to a whole shekel",
+    "cashToPayLabel": "Cash to pay"
   }
 }

@@ -1,6 +1,6 @@
 # Store listing package
 
-Release candidate: `0.13.0` (`versionCode`/`buildNumber` 13 before store-managed auto-increment)
+Release candidate: `0.15.0` (`versionCode`/`buildNumber` 15 before store-managed auto-increment)
 
 ## Product metadata
 
@@ -25,7 +25,7 @@ English full description:
 - Privacy policy URL: publish `docs/privacy-policy.md` at a stable public HTTPS URL.
 - Terms URL: publish `docs/terms-of-service.md` at a stable public HTTPS URL.
 - Support URL and support email: supply operator-owned values.
-- Data Safety/App Privacy answers: phone/name, delivery address, precise location selected on demand, order history, diagnostics, and account identifiers are collected to provide the app; declare encryption in transit and the operator's deletion-request process. Location is requested only when a customer calculates delivery or an owner sets a restaurant pin; continuous/background location, advertising IDs, contacts, photos, microphone, and payment-card data are not collected by this release.
+- Data Safety/App Privacy answers: phone/name, delivery address, precise location selected on demand, order history, diagnostics, and account identifiers are collected to provide the app; declare encryption in transit and the operator's deletion-request process. Location is requested only when a customer calculates delivery or an owner sets a restaurant pin; advertising IDs, contacts, microphone, and payment-card data are not collected. **Drivers' precise location is also collected in the background, but only during an active delivery**: this needs the Play location-permission declaration, the foreground-service declaration, a video and a demo driver account, all described in `docs/play-store-background-location.md`.
 - Content rating: food ordering/commerce; no user-generated public social content.
 - Demo review account: create a dedicated non-production customer account; never submit the development seed credentials.
 

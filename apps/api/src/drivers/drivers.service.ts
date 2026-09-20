@@ -28,6 +28,7 @@ import { createBusinessNotification, createNotification } from "../notifications
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
+import { RoutingService } from "../routing/routing.service";
 import {
   activeDeliveryStatuses,
   allowedDeliveryTransitions,
@@ -49,6 +50,7 @@ import type {
   AdminDriverLocationView,
   AdminDriverView,
   AdminOrderTrackingView,
+  DeliveryRouteView,
   DeliveryView,
   DriverCashPeriod,
   AdminDriverPresence,
@@ -72,7 +74,8 @@ export class DriversService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
-    @Optional() private readonly config?: ConfigService
+    @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly routing?: RoutingService
   ) {}
 
   private presenceDurations(): PresenceDurations {
@@ -304,7 +307,8 @@ export class DriversService {
       }),
       this.prisma.driverCashCustody.findMany({
         where: { driverUserId, status: { in: ["OUTSTANDING", "PARTIALLY_SETTLED"] } },
-        select: { collectedAmountMinor: true, settledAmountMinor: true, collectedAt: true }
+        orderBy: { collectedAt: "asc" },
+        select: { orderId: true, collectedAmountMinor: true, settledAmountMinor: true, collectedAt: true }
       }),
       this.prisma.partnerEarning.aggregate({ where: earnedWhere, _sum: { amountMinor: true } }),
       this.prisma.partnerEarning.findMany({
@@ -349,8 +353,14 @@ export class DriversService {
       amountMinor: row.amountMinor,
       occurredAt: row.occurredAt
     }));
+    // The unsettled orders behind the standing balance, which is a different set from the period's.
+    const openFacts = openCustody.slice(0, cashSummaryLineLimit);
     const orderIds = [
-      ...new Set([...custodyFacts.map((row) => row.orderId), ...earningFacts.map((row) => row.orderId)])
+      ...new Set([
+        ...custodyFacts.map((row) => row.orderId),
+        ...earningFacts.map((row) => row.orderId),
+        ...openFacts.map((row) => row.orderId)
+      ])
     ].filter((id): id is string => Boolean(id));
     const orders = orderIds.length
       ? await this.prisma.order.findMany({
@@ -365,12 +375,16 @@ export class DriversService {
           restaurantName: order.restaurant.name,
           deliveryLabel: order.deliveryLabel,
           // Cash custody exists only for a delivered order; a failed one takes no cash.
-          outcome: outcomeByOrder.get(order.id) ?? (custodyFacts.some((row) => row.orderId === order.id) ? "DELIVERED" : null)
+          outcome:
+            outcomeByOrder.get(order.id) ??
+            ([...custodyFacts, ...openFacts].some((row) => row.orderId === order.id) ? "DELIVERED" : null)
         }
       ])
     );
 
     const lines = buildCashLines(custodyFacts, earningFacts, orderFacts);
+    // Oldest first: the order that has been held longest is the one to hand over first.
+    const openOrders = buildCashLines(openFacts, [], orderFacts).reverse();
     const owedNow = openCustody.reduce((sum, row) => sum + row.collectedAmountMinor - row.settledAmountMinor, 0);
     const owedFromBeforePeriod = from
       ? openCustody
@@ -398,7 +412,9 @@ export class DriversService {
           null
         ),
         cashOwedFromBeforePeriodMinor: owedFromBeforePeriod,
-        earningsOwedToDriverMinor: earnedAllMinor - paidAllMinor
+        earningsOwedToDriverMinor: earnedAllMinor - paidAllMinor,
+        openOrders,
+        openOrdersTruncated: openCustody.length > cashSummaryLineLimit
       },
       lines,
       linesTruncated: custodyRows.length > cashSummaryLineLimit || earningRows.length > cashSummaryLineLimit
@@ -407,6 +423,40 @@ export class DriversService {
 
   async getOwnProfile(driverUserId: string): Promise<DriverProfileView> {
     return toProfileView(await this.requireOwnProfile(driverUserId));
+  }
+
+  /**
+   * The road route from the store to the customer for one of this driver's deliveries.
+   *
+   * A driver can only ask about their own delivery, so this is not a general routing proxy. The
+   * route never changes once the order exists and is cached by the routing service, so it costs
+   * about one upstream request per delivery.
+   */
+  async getDeliveryRoute(driverUserId: string, deliveryId: string): Promise<DeliveryRouteView> {
+    const delivery = await this.prisma.delivery.findUnique({
+      where: { id: deliveryId },
+      include: deliveryInclude
+    });
+    if (!delivery || delivery.driverId !== driverUserId) {
+      throw deliveryNotFound();
+    }
+    const store = delivery.order.restaurant;
+    const destination = delivery.order;
+    if (
+      typeof store.latitude !== "number" ||
+      typeof store.longitude !== "number" ||
+      typeof destination.deliveryLatitude !== "number" ||
+      typeof destination.deliveryLongitude !== "number"
+    ) {
+      return { deliveryId, route: null, unavailableReason: "NO_COORDINATES" };
+    }
+    const route = await this.routing?.route(
+      { latitude: store.latitude, longitude: store.longitude },
+      { latitude: destination.deliveryLatitude, longitude: destination.deliveryLongitude }
+    );
+    return route
+      ? { deliveryId, route, unavailableReason: null }
+      : { deliveryId, route: null, unavailableReason: "UNAVAILABLE" };
   }
 
   async listAvailableDeliveries(): Promise<DeliveryView[]> {

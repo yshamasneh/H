@@ -8,6 +8,10 @@ import { TrackingMap } from "../components/TrackingMap";
 import {
   ageLabel,
   applyLocationUpdate,
+  applyOnlineChange,
+  applyPresenceUpdate,
+  connectionState,
+  countConnections,
   freshness,
   hasPosition,
   markerColors,
@@ -15,6 +19,10 @@ import {
   type TrackedDriver
 } from "../driver-tracking";
 import { useLiveRefresh, useRealtimeEvent } from "../socket";
+
+function connectionBadge(state: "connected" | "online-app-closed" | "offline"): string {
+  return state === "connected" ? "CONNECTED" : state === "online-app-closed" ? "APP_CLOSED" : "OFFLINE";
+}
 
 /**
  * Every driver who is on shift or mid-delivery, on one map.
@@ -57,10 +65,20 @@ export function LiveDriversPage() {
     setDrivers((current) => (current ? applyLocationUpdate(current, payload) : current));
     setNow(Date.now());
   });
+  // Who is connected changes as apps open, go to the background and close, and as drivers go on and off
+  // shift: patch the driver directly, then let the refresh below reconcile.
+  useRealtimeEvent("driver.presence.changed", (payload) => {
+    setDrivers((current) => (current ? applyPresenceUpdate(current, payload) : current));
+    setNow(Date.now());
+  });
+  useRealtimeEvent("driver.status.changed", (payload) => {
+    setDrivers((current) => (current ? applyOnlineChange(current, payload) : current));
+  });
   useLiveRefresh(["driver.status.changed", "delivery.status.changed"], () => void load(), 60_000);
 
   const sorted = useMemo(() => (drivers ? sortForList(drivers, now) : []), [drivers, now]);
   const mapped = sorted.filter(hasPosition).length;
+  const counts = useMemo(() => countConnections(drivers ?? [], now), [drivers, now]);
 
   return (
     <div>
@@ -78,6 +96,18 @@ export function LiveDriversPage() {
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
+
+      {drivers !== null ? (
+        <div className="card" style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: 16 }}>
+          <span>
+            <StatusBadge status="CONNECTED" /> <strong>{counts.connected}</strong> {t("liveDrivers.connectedCount")}
+          </span>
+          <span>
+            <StatusBadge status="APP_CLOSED" /> <strong>{counts.onlineAppClosed}</strong> {t("liveDrivers.appClosedCount")}
+          </span>
+          <small>{t("liveDrivers.connectionHelp")}</small>
+        </div>
+      ) : null}
 
       {drivers === null ? (
         <div className="loading-state">{t("common.loading")}</div>
@@ -144,6 +174,7 @@ export function LiveDriversPage() {
                       </small>
                     </span>
                     <span className="kv-value">
+                      <StatusBadge status={connectionBadge(connectionState(driver, now))} />{" "}
                       {driver.activeDelivery ? <StatusBadge status={driver.activeDelivery.status} /> : null}
                     </span>
                   </button>

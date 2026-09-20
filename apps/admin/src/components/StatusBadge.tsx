@@ -27,6 +27,10 @@ const palette: Record<string, string> = {
   APPROVED: "badge-good",
   ACTIVE: "badge-good",
   ONLINE: "badge-good",
+  // A driver who is on shift with the app running: the only kind who will hear a delivery alert.
+  CONNECTED: "badge-good",
+  // Marked online, but the app has gone quiet: a stale flag, not alerted.
+  APP_CLOSED: "badge-warn",
   RECEIVED: "badge-good",
 
   // went wrong

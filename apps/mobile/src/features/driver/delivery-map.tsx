@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import type { DeliveryView } from "../../core/api";
+import { getDeliveryRoute, type DeliveryRoute, type DeliveryView } from "../../core/api";
+import { getAccessToken } from "../../core/session";
 import { LocationMap } from "../../components/location-map";
 import type { LocationMapCamera, LocationMapMarker, MapCoordinate } from "../../components/location-map.types";
 import { colors, radius, spacing } from "../../theme/tokens";
@@ -10,8 +11,10 @@ import {
   deliveryPins,
   externalNavigationUrl,
   formatDistance,
+  formatDuration,
   haversineMeters,
-  navigationTarget
+  navigationTarget,
+  routeCoordinates
 } from "./navigation-target";
 
 // Shown until the first GPS fix: the Biddu-enclave service area, the same default the driver's home
@@ -19,6 +22,8 @@ import {
 const fallbackCoordinate: MapCoordinate = { latitude: 31.83804, longitude: 35.14047 };
 
 type DeliveryNavigationMapProps = {
+  /** Runs before the trip is handed to another app: the moment to explain and ask for background location. */
+  onBeforeHandOff?: (options?: { auto?: boolean }) => Promise<unknown>;
   delivery: DeliveryView;
   /** The driver's live position, or null before the first fix (or when location is denied). */
   coordinate: MapCoordinate | null;
@@ -35,10 +40,26 @@ type DeliveryNavigationMapProps = {
  * "Whole trip" frames all three points. Turn-by-turn directions are handed to the phone's own
  * navigation app, because the maps used across JOVO show position but do not route.
  */
-export function DeliveryNavigationMap({ delivery, coordinate, locationDenied, landmarks }: DeliveryNavigationMapProps) {
+export function DeliveryNavigationMap({ delivery, coordinate, locationDenied, landmarks, onBeforeHandOff }: DeliveryNavigationMapProps) {
   const { t, i18n } = useTranslation(["driver"]);
   const [following, setFollowing] = useState(true);
   const [fitTick, setFitTick] = useState(0);
+  // The road route store -> customer. It never changes for a delivery, so it is fetched once per
+  // delivery, not on every position update; the server caches it as well.
+  const [routeState, setRouteState] = useState<{ deliveryId: string; result: DeliveryRoute | "failed" } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getAccessToken()
+      .then((accessToken) => (accessToken ? getDeliveryRoute(accessToken, delivery.id) : Promise.reject(new Error("no session"))))
+      .then((result) => !cancelled && setRouteState({ deliveryId: delivery.id, result }))
+      .catch(() => !cancelled && setRouteState({ deliveryId: delivery.id, result: "failed" }));
+    return () => {
+      cancelled = true;
+    };
+  }, [delivery.id]);
+  const road = routeState?.deliveryId === delivery.id && routeState.result !== "failed" ? routeState.result.route : null;
+  const roadLine = useMemo(() => routeCoordinates(road?.points), [road]);
+  const routeSettled = routeState?.deliveryId === delivery.id;
 
   const pins = useMemo(
     () =>
@@ -60,6 +81,9 @@ export function DeliveryNavigationMap({ delivery, coordinate, locationDenied, la
 
   async function openNavigationApp() {
     if (!target) return;
+    // Handing off backgrounds JOVO. Before that, make sure the driver has been told what background
+    // location is and has decided, so their position keeps reaching dispatch while they navigate.
+    await onBeforeHandOff?.().catch(() => undefined);
     const url = externalNavigationUrl(Platform.OS, target.coordinate);
     try {
       await Linking.openURL(url);
@@ -83,6 +107,7 @@ export function DeliveryNavigationMap({ delivery, coordinate, locationDenied, la
           markers={landmarks}
           onUserPan={() => setFollowing(false)}
           pins={pins}
+          route={roadLine}
         />
       </View>
 
@@ -102,6 +127,17 @@ export function DeliveryNavigationMap({ delivery, coordinate, locationDenied, la
       ) : (
         <Text style={styles.notice}>{t("map.noCoordinates")}</Text>
       )}
+
+      {road ? (
+        <Text style={styles.routeSummary}>
+          {t("map.routeSummary", {
+            distance: formatDistance(road.distanceMeters, i18n.language),
+            duration: formatDuration(road.durationSeconds, i18n.language)
+          })}
+        </Text>
+      ) : routeSettled ? (
+        <Text style={styles.notice}>{t("map.routeUnavailable")}</Text>
+      ) : null}
 
       {locationDenied ? <Text style={styles.warning}>{t("map.locationDenied")}</Text> : null}
 
@@ -159,6 +195,7 @@ const styles = StyleSheet.create({
   targetLabel: { ...text("caption", "bold"), color: colors.textMuted },
   targetName: { ...text("bodySm", "bold"), color: colors.text, marginTop: spacing[1] },
   distance: { ...text("bodySm", "bold"), color: colors.primary },
+  routeSummary: { ...text("caption", "bold"), color: colors.info, marginTop: spacing[2], textAlign: "center" },
   notice: { ...text("caption"), color: colors.textMuted, marginTop: spacing[3], textAlign: "center" },
   warning: { ...text("caption"), color: colors.error, marginTop: spacing[2], textAlign: "center" },
   controls: { flexDirection: "row", gap: spacing[2], marginTop: spacing[3] },

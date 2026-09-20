@@ -94,6 +94,20 @@ export type DriverLocationReportView = DriverProfileView & {
   hasActiveDelivery: boolean;
 };
 
+/** The road route for one delivery, store to customer, drawn on the driver's map. */
+export type DeliveryRouteView = {
+  deliveryId: string;
+  /** Null when there is no route to show: missing coordinates, routing switched off, or the routing service unavailable. */
+  route: {
+    /** [latitude, longitude] along the road, store to customer. */
+    points: [number, number][];
+    distanceMeters: number;
+    durationSeconds: number;
+  } | null;
+  /** Why there is no route, so the app can say so instead of drawing something misleading. */
+  unavailableReason: "NO_COORDINATES" | "UNAVAILABLE" | null;
+};
+
 export const driverCashPeriods = ["SHIFT", "TODAY", "WEEK", "MONTH", "ALL"] as const;
 /** SHIFT is "since the last cash handover"; the rest are calendar periods on the server's clock. */
 export type DriverCashPeriod = (typeof driverCashPeriods)[number];
@@ -144,6 +158,12 @@ export type DriverCashSummaryView = {
     cashOwedFromBeforePeriodMinor: number;
     /** Delivery-fee share earned to date and not yet paid to the driver. */
     earningsOwedToDriverMinor: number;
+    /**
+     * The orders that make up cashOwedToPlatformMinor, oldest first, whatever period is selected. This is the
+     * list a driver checks the number against at handover.
+     */
+    openOrders: DriverCashLineView[];
+    openOrdersTruncated: boolean;
   };
   lines: DriverCashLineView[];
   linesTruncated: boolean;

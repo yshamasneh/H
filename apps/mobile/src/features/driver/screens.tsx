@@ -39,7 +39,10 @@ import { Icon, disclosureIconName } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { DeliveryNavigationMap } from "./delivery-map";
+import { HandoverBanner } from "./handover-banner";
+import { useBackgroundLocation } from "./use-background-location";
 import { areDeliveryAlertsEnabled, deliveryAlertsSupported, enableDeliveryAlerts } from "./delivery-alerts";
+import { cashDueMinorOf, cashRoundingMinorOf } from "../../core/cash";
 import { activeDeliveryStatuses, nextDriverActionByStatus } from "./delivery.rules";
 import { useDriverLocationTracking } from "./location-tracking";
 import { deliveryPins as buildDeliveryPins } from "./navigation-target";
@@ -66,6 +69,8 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   const [mine, setMine] = useState<DeliveryView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Bumped each time the home lists are reloaded, so the hand-over banner reads a fresh balance too.
+  const [refreshTick, setRefreshTick] = useState(0);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
@@ -138,6 +143,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
       ]);
       if (profile) setIsOnline(profile.isOnline);
       setAvailable(availableDeliveries);
+      setRefreshTick((tick) => tick + 1);
       setMine(ownDeliveries.items.filter((delivery) => activeDeliveryStatuses.includes(delivery.status)));
       setLandmarks(landmarkList);
       try {
@@ -164,7 +170,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   // While a delivery is in progress the position is followed continuously, not read once: the map
   // pin moves with the driver and each fix (at most every 10 s / 30 m) is reported so dispatch has
   // a current position. Shared with the delivery screen, so opening a delivery does not stop it.
-  useDriverLocationTracking(hasActiveDelivery, setCoordinate);
+  useDriverLocationTracking(hasActiveDelivery, setCoordinate, undefined, "driver-home");
 
   async function turnOnAlerts(): Promise<boolean> {
     setEnablingAlerts(true);
@@ -293,6 +299,8 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
           )}
         </Pressable>
 
+        {!hasActiveDelivery ? <HandoverBanner onOpen={props.onOpenEarnings} refreshKey={refreshTick} /> : null}
+
         <Pressable accessibilityRole="button" onPress={props.onOpenEarnings} style={styles.earningsLink}>
           <View style={styles.earningsIcon}><Icon color={colors.primary} name="orders" size="sm" /></View>
           <Text style={styles.earningsLinkText}>{t("home.viewEarnings")}</Text>
@@ -342,7 +350,7 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
                   <Text style={styles.cardTitle}>{delivery.restaurant.name}</Text>
                   <Text style={styles.cardSubtitle}>{t("home.pickupLabel", { address: delivery.restaurant.addressLine })}</Text>
                   <Text style={styles.cardSubtitle}>{t("home.deliverToLabel", { address: delivery.order.deliveryAddressLine })}</Text>
-                  <Text style={styles.cardTotal}>{formatPrice(delivery.order.totalMinor)}</Text>
+                  <Text style={styles.cardTotal}>{t("home.collectCash", { amount: formatPrice(cashDueMinorOf(delivery.order)) })}</Text>
                   <ActionButton
                     label={t("home.acceptDeliveryButton")}
                     loading={acceptingId === delivery.id}
@@ -377,6 +385,8 @@ function firstName(fullName: string): string {
 type DeliveryDetailScreenProps = {
   deliveryId: string;
   onBack: () => void;
+  /** Opens the cash screen, from the "hand over" banner shown when a delivery is complete. */
+  onOpenCash?: () => void;
 };
 
 export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
@@ -390,10 +400,17 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const landmarkMarkers = useMemo<LocationMapMarker[]>(() => toLandmarkMarkers(landmarks), [landmarks]);
   const isActive = delivery !== null && activeDeliveryStatuses.includes(delivery.status);
+  // Background location during this delivery: the disclosure and permission flow. Shown once the
+  // delivery is open (the natural moment after accepting) and again before handing off to a navigation app.
+  const backgroundLocation = useBackgroundLocation();
+  const ensureBackgroundLocation = backgroundLocation.ensure;
+  useEffect(() => {
+    if (isActive) void ensureBackgroundLocation({ auto: true });
+  }, [isActive, ensureBackgroundLocation]);
 
   // The same tracking the home screen runs, kept alive here: this is the screen the driver is on
   // while actually driving, and the position it reports is what dispatch sees.
-  useDriverLocationTracking(isActive, setCoordinate, () => setLocationDenied(true));
+  useDriverLocationTracking(isActive, setCoordinate, () => setLocationDenied(true), "delivery-detail");
   useEffect(() => {
     if (!isActive) return;
     // A first fix straight away, rather than waiting for the watcher's first update.
@@ -455,6 +472,7 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
       <Header onBack={props.onBack} subtitle={delivery?.restaurant.name ?? t("detail.defaultSubtitle")} title={t("detail.detailsTitle")} />
+      {backgroundLocation.disclosure}
       {error ? (
         <View style={styles.centered}>
           <ErrorState message={error} onRetry={load} />
@@ -471,6 +489,7 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
               delivery={delivery}
               landmarks={landmarkMarkers}
               locationDenied={locationDenied}
+              onBeforeHandOff={ensureBackgroundLocation}
             />
           ) : null}
           <View style={styles.summaryCard}>
@@ -486,11 +505,22 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
             <Text style={styles.addressText}>
               {t("detail.deliverAddressLine", { label: delivery.order.deliveryLabel, address: delivery.order.deliveryAddressLine })}
             </Text>
-            <Text style={styles.label}>{t("detail.orderTotalLabel")}</Text>
+            <Text style={styles.label}>{t("detail.collectLabel")}</Text>
+            <Text style={styles.collectAmount}>{formatPrice(cashDueMinorOf(delivery.order))}</Text>
             <Text style={styles.addressText}>
-              {t("detail.totalWithPayment", { amount: formatPrice(delivery.order.totalMinor), method: paymentMethodLabel(delivery.order.paymentMethod, t) })}
+              {cashRoundingMinorOf(delivery.order) > 0
+                ? t("detail.collectBreakdown", {
+                    total: formatPrice(delivery.order.totalMinor),
+                    rounding: formatPrice(cashRoundingMinorOf(delivery.order)),
+                    method: paymentMethodLabel(delivery.order.paymentMethod, t)
+                  })
+                : paymentMethodLabel(delivery.order.paymentMethod, t)}
             </Text>
           </View>
+
+          {delivery.status === "DELIVERED" ? (
+            <HandoverBanner onOpen={props.onOpenCash ?? props.onBack} refreshKey={delivery.status} showWhenZero />
+          ) : null}
 
           {nextDriverActionByStatus[delivery.status] ? (
             <ActionButton
@@ -673,6 +703,7 @@ const styles = StyleSheet.create({
   },
   label: { ...text("caption", "bold"), color: colors.text, marginBottom: spacing[2], marginTop: spacing[3] },
   addressText: { ...text("bodySm"), color: colors.text },
+  collectAmount: { ...text("display", "bold"), color: colors.primary },
   actionButton: {
     alignItems: "center",
     backgroundColor: colors.primary,

@@ -4,6 +4,30 @@ import { Link } from "react-router-dom";
 import { ApiError, approveDriver, listAdminDrivers, reactivateDriver, rejectDriver, suspendDriver, type AdminDriverView } from "../api";
 import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
+import { applyOnlineChange, applyPresenceUpdate, connectionState, countConnections } from "../driver-tracking";
+import { useLiveRefresh, useRealtimeEvent } from "../socket";
+
+function connectionBadge(state: "connected" | "online-app-closed" | "offline"): string {
+  return state === "connected" ? "CONNECTED" : state === "online-app-closed" ? "APP_CLOSED" : "OFFLINE";
+}
+
+function ConnectionSummary({ counts }: { counts: { connected: number; onlineAppClosed: number; offline: number } }) {
+  const { t } = useTranslation();
+  return (
+    <div className="card" style={{ alignItems: "center", display: "flex", flexWrap: "wrap", gap: 16 }}>
+      <span>
+        <StatusBadge status="CONNECTED" /> <strong>{counts.connected}</strong> {t("drivers.connectedCount")}
+      </span>
+      <span>
+        <StatusBadge status="APP_CLOSED" /> <strong>{counts.onlineAppClosed}</strong> {t("drivers.appClosedCount")}
+      </span>
+      <span>
+        <StatusBadge status="OFFLINE" /> <strong>{counts.offline}</strong> {t("drivers.offlineCount")}
+      </span>
+      <small>{t("drivers.connectionHelp")}</small>
+    </div>
+  );
+}
 
 export function DriversPage() {
   const { t } = useTranslation();
@@ -11,6 +35,20 @@ export function DriversPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [modal, setModal] = useState<{ driver: AdminDriverView; kind: "reject" | "suspend" } | null>(null);
+  // Judged on the admin's own clock, so a driver whose app goes quiet fades from "connected" by themselves.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useRealtimeEvent("driver.presence.changed", (payload) => {
+    setDrivers((current) => (current ? applyPresenceUpdate(current, payload) : current));
+    setNow(Date.now());
+  });
+  useRealtimeEvent("driver.status.changed", (payload) => {
+    setDrivers((current) => (current ? applyOnlineChange(current, payload) : current));
+  });
+  useLiveRefresh(["driver.status.changed"], () => void load(), 60_000);
 
   async function load() {
     try {
@@ -50,6 +88,8 @@ export function DriversPage() {
 
       {error ? <div className="error-banner">{error}</div> : null}
 
+      {drivers && drivers.length > 0 ? <ConnectionSummary counts={countConnections(drivers, now)} /> : null}
+
       <div className="card">
         {drivers === null ? (
           <div className="loading-state">{t("common.loading")}</div>
@@ -63,6 +103,7 @@ export function DriversPage() {
                 <th>{t("common.phone")}</th>
                 <th>{t("common.status")}</th>
                 <th>{t("drivers.online")}</th>
+                <th>{t("drivers.connection")}</th>
                 <th>{t("drivers.completedDeliveries")}</th>
                 <th>{t("common.actions")}</th>
               </tr>
@@ -77,6 +118,9 @@ export function DriversPage() {
                   </td>
                   <td>
                     <StatusBadge status={driver.isOnline ? "ONLINE" : "OFFLINE"} />
+                  </td>
+                  <td>
+                    <StatusBadge status={connectionBadge(connectionState(driver, now))} />
                   </td>
                   <td>{driver.completedDeliveriesCount}</td>
                   <td>

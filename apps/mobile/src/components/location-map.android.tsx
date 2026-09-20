@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Camera, Map, ViewAnnotation, type CameraRef, type StyleSpecification } from "@maplibre/maplibre-react-native";
+import {
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Map,
+  ViewAnnotation,
+  type CameraRef,
+  type StyleSpecification
+} from "@maplibre/maplibre-react-native";
 import { boundsForCoordinates, followZoom } from "./location-map.camera";
 import i18n from "../i18n";
 import { LandmarkFlag } from "./landmark-flag";
 import { MapDot } from "./map-pin";
-import { landmarkMarkerColor, landmarkVisibilityMinZoom, type LocationMapProps } from "./location-map.types";
+import { landmarkMarkerColor, landmarkVisibilityMinZoom, routeLineColor, type LocationMapProps } from "./location-map.types";
 import { radius, spacing, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/theme-context";
 
@@ -100,6 +108,19 @@ export function LocationMap(props: LocationMapProps) {
       ? { bounds: initialFitBounds, padding: fitBoundsPadding }
       : { center: [props.coordinate.longitude, props.coordinate.latitude] as [number, number], zoom: initialZoom };
 
+  // The road route as GeoJSON, in [longitude, latitude] order.
+  const routeGeoJson = useMemo(
+    () =>
+      props.route && props.route.length >= 2
+        ? ({
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: props.route.map((point) => [point.longitude, point.latitude]) }
+          } as const)
+        : null,
+    [props.route]
+  );
+
   // MapLibre coordinates are [longitude, latitude]; our contract is {latitude, longitude}.
   function emit(lngLat: [number, number]) {
     props.onCoordinateChange?.({ latitude: lngLat[1], longitude: lngLat[0] });
@@ -120,6 +141,23 @@ export function LocationMap(props: LocationMapProps) {
         style={StyleSheet.absoluteFillObject}
       >
         <Camera initialViewState={initialViewState} ref={cameraRef} />
+        {routeGeoJson ? (
+          <GeoJSONSource data={routeGeoJson} id="delivery-route">
+            {/* A white casing under the blue line keeps it legible over both light and dark imagery. */}
+            <Layer
+              id="delivery-route-casing"
+              layout={{ "line-cap": "round", "line-join": "round" }}
+              paint={{ "line-color": "#FFFFFF", "line-opacity": 0.9, "line-width": 9 }}
+              type="line"
+            />
+            <Layer
+              id="delivery-route-line"
+              layout={{ "line-cap": "round", "line-join": "round" }}
+              paint={{ "line-color": routeLineColor, "line-width": 5 }}
+              type="line"
+            />
+          </GeoJSONSource>
+        ) : null}
         {editable ? (
           <ViewAnnotation
             draggable

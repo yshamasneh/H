@@ -60,8 +60,19 @@ export type LocationMapCamera =
   | { mode: "follow"; coordinate: MapCoordinate }
   | { mode: "fit"; coordinates: MapCoordinate[]; key: string };
 
+/**
+ * The colour of a road route drawn on any of the maps. A saturated blue with a white casing, so it
+ * reads over satellite imagery and is not confused with the orange brand pins.
+ */
+export const routeLineColor = "#1F5FBF";
+
 export type LocationMapProps = {
   coordinate: MapCoordinate;
+  /**
+   * A road-following route to draw as a blue line, in order from start to end. Fewer than two points
+   * draws nothing: a route is never faked from the pins.
+   */
+  route?: MapCoordinate[];
   onCoordinateChange?: (coordinate: MapCoordinate) => void;
   markers?: LocationMapMarker[];
   pins?: LocationMapPin[];

@@ -236,3 +236,36 @@ The delivery alert channel plays on Android's ALARM stream so it stays audible a
 driver can still turn the channel down in system settings. Revisit (one constant) if it proves too insistent on real devices.
 Driver positions travel in the socket payload rather than as a refetch signal (the codebase's usual rule), because a fix arrives every
 ~10 s per driver; the authoritative list is still re-fetched on shift/delivery events, reconnects and a slow poll.
+
+## 2026-09-20: Routing provider - OSRM protocol, configurable host, one cached request per delivery
+
+The driver's road route comes from any OSRM-compatible service through one setting (`ROUTING_BASE_URL`), the same vendor-neutral shape as the OTP
+webhook and error tracking. OSRM's `/route/v1/driving` request is spoken by the public demo server, self-hosted OSRM and several hosted services, so changing
+provider is configuration. The API makes the call (not the phone), so the provider never appears in the app, no key ships in a binary, results are cached and a
+driver can only ask about their own delivery.
+
+Cost at this scale is negligible because the route is store to customer, which never changes: one request per delivery, cached 24 h. A thousand deliveries a
+month is a thousand requests. Options: the **public OSRM demo** (free, no SLA, asks for light use and an identifying User-Agent, which the client sends; fine for
+Trial, not for launch); **self-hosted OSRM** (free software; needs a Palestine/Israel OSM extract and roughly 1-2 GB RAM, so about one small always-on container,
+tens of dollars a month, and is the recommended launch choice for reliability and data control); **hosted** (Mapbox, OpenRouteService, GraphHopper, Google): a few
+dollars a month or free tier at this volume, but each has its own request format or terms (Mapbox's require Mapbox maps), so switching needs a small adapter.
+A routing outage costs the driver only the blue line: the pins, the distance and the hand-off to their navigation app are unaffected, and no straight line is drawn in its place.
+
+## 2026-09-20: "Alert only while the app is running" is a lease, and its grace is a trade-off
+
+The server cannot observe a force-close, so "the app is running" is inferred from the app reporting in (`presence.rules.ts`). Foreground gets a short lease renewed by
+heartbeat; backgrounding gets a longer grace, because a backgrounded app is running but cannot heartbeat. A driver who force-closes the app therefore stops being
+alerted within the grace (30 min by default), not at the instant of closing; and on iOS a phone left in a pocket longer than the grace stops being alerted until the app
+is opened. This replaces the earlier behaviour (alert every online driver, app or not) at the owner's request, and is the reason for the two `DRIVER_PRESENCE_*` settings.
+
+## 2026-09-20: Cash rounding lives on its own platform account, not in any share
+
+Rounding cash up is revenue that belongs to nobody in the revenue model, and putting it in an owner's, the delivery partner's or the driver's row would silently change a
+split that was agreed to the agora. So it is a distinct ledger component held by a distinct system account (`PLATFORM_ROUNDING`), visible in balances and on the order's
+financial card, and constrained in the database. What the platform does with that balance (pay it to the owners, keep it) is a business decision not made here.
+
+## 2026-09-20: Background location is opt-in, disclosed first, and bounded by the delivery
+
+Location leaves the phone in the background only while a delivery is active, only after a full-screen disclosure the driver accepts, and stops when the server says the
+delivery is over. Declining is honoured (no repeated prompts; the foreground map still works). This is designed for Play/App Store review as much as for battery: the
+permission is justified by one core feature, there is a visible notification or indicator whenever it runs, and it never runs idle.

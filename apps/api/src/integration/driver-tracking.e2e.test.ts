@@ -174,11 +174,12 @@ test(
     // ------------------------------------------------------------------ live tracking
     await context.test("a driver's reported position reaches the admin socket and the REST views", async () => {
       adminEvents.length = 0;
-      await http
+      const located = await http
         .patch("/api/v1/driver/me/location")
         .set("Authorization", `Bearer ${actors.driverAToken}`)
         .send({ latitude: 31.9051, longitude: 35.2101 })
         .expect(200);
+      assert.equal(located.body.hasActiveDelivery, true, "mid-delivery: the phone keeps its background task running");
 
       await eventually(() => adminEvents.some((entry) => entry.event === "driver.location.updated"));
       const moved = adminEvents.find((entry) => entry.event === "driver.location.updated")!.payload;
@@ -434,6 +435,7 @@ test(
     });
 
     // ------------------------------------------------------------------ cash rounding, worked example
+    let deliveredRoundingDeliveryId = "";
     await context.test("WORKED EXAMPLE — a 23.40 order is collected as 24.00 and the ledger still balances to the agora", async () => {
       const overviewBefore = (await http.get("/api/v1/admin/accounting/overview").set("Authorization", `Bearer ${actors.adminToken}`).expect(200)).body;
 
@@ -503,6 +505,90 @@ test(
       const customerView = (await http.get(`/api/v1/orders/${placed.id}`).set("Authorization", `Bearer ${actors.customerToken}`).expect(200)).body;
       assert.equal(customerView.totalMinor, 2_340);
       assert.equal(customerView.cashDueMinor, 2_400);
+
+      // The single number a driver hands over, and the orders behind it, from the same ledger.
+      const open = summary.balance.openOrders;
+      assert.ok(open.some((entry: any) => entry.orderId === placed.id && entry.cashOwedToPlatformMinor === 2_400));
+      assert.equal(
+        open.reduce((sum: number, entry: any) => sum + entry.cashOwedToPlatformMinor, 0),
+        summary.balance.cashOwedToPlatformMinor,
+        "the listed orders add up to exactly the amount to hand over"
+      );
+      const custodyRows = await prisma.driverCashCustody.findMany({
+        where: { driverUserId: actors.driverAId, status: { in: ["OUTSTANDING", "PARTIALLY_SETTLED"] } }
+      });
+      assert.equal(
+        custodyRows.reduce((sum, row) => sum + row.collectedAmountMinor - row.settledAmountMinor, 0),
+        summary.balance.cashOwedToPlatformMinor,
+        "and that equals the driver's unsettled custody in the database"
+      );
+      deliveredRoundingDeliveryId = offered.id;
+    });
+
+    // ------------------------------------------------------------------ tracking ends with the delivery
+    await context.test("once the delivery is done the location reply says so, so the phone stops its background task", async () => {
+      const reply = await http
+        .patch("/api/v1/driver/me/location")
+        .set("Authorization", `Bearer ${actors.driverAToken}`)
+        .send({ latitude: 31.907, longitude: 35.212 })
+        .expect(200);
+      assert.equal(reply.body.hasActiveDelivery, false);
+    });
+
+    // ------------------------------------------------------------------ the road route
+    await context.test("the road route comes from a routing service, once per delivery, and only for the driver's own delivery", async () => {
+      const osrmBody = {
+        code: "Ok",
+        routes: [{ distance: 2_130.4, duration: 301.2, geometry: { coordinates: [[35.2034, 31.9038], [35.21, 31.9041], [35.2184, 31.9038]] } }]
+      };
+      const requested: string[] = [];
+      globalThis.fetch = (async (url: string) => {
+        requested.push(String(url));
+        return new Response(JSON.stringify(osrmBody), { status: 200 });
+      }) as typeof fetch;
+      try {
+        const path = `/api/v1/driver/me/deliveries/${deliveredRoundingDeliveryId}/route`;
+        const first = await http.get(path).set("Authorization", `Bearer ${actors.driverAToken}`).expect(200);
+        assert.equal(first.body.unavailableReason, null);
+        assert.deepEqual(first.body.route.points[0], [31.9038, 35.2034], "[lat, lng], start at the store");
+        assert.deepEqual(first.body.route.points.at(-1), [31.9038, 35.2184], "and end at the customer's address");
+        assert.equal(first.body.route.distanceMeters, 2_130);
+        assert.equal(first.body.route.durationSeconds, 301);
+        // The request went out as a plain OSRM call: store first, then the customer, lng before lat.
+        assert.match(requested[0], /\/route\/v1\/driving\/35\.203400,31\.903800;35\.218400,31\.903800\?/);
+
+        await http.get(path).set("Authorization", `Bearer ${actors.driverAToken}`).expect(200);
+        assert.equal(requested.length, 1, "the second look is served from the cache");
+
+        await http.get(path).set("Authorization", `Bearer ${actors.driverBToken}`).expect(404);
+        await http.get(path).set("Authorization", `Bearer ${actors.customerToken}`).expect(403);
+        await http.get(path).expect(401);
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+
+    await context.test("when routing is down the reply says unavailable, with no invented line", async () => {
+      // A delivery whose store/customer pair has not been routed yet, so the cache cannot answer for it.
+      const other = await placeOrder(http, actors, actors.roundingItemId, 3);
+      await advanceToReady(http, actors, other.id);
+      await reportPresence(http, actors.driverAToken, "FOREGROUND");
+      const available = await http.get("/api/v1/driver/me/deliveries/available").set("Authorization", `Bearer ${actors.driverAToken}`).expect(200);
+      const offered = available.body.find((candidate: any) => candidate.order.id === other.id);
+      await http.post(`/api/v1/driver/me/deliveries/${offered.id}/accept`).set("Authorization", `Bearer ${actors.driverAToken}`).expect(201);
+      // Same store and address as the earlier order: cached. Move the destination so nothing is cached.
+      await prisma.order.update({ where: { id: other.id }, data: { deliveryLatitude: 31.95, deliveryLongitude: 35.25 } });
+
+      globalThis.fetch = (async () => {
+        throw new TypeError("routing service unreachable");
+      }) as typeof fetch;
+      try {
+        const reply = await http.get(`/api/v1/driver/me/deliveries/${offered.id}/route`).set("Authorization", `Bearer ${actors.driverAToken}`).expect(200);
+        assert.equal(reply.body.route, null);
+        assert.equal(reply.body.unavailableReason, "UNAVAILABLE");
+      } finally {
+        globalThis.fetch = realFetch;
+      }
     });
 
     await context.test("the database itself refuses a rounding row that is not a small platform credit", async () => {

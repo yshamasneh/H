@@ -300,3 +300,134 @@ test("tracking an order with no driver yet returns no driver rather than an erro
     (error: unknown) => error instanceof ApiException && error.getStatus() === 404
   );
 });
+
+// ---------------------------------------------------------------------------------------------
+// The road route on the driver's map
+
+function routingReturning(route: unknown) {
+  const calls: { from: unknown; to: unknown }[] = [];
+  return { calls, service: { route: async (from: unknown, to: unknown) => (calls.push({ from, to }), route) } };
+}
+
+function serviceWithRouting(routing: unknown) {
+  const prisma = new FakeDriversPrisma();
+  const realtime = new FakeRealtimeGateway();
+  return { prisma, service: new DriversService(prisma as never, realtime as never, undefined, routing as never) };
+}
+
+test("the route runs from the store to the customer's address, for the driver's own delivery", async () => {
+  const road = { points: [[31.838, 35.14], [31.9, 35.2]] as [number, number][], distanceMeters: 13_618, durationSeconds: 1_349 };
+  const routing = routingReturning(road);
+  const { prisma, service } = serviceWithRouting(routing.service);
+  const restaurant = prisma.seedRestaurant({ latitude: 31.83804, longitude: 35.14047 });
+  const driver = prisma.seedDriver();
+  const order = prisma.seedOrder(restaurant.id, { deliveryLatitude: 31.9038, deliveryLongitude: 35.2034 });
+  prisma.seedOrderItem(order.id);
+  const delivery = prisma.seedDelivery(order.id, { driverId: driver.userId, status: "ASSIGNED" as never });
+
+  const view = await service.getDeliveryRoute(driver.userId, delivery.id);
+
+  assert.deepEqual(view.route, road);
+  assert.equal(view.unavailableReason, null);
+  assert.deepEqual(routing.calls[0], {
+    from: { latitude: 31.83804, longitude: 35.14047 },
+    to: { latitude: 31.9038, longitude: 35.2034 }
+  });
+});
+
+test("a driver cannot ask for a route on somebody else's delivery", async () => {
+  const routing = routingReturning({ points: [], distanceMeters: 1, durationSeconds: 1 });
+  const { prisma, service } = serviceWithRouting(routing.service);
+  const restaurant = prisma.seedRestaurant({ latitude: 31.8, longitude: 35.1 });
+  const owner = prisma.seedDriver();
+  const other = prisma.seedDriver();
+  const order = prisma.seedOrder(restaurant.id, { deliveryLatitude: 31.9, deliveryLongitude: 35.2 });
+  prisma.seedOrderItem(order.id);
+  const delivery = prisma.seedDelivery(order.id, { driverId: owner.userId, status: "ASSIGNED" as never });
+
+  await assert.rejects(
+    service.getDeliveryRoute(other.userId, delivery.id),
+    (error: unknown) => error instanceof ApiException && error.getStatus() === 404
+  );
+  assert.equal(routing.calls.length, 0, "no routing request is made on their behalf");
+});
+
+test("a store or order without coordinates says so instead of asking a routing service about nowhere", async () => {
+  const routing = routingReturning({ points: [], distanceMeters: 1, durationSeconds: 1 });
+  const { prisma, service } = serviceWithRouting(routing.service);
+  const restaurant = prisma.seedRestaurant();
+  const driver = prisma.seedDriver();
+  const order = prisma.seedOrder(restaurant.id);
+  prisma.seedOrderItem(order.id);
+  const delivery = prisma.seedDelivery(order.id, { driverId: driver.userId, status: "ASSIGNED" as never });
+
+  const view = await service.getDeliveryRoute(driver.userId, delivery.id);
+
+  assert.equal(view.route, null);
+  assert.equal(view.unavailableReason, "NO_COORDINATES");
+  assert.equal(routing.calls.length, 0);
+});
+
+test("when the routing service has nothing, the reply says unavailable: there is no invented straight line", async () => {
+  const { prisma, service } = serviceWithRouting(routingReturning(null).service);
+  const restaurant = prisma.seedRestaurant({ latitude: 31.8, longitude: 35.1 });
+  const driver = prisma.seedDriver();
+  const order = prisma.seedOrder(restaurant.id, { deliveryLatitude: 31.9, deliveryLongitude: 35.2 });
+  prisma.seedOrderItem(order.id);
+  const delivery = prisma.seedDelivery(order.id, { driverId: driver.userId, status: "ASSIGNED" as never });
+
+  const view = await service.getDeliveryRoute(driver.userId, delivery.id);
+
+  assert.equal(view.route, null);
+  assert.equal(view.unavailableReason, "UNAVAILABLE");
+});
+
+// ---------------------------------------------------------------------------------------------
+// One number to hand over, and the orders behind it
+
+test("the orders behind the amount to hand over are listed, oldest first, whatever period is on screen", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ name: "Al-Quds Market" });
+  const driver = prisma.seedDriver();
+  const first = await completeDelivery(prisma, service, restaurant.id, driver.userId);
+  const second = await completeDelivery(prisma, service, restaurant.id, driver.userId);
+  // The first order is from last week and was never handed over; the second is from today.
+  const weekAgo = new Date(Date.now() - 8 * 86_400_000);
+  prisma.accounting.driverCashCustodies.find((row) => row.orderId === first.id)!.collectedAt = weekAgo;
+  for (const earning of prisma.accounting.earningsForOrderRecord(first.id)) earning.occurredAt = weekAgo;
+
+  const today = await service.getOwnCashSummary(driver.userId, "TODAY");
+
+  assert.equal(today.balance.cashOwedToPlatformMinor, 6_400);
+  assert.deepEqual(today.balance.openOrders.map((line) => line.orderId), [first.id, second.id], "oldest first");
+  assert.equal(today.balance.openOrders.reduce((sum, line) => sum + line.cashOwedToPlatformMinor, 0), 6_400,
+    "the listed orders add up to exactly the number to hand over");
+  assert.ok(today.balance.openOrders.every((line) => line.restaurantName === "Al-Quds Market"));
+  assert.equal(today.lines.length, 1, "while the period's own list is just today's order");
+  assert.equal(today.balance.openOrdersTruncated, false);
+});
+
+test("an order that has been handed over is no longer in the list to hand over", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const driver = prisma.seedDriver();
+  const first = await completeDelivery(prisma, service, restaurant.id, driver.userId);
+  await completeDelivery(prisma, service, restaurant.id, driver.userId);
+  handOver(prisma, driver.userId, new Date(), [first.id]);
+
+  const summary = await service.getOwnCashSummary(driver.userId, "ALL");
+
+  assert.equal(summary.balance.openOrders.length, 1);
+  assert.equal(summary.balance.cashOwedToPlatformMinor, 3_200);
+  assert.equal(summary.balance.openOrders[0].cashOwedToPlatformMinor, 3_200);
+});
+
+test("a driver holding nothing has an empty list and a zero to hand over", async () => {
+  const { prisma, service } = createService();
+  const driver = prisma.seedDriver();
+
+  const summary = await service.getOwnCashSummary(driver.userId, "SHIFT");
+
+  assert.equal(summary.balance.cashOwedToPlatformMinor, 0);
+  assert.deepEqual(summary.balance.openOrders, []);
+});

@@ -284,6 +284,9 @@ export type OrderDetail = {
   deliveryFeeMinor: number;
   discountMinor: number;
   totalMinor: number;
+  /** Cash to pay: totalMinor rounded UP to a whole shekel. Absent from an API older than cash rounding. */
+  cashDueMinor?: number;
+  cashRoundingMinor?: number;
   createdAt: string;
   statusHistory: OrderStatusHistoryEntry[];
   delivery: DeliveryStatusSummary | null;
@@ -296,6 +299,8 @@ export type OrderQuote = {
   deliveryFeeMinor: number;
   discountMinor: number;
   totalMinor: number;
+  cashDueMinor?: number;
+  cashRoundingMinor?: number;
   appliedPromotions: OrderDetail["appliedPromotions"];
 };
 
@@ -312,6 +317,9 @@ export type DeliveryOrderSummary = {
   deliveryLabel: string;
   deliveryAddressLine: string;
   totalMinor: number;
+  /** What the driver collects at the door: totalMinor rounded UP to a whole shekel. */
+  cashDueMinor?: number;
+  cashRoundingMinor?: number;
   paymentMethod: OrderPaymentMethod;
   // The customer's delivery destination (from checkout). Optional for older orders.
   latitude: number | null;
@@ -598,6 +606,22 @@ export function setDriverOnlineStatus(accessToken: string, isOnline: boolean): P
   return request("/api/v1/driver/me/status", { method: "PATCH", body: { isOnline }, accessToken });
 }
 
+/** The road route store -> customer for one of the driver's deliveries. */
+export type DeliveryRoute = {
+  deliveryId: string;
+  route: {
+    /** [latitude, longitude] along the road. */
+    points: [number, number][];
+    distanceMeters: number;
+    durationSeconds: number;
+  } | null;
+  unavailableReason: "NO_COORDINATES" | "UNAVAILABLE" | null;
+};
+
+export function getDeliveryRoute(accessToken: string, deliveryId: string): Promise<DeliveryRoute> {
+  return request(`/api/v1/driver/me/deliveries/${deliveryId}/route`, { accessToken });
+}
+
 export type DriverStats = { completedCount: number; activeCount: number; earningsMinor: number; perDeliveryMinor: number };
 
 export function getDriverStats(accessToken: string): Promise<DriverStats> {
@@ -645,6 +669,9 @@ export type DriverCashSummary = {
     oldestUnsettledAt: string | null;
     cashOwedFromBeforePeriodMinor: number;
     earningsOwedToDriverMinor: number;
+    /** The orders that make up cashOwedToPlatformMinor, oldest first, whatever the period. */
+    openOrders: DriverCashLine[];
+    openOrdersTruncated: boolean;
   };
   lines: DriverCashLine[];
   linesTruncated: boolean;
@@ -654,7 +681,18 @@ export function getDriverCashSummary(accessToken: string, period: DriverCashPeri
   return request(`/api/v1/driver/me/cash-summary?period=${period}`, { accessToken });
 }
 
-export function updateDriverLocation(accessToken: string, latitude: number, longitude: number): Promise<DriverProfileView> {
+export type DriverPresenceState = "FOREGROUND" | "BACKGROUND" | "CLOSED";
+
+/** The app tells the server it is open, has gone to the background, or is closed. Alerts need it open. */
+export function reportDriverPresence(accessToken: string, state: DriverPresenceState): Promise<{ appOpen: boolean }> {
+  return request("/api/v1/driver/me/presence", { method: "PUT", body: { state }, accessToken });
+}
+
+export function updateDriverLocation(
+  accessToken: string,
+  latitude: number,
+  longitude: number
+): Promise<DriverProfileView & { hasActiveDelivery: boolean }> {
   return request("/api/v1/driver/me/location", { method: "PATCH", body: { latitude, longitude }, accessToken });
 }
 
@@ -1278,7 +1316,7 @@ const refreshAccessToken = createRefreshCoordinator(performTokenRefresh);
 
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; accessToken?: string } = {}
+  options: { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown; accessToken?: string } = {}
 ): Promise<T> {
   const method = options.method ?? "GET";
   // Each fetch attempt gets its own AbortController timeout; a timeout/network failure is

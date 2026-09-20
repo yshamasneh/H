@@ -56,7 +56,10 @@
     "priceChanged": "تغيّر السعر. راجع الإجمالي الجديد وأكّده قبل إرسال الطلب.",
     "confirmUpdatedPrice": "تأكيد السعر الجديد",
     "cashOnDelivery": "الدفع نقدًا عند الاستلام",
-    "selectedDeliveryLocationFallback": "موقع التوصيل المحدد"
+    "selectedDeliveryLocationFallback": "موقع التوصيل المحدد",
+    "orderTotal": "إجمالي الطلب",
+    "roundedUp": "تقريب لأعلى إلى شيكل كامل",
+    "roundedUpNote": "يُحصَّل النقد بالشيكل الكامل، لذلك يُقرَّب المبلغ للأعلى. الزيادة هي فقط الفرق حتى الشيكل التالي."
   },
   "confirmation": {
     "title": "تم إرسال الطلب",
@@ -104,6 +107,8 @@
     "onTheWayAt": "في الطريق: {{date}}",
     "deliveredAt": "تم التوصيل: {{date}}",
     "statusHistoryTitle": "سجل الحالة",
-    "tryAgain": "حاول مرة أخرى"
+    "tryAgain": "حاول مرة أخرى",
+    "roundedUpLabel": "تقريب لأعلى إلى شيكل كامل",
+    "cashToPayLabel": "المبلغ النقدي المطلوب"
   }
 }

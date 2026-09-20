@@ -101,6 +101,34 @@ assert.match(properties, /^android\.enableShrinkResourcesInReleaseBuilds=true$/m
 assert.match(properties, /^EX_DEV_CLIENT_NETWORK_INSPECTOR=false$/m);
 assert.doesNotMatch(gradle, /release\s*\{[^}]{0,500}signingConfig\s+signingConfigs\.debug/s);
 
+// Background location during a delivery: the permissions, the plugin flags that add the iOS background
+// mode and usage strings, the task manager, and the in-app disclosure must all be present together.
+// Any one missing means either a build that cannot track in the background, or one that asks for the
+// permission without the disclosure Play Store review requires.
+const locationPlugin = app.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === "expo-location");
+assert.ok(locationPlugin, "expo-location plugin is required");
+const locationOptions = locationPlugin[1];
+assert.equal(locationOptions.isAndroidBackgroundLocationEnabled, true, "Android background location must be enabled in the plugin");
+assert.equal(locationOptions.isAndroidForegroundServiceEnabled, true, "Android background location needs its foreground service");
+assert.equal(locationOptions.isIosBackgroundLocationEnabled, true, "iOS needs the location background mode");
+assert.ok(
+  locationOptions.locationAlwaysAndWhenInUsePermission && locationOptions.locationAlwaysPermission,
+  "iOS Always usage descriptions must be set: they are what the driver reads in the system prompt"
+);
+for (const permission of [
+  "android.permission.ACCESS_BACKGROUND_LOCATION",
+  "android.permission.FOREGROUND_SERVICE",
+  "android.permission.FOREGROUND_SERVICE_LOCATION"
+]) {
+  assert.ok(app.android.permissions.includes(permission), `app.json android.permissions must include ${permission}`);
+}
+assert.ok(mobilePackage.dependencies["expo-task-manager"], "expo-task-manager is required for the background location task");
+const backgroundLocation = read("src/core/background-location.ts");
+assert.match(backgroundLocation, /defineTask/, "the background task must be defined");
+assert.match(read("index.ts"), /core\/background-location/, "index.ts must import the task so it is registered at startup");
+assert.match(read("src/components/background-location-disclosure.tsx"), /tracking\.disclosure/, "the prominent disclosure component is required");
+assert.match(backgroundLocation, /foregroundService/, "Android requires a visible foreground-service notification");
+
 const pushSetup = read("src/core/push-notifications.ts");
 assert.match(pushSetup, /setNotificationChannelAsync\("orders"/);
 assert.match(pushSetup, /importance:\s*Notifications\.AndroidImportance\.HIGH/);

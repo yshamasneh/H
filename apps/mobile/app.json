@@ -2,7 +2,7 @@
   "expo": {
     "name": "JOVO",
     "slug": "jovo",
-    "version": "0.14.0",
+    "version": "0.15.0",
     "scheme": "jovo",
     "icon": "./assets/store/app-icon-1024.png",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.jovo.app",
-      "buildNumber": "14",
+      "buildNumber": "15",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/store/adaptive-icon-foreground.png",
         "backgroundColor": "#FFFFFF"
       },
-      "versionCode": 14,
+      "versionCode": 15,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -32,7 +32,10 @@
       ],
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -53,7 +56,12 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "JOVO uses your location only when you choose it to calculate delivery availability and pricing."
+          "locationWhenInUsePermission": "JOVO uses your location only when you choose it to calculate delivery availability and pricing.",
+          "locationAlwaysAndWhenInUsePermission": "During an active delivery, JOVO shares your location with JOVO dispatch even when the app is closed or in the background, for example while you use a navigation app. It is not collected when you have no delivery.",
+          "locationAlwaysPermission": "During an active delivery, JOVO shares your location with JOVO dispatch even when the app is closed or in the background. It is not collected when you have no delivery.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [

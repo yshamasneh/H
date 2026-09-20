@@ -5,8 +5,10 @@ import {
   deliveryPins,
   externalNavigationUrl,
   formatDistance,
+  formatDuration,
   haversineMeters,
-  navigationTarget
+  navigationTarget,
+  routeCoordinates
 } from "./navigation-target";
 
 function delivery(
@@ -100,4 +102,23 @@ test("the hand-off link opens turn-by-turn driving directions on each platform",
     externalNavigationUrl("web", point),
     "https://www.google.com/maps/dir/?api=1&destination=31.860000,35.170000&travelmode=driving"
   );
+});
+
+test("route points become map coordinates, and fewer than two points is no route at all", () => {
+  assert.deepEqual(routeCoordinates([[31.8, 35.1], [31.9, 35.2]]), [
+    { latitude: 31.8, longitude: 35.1 },
+    { latitude: 31.9, longitude: 35.2 }
+  ]);
+  assert.equal(routeCoordinates([[31.8, 35.1]]), undefined, "a single point is not drawn as a line");
+  assert.equal(routeCoordinates([]), undefined);
+  assert.equal(routeCoordinates(null), undefined);
+});
+
+test("a drive time reads in minutes, then hours and minutes, in the locale's own script", () => {
+  assert.equal(formatDuration(20, "en"), "1 min", "never 0 min");
+  assert.equal(formatDuration(540, "en"), "9 min");
+  assert.equal(formatDuration(3_900, "en"), "1 h 5 min");
+  assert.equal(formatDuration(7_200, "en"), "2 h");
+  assert.match(formatDuration(540, "ar"), /د$/);
+  assert.match(formatDuration(3_900, "ar"), /س/);
 });

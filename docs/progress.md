@@ -2963,3 +2963,65 @@ show collected / earned / still owed and mark failed deliveries (earning, no cas
 API 468 pass / 4 skipped (472); E2E 35 pass against PostgreSQL (new `driver-tracking.e2e.test.ts`: 12 subtests, a real admin socket, the
 push worker with Expo stubbed); admin 66; mobile 134 unit + 51 UI; typechecks, admin build, full `expo export` (web, iOS, Android),
 Expo Doctor 17/17, secret scan and `prisma validate` clean. Not verified: anything on a physical device.
+
+## 2026-09-20 (4): Alerts gated on the app running, connected drivers, road route, background location, cash rounding
+
+### Deploy visibility
+`/health` now returns `commit` (the Docker build embeds `GIT_SHA`), and `deploy-trial-api.yml` fails unless the running process reports
+the commit it just deployed, and prints the live host. Previously the verify step proved the container image tag and that *a* healthy
+process answered, which a healthy old container could also satisfy.
+
+### Alerts only while the app is running
+A driver is alerted only if approved, marked online **and** the app is running. The server cannot see a force-close, so presence is a lease
+(`drivers/presence.rules.ts`): the app heartbeats FOREGROUND every ~45 s (lease 2 min), reports BACKGROUND once as it goes to the background
+(grace 30 min), and CLOSED on logout; a lapsed lease is treated as closed and the driver gets no alert attempt at all, whatever the stale
+online flag says. Both durations are configurable (`DRIVER_PRESENCE_*`). Migration `20260920130000_driver_app_presence` (nullable columns).
+The three required cases (online+closed = none, online+open = alert, offline+open = none) are unit tests through the real order flow and an e2e.
+**Limit:** iOS suspends a backgrounded app, so a driver whose phone has been in a pocket longer than the background grace stops being alerted
+until they open the app. That is the price of "alert only while the app is running"; raise the grace if it is too short.
+
+### Connected drivers in the admin console
+Every admin driver view carries `appState`/`appLeaseUntil`/`appOpen`; the drivers table has a Connection column and counts, and the live map
+shows the same. `driver.presence.changed` (only on a change, not every heartbeat) and `driver.status.changed` patch the list live; the lease is
+judged on the admin's own clock so a driver fades from "connected" without the server announcing the expiry.
+
+### Road-following route
+`GET /driver/me/deliveries/:id/route` (own delivery only) asks an OSRM-compatible service (`ROUTING_BASE_URL`, default the public demo server)
+for the store-to-customer route once per delivery and caches it (24 h; failures 60 s); the app draws it as a blue line with a white casing on
+MapLibre, Apple Maps and Leaflet, with real distance and drive time. If there is no route the app says so and draws nothing: it never falls back to
+a straight line. (The previous map drew pins and showed a straight-line *distance number*, not a drawn path.) The hand-off to the phone's navigation
+app is unchanged. See decisions.md for the provider choice and cost.
+
+### Background location during a delivery
+Added `expo-task-manager`, the location task (`core/background-location.ts`), the Android background/foreground-service permissions and iOS
+background mode, a full-screen prominent disclosure before the system prompt, and pure, tested rules (`core/tracking/`): track only while a
+delivery is active; stop on completion (screen), on the server's `hasActiveDelivery: false` (covers an admin cancel while the driver is in another
+app), and on logout. Tracking is debounced so opening a delivery from the home screen does not stop it for a moment. The app version is `0.15.0`
+(new native module). Store-console work is in `docs/play-store-background-location.md`. Nothing here is verifiable without a device.
+
+### Cash rounded UP to a whole shekel
+Collected cash is the order total rounded up (23.40 becomes 24.00); the order's total, fees and every split stay exact. The difference is a
+`CASH_ROUNDING` ledger row credited to a dedicated `PLATFORM_ROUNDING` account (new `PartnerAccountKind.PLATFORM_ACCOUNT`), with
+`OrderFinancialRecord.cashRoundingMinor` and DB CHECK constraints (a positive credit under one shekel, to a partner-type account, from an order;
+none on a failed delivery). Migrations `20260920120000_cash_rounding_enums` and `20260920120100_cash_rounding_account_and_column`. The revenue split is
+still asserted to reconcile to the exact total first, then the rounded cash, so rounding cannot hide a split error.
+Worked example, computed by the accounting code and asserted in the e2e against PostgreSQL (a JOVO MARKET order, goods 13.40 at cost 9.00, delivery fee 10.00):
+
+| Ledger row | Party | Amount |
+| --- | --- | --- |
+| SUPERMARKET_GOODS_COST | supermarket partner | 9.00 |
+| SUPERMARKET_MARGIN_SHARE (4.40 split 40/30/30) | supermarket partner / owner A / owner B | 1.76 / 1.32 / 1.32 |
+| DRIVER_DELIVERY_SHARE (70% of 10.00) | driver | 7.00 |
+| DELIVERY_OPS_SHARE / PLATFORM_DELIVERY_SHARE (3.00 split three ways) | ops / owner A / owner B | 1.00 / 1.00 / 1.00 |
+| **Revenue split total** | | **23.40** = the exact order total |
+| CASH_ROUNDING | platform rounding account | 0.60 |
+| **Ledger total** | | **24.00** = cash collected = the driver's custody |
+
+### Driver cash screen: one number
+The screen leads with the cash to hand over (the standing balance, not the period), says it is all the customer cash the driver holds and that
+earnings are not in it, and lists the orders that add up to it (`balance.openOrders`, checked in the e2e to sum to the balance and to equal the
+unsettled custody rows). A hand-over banner appears when a delivery is completed and on the home screen when nothing is in progress. Customers and
+drivers see the rounded cash due; the customer also sees the exact total and the rounding line.
+
+### Suites
+API 519 pass / 4 skipped; E2E 44 pass against PostgreSQL; admin 74; mobile 165 unit + 63 UI; typechecks, native-config check, secret scan clean.

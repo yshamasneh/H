@@ -1,12 +1,18 @@
 import Constants from "expo-constants";
 import { useEffect, useMemo, useRef, useState } from "react";
-import MapView, { Marker, type MapPressEvent, type Region } from "react-native-maps";
+import MapView, { Marker, Polyline, type MapPressEvent, type Region } from "react-native-maps";
 import { boundsForCoordinates, followDelta, regionForCoordinates } from "./location-map.camera";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import i18n from "../i18n";
 import { LandmarkFlag } from "./landmark-flag";
 import { MapDot } from "./map-pin";
-import { landmarkMarkerColor, landmarkVisibilityMinZoom, type LocationMapProps, type MapCoordinate } from "./location-map.types";
+import {
+  landmarkMarkerColor,
+  landmarkVisibilityMinZoom,
+  routeLineColor,
+  type LocationMapProps,
+  type MapCoordinate
+} from "./location-map.types";
 import { radius, spacing, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/theme-context";
 import { text } from "../theme/typography";
@@ -138,6 +144,12 @@ export function LocationMap(props: LocationMapProps) {
         }}
         style={StyleSheet.absoluteFillObject}
       >
+        {props.route && props.route.length >= 2 ? (
+          <>
+            <Polyline coordinates={props.route} lineCap="round" lineJoin="round" strokeColor="#FFFFFF" strokeWidth={9} />
+            <Polyline coordinates={props.route} lineCap="round" lineJoin="round" strokeColor={routeLineColor} strokeWidth={5} />
+          </>
+        ) : null}
         {props.onCoordinateChange ? (
           <Marker
             coordinate={props.coordinate}

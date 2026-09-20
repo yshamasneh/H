@@ -108,6 +108,10 @@ export type OrderDetail = {
 export type DriverApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
 
 export type AdminDriverView = {
+  /** Whether the driver's app is running, judged by the lease below. See driver-tracking.ts connectionState. */
+  appState: "FOREGROUND" | "BACKGROUND" | null;
+  appLeaseUntil: string | null;
+  appOpen: boolean;
   userId: string;
   fullName: string;
   phone: string;
