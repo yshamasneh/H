@@ -82,6 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           az webapp sitecontainers update --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --container-name main --image "$IMAGE" --output none
+          sleep 15
           az webapp restart --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --output none
 
       - name: Verify running image and API health
@@ -89,7 +90,7 @@ jobs:
         run: |
           set -euo pipefail
           host=$(az webapp show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query defaultHostName --output tsv)
-          for attempt in {1..18}; do
+          for attempt in {1..48}; do
             status=$(az webapp sitecontainers status --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --container-name main --output json 2>/dev/null || true)
             if jq -e --arg image "$IMAGE" '.Image == $image and .Status == "Running"' <<< "$status" >/dev/null 2>&1; then
               response=$(curl --fail --silent --show-error --max-time 20 "https://${host}/api/v1/health")

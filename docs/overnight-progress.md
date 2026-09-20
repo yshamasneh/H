@@ -21,7 +21,7 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 
 ## In progress
 
-- Group 2: commit, push, and monitor deployment.
+- Group 2: deployment verification repair; wait for a successful rerun before Group 3.
 
 ## Remaining
 
@@ -32,7 +32,7 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 | Group | Focused checks | Commit | Actions run | Result |
 | --- | --- | --- | --- | --- |
 | 1 | Image upload tests 6/6; Admin typecheck passed; `git diff --check` passed | `e97369d6b72b5926b22a7b8fa8063fd3ccd7e776` | https://github.com/yshamasneh/H/actions/runs/35489471407 | Deployment and readiness passed |
-| 2 | Mobile image UI 7/7, cart/checkout UI 8/8, cart storage 15/15, Admin image tests 6/6; Mobile/Admin typechecks and `git diff --check` passed | Pending | Pending | Pending |
+| 2 | Mobile image UI 7/7, cart/checkout UI 8/8, cart storage 15/15, Admin image tests 6/6; Mobile/Admin typechecks and `git diff --check` passed | `e5c29bcfada1a06a9f61e652f17ccdd727ee5a93` | https://github.com/yshamasneh/H/actions/runs/35490180598 | Build, migration status, and image update passed; verification timed out before Azure reported the new container running. Repair pending. |
 
 ## New issues and decisions
 
@@ -43,3 +43,4 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 - The source image and both new tracked copies have SHA-256 `D793010543458AE231DD92A2E7C601203C9F2788C593CA6BA255E47E94F57E77`. Existing compressed assets were left untouched.
 - Mobile UI tests cover square, wide, and tall image load events with `cover`/`contain` props; actual device visual inspection remains unverified.
 - Local `node_modules` lacked Jest; `npm ci` restored it from the lockfile. The focused UI suite passes, though existing Icon tests print React `act(...)` warnings. The install reported 27 dependency advisories; dependency upgrades are outside this image task.
+- Trial deployment verification used 18 image-status polls and timed out while App Service still reported the new image as `NeverStarted`. Increased the bounded wait to 48 polls and allowed image-setting propagation before restart; no data or Production resources changed.
