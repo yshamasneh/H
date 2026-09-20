@@ -2861,3 +2861,50 @@ Sign-in means typing a password into a login form, which the assistant does not 
 admin screens were verified by unit tests, UI tests, a production build and live API calls, not by clicking. Checklist:
 add a supermarket product with an image URL > open cart (image shows) > reload (still shows) > break the URL (emoji
 shows); admin > Products: Hide, filter Hidden, Unhide; rename a category; try to delete a non-empty one; edit a store.
+
+## 2026-09-20 (2): Plain image URLs, sale prices, map audit
+
+### Image URLs
+Uploaded and external https URLs are both accepted, whether or not Azure storage is configured (`common/image-url.util.ts`,
+`assertAllowedImageUrl`, called at the five product / logo / offer write paths). Rules: https only, no embedded credentials,
+a real dotted host, at most 2048 characters, no whitespace or control characters, and no signed/expiring links (Azure SAS,
+S3, GCS) because they carry a secret and die. Clearing the field and re-saving a record's existing URL are always allowed.
+The previous `UNTRUSTED_IMAGE_URL` check is gone; `assertOwnedUrl` still governs *deleting* a stored blob.
+The CSV importer (`prisma/import-products.ts`) now takes `imageUrl` (validated the same way; blank on a re-run leaves the
+current picture) and `salePrice` (below `price`; blank clears the sale when the column exists; an absent column leaves sales
+alone unless the new price would land on or below a running sale, in which case that sale ends). Template updated.
+
+### Sale price
+`MenuItem.salePriceMinor` (nullable, migration `20260920000000_add_sale_price`, CHECK `1 <= sale < price`) and
+`OrderItem.regularPriceMinorSnapshot` (the regular price a sale line replaced; CHECK `> priceMinorSnapshot`).
+- Rule lives in `restaurants/sale-price.ts`: charged price = sale ?? regular; sale must be strictly below the regular price;
+  validated as the *pair as stored* (lowering the regular price to or below a running sale is refused); starting, changing or
+  ending a sale needs `MANAGE_PRICES` like any price change.
+- Orders charge the sale price and freeze it in `priceMinorSnapshot`, with the regular price in `regularPriceMinorSnapshot`.
+  Accounting values an order from `order.subtotalMinor` (the sum of those snapshots), so a sale reduces margin by exactly the
+  revenue given up. Worked example (test in `accounting/goods-cost.test.ts`): regular 20.00 / cost 12.00 -> margin 8.00 splits
+  partner 3.20 / owner A 2.40 / owner B 2.40; on sale at 15.00 -> margin 3.00 splits 1.20 / 0.90 / 0.90; the 12.00 cost is
+  repaid to the partner either way; both orders reconcile to the agora. A sale below cost goes negative honestly.
+- **Sale vs offer (decision):** a sale-priced product is not also discounted by a PRODUCT offer. The sale price is that
+  product's promotion; stacking a second markdown would silently erode a margin already cut by the sale, and two markdowns
+  on one line is hard to explain on a receipt. Public views show a sale item with `offer: null` and `effectivePriceMinor =
+  sale price`; the order engine skips the line (and, after a fulfillment adjustment, the *frozen* `regularPriceMinorSnapshot`
+  decides, so a sale that has since ended does not start attracting offers). Basket-level offers (order %, delivery) are
+  unchanged and still apply to the sale-priced subtotal. When the sale ends, the product offer applies again.
+- Admin: sale field beside the price, validation message, "Remove sale", below-cost warning, struck price + percentage in the
+  list, an "On sale only" filter. Customer app: struck regular price, orange sale price, and an orange/white sticker on the
+  picture (`components/sale-price.tsx`) on catalogue, product detail, home grid, restaurant menu, cart and checkout. The
+  percentage is computed from the two prices at render (same formula in API, admin and app). Badge text is i18n
+  (`common:saleBadge`): "وفّر {{percent}}%" / "Save {{percent}}%"; positioned with the logical `start` edge.
+- Cart lines carry `regularPriceMinor` (display only) and it is persisted by name in `cart-storage.ts`.
+
+### Map audit (see the report for the full state)
+Fixed: the driver's live position. `watchCurrentCoordinates` existed but was never called, so the driver pin only moved on
+pull-to-refresh; the driver screen now follows position while a delivery is active and reports each fix (max every 10 s / 30 m).
+Verified live: delivery fee (500 m -> 10.00, 6,005 m -> 16.00, 30 km -> 422 `DELIVERY_OUT_OF_RANGE`), coordinate range
+validation, landmark create/read/rename/delete, store location + customer-visibility flag, driver position report.
+Not built: nobody reads a driver's position (no customer tracking, admin does not see it); the landmarks module has no tests;
+distance is straight-line (haversine), not road distance.
+
+### Suites
+API 434 pass / 3 skipped; admin 55; mobile 100 unit + 38 UI; typechecks and the admin build clean.

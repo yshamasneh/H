@@ -31,7 +31,7 @@ import { LocationMap } from "../../components/location-map";
 import { toLandmarkMarkers, type LocationMapMarker, type LocationMapPin, type MapCoordinate } from "../../components/location-map.types";
 import { Skeleton } from "../../components/skeleton";
 import { readError } from "../../core/errors";
-import { getCurrentCoordinates } from "../../core/location";
+import { getCurrentCoordinates, watchCurrentCoordinates } from "../../core/location";
 import { getAccessToken } from "../../core/session";
 import { Icon, disclosureIconName } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
@@ -150,6 +150,33 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
     void load();
     void refreshLocation();
   }, []);
+
+  // While a delivery is in progress the position is followed continuously, not read once: the map
+  // pin moves with the driver and each fix (at most every 10 s / 30 m) is reported so dispatch has
+  // a current position. `watchCurrentCoordinates` existed for exactly this but nothing called it,
+  // so "live" only ever meant "as of the last pull-to-refresh". Foreground only; the watcher is
+  // released as soon as the delivery ends or the screen goes away.
+  useEffect(() => {
+    if (!hasActiveDelivery) return;
+    let cancelled = false;
+    let subscription: { remove: () => void } | null = null;
+    void watchCurrentCoordinates((next) => {
+      setCoordinate(next);
+      void getAccessToken()
+        .then((accessToken) => (accessToken ? updateDriverLocation(accessToken, next.latitude, next.longitude) : undefined))
+        .catch(() => undefined);
+    })
+      .then((handle) => {
+        if (cancelled) handle.remove();
+        else subscription = handle;
+      })
+      // No permission or no GPS: the pin simply stays where the last one-off read put it.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      subscription?.remove();
+    };
+  }, [hasActiveDelivery]);
 
   async function refresh() {
     setRefreshing(true);
