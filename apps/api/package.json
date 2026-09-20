@@ -9,7 +9,7 @@
     "start": "node dist/main.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --require ../../scripts/node-platform-shim.cjs --import tsx --test --test-concurrency=1 src/**/*.test.ts",
+    "test": "node --require ../../scripts/node-platform-shim.cjs --import tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
     "test:e2e": "node ../../scripts/run-api-e2e.mjs",
     "test:migrations:legacy": "tsx prisma/test-legacy-migration-upgrade.ts",
     "prisma:generate": "prisma generate",
