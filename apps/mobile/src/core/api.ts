@@ -604,6 +604,56 @@ export function getDriverStats(accessToken: string): Promise<DriverStats> {
   return request("/api/v1/driver/me/stats", { accessToken });
 }
 
+/** The driver's persisted shift state. The server keeps it while the app is closed. */
+export function getDriverProfile(accessToken: string): Promise<DriverProfileView> {
+  return request("/api/v1/driver/me", { accessToken });
+}
+
+/** SHIFT is "since the last cash handover"; the others are calendar periods. */
+export type DriverCashPeriod = "SHIFT" | "TODAY" | "WEEK" | "MONTH" | "ALL";
+
+export type DriverCashLine = {
+  orderId: string;
+  restaurantName: string | null;
+  deliveryLabel: string | null;
+  outcome: "DELIVERED" | "DELIVERY_FAILED" | null;
+  occurredAt: string;
+  cashCollectedMinor: number;
+  cashHandedOverMinor: number;
+  cashOwedToPlatformMinor: number;
+  earningMinor: number;
+};
+
+/**
+ * Three separate facts read from the accounting ledger. Cash is settled GROSS — everything
+ * collected goes back to the platform and earnings are paid separately — so cash owed is never
+ * reduced by earnings.
+ */
+export type DriverCashSummary = {
+  period: DriverCashPeriod;
+  from: string | null;
+  to: string;
+  lastHandoverAt: string | null;
+  cashCollectedMinor: number;
+  cashHandedOverMinor: number;
+  earningsMinor: number;
+  deliveredCount: number;
+  failedCount: number;
+  balance: {
+    cashOwedToPlatformMinor: number;
+    unsettledOrderCount: number;
+    oldestUnsettledAt: string | null;
+    cashOwedFromBeforePeriodMinor: number;
+    earningsOwedToDriverMinor: number;
+  };
+  lines: DriverCashLine[];
+  linesTruncated: boolean;
+};
+
+export function getDriverCashSummary(accessToken: string, period: DriverCashPeriod): Promise<DriverCashSummary> {
+  return request(`/api/v1/driver/me/cash-summary?period=${period}`, { accessToken });
+}
+
 export function updateDriverLocation(accessToken: string, latitude: number, longitude: number): Promise<DriverProfileView> {
   return request("/api/v1/driver/me/location", { method: "PATCH", body: { latitude, longitude }, accessToken });
 }
@@ -637,6 +687,7 @@ export type NotificationType =
   | "ORDER_STATUS_CHANGED"
   | "DELIVERY_ASSIGNED"
   | "DELIVERY_STATUS_CHANGED"
+  | "DELIVERY_AVAILABLE"
   | "RESTAURANT_APPROVED"
   | "RESTAURANT_REJECTED"
   | "RESTAURANT_SUSPENDED"

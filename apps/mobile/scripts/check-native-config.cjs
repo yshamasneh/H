@@ -105,6 +105,24 @@ const pushSetup = read("src/core/push-notifications.ts");
 assert.match(pushSetup, /setNotificationChannelAsync\("orders"/);
 assert.match(pushSetup, /importance:\s*Notifications\.AndroidImportance\.HIGH/);
 
+// The driver delivery alert: a dedicated channel whose custom sound must exist as a native resource.
+// A channel created against a missing sound stays silent forever (Android channels are immutable
+// once created), so the sound file, the plugin entry that bundles it for iOS, and the channel
+// definition are all pinned together here.
+const channelSetup = read("src/core/push-channels.ts");
+const soundFile = capture(channelSetup, /deliveryAlertSound\s*=\s*"([^"]+)"/, "delivery alert sound file name");
+assert.match(soundFile, /^[a-z0-9_]+\.wav$/, "Android raw resource names allow only lowercase letters, digits and underscores");
+const notificationsPlugin = app.plugins.find((plugin) => Array.isArray(plugin) && plugin[0] === "expo-notifications");
+assert.ok(notificationsPlugin, "The expo-notifications config plugin is required to bundle the alert sound and the iOS push entitlement");
+assert.ok(
+  (notificationsPlugin[1].sounds ?? []).some((sound) => path.basename(sound) === soundFile),
+  "The expo-notifications plugin must list the delivery alert sound so iOS bundles it"
+);
+const bundledSound = fs.readFileSync(path.join(mobileRoot, "assets", "sounds", soundFile));
+const rawSound = path.join(androidRoot, "app", "src", "main", "res", "raw", soundFile);
+assert.ok(fs.existsSync(rawSound), "Missing Android raw resource for the delivery alert sound: " + soundFile);
+assert.ok(bundledSound.equals(fs.readFileSync(rawSound)), "Android res/raw sound differs from assets/sounds; copy it again");
+
 for (const requiredAsset of [
   "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp",
   "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp",

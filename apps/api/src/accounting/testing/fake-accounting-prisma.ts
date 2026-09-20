@@ -97,6 +97,7 @@ export class FakeAccountingStore {
   readonly partnerEarnings: FakeEarningRecord[] = [];
   readonly driverCashCustodies: FakeCustodyRecord[] = [];
   readonly partnerSettlements: { id: string; payeeKey: string; driverUserId: string | null; amountMinor: number }[] = [];
+  readonly cashSettlements: { id: string; driverUserId: string; settledAt: Date }[] = [];
 
   readonly financialRateSet = {} as any;
   readonly partnerAccount = {} as any;
@@ -104,6 +105,7 @@ export class FakeAccountingStore {
   readonly partnerEarning = {} as any;
   readonly driverCashCustody = {} as any;
   readonly partnerSettlement = {} as any;
+  readonly cashSettlement = {} as any;
 
   constructor() {
     this.financialRateSet.findUnique = async ({ where }: any) =>
@@ -158,16 +160,34 @@ export class FakeAccountingStore {
           .reduce((sum, earning) => sum + earning.amountMinor, 0)
       }
     });
-    this.partnerEarning.findMany = async ({ where }: any) =>
-      this.partnerEarnings.filter((earning) => matchesEarning(earning, where));
+    this.partnerEarning.findMany = async ({ where, orderBy, take }: any) => {
+      let rows = this.partnerEarnings.filter((earning) => matchesEarning(earning, where));
+      if (orderBy?.occurredAt) {
+        const direction = orderBy.occurredAt === "desc" ? -1 : 1;
+        rows = [...rows].sort((a, b) => direction * (a.occurredAt.getTime() - b.occurredAt.getTime()));
+      }
+      return typeof take === "number" ? rows.slice(0, take) : rows;
+    };
+    this.orderFinancialRecord.findMany = async ({ where }: any) =>
+      (this.orderFinancialRecords as any[]).filter((record) => !where?.id?.in || where.id.in.includes(record.id));
+    this.cashSettlement.findFirst = async ({ where }: any) =>
+      [...this.cashSettlements]
+        .filter((settlement) => settlement.driverUserId === where.driverUserId)
+        .sort((a, b) => b.settledAt.getTime() - a.settledAt.getTime())[0] ?? null;
 
     this.driverCashCustody.create = async ({ data }: any) => {
       const custody: FakeCustodyRecord = { id: randomUUID(), ...data };
       this.driverCashCustodies.push(custody);
       return custody;
     };
-    this.driverCashCustody.findMany = async ({ where }: any) =>
-      this.driverCashCustodies.filter((custody) => matchesCustody(custody, where));
+    this.driverCashCustody.findMany = async ({ where, orderBy, take }: any) => {
+      let rows = this.driverCashCustodies.filter((custody) => matchesCustody(custody, where));
+      if (orderBy?.collectedAt) {
+        const direction = orderBy.collectedAt === "desc" ? -1 : 1;
+        rows = [...rows].sort((a, b) => direction * (a.collectedAt.getTime() - b.collectedAt.getTime()));
+      }
+      return typeof take === "number" ? rows.slice(0, take) : rows;
+    };
     this.driverCashCustody.aggregate = async ({ where }: any) => {
       const matches = this.driverCashCustodies.filter((custody) => matchesCustody(custody, where));
       return {
@@ -204,6 +224,7 @@ function matchesEarning(earning: FakeEarningRecord, where: any): boolean {
   if (where.driverUserId !== undefined && earning.driverUserId !== where.driverUserId) return false;
   if (where.payeeKey !== undefined && earning.payeeKey !== where.payeeKey) return false;
   if (where.payeeType !== undefined && earning.payeeType !== where.payeeType) return false;
+  if (where.occurredAt?.gte !== undefined && earning.occurredAt < where.occurredAt.gte) return false;
   return true;
 }
 
@@ -212,5 +233,6 @@ function matchesCustody(custody: FakeCustodyRecord, where: any): boolean {
   if (where.driverUserId !== undefined && custody.driverUserId !== where.driverUserId) return false;
   if (where.status?.in !== undefined && !where.status.in.includes(custody.status)) return false;
   if (where.status !== undefined && typeof where.status === "string" && custody.status !== where.status) return false;
+  if (where.collectedAt?.gte !== undefined && custody.collectedAt < where.collectedAt.gte) return false;
   return true;
 }

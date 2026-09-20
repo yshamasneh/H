@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   acceptDelivery,
+  getDriverProfile,
   listAvailableDeliveries,
   listLandmarks,
   listMyDeliveries,
@@ -31,12 +32,17 @@ import { LocationMap } from "../../components/location-map";
 import { toLandmarkMarkers, type LocationMapMarker, type LocationMapPin, type MapCoordinate } from "../../components/location-map.types";
 import { Skeleton } from "../../components/skeleton";
 import { readError } from "../../core/errors";
-import { getCurrentCoordinates, watchCurrentCoordinates } from "../../core/location";
+import { getCurrentCoordinates } from "../../core/location";
 import { getAccessToken } from "../../core/session";
+import { useRealtimeEvent } from "../../core/socket";
 import { Icon, disclosureIconName } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
+import { DeliveryNavigationMap } from "./delivery-map";
+import { areDeliveryAlertsEnabled, deliveryAlertsSupported, enableDeliveryAlerts } from "./delivery-alerts";
 import { activeDeliveryStatuses, nextDriverActionByStatus } from "./delivery.rules";
+import { useDriverLocationTracking } from "./location-tracking";
+import { deliveryPins as buildDeliveryPins } from "./navigation-target";
 
 const currencyCode = "ILS";
 // Default map center: the Biddu-enclave service area (Qatanna, Al-Qubeiba, Biddu,
@@ -64,6 +70,10 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  // null until checked. A driver without alerts only hears about work by opening the app.
+  const [alertsOn, setAlertsOn] = useState<boolean | null>(null);
+  const [enablingAlerts, setEnablingAlerts] = useState(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
   const hasActiveDelivery = (mine?.length ?? 0) > 0;
 
   // The same public landmarks the customer sees on their maps, rendered here as static
@@ -76,24 +86,15 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   // own live position (blue dot), the pickup store (green dot), and the customer's
   // destination (orange delivery pin). Store/destination only appear once an accepted
   // delivery carries valid coordinates; older orders without them are skipped, not crashed.
-  const deliveryPins = useMemo<LocationMapPin[]>(() => {
-    const pins: LocationMapPin[] = [];
-    if (coordinate) {
-      pins.push({ id: "driver", latitude: coordinate.latitude, longitude: coordinate.longitude, title: t("home.youAreHere"), color: colors.info, shape: "dot" });
-    }
-    const active = mine && mine.length > 0 ? mine[0] : null;
-    if (active) {
-      const store = active.restaurant;
-      if (typeof store.latitude === "number" && typeof store.longitude === "number") {
-        pins.push({ id: "store", latitude: store.latitude, longitude: store.longitude, title: store.name, color: colors.success, shape: "dot" });
-      }
-      const destination = active.order;
-      if (typeof destination.latitude === "number" && typeof destination.longitude === "number") {
-        pins.push({ id: "destination", latitude: destination.latitude, longitude: destination.longitude, title: destination.deliveryAddressLine, color: colors.primary, shape: "pin" });
-      }
-    }
-    return pins;
-  }, [coordinate, mine, t]);
+  const deliveryPins = useMemo<LocationMapPin[]>(
+    () =>
+      buildDeliveryPins(mine && mine.length > 0 ? mine[0] : null, coordinate, { driver: t("home.youAreHere") }, {
+        driver: colors.info,
+        store: colors.success,
+        destination: colors.primary
+      }),
+    [coordinate, mine, t]
+  );
 
   // Centre on the average of whatever markers we have so the driver, store and
   // destination are framed together; fall back to the service-area default.
@@ -125,13 +126,17 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
         setError(t("common:sessionExpired"));
         return;
       }
-      const [availableDeliveries, ownDeliveries, landmarkList] = await Promise.all([
+      const [availableDeliveries, ownDeliveries, landmarkList, profile] = await Promise.all([
         listAvailableDeliveries(accessToken),
         listMyDeliveries(accessToken, 1, 20),
         // Landmarks are orientation-only; a failed fetch just leaves the map without reference
         // flags, exactly as on the customer side, and must never block the delivery lists.
-        listLandmarks(accessToken).catch(() => [] as Landmark[])
+        listLandmarks(accessToken).catch(() => [] as Landmark[]),
+        // The shift is stored on the server and outlives the app. Reading it back is what keeps the
+        // button honest after the app was closed or restarted while the driver was still on shift.
+        getDriverProfile(accessToken).catch(() => null)
       ]);
+      if (profile) setIsOnline(profile.isOnline);
       setAvailable(availableDeliveries);
       setMine(ownDeliveries.items.filter((delivery) => activeDeliveryStatuses.includes(delivery.status)));
       setLandmarks(landmarkList);
@@ -149,34 +154,27 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
   useEffect(() => {
     void load();
     void refreshLocation();
+    void areDeliveryAlertsEnabled(props.user).then(setAlertsOn).catch(() => setAlertsOn(false));
   }, []);
+
+  // A delivery becoming available while the app is open refreshes the list at once, instead of
+  // waiting for the driver to pull down. (With the app closed, the push notification does this job.)
+  useRealtimeEvent("delivery.available", () => void load());
 
   // While a delivery is in progress the position is followed continuously, not read once: the map
   // pin moves with the driver and each fix (at most every 10 s / 30 m) is reported so dispatch has
-  // a current position. `watchCurrentCoordinates` existed for exactly this but nothing called it,
-  // so "live" only ever meant "as of the last pull-to-refresh". Foreground only; the watcher is
-  // released as soon as the delivery ends or the screen goes away.
-  useEffect(() => {
-    if (!hasActiveDelivery) return;
-    let cancelled = false;
-    let subscription: { remove: () => void } | null = null;
-    void watchCurrentCoordinates((next) => {
-      setCoordinate(next);
-      void getAccessToken()
-        .then((accessToken) => (accessToken ? updateDriverLocation(accessToken, next.latitude, next.longitude) : undefined))
-        .catch(() => undefined);
-    })
-      .then((handle) => {
-        if (cancelled) handle.remove();
-        else subscription = handle;
-      })
-      // No permission or no GPS: the pin simply stays where the last one-off read put it.
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-      subscription?.remove();
-    };
-  }, [hasActiveDelivery]);
+  // a current position. Shared with the delivery screen, so opening a delivery does not stop it.
+  useDriverLocationTracking(hasActiveDelivery, setCoordinate);
+
+  async function turnOnAlerts(): Promise<boolean> {
+    setEnablingAlerts(true);
+    setAlertsError(null);
+    const result = await enableDeliveryAlerts(props.user);
+    setEnablingAlerts(false);
+    setAlertsOn(result.ok);
+    if (!result.ok) setAlertsError(result.message || t("alerts.enableFailed"));
+    return result.ok;
+  }
 
   async function refresh() {
     setRefreshing(true);
@@ -196,7 +194,12 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
       const profile = await setDriverOnlineStatus(accessToken, next);
       setIsOnline(profile.isOnline);
       await load();
-      if (profile.isOnline) void refreshLocation();
+      if (profile.isOnline) {
+        void refreshLocation();
+        // Going on shift is the moment a driver wants to be told about work, so offer the alerts now
+        // rather than leaving them behind a Settings toggle. Never blocks the shift itself.
+        if (deliveryAlertsSupported && alertsOn !== true) void turnOnAlerts();
+      }
     } catch (requestError) {
       setError(readError(requestError));
     } finally {
@@ -251,6 +254,26 @@ export function DriverHomeScreen(props: DriverHomeScreenProps) {
         <View style={styles.mapCard}>
           <LocationMap coordinate={mapCenter} height={190} markers={landmarkMarkers} pins={deliveryPins} />
         </View>
+
+        {deliveryAlertsSupported && alertsOn === false ? (
+          <View style={styles.alertsBanner}>
+            <Text style={styles.alertsTitle}>{t("alerts.offTitle")}</Text>
+            <Text style={styles.alertsBody}>{t("alerts.offBody")}</Text>
+            {alertsError ? <Text style={styles.inlineErrorText}>{alertsError}</Text> : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={enablingAlerts}
+              onPress={() => void turnOnAlerts()}
+              style={({ pressed }) => [styles.alertsButton, (pressed || enablingAlerts) && styles.buttonPressed]}
+            >
+              {enablingAlerts ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <Text style={styles.alertsButtonText}>{t("alerts.turnOn")}</Text>
+              )}
+            </Pressable>
+          </View>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"
@@ -362,6 +385,26 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
+  const [locationDenied, setLocationDenied] = useState(false);
+  const [landmarks, setLandmarks] = useState<Landmark[]>([]);
+  const landmarkMarkers = useMemo<LocationMapMarker[]>(() => toLandmarkMarkers(landmarks), [landmarks]);
+  const isActive = delivery !== null && activeDeliveryStatuses.includes(delivery.status);
+
+  // The same tracking the home screen runs, kept alive here: this is the screen the driver is on
+  // while actually driving, and the position it reports is what dispatch sees.
+  useDriverLocationTracking(isActive, setCoordinate, () => setLocationDenied(true));
+  useEffect(() => {
+    if (!isActive) return;
+    // A first fix straight away, rather than waiting for the watcher's first update.
+    void getCurrentCoordinates().then(setCoordinate).catch(() => setLocationDenied(true));
+  }, [isActive]);
+  useEffect(() => {
+    void getAccessToken()
+      .then((accessToken) => (accessToken ? listLandmarks(accessToken) : []))
+      .then(setLandmarks)
+      .catch(() => undefined);
+  }, []);
 
   async function load() {
     setError(null);
@@ -422,6 +465,14 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.formContent}>
+          {isActive ? (
+            <DeliveryNavigationMap
+              coordinate={coordinate}
+              delivery={delivery}
+              landmarks={landmarkMarkers}
+              locationDenied={locationDenied}
+            />
+          ) : null}
           <View style={styles.summaryCard}>
             <View style={styles.orderRowHeader}>
               <Text style={styles.sectionTitle}>{t("detail.statusLabel")}</Text>
@@ -548,6 +599,11 @@ const styles = StyleSheet.create({
   iconButton: { alignItems: "center", backgroundColor: colors.surfaceSunk, borderRadius: radius.lg, height: 44, justifyContent: "center", position: "relative", width: 44 },
   notificationDot: { backgroundColor: colors.primary, borderRadius: radius.pill, height: 10, position: "absolute", right: 10, top: 10, width: 10 },
   earningsIcon: { alignItems: "center", backgroundColor: colors.primarySubtle, borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
+  alertsBanner: { backgroundColor: colors.primarySubtle, borderColor: colors.primary, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[3], padding: spacing[4] },
+  alertsTitle: { ...text("bodySm", "bold"), color: colors.primaryPressed },
+  alertsBody: { ...text("caption"), color: colors.primaryPressed, marginTop: spacing[1] },
+  alertsButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: radius.md, borderWidth: 1, marginTop: spacing[3], minHeight: 44, justifyContent: "center", paddingHorizontal: spacing[4] },
+  alertsButtonText: { ...text("bodySm", "bold"), color: colors.primary },
   emptyCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[3], padding: spacing[5] },
   skeletonLine: { marginTop: spacing[3] },
   dashboardHeading: { ...text("h2", "bold"), color: colors.text, marginBottom: spacing[3] },

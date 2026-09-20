@@ -5,7 +5,13 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../common/decorators/roles.decorator";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../generated/prisma/client";
-import { DeliveriesPaginationQueryDto, SetDriverOnlineStatusDto, UpdateDeliveryStatusDto, UpdateDriverLocationDto } from "./drivers.dto";
+import {
+  DeliveriesPaginationQueryDto,
+  DriverCashSummaryQueryDto,
+  SetDriverOnlineStatusDto,
+  UpdateDeliveryStatusDto,
+  UpdateDriverLocationDto
+} from "./drivers.dto";
 import { DriversService } from "./drivers.service";
 
 @ApiTags("driver-portal")
@@ -15,6 +21,12 @@ import { DriversService } from "./drivers.service";
 @Roles(UserRole.DRIVER)
 export class DriverPortalController {
   constructor(private readonly drivers: DriversService) {}
+
+  @Get("me")
+  @ApiOperation({ summary: "The driver's own profile, including whether they are currently on shift (online)" })
+  getProfile(@Req() request: AuthenticatedRequest) {
+    return this.drivers.getOwnProfile(request.user.id);
+  }
 
   @Patch("me/status")
   @ApiOperation({ summary: "Toggle whether the driver is online and available for deliveries" })
@@ -32,6 +44,15 @@ export class DriverPortalController {
   @ApiOperation({ summary: "Completed-delivery count and earnings for the authenticated driver" })
   getStats(@Req() request: AuthenticatedRequest) {
     return this.drivers.getOwnStats(request.user.id);
+  }
+
+  @Get("me/cash-summary")
+  @ApiOperation({
+    summary:
+      "Cash collected, delivery earnings and cash still owed to the platform — three separate figures read from the accounting ledger, for a chosen period"
+  })
+  getCashSummary(@Req() request: AuthenticatedRequest, @Query() query: DriverCashSummaryQueryDto) {
+    return this.drivers.getOwnCashSummary(request.user.id, query.period ?? "SHIFT");
   }
 
   @Get("me/deliveries/available")

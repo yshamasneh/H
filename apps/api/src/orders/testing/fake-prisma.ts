@@ -180,6 +180,7 @@ export class FakeOrdersPrisma {
   readonly deliveries: DeliveryRecord[] = [];
   readonly notifications: NotificationRecord[] = [];
   readonly pushTokens: PushTokenRecord[] = [];
+  readonly driverProfiles: { userId: string; status: string; isOnline: boolean; isActive: boolean }[] = [];
   readonly pushDeliveries: PushDeliveryRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
   readonly offers: any[] = [];
@@ -222,8 +223,12 @@ export class FakeOrdersPrisma {
       );
     this.pushToken.findMany = async ({ where }: any) =>
       this.pushTokens
-        .filter((token) => token.userId === where.userId && token.isActive === where.isActive)
-        .map((token) => ({ id: token.id }));
+        .filter(
+          (token) =>
+            (where.userId?.in ? where.userId.in.includes(token.userId) : token.userId === where.userId) &&
+            token.isActive === where.isActive
+        )
+        .map((token) => ({ id: token.id, userId: token.userId }));
     this.pushDelivery.createMany = async ({ data, skipDuplicates }: any) => {
       let count = 0;
       for (const entry of data) {
@@ -529,8 +534,10 @@ export class FakeOrdersPrisma {
     this.delivery.findMany = async ({ where }: any) =>
       this.deliveries.filter(
         (delivery) =>
-          (!where?.status || delivery.status === where.status) &&
-          (!where?.driverId || delivery.driverId === where.driverId)
+          (!where?.status ||
+            (where.status.in ? where.status.in.includes(delivery.status) : delivery.status === where.status)) &&
+          (!where?.driverId ||
+            (where.driverId.in ? where.driverId.in.includes(delivery.driverId) : delivery.driverId === where.driverId))
       );
 
     this.delivery.updateMany = async ({ where, data }: any) => {
@@ -551,6 +558,13 @@ export class FakeOrdersPrisma {
     };
 
     this.driverProfile.findUnique = async () => null;
+    this.driverProfile.findMany = async ({ where }: any) =>
+      this.driverProfiles
+        .filter(
+          (profile) =>
+            profile.status === where.status && profile.isOnline === where.isOnline && profile.isActive
+        )
+        .map((profile) => ({ userId: profile.userId }));
 
     this.notification.create = async ({ data }: any) => {
       const notification: NotificationRecord = {
@@ -672,6 +686,13 @@ export class FakeOrdersPrisma {
   seedBusinessMember(businessId: string, userId: string = randomUUID()): { businessId: string; userId: string } {
     this.businessMembers.push({ businessId, userId, isActive: true });
     return { businessId, userId };
+  }
+
+  /** An approved, online driver by default — the audience of a "delivery available" alert. */
+  seedDriver(overrides: Partial<{ userId: string; status: string; isOnline: boolean; isActive: boolean }> = {}) {
+    const record = { userId: randomUUID(), status: "APPROVED", isOnline: true, isActive: true, ...overrides };
+    this.driverProfiles.push(record);
+    return record;
   }
 
   seedPushToken(userId: string, token = `ExponentPushToken[${randomUUID()}]`): PushTokenRecord {

@@ -20,4 +20,8 @@ export class FakeRealtimeGateway {
     this.emitted.push({ room: "admins", event, payload });
   }
 
+  emitToDrivers(event: string, payload: unknown): void {
+    this.emitted.push({ room: "drivers", event, payload });
+  }
+
 }

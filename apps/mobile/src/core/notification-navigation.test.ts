@@ -183,3 +183,51 @@ test("listener cleanup removes the subscription and ignores a late cold-start re
   assert.equal(removed, 1);
   assert.equal(seen, 0);
 });
+
+const driver: PublicUser = { id: "driver-1", fullName: "Omar", phone: "+970590000001", role: "DRIVER" };
+const deliveryId = "22222222-2222-4222-8222-222222222222";
+
+test("tapping a delivery alert opens the driver's home, where the waiting deliveries are", async () => {
+  const { navigator, screens } = harness();
+  await navigator.setSession({ accessToken: "access", user: driver });
+
+  const result = await navigator.handleResponse(
+    response({ id: "alert-1", type: "DELIVERY_AVAILABLE", relatedEntityId: deliveryId })
+  );
+
+  assert.equal(result, "navigated");
+  assert.deepEqual(screens, [{ name: "driver-home", user: driver }]);
+});
+
+test("a delivery alert that opened a cold app waits for session restore, then opens the driver's home", async () => {
+  const { navigator, screens } = harness();
+  const alert = response({ id: "alert-cold", type: "DELIVERY_AVAILABLE", relatedEntityId: deliveryId });
+
+  assert.equal(await navigator.handleResponse(alert), "queued");
+  assert.equal(screens.length, 0);
+  await navigator.setSession({ accessToken: "access", user: driver });
+
+  assert.deepEqual(screens, [{ name: "driver-home", user: driver }]);
+});
+
+test("a delivery alert is ignored for anyone who is not a driver, and is never opened twice", async () => {
+  const { navigator, screens } = harness();
+  await navigator.setSession({ accessToken: "access", user: customer });
+  const alert = response({ id: "alert-2", type: "DELIVERY_AVAILABLE", relatedEntityId: deliveryId });
+
+  assert.equal(await navigator.handleResponse(alert), "ignored");
+  assert.equal(await navigator.handleResponse(alert), "duplicate");
+  assert.equal(screens.length, 0);
+});
+
+test("a delivery alert with a malformed id is rejected rather than trusted", async () => {
+  const { navigator, screens } = harness();
+  await navigator.setSession({ accessToken: "access", user: driver });
+
+  const result = await navigator.handleResponse(
+    response({ id: "alert-3", type: "DELIVERY_AVAILABLE", relatedEntityId: "not-a-uuid" })
+  );
+
+  assert.equal(result, "ignored");
+  assert.equal(screens.length, 0);
+});

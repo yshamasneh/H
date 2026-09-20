@@ -217,3 +217,22 @@ The request to make `apps/admin` "default to Arabic RTL the same way apps/mobile
 All 9 pages, 3 shared components, `auth.tsx`'s error strings, and `App.tsx`'s loading state were converted to `useTranslation()`/`t()` — nothing was left hardcoded except literal data values (restaurant names, phone numbers, free-text audit-log reasons, which are real content, not UI chrome). CSS RTL risk was low: `styles.css` had only three physical-direction declarations (`text-align: left` on table headers, and `border-left`/`margin-left`/`left` on the audit-log timeline component); these were converted to logical properties (`text-align: start`, `border-inline-start`, `margin-inline-start`, `inset-inline-start`) so they mirror automatically under `dir="rtl"` with no duplicate `[dir=rtl]` override rules needed. The rest of the layout is flexbox/grid, which the browser already re-flows correctly under the `dir` attribute.
 
 Verified directly in a running Chrome instance, not assumed: logged in as the seeded admin account, and screenshotted the login screen, dashboard, restaurants/orders/drivers/users/audit-log tables, and the suspend-restaurant reason modal, all rendering correctly mirrored (sidebar and sign-out on the right, table columns re-ordered, modal confirm/cancel button order swapped to the RTL convention). Toggled to English and back, confirmed the full layout re-mirrors instantly, and confirmed the language choice survives a page reload via `localStorage`. `tsc --noEmit` passes clean.
+
+## 2026-09-20: Driver cash screen reads GROSS settlement; "shift" means since the last handover
+
+The driver screen shows cash collected, earnings and cash owed as three figures. The request described "amount owed" as what the driver
+hands over at settlement. In the accounting layer that is the full unsettled cash: `recordCashSettlement` is always GROSS, the driver
+hands everything back, and the delivery share is paid as its own event. Showing collected-minus-earnings would tell drivers to hand over
+less than the receiver expects and record a shortfall against them, so the screen shows the ledger's figure and states that earnings are
+not deducted. If the business wants drivers to keep their share out of the cash, that is `NET_OF_EARNINGS` (in the enum, unimplemented)
+and needs a settlement change first, then a screen change.
+
+There is no shift record and none was added: a cash-carrying courier's shift ends when they hand the cash over, so the default period
+is "since the last handover", with calendar periods for looking back. The owed balance ignores the chosen period.
+
+## 2026-09-20: Driver alerts use the alarm audio stream; positions are streamed, not re-fetched
+
+The delivery alert channel plays on Android's ALARM stream so it stays audible at low notification volume and on a quiet profile. A
+driver can still turn the channel down in system settings. Revisit (one constant) if it proves too insistent on real devices.
+Driver positions travel in the socket payload rather than as a refetch signal (the codebase's usual rule), because a fix arrives every
+~10 s per driver; the authoritative list is still re-fetched on shift/delivery events, reconnects and a slow poll.

@@ -81,3 +81,61 @@ export async function createBusinessNotification(
     await createNotification(tx, gateway, { ...input, userId: member.userId });
   }
 }
+
+/**
+ * The same notification for many recipients — a "delivery available" alert for every on-shift
+ * driver. One token lookup and one bulk outbox insert cover the whole audience, so the cost grows
+ * with the number of notification rows rather than with three queries per recipient. Read state
+ * stays per recipient: one driver dismissing the alert must not clear it for the others.
+ */
+export async function createNotificationsForUsers(
+  tx: Prisma.TransactionClient,
+  gateway: Pick<RealtimeEmitter, "emitToUser">,
+  userIds: string[],
+  input: Omit<CreateNotificationInput, "userId">
+): Promise<void> {
+  const recipients = [...new Set(userIds)];
+  if (recipients.length === 0) return;
+
+  const tokens = await tx.pushToken.findMany({
+    where: { userId: { in: recipients }, isActive: true },
+    select: { id: true, userId: true }
+  });
+  const tokensByUser = new Map<string, string[]>();
+  for (const token of tokens) {
+    tokensByUser.set(token.userId, [...(tokensByUser.get(token.userId) ?? []), token.id]);
+  }
+
+  const deliveries: { notificationId: string; pushTokenId: string; deduplicationKey: string }[] = [];
+  for (const userId of recipients) {
+    const notification = await tx.notification.create({
+      data: {
+        userId,
+        businessId: input.businessId ?? null,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        relatedEntityId: input.relatedEntityId ?? null
+      }
+    });
+    for (const pushTokenId of tokensByUser.get(userId) ?? []) {
+      deliveries.push({
+        notificationId: notification.id,
+        pushTokenId,
+        deduplicationKey: `${notification.id}:${pushTokenId}`
+      });
+    }
+    gateway.emitToUser(userId, "notification.created", {
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      relatedEntityId: notification.relatedEntityId,
+      isRead: notification.isRead,
+      createdAt: notification.createdAt
+    });
+  }
+  if (deliveries.length > 0) {
+    await tx.pushDelivery.createMany({ data: deliveries, skipDuplicates: true });
+  }
+}

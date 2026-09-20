@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError, cancelAdminOrder, getAdminOrder, type OrderDetail } from "../api";
 import { OrderFinancialCard } from "../components/OrderFinancialCard";
+import { OrderTrackingCard } from "../components/OrderTrackingCard";
 import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { useRealtimeEvent } from "../socket";
@@ -123,6 +124,8 @@ export function OrderDetailPage() {
               ) : null}
             </div>
           ) : null}
+
+          {order.delivery ? <OrderTrackingCard orderId={order.id} /> : null}
 
           <OrderFinancialCard orderId={order.id} />
 

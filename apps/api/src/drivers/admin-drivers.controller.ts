@@ -25,6 +25,18 @@ export class AdminDriversController {
     return this.drivers.adminListDrivers();
   }
 
+  @Get("locations")
+  @ApiOperation({ summary: "Every on-shift or mid-delivery driver with their last reported position" })
+  listLocations() {
+    return this.drivers.adminListDriverLocations();
+  }
+
+  @Get("tracking/orders/:orderId")
+  @ApiOperation({ summary: "Where the driver on one order is now, with the pickup and destination" })
+  trackOrder(@Param("orderId", new ParseUUIDPipe()) orderId: string) {
+    return this.drivers.adminGetOrderTracking(orderId);
+  }
+
   @Post(":driverUserId/approve")
   @ApiOperation({ summary: "Approve a pending driver application" })
   approve(@Req() request: AuthenticatedRequest, @Param("driverUserId", new ParseUUIDPipe()) driverUserId: string) {

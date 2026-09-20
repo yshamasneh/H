@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { ApiError, approveDriver, listAdminDrivers, reactivateDriver, rejectDriver, suspendDriver, type AdminDriverView } from "../api";
 import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
@@ -42,6 +43,9 @@ export function DriversPage() {
           <h1 className="page-title">{t("drivers.title")}</h1>
           <p className="page-subtitle">{t("drivers.subtitle")}</p>
         </div>
+        <Link className="btn btn-primary" to="/drivers/live">
+          {t("liveDrivers.openMap")}
+        </Link>
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}

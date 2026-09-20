@@ -964,5 +964,35 @@
     "entries": "What each party was credited",
     "reconciliation": "Ledger reconciliation",
     "correct": "Record a correction for this order"
+  },
+  "liveDrivers": {
+    "openMap": "Live map",
+    "title": "Live driver map",
+    "subtitle": "Every driver on shift or mid-delivery, updating as their phone reports",
+    "fitAll": "Show all drivers",
+    "loadError": "Could not load driver positions.",
+    "onShift": "On shift: {{count}} ({{mapped}} on the map)",
+    "empty": "No drivers are on shift right now.",
+    "legend": "Blue: live (last minute). Amber: last seen within 5 minutes. Grey: older, or no position yet.",
+    "idle": "Available",
+    "onDelivery": "Delivering for {{store}}",
+    "noFix": "no position yet",
+    "age": {
+      "seconds_one": "{{count}} second ago",
+      "seconds_other": "{{count}} seconds ago",
+      "minutes_one": "{{count}} minute ago",
+      "minutes_other": "{{count}} minutes ago",
+      "hours_one": "{{count}} hour ago",
+      "hours_other": "{{count}} hours ago"
+    }
+  },
+  "tracking": {
+    "title": "Driver location",
+    "driver": "Driver",
+    "lastSeen": "Last seen",
+    "noDriver": "No driver has accepted this delivery yet.",
+    "noPosition": "This driver has not reported a position yet.",
+    "legend": "Blue dot: driver. Green pin: pickup. Orange pin: customer.",
+    "loadError": "Could not load the driver's location."
   }
 }

@@ -20,6 +20,7 @@ type DriverProfileRecord = {
   isOnline: boolean;
   lastLatitude: number | null;
   lastLongitude: number | null;
+  lastLocationAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -30,6 +31,8 @@ type RestaurantRecord = {
   addressLine: string;
   businessType: "RESTAURANT" | "SUPERMARKET";
   isPromotionalPartner: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 type OrderItemRecord = {
@@ -49,6 +52,8 @@ type OrderRecord = {
   status: OrderStatus;
   deliveryLabel: string;
   deliveryAddressLine: string;
+  deliveryLatitude?: number | null;
+  deliveryLongitude?: number | null;
   subtotalMinor: number;
   totalMinor: number;
   deliveryFeeMinor: number;
@@ -154,6 +159,7 @@ export class FakeDriversPrisma {
   readonly partnerEarning = this.accounting.partnerEarning;
   readonly driverCashCustody = this.accounting.driverCashCustody;
   readonly partnerSettlement = this.accounting.partnerSettlement;
+  readonly cashSettlement = this.accounting.cashSettlement;
 
   constructor() {
     this.pushToken.findMany = async () => [];
@@ -187,6 +193,7 @@ export class FakeDriversPrisma {
         isOnline: data.isOnline ?? false,
         lastLatitude: data.lastLatitude ?? null,
         lastLongitude: data.lastLongitude ?? null,
+        lastLocationAt: data.lastLocationAt ?? null,
         createdAt: now,
         updatedAt: now
       };
@@ -198,8 +205,17 @@ export class FakeDriversPrisma {
       if (!profile) return null;
       return include?.user ? { ...profile, user: this.users.find((user) => user.id === profile.userId)! } : profile;
     };
-    this.driverProfile.findMany = async ({ include, orderBy }: any) => {
-      let matches = [...this.driverProfiles];
+    this.driverProfile.findMany = async ({ where, include, orderBy }: any) => {
+      let matches = this.driverProfiles.filter(
+        (profile) =>
+          (where?.status === undefined || profile.status === where.status) &&
+          (where?.OR === undefined ||
+            where.OR.some(
+              (clause: any) =>
+                (clause.isOnline !== undefined && profile.isOnline === clause.isOnline) ||
+                (clause.userId?.in !== undefined && clause.userId.in.includes(profile.userId))
+            ))
+      );
       if (orderBy?.createdAt === "desc") {
         matches.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
       } else if (orderBy?.createdAt === "asc") {
@@ -216,6 +232,7 @@ export class FakeDriversPrisma {
       if (data.status !== undefined) profile.status = data.status;
       if (data.lastLatitude !== undefined) profile.lastLatitude = data.lastLatitude;
       if (data.lastLongitude !== undefined) profile.lastLongitude = data.lastLongitude;
+      if (data.lastLocationAt !== undefined) profile.lastLocationAt = data.lastLocationAt;
       profile.updatedAt = new Date();
       return include?.user ? { ...profile, user: this.users.find((user) => user.id === profile.userId)! } : profile;
     };
@@ -242,6 +259,13 @@ export class FakeDriversPrisma {
           : {})
       };
     };
+    this.order.findMany = async ({ where }: any) =>
+      this.orders
+        .filter((order) => !where?.id?.in || where.id.in.includes(order.id))
+        .map((order) => ({
+          ...order,
+          restaurant: this.restaurants.find((restaurant) => restaurant.id === order.restaurantId)!
+        }));
     this.order.updateMany = async ({ where, data }: any) => {
       const matches = this.orders.filter(
         (order) => order.id === where.id && (!where.status || order.status === where.status)
@@ -329,7 +353,11 @@ export class FakeDriversPrisma {
 
     this.delivery.count = async ({ where }: any) =>
       this.deliveries.filter(
-        (delivery) => matchesStatus(delivery.status, where?.status) && (!where?.driverId || delivery.driverId === where.driverId)
+        (delivery) =>
+          matchesStatus(delivery.status, where?.status) &&
+          (!where?.driverId || delivery.driverId === where.driverId) &&
+          (where?.deliveredAt?.gte === undefined || (delivery.deliveredAt !== null && delivery.deliveredAt >= where.deliveredAt.gte)) &&
+          (where?.failedAt?.gte === undefined || (delivery.failedAt !== null && delivery.failedAt >= where.failedAt.gte))
       ).length;
 
     this.delivery.updateMany = async ({ where, data }: any) => {
@@ -466,8 +494,9 @@ export class FakeDriversPrisma {
       userId,
       status: overrides.status ?? DriverApprovalStatus.APPROVED,
       isOnline: overrides.isOnline ?? true,
-      lastLatitude: null,
-      lastLongitude: null,
+      lastLatitude: overrides.lastLatitude ?? null,
+      lastLongitude: overrides.lastLongitude ?? null,
+      lastLocationAt: overrides.lastLocationAt ?? null,
       createdAt: now,
       updatedAt: now
     });

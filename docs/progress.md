@@ -2908,3 +2908,58 @@ distance is straight-line (haversine), not road distance.
 
 ### Suites
 API 434 pass / 3 skipped; admin 55; mobile 100 unit + 38 UI; typechecks and the admin build clean.
+
+## 2026-09-20 (3): Driver alerts, live tracking, cash screen; CI repair
+
+### CI repair (found while taking over from the deployment work)
+The Deploy workflow was green but CI had been red for three pushes: the tracked `missingProducts.jpg` carried 3.77 MB of C2PA
+metadata ahead of its size header and Metro's `image-size` reads only 512 KB, so every mobile/web export failed. Metadata stripped
+losslessly (scan data byte-identical, 4.4 MB -> 655 KB). Separately, the `test` globs were unquoted, so the Linux CI shell skipped
+test files three directories deep (including `route-permissions.test.ts`); quoted in api, admin and mobile. Details in
+`docs/overnight-progress.md`.
+
+### Driver push alerts (custom sound)
+- `NotificationType.DELIVERY_AVAILABLE` (migration `20260920100000_add_delivery_available_notification`, additive). When an order
+  becomes READY_FOR_PICKUP the delivery is created and `createNotificationsForUsers` writes one notification (and one outbox row per
+  device) for each approved, online, unoccupied driver, in the same transaction. The body names only the store: a lock screen
+  must not show the customer's address. An open app also gets a `delivery.available` socket event (`drivers` room) and refreshes.
+- **"On shift" = the server-side `isOnline` flag** (there is no shift table). It survives the app being closed, which is what lets a
+  driver be alerted without reopening the app. The driver app used to start every launch showing "offline" whatever the server held;
+  it now reads `GET /driver/me`. Going online offers to turn on alerts (push is otherwise a Settings toggle a driver may never find).
+- Presentation per type in `notifications/push-presentation.ts`: channel `delivery-alerts`, 120 s TTL, iOS sound `jovo_delivery.wav`; Android
+  takes the sound from the channel. Android channel (max importance, ALARM audio usage, JOVO sound, ~2.6 s vibration) in
+  `mobile/src/core/push-channels.ts`. The sound is synthesised (`scripts/generate-alert-sound.mjs`): four rising bell notes, three
+  repeats, 3.7 s, peak -1 dBFS, RMS -8 dBFS, energy concentrated at 1-6 kHz (a test pins these).
+- **Needs a new native build** (a sound file cannot ship OTA). App version 0.14.0 / build 14 so the appVersion runtime policy keeps
+  this JS away from old binaries. `expo-notifications` plugin added to `app.json` (also supplies the iOS push entitlement). See
+  `apps/mobile/NATIVE_CONFIGURATION.md`. Tapping an alert opens the driver's home.
+
+### Driver navigation map
+`DeliveryNavigationMap` on the delivery screen: driver (blue dot), pickup (green dot) and customer (orange pin); the target follows the
+status (pickup until picked up, then customer); follow camera that a manual drag releases; "Whole trip"; straight-line distance;
+hand-off to the phone's navigation app (`google.navigation:` / Apple Maps / Google Maps web) because the in-app maps do not route.
+`LocationMap` gained a `camera` prop implemented in all three stacks (MapLibre, Apple Maps, Leaflet). The position watcher was
+extracted to `useDriverLocationTracking` and is used by both driver screens: it previously lived only on the home screen and stopped
+the moment a delivery was opened.
+
+### Admin live tracking
+`PATCH /driver/me/location` now emits `driver.location.updated` to the `admins` room only (never an order room, so customers cannot
+receive it); status and delivery changes emit `driver.status.changed` / `delivery.status.changed` to admins. New admin routes, under
+`MANAGE_DRIVERS`: `GET /admin/drivers/locations` and `GET /admin/drivers/tracking/orders/:orderId`. Admin UI: a live map at
+`/drivers/live` and a tracking card on the order page. Positions move markers directly from the socket payload (a position stream cannot
+be a "go re-fetch" signal without a request per fix); the list is re-fetched on shift/delivery events, reconnect, focus, and a 60 s poll.
+Freshness bands: live <= 60 s, recent <= 5 min, else stale (drawn muted, never hidden). Also fixed `getSocket()`, which recreated a
+still-connecting socket and would have orphaned the first of two hooks' listeners on one page.
+
+### Driver cash screen
+`GET /driver/me/cash-summary?period=SHIFT|TODAY|WEEK|MONTH|ALL`, read from `DriverCashCustody`, `PartnerEarning`, `PartnerSettlement`
+and `CashSettlement`; nothing is recomputed. Three separate figures: **total cash collected** (period), **your earnings**
+(delivery share, period), **owed to the platform** (standing balance of unsettled cash, whatever the period, so a narrow period
+never hides old cash). SHIFT means since the last handover. **Decision:** because the accounting layer settles GROSS, "owed" is the
+full unsettled cash and is *not* collected minus earnings; earnings are paid separately, and the screen says so. Per-order lines
+show collected / earned / still owed and mark failed deliveries (earning, no cash).
+
+### Suites
+API 468 pass / 4 skipped (472); E2E 35 pass against PostgreSQL (new `driver-tracking.e2e.test.ts`: 12 subtests, a real admin socket, the
+push worker with Expo stubbed); admin 66; mobile 134 unit + 51 UI; typechecks, admin build, full `expo export` (web, iOS, Android),
+Expo Doctor 17/17, secret scan and `prisma validate` clean. Not verified: anything on a physical device.

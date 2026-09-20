@@ -316,3 +316,48 @@ test("structured failure logs never contain the complete push token", async () =
   assert.ok(logs.length > 0);
   assert.equal(logs.some((line) => line.includes(secretToken)), false);
 });
+
+function deliveryFor(type: string, platform: string): RecordShape {
+  const delivery = makeDelivery();
+  delivery.notification.type = type;
+  delivery.pushToken.platform = platform;
+  return delivery;
+}
+
+async function sentPayload(delivery: RecordShape): Promise<Record<string, unknown>> {
+  const worker = service(new FakePushPrisma([delivery]));
+  let payload: Record<string, unknown> = {};
+  await withFetch((async (_url: string, init: RequestInit) => {
+    [payload] = JSON.parse(init.body as string) as Record<string, unknown>[];
+    return sendTickets(init);
+  }) as never, async () => worker.processOnce());
+  return payload;
+}
+
+test("a delivery alert to an Android driver targets the delivery-alerts channel and expires if not delivered promptly", async () => {
+  const payload = await sentPayload(
+    deliveryFor("DELIVERY_AVAILABLE", "android")
+  );
+
+  assert.equal(payload.channelId, "delivery-alerts");
+  assert.equal(payload.ttl, 120);
+  assert.equal(payload.priority, "high");
+  assert.equal(payload.sound, "default", "Android takes the JOVO sound from the channel, not the message");
+});
+
+test("a delivery alert to an iOS driver names the bundled JOVO sound file", async () => {
+  const payload = await sentPayload(
+    deliveryFor("DELIVERY_AVAILABLE", "ios")
+  );
+
+  assert.equal(payload.sound, "jovo_delivery.wav");
+  assert.equal(payload.channelId, "delivery-alerts");
+});
+
+test("ordinary notifications are sent exactly as before: default sound, no channel, no expiry", async () => {
+  const payload = await sentPayload(deliveryFor("ORDER_PLACED", "android"));
+
+  assert.equal(payload.sound, "default");
+  assert.equal("channelId" in payload, false);
+  assert.equal("ttl" in payload, false);
+});

@@ -3,7 +3,7 @@ import type { RealtimeGateway } from "./realtime.gateway";
 /** The emit surface a domain service needs while it is inside a transaction. */
 export type RealtimeEmitter = Pick<
   RealtimeGateway,
-  "emitToUser" | "emitToRestaurant" | "emitToOrder" | "emitToAdmins"
+  "emitToUser" | "emitToRestaurant" | "emitToOrder" | "emitToAdmins" | "emitToDrivers"
 >;
 
 /**
@@ -32,6 +32,10 @@ export class DeferredEmitter implements RealtimeEmitter {
 
   emitToAdmins(event: string, payload: unknown): void {
     this.queued.push(() => this.gateway.emitToAdmins(event, payload));
+  }
+
+  emitToDrivers(event: string, payload: unknown): void {
+    this.queued.push(() => this.gateway.emitToDrivers(event, payload));
   }
 
   flush(): void {

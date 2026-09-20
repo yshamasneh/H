@@ -33,13 +33,27 @@ import {
   deliveryStatusTransitions,
   orderStatusesAllowingDeliveryProgress
 } from "./delivery.rules";
+import { buildCashLines, resolvePeriodStart, type OrderFact } from "./driver-cash-summary";
 import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
-import type { AdminDriverView, DeliveryView, DriverProfileView, DriverStatsView, Page } from "./drivers.types";
+import type {
+  AdminDriverLocationView,
+  AdminDriverView,
+  AdminOrderTrackingView,
+  DeliveryView,
+  DriverCashPeriod,
+  DriverCashSummaryView,
+  DriverProfileView,
+  DriverStatsView,
+  Page
+} from "./drivers.types";
 
 type DeliveryWithRelations = Delivery & { order: Order & { restaurant: Restaurant } };
 type DriverWithUser = DriverProfile & { user: User };
 
 const deliveryInclude = { order: { include: { restaurant: true } } } as const;
+
+/** Orders listed under a cash summary. Totals are exact regardless; only the list is capped. */
+const cashSummaryLineLimit = 100;
 
 @Injectable()
 export class DriversService {
@@ -108,14 +122,24 @@ export class DriversService {
       );
     }
     const updated = await this.prisma.driverProfile.update({ where: { userId: profile.userId }, data: { isOnline } });
+    this.realtime.emitToAdmins("driver.status.changed", { userId: profile.userId, isOnline });
     return toProfileView(updated);
   }
 
   async updateLocation(driverUserId: string, latitude: number, longitude: number): Promise<DriverProfileView> {
     const profile = await this.requireOwnProfile(driverUserId);
+    const reportedAt = new Date();
     const updated = await this.prisma.driverProfile.update({
       where: { userId: profile.userId },
-      data: { lastLatitude: latitude, lastLongitude: longitude, lastLocationAt: new Date() }
+      data: { lastLatitude: latitude, lastLongitude: longitude, lastLocationAt: reportedAt }
+    });
+    // Admins only: a driver's position is operational data for dispatch, not something the customer
+    // or the business is shown, so it never goes to an order room.
+    this.realtime.emitToAdmins("driver.location.updated", {
+      userId: profile.userId,
+      latitude,
+      longitude,
+      lastLocationAt: reportedAt
     });
     return toProfileView(updated);
   }
@@ -159,6 +183,158 @@ export class DriversService {
       cashOutstandingMinor,
       perDeliveryMinor: completedCount > 0 ? Math.round(earningsMinor / completedCount) : 0
     };
+  }
+
+  /**
+   * The driver's cash-and-pay screen: three separate facts read straight from the accounting ledger.
+   *
+   * Nothing is recomputed here. Cash collected and cash handed over come from DriverCashCustody, the
+   * delivery-fee share from PartnerEarning, what has been paid out from PartnerSettlement — the rows
+   * the accounting layer wrote when each order reached its outcome. Cash is settled GROSS (the
+   * driver hands over everything collected and is paid separately), so the amount owed to the
+   * platform is deliberately NOT reduced by the driver's earnings.
+   *
+   * Per-order lines are attributed through the order's financial record; a ledger correction that
+   * is not tied to an order still counts in the totals but has no line of its own.
+   */
+  async getOwnCashSummary(driverUserId: string, period: DriverCashPeriod): Promise<DriverCashSummaryView> {
+    await this.requireOwnProfile(driverUserId);
+    const now = new Date();
+    const lastHandover = await this.prisma.cashSettlement.findFirst({
+      where: { driverUserId },
+      orderBy: { settledAt: "desc" },
+      select: { settledAt: true }
+    });
+    const lastHandoverAt = lastHandover?.settledAt ?? null;
+    const from = resolvePeriodStart(period, now, lastHandoverAt);
+
+    const collectedWhere = { driverUserId, ...(from ? { collectedAt: { gte: from } } : {}) };
+    const earnedWhere = { driverUserId, ...(from ? { occurredAt: { gte: from } } : {}) };
+    const [
+      custodyTotals,
+      custodyRows,
+      openCustody,
+      earningTotals,
+      earningRows,
+      earnedToDate,
+      paidToDate,
+      deliveredCount,
+      failedCount
+    ] = await Promise.all([
+      this.prisma.driverCashCustody.aggregate({
+        where: collectedWhere,
+        _sum: { collectedAmountMinor: true, settledAmountMinor: true }
+      }),
+      this.prisma.driverCashCustody.findMany({
+        where: collectedWhere,
+        orderBy: { collectedAt: "desc" },
+        take: cashSummaryLineLimit + 1
+      }),
+      this.prisma.driverCashCustody.findMany({
+        where: { driverUserId, status: { in: ["OUTSTANDING", "PARTIALLY_SETTLED"] } },
+        select: { collectedAmountMinor: true, settledAmountMinor: true, collectedAt: true }
+      }),
+      this.prisma.partnerEarning.aggregate({ where: earnedWhere, _sum: { amountMinor: true } }),
+      this.prisma.partnerEarning.findMany({
+        where: earnedWhere,
+        orderBy: { occurredAt: "desc" },
+        take: cashSummaryLineLimit + 1,
+        select: { amountMinor: true, occurredAt: true, orderFinancialRecordId: true }
+      }),
+      this.prisma.partnerEarning.aggregate({ where: { driverUserId }, _sum: { amountMinor: true } }),
+      this.prisma.partnerSettlement.aggregate({ where: { driverUserId }, _sum: { amountMinor: true } }),
+      this.prisma.delivery.count({
+        where: {
+          driverId: driverUserId,
+          status: DeliveryStatus.DELIVERED,
+          ...(from ? { deliveredAt: { gte: from } } : {})
+        }
+      }),
+      this.prisma.delivery.count({
+        where: {
+          driverId: driverUserId,
+          status: DeliveryStatus.FAILED,
+          ...(from ? { failedAt: { gte: from } } : {})
+        }
+      })
+    ]);
+
+    const recordIds = [
+      ...new Set(earningRows.map((row) => row.orderFinancialRecordId).filter((id): id is string => Boolean(id)))
+    ];
+    const records = recordIds.length
+      ? await this.prisma.orderFinancialRecord.findMany({
+          where: { id: { in: recordIds } },
+          select: { id: true, orderId: true, outcome: true }
+        })
+      : [];
+    const orderIdByRecord = new Map(records.map((record) => [record.id, record.orderId]));
+    const outcomeByOrder = new Map(records.map((record) => [record.orderId, record.outcome]));
+
+    const custodyFacts = custodyRows.slice(0, cashSummaryLineLimit);
+    const earningFacts = earningRows.slice(0, cashSummaryLineLimit).map((row) => ({
+      orderId: row.orderFinancialRecordId ? (orderIdByRecord.get(row.orderFinancialRecordId) ?? null) : null,
+      amountMinor: row.amountMinor,
+      occurredAt: row.occurredAt
+    }));
+    const orderIds = [
+      ...new Set([...custodyFacts.map((row) => row.orderId), ...earningFacts.map((row) => row.orderId)])
+    ].filter((id): id is string => Boolean(id));
+    const orders = orderIds.length
+      ? await this.prisma.order.findMany({
+          where: { id: { in: orderIds } },
+          select: { id: true, deliveryLabel: true, restaurant: { select: { name: true } } }
+        })
+      : [];
+    const orderFacts = new Map<string, OrderFact>(
+      orders.map((order) => [
+        order.id,
+        {
+          restaurantName: order.restaurant.name,
+          deliveryLabel: order.deliveryLabel,
+          // Cash custody exists only for a delivered order; a failed one takes no cash.
+          outcome: outcomeByOrder.get(order.id) ?? (custodyFacts.some((row) => row.orderId === order.id) ? "DELIVERED" : null)
+        }
+      ])
+    );
+
+    const lines = buildCashLines(custodyFacts, earningFacts, orderFacts);
+    const owedNow = openCustody.reduce((sum, row) => sum + row.collectedAmountMinor - row.settledAmountMinor, 0);
+    const owedFromBeforePeriod = from
+      ? openCustody
+          .filter((row) => row.collectedAt < from)
+          .reduce((sum, row) => sum + row.collectedAmountMinor - row.settledAmountMinor, 0)
+      : 0;
+    const earnedAllMinor = earnedToDate._sum.amountMinor ?? 0;
+    const paidAllMinor = paidToDate._sum.amountMinor ?? 0;
+
+    return {
+      period,
+      from,
+      to: now,
+      lastHandoverAt,
+      cashCollectedMinor: custodyTotals._sum.collectedAmountMinor ?? 0,
+      cashHandedOverMinor: custodyTotals._sum.settledAmountMinor ?? 0,
+      earningsMinor: earningTotals._sum.amountMinor ?? 0,
+      deliveredCount,
+      failedCount,
+      balance: {
+        cashOwedToPlatformMinor: owedNow,
+        unsettledOrderCount: openCustody.length,
+        oldestUnsettledAt: openCustody.reduce<Date | null>(
+          (oldest, row) => (oldest === null || row.collectedAt < oldest ? row.collectedAt : oldest),
+          null
+        ),
+        cashOwedFromBeforePeriodMinor: owedFromBeforePeriod,
+        earningsOwedToDriverMinor: earnedAllMinor - paidAllMinor
+      },
+      lines,
+      linesTruncated: custodyRows.length > cashSummaryLineLimit || earningRows.length > cashSummaryLineLimit
+    };
+  }
+
+  async getOwnProfile(driverUserId: string): Promise<DriverProfileView> {
+    return toProfileView(await this.requireOwnProfile(driverUserId));
   }
 
   async listAvailableDeliveries(): Promise<DeliveryView[]> {
@@ -240,6 +416,12 @@ export class DriversService {
           relatedEntityId: order.id
         });
         emitter.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: DeliveryStatus.ASSIGNED });
+        emitter.emitToAdmins("delivery.status.changed", {
+          deliveryId,
+          orderId: order.id,
+          status: DeliveryStatus.ASSIGNED,
+          driverUserId
+        });
       }
       return tx.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
     });
@@ -359,6 +541,12 @@ export class DriversService {
         });
       }
       emitter.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: targetStatus });
+      emitter.emitToAdmins("delivery.status.changed", {
+        deliveryId,
+        orderId: order.id,
+        status: targetStatus,
+        driverUserId
+      });
       if (finalOrderStatus) {
         emitter.emitToOrder(order.id, "order.status.changed", { orderId: order.id, status: finalOrderStatus });
         emitter.emitToAdmins("order.status.changed", { orderId: order.id, status: finalOrderStatus });
@@ -399,6 +587,69 @@ export class DriversService {
     return profiles.map((profile) =>
       toAdminView(profile, completedByDriver.get(profile.userId) ?? 0, activeByDriver.get(profile.userId) ?? null)
     );
+  }
+
+  /**
+   * Every driver who is on shift or mid-delivery, with their last reported position. A driver who
+   * has gone offline but still holds an active delivery stays listed, because dispatch still needs
+   * to see where that order is.
+   */
+  async adminListDriverLocations(): Promise<AdminDriverLocationView[]> {
+    const activeDeliveries = await this.prisma.delivery.findMany({
+      where: { status: { in: activeDeliveryStatuses } },
+      include: { order: { include: { restaurant: true } } }
+    });
+    const activeByDriver = new Map<string, DeliveryWithRelations>();
+    for (const delivery of activeDeliveries) {
+      if (delivery.driverId) activeByDriver.set(delivery.driverId, delivery as DeliveryWithRelations);
+    }
+    const profiles = await this.prisma.driverProfile.findMany({
+      where: {
+        status: DriverApprovalStatus.APPROVED,
+        OR: [{ isOnline: true }, { userId: { in: [...activeByDriver.keys()] } }]
+      },
+      include: { user: true },
+      orderBy: { createdAt: "asc" }
+    });
+    return profiles.map((profile) => toLocationView(profile, activeByDriver.get(profile.userId) ?? null));
+  }
+
+  /** Where the assigned driver of one order is right now. */
+  async adminGetOrderTracking(orderId: string): Promise<AdminOrderTrackingView> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { restaurant: true, delivery: true }
+    });
+    if (!order) {
+      throw new ApiException(404, "ORDER_NOT_FOUND", "This order does not exist.");
+    }
+    const delivery = order.delivery;
+    let driver: AdminDriverLocationView | null = null;
+    if (delivery?.driverId) {
+      const profile = await this.prisma.driverProfile.findUnique({
+        where: { userId: delivery.driverId },
+        include: { user: true }
+      });
+      if (profile) {
+        driver = toLocationView(profile, { ...delivery, order } as unknown as DeliveryWithRelations);
+      }
+    }
+    return {
+      orderId: order.id,
+      deliveryId: delivery?.id ?? null,
+      deliveryStatus: delivery?.status ?? null,
+      driver,
+      pickup: {
+        name: order.restaurant.name,
+        latitude: order.restaurant.latitude,
+        longitude: order.restaurant.longitude
+      },
+      destination: {
+        label: order.deliveryLabel,
+        latitude: order.deliveryLatitude,
+        longitude: order.deliveryLongitude
+      }
+    };
   }
 
   async adminApprove(adminUserId: string, driverUserId: string): Promise<AdminDriverView> {
@@ -576,6 +827,28 @@ function toProfileView(profile: DriverProfile): DriverProfileView {
     isOnline: profile.isOnline,
     lastLatitude: profile.lastLatitude,
     lastLongitude: profile.lastLongitude
+  };
+}
+
+function toLocationView(profile: DriverWithUser, active: DeliveryWithRelations | null): AdminDriverLocationView {
+  const live = active && activeDeliveryStatuses.includes(active.status) ? active : null;
+  return {
+    userId: profile.userId,
+    fullName: profile.user.fullName,
+    phone: profile.user.phone,
+    status: profile.status,
+    isOnline: profile.isOnline,
+    latitude: profile.lastLatitude,
+    longitude: profile.lastLongitude,
+    lastLocationAt: profile.lastLocationAt,
+    activeDelivery: live
+      ? {
+          deliveryId: live.id,
+          orderId: live.orderId,
+          status: live.status,
+          restaurantName: live.order.restaurant.name
+        }
+      : null
   };
 }
 

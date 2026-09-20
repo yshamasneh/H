@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Camera, Map, ViewAnnotation, type StyleSpecification } from "@maplibre/maplibre-react-native";
+import { Camera, Map, ViewAnnotation, type CameraRef, type StyleSpecification } from "@maplibre/maplibre-react-native";
+import { boundsForCoordinates, followZoom } from "./location-map.camera";
 import i18n from "../i18n";
 import { LandmarkFlag } from "./landmark-flag";
 import { MapDot } from "./map-pin";
@@ -56,6 +57,48 @@ export function LocationMap(props: LocationMapProps) {
   // renders. MapLibre reports the live zoom on every camera change.
   const [zoom, setZoom] = useState(initialZoom);
   const showLandmarks = zoom >= landmarkVisibilityMinZoom;
+  const cameraRef = useRef<CameraRef>(null);
+  const { camera } = props;
+  const followingRef = useRef(false);
+  const fitBoundsPadding = { top: 48, right: 48, bottom: 48, left: 48 };
+
+  // External camera control. Entering follow mode zooms to street level once; after that each fix
+  // only moves the centre, so a driver who pinches to zoom is not snapped back on every update.
+  const followLng = camera?.mode === "follow" ? camera.coordinate.longitude : null;
+  const followLat = camera?.mode === "follow" ? camera.coordinate.latitude : null;
+  const fitKey = camera?.mode === "fit" ? camera.key : null;
+  useEffect(() => {
+    if (followLng === null || followLat === null) {
+      followingRef.current = false;
+      return;
+    }
+    const entering = !followingRef.current;
+    followingRef.current = true;
+    cameraRef.current?.easeTo({
+      center: [followLng, followLat],
+      duration: 700,
+      ...(entering ? { zoom: followZoom } : {})
+    });
+  }, [followLng, followLat]);
+  useEffect(() => {
+    if (camera?.mode !== "fit") return;
+    const bounds = boundsForCoordinates(camera.coordinates);
+    if (!bounds) return;
+    if (bounds[0] === bounds[2] && bounds[1] === bounds[3]) {
+      cameraRef.current?.easeTo({ center: [bounds[0], bounds[1]], zoom: followZoom - 1, duration: 600 });
+    } else {
+      cameraRef.current?.fitBounds(bounds, { padding: fitBoundsPadding, duration: 600 });
+    }
+    // Re-framing is keyed on `camera.key`, not on the coordinates array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey]);
+
+  // The first frame: fitted to the points when the camera asks for it, otherwise on `coordinate`.
+  const initialFitBounds = camera?.mode === "fit" ? boundsForCoordinates(camera.coordinates) : null;
+  const initialViewState =
+    initialFitBounds && (initialFitBounds[0] !== initialFitBounds[2] || initialFitBounds[1] !== initialFitBounds[3])
+      ? { bounds: initialFitBounds, padding: fitBoundsPadding }
+      : { center: [props.coordinate.longitude, props.coordinate.latitude] as [number, number], zoom: initialZoom };
 
   // MapLibre coordinates are [longitude, latitude]; our contract is {latitude, longitude}.
   function emit(lngLat: [number, number]) {
@@ -71,11 +114,12 @@ export function LocationMap(props: LocationMapProps) {
         mapStyle={esriRasterStyle}
         onPress={editable ? (event) => emit(event.nativeEvent.lngLat) : undefined}
         onRegionDidChange={(event) => setZoom(event.nativeEvent.zoom)}
+        onRegionWillChange={(event) => {
+          if (event.nativeEvent.userInteraction) props.onUserPan?.();
+        }}
         style={StyleSheet.absoluteFillObject}
       >
-        <Camera
-          initialViewState={{ center: [props.coordinate.longitude, props.coordinate.latitude], zoom: initialZoom }}
-        />
+        <Camera initialViewState={initialViewState} ref={cameraRef} />
         {editable ? (
           <ViewAnnotation
             draggable

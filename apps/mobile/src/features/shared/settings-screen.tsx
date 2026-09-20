@@ -105,7 +105,7 @@ export function SettingsScreen(props: {
         await clearStoredPushToken();
         setPushEnabled(false);
       } else {
-        const next = await getPushToken();
+        const next = await getPushToken(props.user.role);
         const platform = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
         await registerMyPushToken(accessToken, next, platform);
         await storePushToken(next, props.user.id);

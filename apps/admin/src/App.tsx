@@ -13,6 +13,7 @@ import { StaffPage } from "./pages/business/StaffPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DriversPage } from "./pages/DriversPage";
 import { LandmarksPage } from "./pages/LandmarksPage";
+import { LiveDriversPage } from "./pages/LiveDriversPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
@@ -66,6 +67,7 @@ function PlatformRoutes() {
       <Route element={<OrdersPage />} path="/orders" />
       <Route element={<OrderDetailPage />} path="/orders/:orderId" />
       <Route element={<DriversPage />} path="/drivers" />
+      <Route element={<LiveDriversPage />} path="/drivers/live" />
       <Route element={<UsersPage />} path="/users" />
       <Route element={<LandmarksPage />} path="/landmarks" />
       <Route element={<OffersPage />} path="/offers" />

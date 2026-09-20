@@ -2,6 +2,7 @@ import { createElement, useEffect, useMemo, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import type LeafletNamespace from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { boundsForCoordinates, followZoom } from "./location-map.camera";
 import { landmarkMarkerColor, landmarkVisibilityMinZoom, type LocationMapProps } from "./location-map.types";
 import { radius, spacing, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/theme-context";
@@ -123,6 +124,9 @@ export function LocationMap(props: LocationMapProps) {
   const pinLayersRef = useRef<LeafletNamespace.Layer[]>([]);
   const onChangeRef = useRef(props.onCoordinateChange);
   onChangeRef.current = props.onCoordinateChange;
+  const onUserPanRef = useRef(props.onUserPan);
+  onUserPanRef.current = props.onUserPan;
+  const followingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +165,12 @@ export function LocationMap(props: LocationMapProps) {
       }
 
       mapRef.current = map;
+      // Only a drag the user made themselves: Leaflet does not fire dragstart for programmatic moves.
+      map.on("dragstart", () => onUserPanRef.current?.());
+      const initialFit = props.camera?.mode === "fit" ? boundsForCoordinates(props.camera.coordinates) : null;
+      if (initialFit && (initialFit[0] !== initialFit[2] || initialFit[1] !== initialFit[3])) {
+        map.fitBounds([[initialFit[1], initialFit[0]], [initialFit[3], initialFit[2]]], { padding: [48, 48] });
+      }
       applyLandmarks(L, map, landmarkLayersRef, props.markers ?? []);
       applyPins(L, map, pinLayersRef, props.pins ?? []);
       map.on("zoomend", () => applyLandmarks(L, map, landmarkLayersRef, props.markers ?? []));
@@ -181,12 +191,44 @@ export function LocationMap(props: LocationMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Move the marker and recenter when the coordinate changes from outside.
+  // Move the marker and recenter when the coordinate changes from outside. A map with a `camera`
+  // is steered by that instead, so the user's own panning is not undone by every position update.
+  const hasCamera = props.camera !== undefined;
   useEffect(() => {
     if (!mapRef.current) return;
     markerRef.current?.setLatLng([props.coordinate.latitude, props.coordinate.longitude]);
-    mapRef.current.panTo([props.coordinate.latitude, props.coordinate.longitude]);
-  }, [props.coordinate.latitude, props.coordinate.longitude]);
+    if (!hasCamera) mapRef.current.panTo([props.coordinate.latitude, props.coordinate.longitude]);
+  }, [props.coordinate.latitude, props.coordinate.longitude, hasCamera]);
+
+  const followLat = props.camera?.mode === "follow" ? props.camera.coordinate.latitude : null;
+  const followLng = props.camera?.mode === "follow" ? props.camera.coordinate.longitude : null;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (followLat === null || followLng === null) {
+      followingRef.current = false;
+      return;
+    }
+    const entering = !followingRef.current;
+    followingRef.current = true;
+    // Entering follow mode zooms to street level once; later fixes only move the centre.
+    map.setView([followLat, followLng], entering ? Math.max(map.getZoom(), followZoom) : map.getZoom(), { animate: true });
+  }, [followLat, followLng]);
+
+  const fitKey = props.camera?.mode === "fit" ? props.camera.key : null;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || props.camera?.mode !== "fit") return;
+    const bounds = boundsForCoordinates(props.camera.coordinates);
+    if (!bounds) return;
+    if (bounds[0] === bounds[2] && bounds[1] === bounds[3]) {
+      map.setView([bounds[1], bounds[0]], followZoom - 1, { animate: true });
+    } else {
+      map.fitBounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]], { padding: [48, 48], animate: true });
+    }
+    // Re-framing is keyed on `camera.key`, not on the coordinates array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey]);
 
   useEffect(() => {
     void loadLeaflet().then((L) => {

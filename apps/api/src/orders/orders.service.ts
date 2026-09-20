@@ -15,7 +15,11 @@ import {
   type Restaurant
 } from "../generated/prisma/client";
 import { writeInventoryMovement } from "../inventory/inventory.util";
-import { createBusinessNotification, createNotification } from "../notifications/notification.util";
+import {
+  createBusinessNotification,
+  createNotification,
+  createNotificationsForUsers
+} from "../notifications/notification.util";
 import { calculatePromotionDiscounts } from "../offers/offers.service";
 import { chargedUnitPriceMinor, isOnSale } from "../restaurants/sale-price";
 import type { AppliedPromotion } from "../offers/offers.types";
@@ -24,6 +28,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
 import { terminalDeliveryStatuses } from "../drivers/delivery.rules";
+import { findDispatchableDriverIds } from "../drivers/dispatch.util";
 import {
   allowedOrderTransitions,
   cancellableByAdminStatuses,
@@ -667,7 +672,20 @@ export class OrdersService {
         }
       });
       if (targetStatus === OrderStatus.READY_FOR_PICKUP) {
-        await tx.delivery.create({ data: { orderId, status: DeliveryStatus.PENDING_ASSIGNMENT } });
+        const delivery = await tx.delivery.create({
+          data: { orderId, status: DeliveryStatus.PENDING_ASSIGNMENT }
+        });
+        // Alert on-shift drivers through the push outbox, so a driver with the app closed hears about
+        // the job. Written in this transaction: the delivery and its alerts commit or roll back
+        // together, and the worker (not this request) talks to Expo. The body deliberately names only
+        // the pickup store — a lock-screen notification must not expose the customer's address.
+        await createNotificationsForUsers(tx, emitter, await findDispatchableDriverIds(tx), {
+          type: NotificationType.DELIVERY_AVAILABLE,
+          title: "طلب توصيل جديد · New delivery",
+          body: `${restaurant.name} — افتح التطبيق للقبول · Open the app to accept`,
+          relatedEntityId: delivery.id
+        });
+        emitter.emitToDrivers("delivery.available", { deliveryId: delivery.id, orderId });
       }
       if (targetStatus === OrderStatus.REJECTED) {
         await this.restoreTrackedInventory(tx, orderId);

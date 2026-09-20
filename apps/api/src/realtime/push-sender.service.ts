@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from "@ne
 import { ConfigService } from "@nestjs/config";
 import { Prisma, PushDeliveryStatus } from "../generated/prisma/client";
 import { MetricsService } from "../observability/metrics.service";
+import { pushPresentation } from "../notifications/push-presentation";
 import { PrismaService } from "../prisma/prisma.service";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -247,7 +248,7 @@ export class PushSenderService implements OnModuleInit, OnModuleDestroy {
         type: delivery.notification.type,
         relatedEntityId: delivery.notification.relatedEntityId ?? undefined
       },
-      sound: "default",
+      ...pushPresentation(delivery.notification.type, delivery.pushToken.platform),
       priority: "high"
     })));
 

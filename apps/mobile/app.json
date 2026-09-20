@@ -2,7 +2,7 @@
   "expo": {
     "name": "JOVO",
     "slug": "jovo",
-    "version": "0.13.0",
+    "version": "0.14.0",
     "scheme": "jovo",
     "icon": "./assets/store/app-icon-1024.png",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.jovo.app",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/store/adaptive-icon-foreground.png",
         "backgroundColor": "#FFFFFF"
       },
-      "versionCode": 13,
+      "versionCode": 14,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -62,6 +62,12 @@
           "photosPermission": "JOVO accesses your photos only when you choose an image to upload.",
           "cameraPermission": "JOVO accesses the camera only when you choose to take an image.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "sounds": ["./assets/sounds/jovo_delivery.wav"]
         }
       ],
       "expo-localization",

@@ -12,7 +12,11 @@ let socket: Socket | null = null;
 export function getSocket(): Socket | null {
   const token = getAccessToken();
   if (!token) return null;
-  if (socket && socket.connected) return socket;
+  // Reuse a socket that is connected OR still connecting/reconnecting. Checking `connected` alone
+  // made a second hook mounting in the same tick tear down the socket the first hook had just
+  // created (it is not connected yet), leaving the first hook's listeners on a dead socket.
+  // A socket the server closed (expired session) is neither, and is replaced with a fresh token.
+  if (socket && (socket.connected || socket.active)) return socket;
   if (socket) {
     socket.disconnect();
   }

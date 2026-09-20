@@ -1,12 +1,48 @@
 {
   "earnings": {
-    "headerTitle": "My earnings",
-    "subtitle": "A summary of your deliveries and pay",
-    "totalLabel": "Total earnings",
-    "rateHint": "Avg {{rate}} per completed delivery",
-    "completedLabel": "Completed deliveries",
-    "activeLabel": "In progress now",
-    "footnote": "Earnings count completed (delivered) deliveries only."
+    "headerTitle": "Cash & earnings",
+    "subtitle": "What you collected, what you earned, and what you owe",
+    "periodsLabel": "Period",
+    "periods": {
+      "SHIFT": "Since last handover",
+      "TODAY": "Today",
+      "WEEK": "This week",
+      "MONTH": "This month",
+      "ALL": "All time"
+    },
+    "lastHandover": "Last handover: {{date}}",
+    "noHandoverYet": "No handover recorded yet",
+    "collected": {
+      "label": "Total cash collected",
+      "help": "Cash you took from customers in this period, delivery fees included.",
+      "handedOver": "Already handed over: {{amount}}"
+    },
+    "earned": {
+      "label": "Your earnings",
+      "help": "Your share of the delivery fees. The platform pays this to you separately.",
+      "unpaid": "Still to be paid to you: {{amount}}"
+    },
+    "owed": {
+      "label": "Owed to the platform",
+      "help": "What you hand over at your next settlement: the full amount, with nothing taken off for your earnings.",
+      "orders_one": "{{count}} order not yet handed over",
+      "orders_other": "{{count}} orders not yet handed over",
+      "oldest": "Oldest: {{date}}",
+      "fromBefore": "Includes {{amount}} from before this period.",
+      "none": "You have nothing to hand over."
+    },
+    "counts": "Delivered {{delivered}} · Failed {{failed}}",
+    "lines": {
+      "title": "Orders in this period",
+      "empty": "No deliveries in this period.",
+      "collected": "Collected",
+      "earned": "Earned",
+      "stillOwed": "Still owed",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "noCash": "No cash taken",
+      "truncated": "Showing the latest {{count}} orders. The totals above include all of them."
+    }
   },
   "home": {
     "dashboardTitle": "Delivery Dashboard",
@@ -45,5 +81,26 @@
     "deliveryComplete": "This delivery is complete.",
     "tryAgain": "Try Again",
     "cashOnDelivery": "Cash on Delivery"
+  },
+  "map": {
+    "you": "You",
+    "followMe": "Follow me",
+    "following": "Following you",
+    "wholeTrip": "Whole trip",
+    "headingToPickup": "Head to pickup",
+    "headingToCustomer": "Head to customer",
+    "distanceAway": "{{distance}} away",
+    "navigateToPickup": "Navigate to pickup",
+    "navigateToCustomer": "Navigate to customer",
+    "navigate": "Navigate",
+    "navigateFailed": "No navigation app could be opened on this device.",
+    "noCoordinates": "This location has no map coordinates. Use the address below.",
+    "locationDenied": "Allow location access to see yourself on the map and share your position."
+  },
+  "alerts": {
+    "offTitle": "Delivery alerts are off",
+    "offBody": "Turn them on to be alerted to new deliveries with a sound, even when the app is closed.",
+    "turnOn": "Turn on delivery alerts",
+    "enableFailed": "Delivery alerts could not be turned on. Check that notifications are allowed for JOVO in your phone settings."
   }
 }

@@ -49,10 +49,24 @@ export type LocationMapPin = MapCoordinate & {
   shape?: "dot" | "pin";
 };
 
+/**
+ * Drives the camera from outside, for a map that has to keep up with something moving (the driver).
+ * With no `camera` a map behaves as before: it starts on `coordinate` and the user moves it.
+ *
+ * - `follow` keeps `coordinate` in view as it changes, at the zoom the user has chosen.
+ * - `fit` frames all `coordinates` once, and again whenever `key` changes.
+ */
+export type LocationMapCamera =
+  | { mode: "follow"; coordinate: MapCoordinate }
+  | { mode: "fit"; coordinates: MapCoordinate[]; key: string };
+
 export type LocationMapProps = {
   coordinate: MapCoordinate;
   onCoordinateChange?: (coordinate: MapCoordinate) => void;
   markers?: LocationMapMarker[];
   pins?: LocationMapPin[];
   height?: number;
+  camera?: LocationMapCamera;
+  /** The user dragged the map themselves; a follow camera should stop following. */
+  onUserPan?: () => void;
 };

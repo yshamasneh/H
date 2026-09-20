@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 import { PhoneDto, strongPasswordPattern } from "../auth/auth.dto";
+import { driverCashPeriods, type DriverCashPeriod } from "./drivers.types";
 
 export class AdminActionReasonDto {
   @ApiProperty({ example: "Repeated late deliveries" })
@@ -78,6 +79,13 @@ export class UpdateDeliveryStatusDto {
   @IsString()
   @MaxLength(500)
   failureNote?: string;
+}
+
+export class DriverCashSummaryQueryDto {
+  @ApiPropertyOptional({ enum: driverCashPeriods, example: "SHIFT" })
+  @IsOptional()
+  @IsIn(driverCashPeriods)
+  period?: DriverCashPeriod;
 }
 
 export class DeliveriesPaginationQueryDto {

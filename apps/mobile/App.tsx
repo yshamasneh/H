@@ -235,7 +235,7 @@ function TasawaQApp() {
     const platform = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
     await reconcilePushTokenForUser(accessToken, user.id, platform, {
       isPushEnabled: isPushNotificationsEnabled,
-      getDevicePushToken: getPushToken,
+      getDevicePushToken: () => getPushToken(user.role),
       registerPushToken: registerMyPushToken,
       storePushAssociation: storePushToken
     });

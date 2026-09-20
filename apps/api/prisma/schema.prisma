@@ -46,6 +46,8 @@ enum NotificationType {
   ORDER_STATUS_CHANGED
   DELIVERY_ASSIGNED
   DELIVERY_STATUS_CHANGED
+  /// A delivery is waiting for a driver. Sent to on-shift drivers, so it carries its own alert sound.
+  DELIVERY_AVAILABLE
   RESTAURANT_APPROVED
   RESTAURANT_REJECTED
   RESTAURANT_SUSPENDED

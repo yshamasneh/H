@@ -1,6 +1,7 @@
 import Constants from "expo-constants";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, type MapPressEvent, type Region } from "react-native-maps";
+import { boundsForCoordinates, followDelta, regionForCoordinates } from "./location-map.camera";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import i18n from "../i18n";
 import { LandmarkFlag } from "./landmark-flag";
@@ -70,11 +71,41 @@ export const isInteractiveMapAvailable = Platform.OS !== "android" || mapsApiKey
 export function LocationMap(props: LocationMapProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const region: Region = {
+  const { camera } = props;
+  // A fit camera starts framed on its points; otherwise the map starts on `coordinate`.
+  const fitRegion = camera?.mode === "fit" ? regionForCoordinates(camera.coordinates) : null;
+  const region: Region = fitRegion ?? {
     ...props.coordinate,
     latitudeDelta,
     longitudeDelta
   };
+  const mapRef = useRef<MapView>(null);
+  const followingRef = useRef(false);
+  // The current span, so a follow camera keeps the zoom the driver has chosen instead of resetting it.
+  const spanRef = useRef({ latitudeDelta: followDelta, longitudeDelta: followDelta });
+
+  const followLat = camera?.mode === "follow" ? camera.coordinate.latitude : null;
+  const followLng = camera?.mode === "follow" ? camera.coordinate.longitude : null;
+  const fitKey = camera?.mode === "fit" ? camera.key : null;
+  useEffect(() => {
+    if (followLat === null || followLng === null) {
+      followingRef.current = false;
+      return;
+    }
+    const entering = !followingRef.current;
+    followingRef.current = true;
+    const span = entering ? { latitudeDelta: followDelta, longitudeDelta: followDelta } : spanRef.current;
+    mapRef.current?.animateToRegion({ latitude: followLat, longitude: followLng, ...span }, 700);
+  }, [followLat, followLng]);
+  useEffect(() => {
+    if (camera?.mode !== "fit" || !boundsForCoordinates(camera.coordinates)) return;
+    mapRef.current?.fitToCoordinates(camera.coordinates, {
+      edgePadding: { top: 48, right: 48, bottom: 48, left: 48 },
+      animated: true
+    });
+    // Re-framing is keyed on `camera.key`, not on the coordinates array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitKey]);
   // Start from the initial region's zoom so landmarks are correct on first paint,
   // then track it as the user pans/zooms. Only landmark markers are gated on this;
   // the draggable delivery pin always renders.
@@ -99,7 +130,12 @@ export function LocationMap(props: LocationMapProps) {
         initialRegion={region}
         mapType="hybrid"
         onPress={select}
-        onRegionChangeComplete={(next: Region) => setZoom(approximateZoom(next.longitudeDelta))}
+        ref={mapRef}
+        onPanDrag={() => props.onUserPan?.()}
+        onRegionChangeComplete={(next: Region) => {
+          spanRef.current = { latitudeDelta: next.latitudeDelta, longitudeDelta: next.longitudeDelta };
+          setZoom(approximateZoom(next.longitudeDelta));
+        }}
         style={StyleSheet.absoluteFillObject}
       >
         {props.onCoordinateChange ? (

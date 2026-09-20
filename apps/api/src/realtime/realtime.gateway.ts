@@ -52,6 +52,9 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (user.role === UserRole.ADMIN) {
       await client.join("admins");
     }
+    if (user.role === UserRole.DRIVER) {
+      await client.join("drivers");
+    }
     if (user.role === UserRole.RESTAURANT) {
       // Joined from memberships rather than ownership, so every staff account on a business
       // receives its live order events, not only the owner.
@@ -154,6 +157,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   emitToAdmins(event: string, payload: unknown): void {
     this.safeEmit(() => this.server.to("admins").emit(event, payload));
+  }
+
+  emitToDrivers(event: string, payload: unknown): void {
+    this.safeEmit(() => this.server.to("drivers").emit(event, payload));
   }
 
   private safeEmit(emit: () => void): void {

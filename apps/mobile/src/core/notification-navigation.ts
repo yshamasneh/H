@@ -1,6 +1,7 @@
 import type { PublicUser } from "./api";
 import {
   goToAdminOrderDetail,
+  goToDriverHome,
   goToOrderDetail,
   goToRestaurantOrderDetail,
   type AppScreen
@@ -28,6 +29,8 @@ export type NotificationResponseLike = {
 type ParsedOrderNotification = {
   responseId: string;
   orderId: string;
+  /** A delivery alert opens the driver's home (where the waiting deliveries are) instead of an order. */
+  kind?: "delivery-alert";
 };
 
 export function parseOrderNotificationResponse(response: NotificationResponseLike): ParsedOrderNotification | null {
@@ -39,6 +42,12 @@ export function parseOrderNotificationResponse(response: NotificationResponseLik
 
   const type = request.content.data.type;
   const relatedEntityId = request.content.data.relatedEntityId;
+  if (type === "DELIVERY_AVAILABLE") {
+    // The related id is the delivery, not an order, and the driver may no longer be able to accept it
+    // (someone else was faster), so the target is the list of waiting deliveries, not the delivery.
+    if (typeof relatedEntityId !== "string" || !uuidPattern.test(relatedEntityId)) return null;
+    return { responseId: request.identifier, orderId: relatedEntityId, kind: "delivery-alert" };
+  }
   if (typeof type !== "string" || !orderNotificationTypes.has(type)) return null;
   if (typeof relatedEntityId !== "string" || !uuidPattern.test(relatedEntityId)) return null;
   return { responseId: request.identifier, orderId: relatedEntityId };
@@ -107,6 +116,12 @@ export class NotificationOrderNavigator {
   ): Promise<NotificationNavigationResult> {
     if (this.processed.has(parsed.responseId)) return "duplicate";
     this.processed.add(parsed.responseId);
+
+    if (parsed.kind === "delivery-alert") {
+      if (session.user.role !== "DRIVER") return "ignored";
+      this.deps.navigate(goToDriverHome(session.user));
+      return "navigated";
+    }
 
     const screen = orderScreenForUser(session.user, parsed.orderId);
     if (!screen) {

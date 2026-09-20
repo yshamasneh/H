@@ -1,4 +1,9 @@
-import type { DeliveryStatus, DriverApprovalStatus, OrderPaymentMethod } from "../generated/prisma/enums";
+import type {
+  DeliveryStatus,
+  DriverApprovalStatus,
+  OrderFinancialOutcome,
+  OrderPaymentMethod
+} from "../generated/prisma/enums";
 
 export type DriverProfileView = {
   userId: string;
@@ -20,6 +25,35 @@ export type AdminDriverView = {
   createdAt: Date;
 };
 
+/** One driver's last reported position, for the admin live map. */
+export type AdminDriverLocationView = {
+  userId: string;
+  fullName: string;
+  phone: string;
+  status: DriverApprovalStatus;
+  isOnline: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  /** When the phone last reported. Null until the driver's first fix. */
+  lastLocationAt: Date | null;
+  activeDelivery: {
+    deliveryId: string;
+    orderId: string;
+    status: DeliveryStatus;
+    restaurantName: string;
+  } | null;
+};
+
+/** Where the driver on one order is, with the two ends of the trip for context. */
+export type AdminOrderTrackingView = {
+  orderId: string;
+  deliveryId: string | null;
+  deliveryStatus: DeliveryStatus | null;
+  driver: AdminDriverLocationView | null;
+  pickup: { name: string; latitude: number | null; longitude: number | null } | null;
+  destination: { label: string; latitude: number | null; longitude: number | null };
+};
+
 export type DriverStatsView = {
   /** Deliveries the driver completed (DELIVERED). */
   completedCount: number;
@@ -37,6 +71,61 @@ export type DriverStatsView = {
   /** Average payout per completed delivery, in minor units (earningsMinor / completedCount, since
    *  the payout scales with each delivery's actual fee and is no longer a flat rate). */
   perDeliveryMinor: number;
+};
+
+export const driverCashPeriods = ["SHIFT", "TODAY", "WEEK", "MONTH", "ALL"] as const;
+/** SHIFT is "since the last cash handover"; the rest are calendar periods on the server's clock. */
+export type DriverCashPeriod = (typeof driverCashPeriods)[number];
+
+export type DriverCashLineView = {
+  orderId: string;
+  restaurantName: string | null;
+  deliveryLabel: string | null;
+  outcome: OrderFinancialOutcome | null;
+  occurredAt: Date;
+  cashCollectedMinor: number;
+  cashHandedOverMinor: number;
+  cashOwedToPlatformMinor: number;
+  earningMinor: number;
+};
+
+/**
+ * The driver's money, as three separate facts. Every figure is read from the accounting ledger and
+ * none is derived by netting one against another.
+ *
+ * The platform settles cash GROSS: the driver hands over everything collected and is paid their
+ * delivery share as a separate event. So `cashOwedToPlatformMinor` is NOT reduced by earnings.
+ */
+export type DriverCashSummaryView = {
+  period: DriverCashPeriod;
+  /** Start of the period, or null when it reaches back to the first order. */
+  from: Date | null;
+  to: Date;
+  lastHandoverAt: Date | null;
+  /** What was collected from customers in the period, including anything already handed over. */
+  cashCollectedMinor: number;
+  /** Of that, how much has already been handed back to the platform. */
+  cashHandedOverMinor: number;
+  /** The driver's delivery-fee share earned on orders in the period. */
+  earningsMinor: number;
+  deliveredCount: number;
+  failedCount: number;
+  /**
+   * Standing balance, independent of the chosen period, so a narrow period can never hide cash
+   * that is still owed.
+   */
+  balance: {
+    /** Cash still to hand over at the next settlement, across every unsettled order. */
+    cashOwedToPlatformMinor: number;
+    unsettledOrderCount: number;
+    oldestUnsettledAt: Date | null;
+    /** Part of the amount above that comes from before the chosen period began. */
+    cashOwedFromBeforePeriodMinor: number;
+    /** Delivery-fee share earned to date and not yet paid to the driver. */
+    earningsOwedToDriverMinor: number;
+  };
+  lines: DriverCashLineView[];
+  linesTruncated: boolean;
 };
 
 export type DeliveryOrderSummary = {
