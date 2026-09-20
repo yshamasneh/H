@@ -127,7 +127,17 @@
     "newSignupsHint": "New customers today",
     "recentActivity": "Recent activity",
     "noActivity": "No order activity yet.",
-    "activityLine": "order moved to {{status}}"
+    "activityLine": "order moved to {{status}}",
+    "totalsTitle": "What the platform holds",
+    "totals": {
+      "businesses": "Stores",
+      "businessesHint": "{{approved}} approved · {{suspended}} suspended",
+      "products": "Products",
+      "productsHint": "{{hidden}} hidden from customers",
+      "customers": "Customers",
+      "orders": "Total orders",
+      "drivers": "Approved drivers"
+    }
   },
   "restaurants": {
     "title": "Restaurants",
@@ -175,7 +185,9 @@
     "locationUnset": "No location set yet — tap the map to place the store.",
     "showLocationToCustomer": "Show this store's location to customers",
     "saveLocation": "Save location",
-    "locationSaved": "Location updated."
+    "locationSaved": "Location updated.",
+    "detailsTitle": "Store details",
+    "detailsHint": "Name, description, address and opening hours. A store's status (approve / suspend) changes with the status buttons, and its location in the next card."
   },
   "orders": {
     "title": "Orders",
@@ -413,7 +425,41 @@
     "errorPriceInvalid": "Enter a valid price of 0 or more (for example 12.50).",
     "errorCostPriceInvalid": "Enter a valid cost price of 0 or more, or leave it blank.",
     "deleteConfirmTitle": "Delete product",
-    "deleteConfirmDescription": "Delete \"{{name}}\" permanently? This only works for products that have never been ordered - anything with order history must be marked sold out instead."
+    "deleteConfirmDescription": "Delete \"{{name}}\" permanently? This only works for products that have never been ordered - anything with order history must be marked sold out instead.",
+    "searchPlaceholder": "Search by name, SKU, barcode or brand",
+    "allCategories": "All categories",
+    "visibilityAll": "All products",
+    "visibilityVisible": "Visible to customers",
+    "visibilityHidden": "Hidden",
+    "showing": "Showing {{shown}} of {{total}} products",
+    "hiddenSummary": "{{count}} product(s) hidden from customers",
+    "noMatches": "No products match the search or filters.",
+    "statusVisible": "Visible",
+    "statusHidden": "Hidden",
+    "hide": "Hide product",
+    "unhide": "Unhide product",
+    "hideConfirmTitle": "Hide this product?",
+    "hideConfirmBody": "Customers will no longer see or order \"{{name}}\". The product and its order history stay exactly as they are, and you can unhide it any time from the Hidden list.",
+    "hideNote": "Hiding is how a product is removed: it disappears for customers but stays in the database with its order history.",
+    "hidden": "Product hidden.",
+    "unhidden": "Product is visible again.",
+    "moveTo": "Move to category",
+    "moved": "Product moved.",
+    "productCount": "Products",
+    "countDetail": "{{visible}} visible · {{hidden}} hidden",
+    "rename": "Rename",
+    "renameSave": "Save",
+    "categoryNameRequired": "Enter the category name.",
+    "sortOrderInvalid": "The order must be a whole number, 0 or more.",
+    "deleteCategory": "Delete category",
+    "deleteCategoryBlocked": "\"{{name}}\" cannot be deleted because it still holds {{count}} product(s). Move them to another category first; hiding a product does not take it out of its category.",
+    "deleteCategoryTitle": "Delete this category?",
+    "deleteCategoryBody": "The empty category \"{{name}}\" will be deleted permanently.",
+    "imageUrlPlaceholder": "https://…",
+    "imageUrlHint": "Paste the image URL. Leave it empty for no image.",
+    "errorStockInvalid": "Quantity must be a whole number, 0 or more.",
+    "errorImageUrlInvalid": "The image URL must start with http:// or https://",
+    "saved": "Product saved."
   },
   "inventory": {
     "title": "Inventory and purchasing",
@@ -842,7 +888,9 @@
       "startInvalid": "The start date is not valid.",
       "endInvalid": "The end date is not valid.",
       "endBeforeStart": "The end must be after the start."
-    }
+    },
+    "filterAllOffers": "All offers",
+    "filterGlobal": "Platform-wide offers (no store)"
   },
   "businessSettings": {
     "title": "Store profile",

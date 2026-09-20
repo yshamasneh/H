@@ -56,6 +56,30 @@ export function DashboardPage() {
             <StatCard hint={t("dashboard.newSignupsHint")} label={t("dashboard.newSignups")} value={String(data.newCustomerSignupsToday)} />
           </div>
 
+          {data.totals ? (
+            <>
+              <h2 className="form-section-title">{t("dashboard.totalsTitle")}</h2>
+              <div className="stat-grid">
+                <StatCard
+                  hint={t("dashboard.totals.businessesHint", {
+                    approved: data.totals.approvedBusinesses,
+                    suspended: data.totals.suspendedBusinesses
+                  })}
+                  label={t("dashboard.totals.businesses")}
+                  value={String(data.totals.businesses)}
+                />
+                <StatCard
+                  hint={t("dashboard.totals.productsHint", { hidden: data.totals.hiddenProducts })}
+                  label={t("dashboard.totals.products")}
+                  value={String(data.totals.products)}
+                />
+                <StatCard hint="" label={t("dashboard.totals.customers")} value={String(data.totals.customers)} />
+                <StatCard hint="" label={t("dashboard.totals.orders")} value={String(data.totals.orders)} />
+                <StatCard hint="" label={t("dashboard.totals.drivers")} value={String(data.totals.approvedDrivers)} />
+              </div>
+            </>
+          ) : null}
+
           <div className="card">
             <h2 className="card-title">{t("dashboard.recentActivity")}</h2>
             {data.activityFeed.length === 0 ? (

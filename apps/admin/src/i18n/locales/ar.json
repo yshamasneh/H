@@ -127,7 +127,17 @@
     "newSignupsHint": "عملاء جدد اليوم",
     "recentActivity": "النشاط الأخير",
     "noActivity": "لا يوجد نشاط طلبات بعد.",
-    "activityLine": "تم نقل الطلب إلى {{status}}"
+    "activityLine": "تم نقل الطلب إلى {{status}}",
+    "totalsTitle": "ما في النظام حالياً",
+    "totals": {
+      "businesses": "المتاجر",
+      "businessesHint": "{{approved}} معتمد · {{suspended}} موقوف",
+      "products": "المنتجات",
+      "productsHint": "{{hidden}} مخفي عن الزبائن",
+      "customers": "الزبائن",
+      "orders": "إجمالي الطلبات",
+      "drivers": "السائقون المعتمدون"
+    }
   },
   "restaurants": {
     "title": "المطاعم",
@@ -175,7 +185,9 @@
     "locationUnset": "لم يُحدَّد موقع بعد — اضغط على الخريطة لتحديد موقع المتجر.",
     "showLocationToCustomer": "إظهار موقع هذا المتجر للعملاء",
     "saveLocation": "حفظ الموقع",
-    "locationSaved": "تم تحديث الموقع."
+    "locationSaved": "تم تحديث الموقع.",
+    "detailsTitle": "بيانات المتجر",
+    "detailsHint": "الاسم والوصف والعنوان وساعات العمل. تُغيَّر حالة المتجر (اعتماد أو إيقاف) من أزرار الحالة، والموقع من البطاقة التالية."
   },
   "orders": {
     "title": "الطلبات",
@@ -413,7 +425,41 @@
     "errorPriceInvalid": "أدخل سعرًا صحيحًا لا يقل عن 0 (مثال: 12.50).",
     "errorCostPriceInvalid": "أدخل سعر تكلفة صحيحًا لا يقل عن 0، أو اتركه فارغًا.",
     "deleteConfirmTitle": "حذف المنتج",
-    "deleteConfirmDescription": "هل تريد حذف \"{{name}}\" نهائيًا؟ يعمل هذا فقط للمنتجات التي لم تُطلب من قبل — أي منتج له سجل طلبات يجب تعليمه كغير متوفر بدلاً من ذلك."
+    "deleteConfirmDescription": "هل تريد حذف \"{{name}}\" نهائيًا؟ يعمل هذا فقط للمنتجات التي لم تُطلب من قبل — أي منتج له سجل طلبات يجب تعليمه كغير متوفر بدلاً من ذلك.",
+    "searchPlaceholder": "ابحث بالاسم أو الرمز أو الباركود أو العلامة",
+    "allCategories": "كل الفئات",
+    "visibilityAll": "الكل",
+    "visibilityVisible": "الظاهرة للزبائن",
+    "visibilityHidden": "المخفية",
+    "showing": "عرض {{shown}} من {{total}} منتج",
+    "hiddenSummary": "{{count}} منتج مخفي عن الزبائن",
+    "noMatches": "لا توجد منتجات مطابقة للبحث أو التصفية.",
+    "statusVisible": "ظاهر",
+    "statusHidden": "مخفي",
+    "hide": "إخفاء المنتج",
+    "unhide": "إظهار المنتج",
+    "hideConfirmTitle": "إخفاء المنتج؟",
+    "hideConfirmBody": "لن يرى الزبائن «{{name}}» ولن يستطيعوا طلبه. يبقى المنتج وسجل طلباته كما هما، ويمكنك إظهاره في أي وقت من قائمة «المخفية».",
+    "hideNote": "الإخفاء هو طريقة إزالة المنتج: يختفي عن الزبائن ويبقى في قاعدة البيانات مع سجل طلباته.",
+    "hidden": "أُخفي المنتج.",
+    "unhidden": "أُظهر المنتج.",
+    "moveTo": "نقل إلى فئة",
+    "moved": "نُقل المنتج.",
+    "productCount": "المنتجات",
+    "countDetail": "{{visible}} ظاهر · {{hidden}} مخفي",
+    "rename": "إعادة تسمية",
+    "renameSave": "حفظ",
+    "categoryNameRequired": "أدخل اسم الفئة.",
+    "sortOrderInvalid": "الترتيب رقم صحيح لا يقل عن 0.",
+    "deleteCategory": "حذف الفئة",
+    "deleteCategoryBlocked": "لا يمكن حذف «{{name}}» لأنها تحتوي {{count}} منتج. انقل منتجاتها إلى فئة أخرى أولاً؛ إخفاء المنتج لا يخرجه من الفئة.",
+    "deleteCategoryTitle": "حذف الفئة؟",
+    "deleteCategoryBody": "ستُحذف الفئة الفارغة «{{name}}» نهائياً.",
+    "imageUrlPlaceholder": "https://…",
+    "imageUrlHint": "الصق رابط الصورة. اتركه فارغاً بلا صورة.",
+    "errorStockInvalid": "الكمية عدد صحيح لا يقل عن 0.",
+    "errorImageUrlInvalid": "رابط الصورة يجب أن يبدأ بـ http:// أو https://",
+    "saved": "حُفظ المنتج."
   },
   "inventory": {
     "title": "المخزون والتوريد",
@@ -842,7 +888,9 @@
       "startInvalid": "تاريخ البدء غير صحيح.",
       "endInvalid": "تاريخ الانتهاء غير صحيح.",
       "endBeforeStart": "يجب أن يكون الانتهاء بعد البدء."
-    }
+    },
+    "filterAllOffers": "كل العروض",
+    "filterGlobal": "عروض المنصة العامة (بلا متجر)"
   },
   "businessSettings": {
     "title": "بيانات المتجر",

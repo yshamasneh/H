@@ -2,12 +2,16 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "../api";
 import { type MenuCategoryOwner, type MenuItemOwner } from "../api.business";
+import { categoryCounts, emptyFilter, filterProducts, hiddenCount, paginate, type ProductFilter, type Visibility } from "../catalogue-view";
+import { parseMoneyToMinor, parseWholeNumber, toMoneyInput } from "../money";
 import { ConfirmModal } from "./ConfirmModal";
 import { FallbackImage } from "./FallbackImage";
 import { ImageUploadField } from "./ImageUploadField";
+import { Pager } from "./Pager";
 import { removeUploadedImage, uploadImage } from "../image-upload";
 
 const currencyCode = "ILS";
+const productsPageSize = 40;
 
 /**
  * The set of catalogue calls this editor needs, injected so the same UI drives two shells: the
@@ -77,7 +81,15 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   const [categoryName, setCategoryName] = useState("");
   const [draft, setDraft] = useState<ItemDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<MenuItemOwner | null>(null);
+  // Removing a product means hiding it. There is deliberately no delete action in this screen: the
+  // API refuses to delete a product that was ever ordered (order history must stay intact), and
+  // hiding is the normal, reversible way to take something off sale.
+  const [pendingHide, setPendingHide] = useState<MenuItemOwner | null>(null);
+  const [filter, setFilter] = useState<ProductFilter>(emptyFilter);
+  const [page, setPage] = useState(1);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string; sortOrder: string } | null>(null);
+  const [pendingCategoryDelete, setPendingCategoryDelete] = useState<MenuCategoryOwner | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null | undefined>(undefined);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
@@ -100,6 +112,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   }, [api]);
 
   async function run(action: () => Promise<unknown>): Promise<boolean> {
+    setNotice(null);
     try {
       await action();
       await load();
@@ -118,8 +131,8 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       categoryId: item.categoryId,
       name: item.name,
       description: item.description ?? "",
-      price: (item.priceMinor / 100).toFixed(2),
-      costPrice: item.costPriceMinor === null ? "" : (item.costPriceMinor / 100).toFixed(2),
+      price: toMoneyInput(item.priceMinor),
+      costPrice: item.costPriceMinor === null ? "" : toMoneyInput(item.costPriceMinor),
       imageUrl: item.imageUrl ?? "",
       brand: item.brand ?? "",
       sku: item.sku ?? "",
@@ -143,15 +156,18 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   function validateDraft(): string | null {
     if (!draft.name.trim()) return t("catalogue.errorNameRequired");
     if (canManagePrices) {
-      const priceMinor = Math.round(Number(draft.price.replace(",", ".")) * 100);
-      if (!draft.price.trim() || !Number.isFinite(priceMinor) || priceMinor < 0) {
-        return t("catalogue.errorPriceInvalid");
-      }
-      if (draft.costPrice.trim()) {
-        const costPriceMinor = Math.round(Number(draft.costPrice.replace(",", ".")) * 100);
-        if (!Number.isFinite(costPriceMinor) || costPriceMinor < 0) return t("catalogue.errorCostPriceInvalid");
+      // Text is parsed digit by digit (see money.ts): `Number("1.15") * 100` is 114.99999999999999.
+      if (!draft.price.trim() || parseMoneyToMinor(draft.price) === null) return t("catalogue.errorPriceInvalid");
+      if (draft.costPrice.trim() && parseMoneyToMinor(draft.costPrice) === null) {
+        return t("catalogue.errorCostPriceInvalid");
       }
     }
+    if (isSupermarket) {
+      for (const value of [draft.stockQuantity, draft.reorderLevel]) {
+        if (value.trim() && parseWholeNumber(value) === null) return t("catalogue.errorStockInvalid");
+      }
+    }
+    if (draft.imageUrl.trim() && !/^https?:\/\//i.test(draft.imageUrl.trim())) return t("catalogue.errorImageUrlInvalid");
     return null;
   }
 
@@ -185,9 +201,9 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       // Price and cost price are only ever sent by someone allowed to set prices, and the API
       // enforces the same rule independently.
       if (canManagePrices && draft.price) {
-        body.priceMinor = Math.round(Number(draft.price.replace(",", ".")) * 100);
+        body.priceMinor = parseMoneyToMinor(draft.price);
         body.costPriceMinor = draft.costPrice.trim()
-          ? Math.round(Number(draft.costPrice.replace(",", ".")) * 100)
+          ? parseMoneyToMinor(draft.costPrice)
           : editingId
             ? null
             : undefined;
@@ -197,12 +213,12 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
         if (draft.sku.trim()) body.sku = draft.sku.trim();
         if (draft.barcode.trim()) body.barcode = draft.barcode.trim();
         body.stockQuantity = draft.stockQuantity.trim()
-          ? Math.max(0, Number.parseInt(draft.stockQuantity, 10) || 0)
+          ? parseWholeNumber(draft.stockQuantity)
           : editingId
             ? null
             : undefined;
         body.reorderLevel = draft.reorderLevel.trim()
-          ? Math.max(0, Number.parseInt(draft.reorderLevel, 10) || 0)
+          ? parseWholeNumber(draft.reorderLevel)
           : editingId
             ? null
             : undefined;
@@ -215,7 +231,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
         else {
           await api.createItem({
             ...body,
-            priceMinor: Math.round(Number(draft.price.replace(",", ".") || 0) * 100)
+            priceMinor: parseMoneyToMinor(draft.price || "0") ?? 0
           });
         }
       });
@@ -226,6 +242,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
         setDraft(emptyDraft);
         setEditingId(null);
         setSelectedImage(undefined);
+        setNotice(t("catalogue.saved"));
       } else if (uploadedUrl) {
         await removeUploadedImage({ purpose: "PRODUCT", restaurantId, imageUrl: uploadedUrl });
       }
@@ -237,9 +254,47 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
     }
   }
 
+  const counts = categoryCounts(items);
+  const filtered = filterProducts(items, filter);
+  const pageItems = paginate(filtered, page, productsPageSize);
+  const hiddenTotal = hiddenCount(items);
+  const categoryNameOf = (id: string) => categories.find((category) => category.id === id)?.name ?? "—";
+  const canHide = canManageProducts || canManageOrders;
+
+  function changeFilter(patch: Partial<ProductFilter>) {
+    setFilter((previous) => ({ ...previous, ...patch }));
+    setPage(1);
+  }
+
+  async function moveItem(item: MenuItemOwner, categoryId: string) {
+    if (categoryId === item.categoryId) return;
+    if (await run(() => api.updateItem(item.id, { categoryId }))) setNotice(t("catalogue.moved"));
+  }
+
+  async function saveRename() {
+    if (!renaming) return;
+    const name = renaming.name.trim();
+    if (!name) return setError(t("catalogue.categoryNameRequired"));
+    const sortOrder = parseWholeNumber(renaming.sortOrder);
+    if (sortOrder === null) return setError(t("catalogue.sortOrderInvalid"));
+    if (await run(() => api.updateCategory(renaming.id, { name, sortOrder }))) setRenaming(null);
+  }
+
+  function requestCategoryDelete(category: MenuCategoryOwner) {
+    const count = counts.get(category.id)?.total ?? 0;
+    if (count > 0) {
+      // The API refuses this too; saying why here, in the operator's language, saves a round trip.
+      setError(t("catalogue.deleteCategoryBlocked", { name: category.name, count }));
+      return;
+    }
+    setError(null);
+    setPendingCategoryDelete(category);
+  }
+
   return (
     <div>
       {error ? <div className="error-banner">{error}</div> : null}
+      {notice ? <div className="notice-banner">{notice}</div> : null}
 
       <div className="card">
         <h2 className="card-title">{t("catalogue.categories")}</h2>
@@ -274,39 +329,99 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
               <thead>
                 <tr>
                   <th>{t("common.name")}</th>
+                  <th>{t("catalogue.productCount")}</th>
                   <th>{t("catalogue.sortOrder")}</th>
                   <th>{t("common.status")}</th>
                   {canManageMenu ? <th>{t("common.actions")}</th> : null}
                 </tr>
               </thead>
               <tbody>
-                {categories.map((category) => (
-                  <tr key={category.id}>
-                    <td>{category.name}</td>
-                    <td>{category.sortOrder}</td>
-                    <td>{category.isActive ? t("common.active") : t("common.inactive")}</td>
-                    {canManageMenu ? (
+                {categories.map((category) => {
+                  const count = counts.get(category.id) ?? { total: 0, visible: 0, hidden: 0 };
+                  const editing = renaming?.id === category.id ? renaming : null;
+                  return (
+                    <tr key={category.id}>
                       <td>
-                        <div className="filters-row" style={{ margin: 0 }}>
-                          <button
-                            className="btn btn-outline btn-sm"
-                            onClick={() => void run(() => api.updateCategory(category.id, { isActive: !category.isActive }))}
-                            type="button"
-                          >
-                            {category.isActive ? t("catalogue.deactivate") : t("catalogue.activate")}
-                          </button>
-                          <button
-                            className="btn btn-danger btn-sm"
-                            onClick={() => void run(() => api.deleteCategory(category.id))}
-                            type="button"
-                          >
-                            {t("common.delete")}
-                          </button>
-                        </div>
+                        {editing ? (
+                          <input
+                            className="text-input"
+                            maxLength={80}
+                            onChange={(event) => setRenaming({ ...editing, name: event.target.value })}
+                            value={editing.name}
+                          />
+                        ) : (
+                          category.name
+                        )}
                       </td>
-                    ) : null}
-                  </tr>
-                ))}
+                      <td>
+                        <strong className="num">{count.total}</strong>
+                        {count.hidden > 0 ? (
+                          <>
+                            <br />
+                            <small>{t("catalogue.countDetail", { visible: count.visible, hidden: count.hidden })}</small>
+                          </>
+                        ) : null}
+                      </td>
+                      <td className="num">
+                        {editing ? (
+                          <input
+                            className="text-input"
+                            dir="ltr"
+                            inputMode="numeric"
+                            onChange={(event) => setRenaming({ ...editing, sortOrder: event.target.value })}
+                            style={{ maxWidth: 90 }}
+                            value={editing.sortOrder}
+                          />
+                        ) : (
+                          category.sortOrder
+                        )}
+                      </td>
+                      <td>{category.isActive ? t("common.active") : t("common.inactive")}</td>
+                      {canManageMenu ? (
+                        <td>
+                          <div className="row-actions">
+                            {editing ? (
+                              <>
+                                <button className="btn btn-primary btn-sm" onClick={() => void saveRename()} type="button">
+                                  {t("catalogue.renameSave")}
+                                </button>
+                                <button className="btn btn-outline btn-sm" onClick={() => setRenaming(null)} type="button">
+                                  {t("common.cancel")}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() =>
+                                    setRenaming({ id: category.id, name: category.name, sortOrder: String(category.sortOrder) })
+                                  }
+                                  type="button"
+                                >
+                                  {t("catalogue.rename")}
+                                </button>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() => void run(() => api.updateCategory(category.id, { isActive: !category.isActive }))}
+                                  type="button"
+                                >
+                                  {category.isActive ? t("catalogue.deactivate") : t("catalogue.activate")}
+                                </button>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() => requestCategoryDelete(category)}
+                                  type="button"
+                                >
+                                  {t("catalogue.deleteCategory")}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -338,14 +453,18 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
           <div className="filters-row">
             <input
               className="text-input"
+              dir="ltr"
               disabled={!canManagePrices}
+              inputMode="decimal"
               onChange={(event) => setDraft({ ...draft, price: event.target.value })}
               placeholder={canManagePrices ? t("catalogue.priceMinor") : t("catalogue.priceLocked")}
               value={draft.price}
             />
             <input
               className="text-input"
+              dir="ltr"
               disabled={!canManagePrices}
+              inputMode="decimal"
               onChange={(event) => setDraft({ ...draft, costPrice: event.target.value })}
               placeholder={canManagePrices ? t("catalogue.costPriceMinor") : t("catalogue.costPriceLocked")}
               value={draft.costPrice}
@@ -364,6 +483,18 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
               placeholder={t("catalogue.description")}
               value={draft.description}
             />
+          </div>
+          <div className="filters-row">
+            <input
+              aria-label={t("catalogue.imageUrl")}
+              className="text-input"
+              dir="ltr"
+              onChange={(event) => setDraft({ ...draft, imageUrl: event.target.value })}
+              placeholder={`${t("catalogue.imageUrl")} — ${t("catalogue.imageUrlPlaceholder")}`}
+              style={{ minWidth: 320 }}
+              value={draft.imageUrl}
+            />
+            <span className="field-hint">{t("catalogue.imageUrlHint")}</span>
           </div>
           <ImageUploadField
             currentUrl={draft.imageUrl}
@@ -389,6 +520,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
                 />
                 <input
                   className="text-input"
+                  dir="ltr"
                   onChange={(event) => setDraft({ ...draft, barcode: event.target.value })}
                   placeholder={t("catalogue.barcode")}
                   value={draft.barcode}
@@ -397,16 +529,16 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
               <div className="filters-row">
                 <input
                   className="text-input"
+                  inputMode="numeric"
                   onChange={(event) => setDraft({ ...draft, stockQuantity: event.target.value })}
                   placeholder={t("catalogue.stockQuantity")}
-                  type="number"
                   value={draft.stockQuantity}
                 />
                 <input
                   className="text-input"
+                  inputMode="numeric"
                   onChange={(event) => setDraft({ ...draft, reorderLevel: event.target.value })}
                   placeholder={t("catalogue.reorderLevel")}
-                  type="number"
                   value={draft.reorderLevel}
                 />
                 <button
@@ -442,8 +574,48 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
 
       <div className="card">
         <h2 className="card-title">{t("catalogue.products")}</h2>
+        <div className="filters-row">
+          <input
+            className="text-input"
+            onChange={(event) => changeFilter({ search: event.target.value })}
+            placeholder={t("catalogue.searchPlaceholder")}
+            style={{ minWidth: 260 }}
+            value={filter.search}
+          />
+          <select
+            aria-label={t("catalogue.category")}
+            className="select"
+            onChange={(event) => changeFilter({ categoryId: event.target.value })}
+            value={filter.categoryId}
+          >
+            <option value="">{t("catalogue.allCategories")}</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={t("common.status")}
+            className="select"
+            onChange={(event) => changeFilter({ visibility: event.target.value as Visibility })}
+            value={filter.visibility}
+          >
+            <option value="ALL">{t("catalogue.visibilityAll")}</option>
+            <option value="VISIBLE">{t("catalogue.visibilityVisible")}</option>
+            <option value="HIDDEN">
+              {t("catalogue.visibilityHidden")} ({hiddenTotal})
+            </option>
+          </select>
+        </div>
+        <p className="field-hint">
+          {t("catalogue.showing", { shown: filtered.length, total: items.length })}
+          {hiddenTotal > 0 ? ` · ${t("catalogue.hiddenSummary", { count: hiddenTotal })}` : ""}
+        </p>
         {items.length === 0 ? (
           <div className="empty-state">{t("catalogue.noProducts")}</div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state">{t("catalogue.noMatches")}</div>
         ) : (
           <div className="table-scroll">
             <table className="data-table">
@@ -460,39 +632,59 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <tr key={item.id}>
+                {pageItems.map((item) => (
+                  <tr key={item.id} style={item.isAvailable ? undefined : { opacity: 0.7 }}>
                     <td><FallbackImage alt="" className="catalogue-thumbnail" src={item.imageUrl ?? undefined} /></td>
                     <td>{item.name}</td>
-                    <td>{categories.find((category) => category.id === item.categoryId)?.name ?? "—"}</td>
-                    <td className="num">{formatPrice(item.priceMinor)}</td>
-                    <td className="num">{item.costPriceMinor === null ? t("common.dash") : formatPrice(item.costPriceMinor)}</td>
-                    {isSupermarket ? <td className="num">{item.stockQuantity ?? t("common.dash")}</td> : null}
-                    <td>{item.isAvailable ? t("catalogue.available") : t("catalogue.soldOut")}</td>
                     <td>
-                      <div className="filters-row" style={{ margin: 0 }}>
-                        {canManageOrders ? (
-                          <button
-                            className="btn btn-outline btn-sm"
-                            onClick={() => void run(() => api.setItemAvailability(item.id, !item.isAvailable))}
-                            type="button"
-                          >
-                            {item.isAvailable ? t("catalogue.markSoldOut") : t("catalogue.markAvailable")}
-                          </button>
-                        ) : null}
+                      {canManageProducts ? (
+                        <select
+                          aria-label={t("catalogue.moveTo")}
+                          className="select"
+                          onChange={(event) => void moveItem(item, event.target.value)}
+                          value={item.categoryId}
+                        >
+                          {categories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        categoryNameOf(item.categoryId)
+                      )}
+                    </td>
+                    <td className="money">{formatPrice(item.priceMinor)}</td>
+                    <td className="money">{item.costPriceMinor === null ? t("common.dash") : formatPrice(item.costPriceMinor)}</td>
+                    {isSupermarket ? <td className="num">{item.stockQuantity ?? t("common.dash")}</td> : null}
+                    <td>
+                      <span className={`badge ${item.isAvailable ? "badge-good" : "badge-neutral"}`}>
+                        {item.isAvailable ? t("catalogue.statusVisible") : t("catalogue.statusHidden")}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="row-actions">
                         {canManageProducts ? (
                           <button className="btn btn-outline btn-sm" onClick={() => startEdit(item)} type="button">
                             {t("common.edit")}
                           </button>
                         ) : null}
-                        {canManageProducts ? (
-                          <button
-                            className="btn btn-danger btn-sm"
-                            onClick={() => setPendingDelete(item)}
-                            type="button"
-                          >
-                            {t("common.delete")}
-                          </button>
+                        {canHide ? (
+                          item.isAvailable ? (
+                            <button className="btn btn-outline btn-sm" onClick={() => setPendingHide(item)} type="button">
+                              {t("catalogue.hide")}
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-primary btn-sm"
+                              onClick={async () => {
+                                if (await run(() => api.setItemAvailability(item.id, true))) setNotice(t("catalogue.unhidden"));
+                              }}
+                              type="button"
+                            >
+                              {t("catalogue.unhide")}
+                            </button>
+                          )
                         ) : null}
                       </div>
                     </td>
@@ -502,19 +694,36 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
             </table>
           </div>
         )}
+        <Pager onPage={setPage} page={page} pageSize={productsPageSize} total={filtered.length} />
+        <p className="field-hint">{t("catalogue.hideNote")}</p>
       </div>
 
-      {pendingDelete ? (
+      {pendingHide ? (
         <ConfirmModal
-          confirmLabel={t("common.delete")}
-          description={t("catalogue.deleteConfirmDescription", { name: pendingDelete.name })}
-          onCancel={() => setPendingDelete(null)}
+          confirmLabel={t("catalogue.hide")}
+          description={t("catalogue.hideConfirmBody", { name: pendingHide.name })}
+          onCancel={() => setPendingHide(null)}
           onConfirm={async () => {
-            await api.deleteItem(pendingDelete.id);
-            setPendingDelete(null);
+            await api.setItemAvailability(pendingHide.id, false);
+            setPendingHide(null);
+            setNotice(t("catalogue.hidden"));
             await load();
           }}
-          title={t("catalogue.deleteConfirmTitle")}
+          title={t("catalogue.hideConfirmTitle")}
+          tone="primary"
+        />
+      ) : null}
+      {pendingCategoryDelete ? (
+        <ConfirmModal
+          confirmLabel={t("catalogue.deleteCategory")}
+          description={t("catalogue.deleteCategoryBody", { name: pendingCategoryDelete.name })}
+          onCancel={() => setPendingCategoryDelete(null)}
+          onConfirm={async () => {
+            await api.deleteCategory(pendingCategoryDelete.id);
+            setPendingCategoryDelete(null);
+            await load();
+          }}
+          title={t("catalogue.deleteCategoryTitle")}
         />
       ) : null}
     </div>

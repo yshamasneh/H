@@ -2810,3 +2810,54 @@ For each item, check Arabic (the default) and English, and that nothing overlaps
 > "Not done / partial" list in order: audit the pages not yet audited in depth, add a mobile navigation for
 > `.sidebar` below 860px, multi-line purchase orders, supplier edit/deactivate. Do not touch image upload,
 > backend business logic, schema, auth or routing architecture without flagging it. Commit and push as you go.
+
+## 2026-09-20: Cart images, catalogue hide/unhide, store editing, API review
+
+Branch `agent/phase-15-and-jovo-brand`. The protections were kept intact and re-verified live: a product that
+was ever ordered still cannot be hard-deleted (`MENU_ITEM_IN_USE`), order lines still freeze name, price and cost
+at order time, and nothing touched the ledger.
+
+### Cart image: root cause
+
+Four gaps in a row, none of them a bad URL. The URL was stored and the API returned it (verified). Then:
+1. `CartItem` had no `imageUrl` field; 2. `startCart` / `addCartItem` never copied it from the product;
+3. `deserializeCart` rebuilds each stored line field by field, so even a stored URL would have been dropped on
+every reload; 4. the cart row rendered a hard-coded `🥫` and never an image at all.
+Fixed in `features/customer/cart.ts`, `core/cart-storage.ts`, `features/customer/cart-screens.tsx`.
+`RemoteImage` gained a `fallback` node, so a missing or broken URL shows the emoji instead of blank space.
+Order items now also return the product's current `imageUrl` (display-only, read live, not a snapshot).
+Tests: cart (+2), cart-storage (+3, including a pre-fix saved cart still loading), RemoteImage UI (+4).
+
+### Admin
+
+- **Catalogue** (`components/CatalogueManager.tsx`, `catalogue-view.ts`): no hard-delete for products anywhere in
+  the UI. "Hide product" (with an explanation and confirmation) and "Unhide product"; a Hidden filter with a count;
+  search by name/SKU/barcode/brand (Arabic-aware: diacritics, alef and ta-marbuta folded); category filter; paging;
+  quick move-to-category on each row; a plain Image URL text field beside the existing uploader (uploader untouched);
+  prices parsed by string (`money.ts`), no float multiply. Categories: product count (visible and hidden), rename and
+  reorder, delete with a clear refusal when non-empty (the API refuses too).
+- **Store editing**: new `PATCH /admin/restaurants/:id` (name, description, address, coordinates, hours; audited as
+  `RESTAURANT_PROFILE_UPDATED`) sharing one code path with the owner's own edit; `StoreDetailsCard` on the store page.
+  Status still changes only by approve / suspend / reactivate; there is no store delete.
+- **Dashboard**: all-time totals (stores, products and how many hidden, customers, orders, approved drivers) next to
+  the "today" figures, which read as zero on a quiet day and looked disconnected from real data.
+- **Offers**: filter by store / platform-wide.
+
+### Verified live (real HTTP against the running API; seeded supermarket)
+
+Created a product with an imageUrl; the public catalogue returned it; a customer ordered it at 15.00. Admin changed
+the price to 20.00: the catalogue showed 20.00, the past order still read 15.00 (same total), a new order read 20.00.
+Hard delete of the ordered product: 409. Hide: gone from the customer catalogue, order refused (`ORDER_ITEM_UNAVAILABLE`),
+still visible to admin; unhide restored it. Non-empty category delete: 409 with a message; after moving the product,
+delete succeeded. Admin store rename + hours: 200; a customer token on it: 403. 45 GET routes probed as their own role
+(no 5xx); 64 negative checks (customer and anonymous against every admin/owner/driver route): 0 leaks.
+Test data was cleaned up (never-ordered rows deleted, ordered ones hidden).
+
+### Suites: API 411 pass / 3 skipped / 0 fail; admin 48; mobile unit 92, UI 30; all typechecks and the admin build clean.
+
+### Not verified in a browser
+
+Sign-in means typing a password into a login form, which the assistant does not do, so the cart-refresh check and the
+admin screens were verified by unit tests, UI tests, a production build and live API calls, not by clicking. Checklist:
+add a supermarket product with an image URL > open cart (image shows) > reload (still shows) > break the URL (emoji
+shows); admin > Products: Hide, filter Hidden, Unhide; rename a category; try to delete a non-empty one; edit a store.

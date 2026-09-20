@@ -20,6 +20,7 @@ import {
   updateStoreItem
 } from "../api.business";
 import { CatalogueManager, type CatalogueApi } from "../components/CatalogueManager";
+import { StoreDetailsCard } from "../components/StoreDetailsCard";
 import { LeafletPicker, type PickerCoordinate } from "../components/LeafletPicker";
 import { StatusBadge } from "../components/StatusBadge";
 
@@ -103,6 +104,11 @@ export function RestaurantDetailPage() {
           </div>
         </div>
       </div>
+
+      <StoreDetailsCard
+        onUpdated={(profile) => setRestaurant((current) => (current ? { ...current, ...profile } : current))}
+        restaurant={restaurant}
+      />
 
       <StoreLocationCard
         restaurant={restaurant}

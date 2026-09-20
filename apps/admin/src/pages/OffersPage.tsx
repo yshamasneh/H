@@ -50,6 +50,8 @@ export function OffersPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ offer: OfferView | null } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // '' = every offer, GLOBAL = offers not tied to one store, otherwise a store id.
+  const [storeFilter, setStoreFilter] = useState("");
 
   const report = (requestError: unknown, fallback: string) =>
     setError(requestError instanceof ApiError ? requestError.message : fallback);
@@ -70,6 +72,10 @@ export function OffersPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  const visibleOffers = (offers ?? []).filter((offer) =>
+    storeFilter === "" ? true : storeFilter === "GLOBAL" ? offer.restaurantId === null : offer.restaurantId === storeFilter
+  );
 
   const toggle = async (offer: OfferView) => {
     setBusyId(offer.id);
@@ -124,9 +130,25 @@ export function OffersPage() {
       ) : null}
 
       <div className="card">
+        <div className="filters-row">
+          <select
+            aria-label={t("offers.store")}
+            className="select"
+            onChange={(event) => setStoreFilter(event.target.value)}
+            value={storeFilter}
+          >
+            <option value="">{t("offers.filterAllOffers")}</option>
+            <option value="GLOBAL">{t("offers.filterGlobal")}</option>
+            {stores.map((store) => (
+              <option key={store.id} value={store.id}>
+                {store.name}
+              </option>
+            ))}
+          </select>
+        </div>
         {offers === null ? (
           <div className="loading-state">{t("common.loading")}</div>
-        ) : offers.length === 0 ? (
+        ) : visibleOffers.length === 0 ? (
           <div className="empty-state">{t("offers.empty")}</div>
         ) : (
           <div className="table-scroll">
@@ -143,7 +165,7 @@ export function OffersPage() {
                 </tr>
               </thead>
               <tbody>
-                {offers.map((offer) => {
+                {visibleOffers.map((offer) => {
                   const status = offerStatus(offer);
                   return (
                     <tr key={offer.id}>

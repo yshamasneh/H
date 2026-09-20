@@ -144,6 +144,17 @@ export type DashboardOverview = {
   pendingRestaurantApprovals: number;
   onlineDriversCount: number;
   newCustomerSignupsToday: number;
+  /** All-time counts from the tables (absent on an API that predates them). */
+  totals?: {
+    businesses: number;
+    approvedBusinesses: number;
+    suspendedBusinesses: number;
+    products: number;
+    hiddenProducts: number;
+    customers: number;
+    orders: number;
+    approvedDrivers: number;
+  };
   activityFeed: DashboardActivityEntry[];
 };
 
@@ -254,6 +265,14 @@ export function listAdminRestaurants(
 
 export function getAdminRestaurant(id: string): Promise<AdminRestaurantView> {
   return request(`/api/v1/admin/restaurants/${id}`);
+}
+
+/** Edit a store's name, description, address, coordinates or hours. Status has its own actions. */
+export function updateAdminRestaurant(
+  id: string,
+  body: import("./business-profile").ProfileBody
+): Promise<RestaurantProfile> {
+  return request(`/api/v1/admin/restaurants/${id}`, { method: "PATCH", body });
 }
 
 export function getAdminRestaurantMenu(id: string): Promise<AdminMenuView> {
