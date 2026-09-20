@@ -217,6 +217,7 @@ export type DriverDeliveryStatusAction = (typeof driverDeliveryStatusActions)[nu
 export type OrderItemView = {
   id: string;
   menuItemId: string;
+  imageUrl?: string | null;
   nameSnapshot: string;
   priceMinorSnapshot: number;
   /** The regular price a sale line replaced; null when it was not on sale. */

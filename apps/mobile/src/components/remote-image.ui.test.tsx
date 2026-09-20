@@ -1,33 +1,40 @@
 import { fireEvent, render } from "@testing-library/react-native";
-import { Image, Text } from "react-native";
-import { RemoteImage } from "./remote-image";
+import { Image } from "react-native";
+import { RemoteImage, displayableImageUri, missingProductImage } from "./remote-image";
 
-const emoji = <Text>🥫</Text>;
-
-test("a working URL renders the picture, not the fallback node", () => {
-  const view = render(<RemoteImage fallback={emoji} uri="https://cdn.example/milk.jpg" />);
+test("a working URL renders the remote picture", () => {
+  const view = render(<RemoteImage uri="https://cdn.example/milk.jpg" />);
   expect(view.UNSAFE_getByType(Image).props.source).toEqual({ uri: "https://cdn.example/milk.jpg" });
-  expect(view.queryByText("🥫")).toBeNull();
 });
 
-test("a missing or blank URL renders the fallback node instead of blank space", () => {
-  for (const uri of [undefined, null, "", "   "]) {
-    const view = render(<RemoteImage fallback={emoji} uri={uri} />);
-    expect(view.getByText("🥫")).toBeTruthy();
-    expect(view.UNSAFE_queryByType(Image)).toBeNull();
+test("missing, blank, and invalid URLs use the exact bundled image", () => {
+  for (const uri of [undefined, null, "", "   ", "not a URL", "javascript:alert(1)"]) {
+    const view = render(<RemoteImage uri={uri} />);
+    expect(view.UNSAFE_getByType(Image).props.source).toEqual(missingProductImage);
   }
+  expect(displayableImageUri("https://cdn.example/image.jpg")).toBe("https://cdn.example/image.jpg");
 });
 
-test("a URL that fails to load swaps to the fallback node, and a new URL gets a fresh attempt", () => {
-  const view = render(<RemoteImage fallback={emoji} uri="https://cdn.example/broken.jpg" />);
+test("a failed URL falls back once without retrying the fallback, and a new URL gets a fresh attempt", () => {
+  const view = render(<RemoteImage uri="https://cdn.example/broken.jpg" />);
   fireEvent(view.UNSAFE_getByType(Image), "error");
-  expect(view.getByText("🥫")).toBeTruthy();
+  expect(view.UNSAFE_getByType(Image).props.source).toEqual(missingProductImage);
+  expect(view.UNSAFE_getByType(Image).props.onError).toBeUndefined();
 
-  view.rerender(<RemoteImage fallback={emoji} uri="https://cdn.example/fixed.jpg" />);
+  view.rerender(<RemoteImage uri="https://cdn.example/fixed.jpg" />);
   expect(view.UNSAFE_getByType(Image).props.source).toEqual({ uri: "https://cdn.example/fixed.jpg" });
 });
 
-test("without a fallback node the bundled placeholder image is used, as before", () => {
+test("the bundled placeholder image is used by default", () => {
   const view = render(<RemoteImage uri={null} />);
-  expect(view.UNSAFE_getByType(Image).props.source).not.toEqual({ uri: null });
+  expect(view.UNSAFE_getByType(Image).props.source).toEqual(missingProductImage);
+});
+
+test.each([[1024, 1024], [1600, 900], [900, 1600]])("square, wide, and tall images keep their chosen crop mode (%i×%i)", (width, height) => {
+  const view = render(<RemoteImage resizeMode="cover" uri="https://cdn.example/product.jpg" />);
+  fireEvent(view.UNSAFE_getByType(Image), "load", { nativeEvent: { source: { width, height } } });
+  expect(view.UNSAFE_getByType(Image).props.resizeMode).toBe("cover");
+  expect(view.UNSAFE_getByType(Image).props.source).toEqual({ uri: "https://cdn.example/product.jpg" });
+  view.rerender(<RemoteImage resizeMode="contain" uri="https://cdn.example/product.jpg" />);
+  expect(view.UNSAFE_getByType(Image).props.resizeMode).toBe("contain");
 });

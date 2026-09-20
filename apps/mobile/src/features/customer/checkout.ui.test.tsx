@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
+import { Image } from "react-native";
 import i18n from "../../i18n";
 import { CheckoutScreen } from "./cart-screens";
 import type { Cart } from "./cart";
@@ -57,6 +58,12 @@ afterAll(async () => {
   await act(async () => {
     await i18n.changeLanguage("ar");
   });
+});
+
+test("checkout keeps the cart image URL in its order summary", () => {
+  const pictured = { ...cart, items: [{ ...cart.items[0], imageUrl: "https://cdn.example/milk.jpg" }] };
+  const view = render(<CheckoutScreen cart={pictured} onBack={() => {}} onPlaced={() => {}} substitutionEnabled={true} />);
+  expect(view.UNSAFE_getAllByType(Image).some((image) => image.props.source?.uri === "https://cdn.example/milk.jpg")).toBe(true);
 });
 
 test("a rapid double-tap on Place order submits exactly one order", async () => {

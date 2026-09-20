@@ -198,7 +198,7 @@ export function SupermarketProductScreen(props: {
       ) : (
         <ScrollView contentContainerStyle={[styles.detailContent, showCart && styles.productGridWithCart]}>
           <View style={styles.detailArtwork}>
-            <RemoteImage resizeMode="cover" uri={product.imageUrl} style={styles.image} />
+            <RemoteImage resizeMode="contain" uri={product.imageUrl} style={styles.image} />
             <SaleBadge item={product} />
           </View>
           <Text style={styles.detailDepartment}>{product.categoryName}</Text>
@@ -412,7 +412,7 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   productGridWithCart: { paddingBottom: 105 },
   productRow: { gap: spacing[2] },
   productCard: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, marginBottom: spacing[2], maxWidth: "50%", overflow: "hidden", padding: spacing[2] },
-  productArtwork: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.md, height: 115, justifyContent: "center", overflow: "hidden" },
+  productArtwork: { alignItems: "center", aspectRatio: 1, backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.md, justifyContent: "center", overflow: "hidden" },
   productEmoji: { fontSize: iconSize.xxl },
   productDepartment: { ...text("label", "bold"), color: customerTheme.colors.primary, marginTop: spacing[2] },
   productBrand: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },

@@ -102,7 +102,6 @@ export function CartScreen(props: CartScreenProps) {
                   <View style={styles.cartItemVisual}>
                     <RemoteImage
                       accessibilityIgnoresInvertColors
-                      fallback={<Text style={styles.cartItemEmoji}>🥫</Text>}
                       resizeMode="cover"
                       style={styles.cartItemImage}
                       uri={item.imageUrl}
@@ -404,6 +403,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
             <Text style={styles.sectionTitle}>{t("checkout.orderSummaryEstimate")}</Text>
             {props.cart.items.map((item) => (
               <View key={item.menuItemId} style={styles.summaryRow}>
+                <RemoteImage resizeMode="cover" style={styles.summaryImage} uri={item.imageUrl} />
                 <Text style={styles.summaryRowLabel}>
                   {t("checkout.quantityTimesName", { quantity: item.quantity, name: item.name })}
                 </Text>
@@ -847,6 +847,7 @@ function OrderSummaryCard(props: { order: OrderDetail }) {
         const approved = item.fulfillmentAdjustment?.status === "APPROVED" ? item.fulfillmentAdjustment : null;
         return (
           <View key={item.id} style={styles.summaryRow}>
+            <RemoteImage resizeMode="cover" style={styles.summaryImage} uri={item.imageUrl} />
             <Text style={styles.summaryRowLabel}>
               {approved
                 ? t("checkout.quantityTimesName", {
@@ -1139,7 +1140,6 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   },
   cartItemTop: { alignItems: "center", flexDirection: "row" },
   cartItemVisual: { alignItems: "center", backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.lg, overflow: "hidden", height: 72, justifyContent: "center", marginEnd: spacing[3], width: 72 },
-  cartItemEmoji: { fontSize: iconSize.xl },
   cartItemImage: { borderRadius: radius.lg, height: 72, width: 72 },
   cartRowInfo: { flex: 1 },
   cartRowName: { ...text("body", "bold"), color: customerTheme.colors.text },
@@ -1183,6 +1183,7 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
     ...customerTheme.shadow
   },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[2] },
+  summaryImage: { borderRadius: radius.sm, height: 42, marginEnd: spacing[2], width: 42 },
   summaryRowLabel: { ...text("caption"), color: customerTheme.colors.textMuted, flex: 1, paddingEnd: spacing[2] },
   summaryRowValue: { ...text("caption", "medium"), color: customerTheme.colors.text },
   summaryRowLabelBold: { ...text("body", "bold"), color: customerTheme.colors.text },

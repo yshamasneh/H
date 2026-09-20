@@ -13,8 +13,12 @@ test("file validation accepts only JPEG, PNG, and WebP within five megabytes", (
 test("fallback resolution covers empty and failed remote URLs", () => {
   assert.equal(resolveImageSource(null, false, "/fallback.jpg"), "/fallback.jpg");
   assert.equal(resolveImageSource("", false, "/fallback.jpg"), "/fallback.jpg");
+  assert.equal(resolveImageSource("   ", false, "/fallback.jpg"), "/fallback.jpg");
+  assert.equal(resolveImageSource("bad url", false, "/fallback.jpg"), "/fallback.jpg");
+  assert.equal(resolveImageSource("javascript:alert(1)", false, "/fallback.jpg"), "/fallback.jpg");
   assert.equal(resolveImageSource("https://invalid.example/image.jpg", true, "/fallback.jpg"), "/fallback.jpg");
   assert.equal(resolveImageSource("https://cdn.example/image.jpg", false, "/fallback.jpg"), "https://cdn.example/image.jpg");
+  assert.equal(resolveImageSource("blob:https://admin.example/preview", false, "/fallback.jpg"), "blob:https://admin.example/preview");
 });
 
 test("browser PUT reports progress and rejects failed uploads", async () => {

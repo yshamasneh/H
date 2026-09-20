@@ -495,9 +495,9 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   },
   productArtwork: {
     alignItems: "center",
+    aspectRatio: 1,
     backgroundColor: colors.neutralSubtle,
     borderRadius: radius.md,
-    height: 96,
     justifyContent: "center",
     marginBottom: spacing[3],
     overflow: "hidden"
