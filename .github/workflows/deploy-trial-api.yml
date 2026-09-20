@@ -69,7 +69,11 @@ jobs:
           az postgres flexible-server firewall-rule create --resource-group "$RESOURCE_GROUP" --server-name "$DB_SERVER" --name "$rule_name" --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" --output none
           rule_created=1
           sleep 15
-          DATABASE_URL="$db_url" npm run prisma:deploy --workspace @wasel/api
+          if DATABASE_URL="$db_url" npm exec --workspace @wasel/api -- prisma migrate status; then
+            echo 'No pending Trial migrations'
+          else
+            DATABASE_URL="$db_url" npm run prisma:deploy --workspace @wasel/api
+          fi
           az postgres flexible-server firewall-rule delete --resource-group "$RESOURCE_GROUP" --server-name "$DB_SERVER" --name "$rule_name" --yes --output none
           rule_created=0
 
@@ -78,6 +82,7 @@ jobs:
         run: |
           set -euo pipefail
           az webapp sitecontainers update --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --container-name main --image "$IMAGE" --output none
+          az webapp restart --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --output none
 
       - name: Verify running image and API health
         shell: bash
