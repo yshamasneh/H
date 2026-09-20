@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ApiException } from "../common/api.exception";
+import { assertAllowedImageUrl } from "../common/image-url.util";
 import type { ImagePurpose } from "./uploads.types";
 
 @Injectable()
@@ -47,24 +48,9 @@ export class ManagedImageUrlService {
     }
   }
 
-  assertAllowedChange(input: {
-    previousUrl?: string | null;
-    nextUrl?: string | null;
-    purpose: ImagePurpose;
-    restaurantId: string | null;
-  }): void {
-    const next = input.nextUrl?.trim() || null;
-    const previous = input.previousUrl?.trim() || null;
-    if (!next || next === previous || !this.isConfigured()) return;
-    const blobName = this.blobNameFromUrl(next);
-    const expectedPrefix = imagePrefix(input.purpose, input.restaurantId);
-    if (!blobName || !blobName.startsWith(expectedPrefix)) {
-      throw new ApiException(
-        400,
-        "UNTRUSTED_IMAGE_URL",
-        "New images must be uploaded through the application's image upload service."
-      );
-    }
+  /** Kept for callers that still hold the service; the rule itself lives in `assertAllowedImageUrl`. */
+  assertAllowedChange(input: Parameters<typeof assertAllowedImageUrl>[0]): void {
+    assertAllowedImageUrl(input);
   }
 
   assertOwnedUrl(imageUrl: string, purpose: ImagePurpose, restaurantId: string | null): string {

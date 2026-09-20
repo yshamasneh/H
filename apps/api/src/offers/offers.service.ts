@@ -2,6 +2,7 @@ import { Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { writeAuditLog } from "../common/audit-log.util";
 import { ApiException } from "../common/api.exception";
+import { assertAllowedImageUrl } from "../common/image-url.util";
 import { BusinessType, OfferType, type Offer, type Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { ManagedImageUrlService } from "../uploads/managed-image-url.service";
@@ -58,7 +59,7 @@ export class OffersService {
 
   async adminCreate(adminUserId: string, input: CreateOfferDto): Promise<OfferView> {
     const normalized = await this.validateAndNormalize(input);
-    this.managedImages?.assertAllowedChange({
+    assertAllowedImageUrl({
       nextUrl: normalized.imageUrl,
       purpose: "OFFER",
       restaurantId: normalized.restaurantId
@@ -81,7 +82,7 @@ export class OffersService {
     const existing = await this.prisma.offer.findUnique({ where: { id: offerId } });
     if (!existing) throw new ApiException(404, "OFFER_NOT_FOUND", "This offer does not exist.");
     const normalized = await this.validateAndNormalize(input);
-    this.managedImages?.assertAllowedChange({
+    assertAllowedImageUrl({
       previousUrl: existing.imageUrl,
       nextUrl: normalized.imageUrl,
       purpose: "OFFER",
@@ -153,7 +154,8 @@ export class OffersService {
 
 export function calculatePromotionDiscounts(input: {
   offers: Offer[];
-  items: { menuItemId: string; priceMinor: number; quantity: number }[];
+  /** `onSale` lines already carry their promotion in their price and are skipped by product offers. */
+  items: { menuItemId: string; priceMinor: number; quantity: number; onSale?: boolean }[];
   subtotalMinor: number;
   deliveryFeeMinor: number;
 }): PromotionCalculation {
@@ -161,6 +163,10 @@ export function calculatePromotionDiscounts(input: {
   const productApplications: AppliedPromotion[] = [];
   const itemAmounts = new Map<string, number>();
   for (const line of input.items) {
+    // A product already reduced by a sale price is not discounted a second time by a product offer
+    // (see the decision note on `MenuItem.salePriceMinor`). Basket-level offers — an order
+    // percentage, delivery — are unaffected and still see the full sale-priced subtotal.
+    if (line.onSale) continue;
     itemAmounts.set(line.menuItemId, (itemAmounts.get(line.menuItemId) ?? 0) + line.priceMinor * line.quantity);
   }
   for (const [menuItemId, amountMinor] of itemAmounts) {

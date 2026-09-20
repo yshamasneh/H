@@ -142,6 +142,8 @@ export type MenuItemOwner = {
   name: string;
   description: string | null;
   priceMinor: number;
+  /** The price customers pay while a sale is on; null when there is no sale. Always below priceMinor. */
+  salePriceMinor: number | null;
   /** What the store paid per unit. Owner/admin-only; never present on a customer-facing view. */
   costPriceMinor: number | null;
   imageUrl: string | null;

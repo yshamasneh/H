@@ -15,9 +15,11 @@ export type ProductFilter = {
   search: string;
   categoryId: string;
   visibility: Visibility;
+  /** Only products with a sale price running. */
+  onSaleOnly: boolean;
 };
 
-export const emptyFilter: ProductFilter = { search: "", categoryId: "", visibility: "ALL" };
+export const emptyFilter: ProductFilter = { search: "", categoryId: "", visibility: "ALL", onSaleOnly: false };
 
 const arabicDiacritics = /[ً-ٰٟـ]/g;
 
@@ -50,7 +52,8 @@ export function filterProducts(items: MenuItemOwner[], filter: ProductFilter): M
     (item) =>
       matchesSearch(item, needle) &&
       (!filter.categoryId || item.categoryId === filter.categoryId) &&
-      (filter.visibility === "ALL" || (filter.visibility === "VISIBLE") === item.isAvailable)
+      (filter.visibility === "ALL" || (filter.visibility === "VISIBLE") === item.isAvailable) &&
+      (!filter.onSaleOnly || item.salePriceMinor !== null)
   );
 }
 
@@ -72,6 +75,10 @@ export function categoryCounts(items: Pick<MenuItemOwner, "categoryId" | "isAvai
 export function paginate<T>(items: T[], page: number, pageSize: number): T[] {
   const start = (Math.max(1, page) - 1) * pageSize;
   return items.slice(start, start + pageSize);
+}
+
+export function onSaleCount(items: Pick<MenuItemOwner, "salePriceMinor">[]): number {
+  return items.reduce((sum, item) => sum + (item.salePriceMinor !== null ? 1 : 0), 0);
 }
 
 export function hiddenCount(items: Pick<MenuItemOwner, "isAvailable">[]): number {

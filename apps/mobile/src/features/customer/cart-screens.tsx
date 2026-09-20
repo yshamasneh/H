@@ -44,6 +44,7 @@ import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "
 import { useOrderRealtime } from "../../core/socket";
 import { OrderDetailSkeleton, OrderListSkeleton } from "../../components/skeleton";
 import { RemoteImage } from "../../components/remote-image";
+import { PriceDisplay, SaleBadge } from "../../components/sale-price";
 import { useCustomerTheme, type CustomerTheme } from "./theme";
 import { Icon, backIconName } from "../../theme/icon";
 import { motionDuration, motionEasing, useReducedMotion } from "../../theme/motion";
@@ -106,11 +107,19 @@ export function CartScreen(props: CartScreenProps) {
                       style={styles.cartItemImage}
                       uri={item.imageUrl}
                     />
+                    {item.regularPriceMinor ? (
+                      <SaleBadge item={{ priceMinor: item.regularPriceMinor, salePriceMinor: item.priceMinor }} />
+                    ) : null}
                   </View>
                   <View style={styles.cartRowInfo}>
                     <Text style={styles.cartRowName}>{item.name}</Text>
                     <Text style={styles.cartRowUnitPrice}>{t("cart.unitPriceLabel", { price: formatPrice(item.priceMinor), unit: item.unitLabel })}</Text>
-                    <Text style={styles.cartRowLineTotal}>{formatPrice(item.priceMinor * item.quantity)}</Text>
+                    <PriceDisplay
+                      effectiveMinor={item.priceMinor * item.quantity}
+                      format={formatPrice}
+                      priceStyle={styles.cartRowLineTotal}
+                      regularMinor={(item.regularPriceMinor ?? item.priceMinor) * item.quantity}
+                    />
                     {props.substitutionEnabled ? (
                       <Pressable
                         accessibilityRole="checkbox"
@@ -398,7 +407,12 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
                 <Text style={styles.summaryRowLabel}>
                   {t("checkout.quantityTimesName", { quantity: item.quantity, name: item.name })}
                 </Text>
-                <Text style={styles.summaryRowValue}>{formatPrice(item.priceMinor * item.quantity)}</Text>
+                <PriceDisplay
+                  effectiveMinor={item.priceMinor * item.quantity}
+                  format={formatPrice}
+                  priceStyle={styles.summaryRowValue}
+                  regularMinor={(item.regularPriceMinor ?? item.priceMinor) * item.quantity}
+                />
               </View>
             ))}
             <View style={styles.summaryDivider} />

@@ -12,6 +12,7 @@ import {
   View
 } from "react-native";
 import { RemoteImage } from "../../components/remote-image";
+import { PriceDisplay, SaleBadge } from "../../components/sale-price";
 // Expo's safe-area module, not React Native's deprecated built-in `SafeAreaView`
 // (iOS-only, a no-op on Android) — matching every other screen in this app.
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -196,7 +197,10 @@ export function SupermarketProductScreen(props: {
         <ProductDetailSkeleton />
       ) : (
         <ScrollView contentContainerStyle={[styles.detailContent, showCart && styles.productGridWithCart]}>
-          <View style={styles.detailArtwork}><RemoteImage resizeMode="cover" uri={product.imageUrl} style={styles.image} /></View>
+          <View style={styles.detailArtwork}>
+            <RemoteImage resizeMode="cover" uri={product.imageUrl} style={styles.image} />
+            <SaleBadge item={product} />
+          </View>
           <Text style={styles.detailDepartment}>{product.categoryName}</Text>
           <Text style={styles.detailName}>{product.name}</Text>
           {product.brand ? <Text style={styles.detailBrand}>{product.brand}</Text> : null}
@@ -210,8 +214,13 @@ export function SupermarketProductScreen(props: {
             <Text style={styles.offerBadge}>{t("supermarket.offerLabel", { title: product.offer.title, percent: product.offer.discountPercent })}</Text>
           ) : null}
           <View style={styles.detailPriceRow}>
-            {product.offer ? <Text style={styles.oldPrice}>{formatPrice(product.priceMinor)}</Text> : null}
-            <Text style={styles.detailPrice}>{formatPrice(product.effectivePriceMinor)}</Text>
+            <PriceDisplay
+              effectiveMinor={product.effectivePriceMinor}
+              format={formatPrice}
+              priceStyle={styles.detailPrice}
+              regularMinor={product.priceMinor}
+              regularStyle={styles.oldPrice}
+            />
           </View>
           <Pressable
             accessibilityRole="checkbox"
@@ -274,7 +283,10 @@ function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpe
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <Pressable onPress={props.onOpen} style={({ pressed }) => [styles.productCard, pressed && styles.pressed]}>
-      <View style={styles.productArtwork}><RemoteImage resizeMode="cover" uri={props.item.imageUrl} style={styles.image} /></View>
+      <View style={styles.productArtwork}>
+        <RemoteImage resizeMode="cover" uri={props.item.imageUrl} style={styles.image} />
+        <SaleBadge item={props.item} />
+      </View>
       <Text style={styles.productDepartment}>{props.item.categoryName}</Text>
       {props.item.brand ? <Text numberOfLines={1} style={styles.productBrand}>{props.item.brand}</Text> : null}
       <Text numberOfLines={2} style={styles.productName}>{props.item.name}</Text>
@@ -283,7 +295,12 @@ function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpe
         <Text style={styles.offerBadge}>{t("supermarket.offerPercentOnly", { percent: props.item.offer.discountPercent })}</Text>
       ) : null}
       <View style={styles.cardPriceRow}>
-        <Text style={styles.productPrice}>{formatPrice(props.item.effectivePriceMinor)}</Text>
+        <PriceDisplay
+          effectiveMinor={props.item.effectivePriceMinor}
+          format={formatPrice}
+          priceStyle={styles.productPrice}
+          regularMinor={props.item.priceMinor}
+        />
         <Pressable
           accessibilityLabel={t("supermarket.addProductAccessibility", { name: props.item.name })}
           onPress={(event) => { event.stopPropagation(); props.onAdd(); }}

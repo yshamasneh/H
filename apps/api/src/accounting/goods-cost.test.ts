@@ -217,3 +217,50 @@ test("worked example: a 100.00 basket with no cost price at all pays the superma
   assert.equal(withCost.distributed, 11_000);
   assert.equal(withoutCost.distributed, 11_000);
 });
+
+// ------------------------------------------------------------------------------ sale prices
+
+test("worked example: a sale reduces the margin, and the 40/30/30 split follows it to the agora", () => {
+  // One supermarket product: regular 20.00, the platform paid 12.00 for it.
+  //
+  //                        regular price          on sale at 15.00
+  //   retail (charged)     20.00                  15.00
+  //   goods cost           12.00 -> partner       12.00 -> partner
+  //   margin                8.00                   3.00
+  //   partner  40%          3.20                   1.20   (+ the 12.00 cost back)
+  //   owner A  30%          2.40                   0.90
+  //   owner B  30%          2.40                   0.90
+  //
+  // The order snapshots the charged price, the order's subtotal is the sum of those snapshots, and
+  // the accounting layer values the order from that subtotal — so it is the sale price that counts.
+  const regular = distribute(2_000, 1_200);
+  const onSale = distribute(1_500, 1_200);
+
+  assert.equal(regular.marginMinor, 800);
+  assert.equal(regular.supermarket, 1_200 + 320);
+  assert.equal(regular.ownerA, 240);
+  assert.equal(regular.ownerB, 240);
+
+  assert.equal(onSale.marginMinor, 300, "15.00 charged less 12.00 cost");
+  assert.equal(onSale.supermarket, 1_200 + 120, "the cost is still repaid in full; only the margin share shrinks");
+  assert.equal(onSale.ownerA, 90);
+  assert.equal(onSale.ownerB, 90);
+
+  // Both orders reconcile exactly: everything charged (goods + 10.00 delivery) is distributed.
+  assert.equal(regular.distributed, 2_000 + 1_000);
+  assert.equal(onSale.distributed, 1_500 + 1_000);
+  // The partner's cost repayment is untouched by the sale; owners and partner shared the 5.00 hit 40/30/30.
+  assert.equal(regular.supermarket - onSale.supermarket, 200);
+  assert.equal(regular.ownerA - onSale.ownerA, 150);
+  assert.equal(regular.ownerB - onSale.ownerB, 150);
+});
+
+test("a sale below cost is a loss the split reports honestly, not something that reconciles away", () => {
+  // Sold at 10.00 against a 12.00 cost: margin is -2.00. Nothing in the arithmetic hides that; the
+  // shares go negative, the order still reconciles to the agora, and the admin form warns before
+  // anyone can set such a price without noticing.
+  const loss = distribute(1_000, 1_200);
+  assert.equal(loss.marginMinor, -200);
+  assert.equal(loss.distributed, 1_000 + 1_000, "still reconciles exactly");
+  assert.ok(loss.ownerA < 0 && loss.ownerB < 0, "owners carry the loss");
+});

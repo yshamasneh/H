@@ -459,7 +459,15 @@
     "imageUrlHint": "Paste the image URL. Leave it empty for no image.",
     "errorStockInvalid": "Quantity must be a whole number, 0 or more.",
     "errorImageUrlInvalid": "The image URL must start with http:// or https://",
-    "saved": "Product saved."
+    "saved": "Product saved.",
+    "salePrice": "Sale price (optional)",
+    "salePriceHint": "Must be lower than the regular price. Leave empty to end the sale. The saving percentage is worked out from the two prices.",
+    "saleBadge": "Save {{percent}}%",
+    "clearSale": "Remove sale",
+    "errorSaleInvalid": "Enter a valid sale price above zero (for example 9.90), or leave it empty.",
+    "errorSaleNotBelow": "The sale price must be lower than the regular price.",
+    "saleBelowCost": "Warning: the sale price is below the cost price, so every sale at this price is recorded as a loss.",
+    "onSaleOnly": "On sale only ({{count}})"
   },
   "inventory": {
     "title": "Inventory and purchasing",

@@ -98,5 +98,6 @@
     "invalidTitle": "Image not selected",
     "tooLarge": "Choose an image no larger than 5 MB.",
     "processingFailed": "The image could not be prepared. Try another JPEG, PNG, or WebP file."
-  }
+  },
+  "saleBadge": "Save {{percent}}%"
 }

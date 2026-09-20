@@ -415,63 +415,63 @@ model Address {
 }
 
 model PushToken {
-  id               String   @id @default(uuid()) @db.Uuid
-  userId           String   @db.Uuid
-  token            String   @unique
+  id               String         @id @default(uuid()) @db.Uuid
+  userId           String         @db.Uuid
+  token            String         @unique
   platform         String
-  isActive         Boolean  @default(true)
-  lastRegisteredAt DateTime @default(now())
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isActive         Boolean        @default(true)
+  lastRegisteredAt DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   pushDeliveries   PushDelivery[]
 
   @@index([userId, isActive])
 }
 
 model Restaurant {
-  id                   String                 @id @default(uuid()) @db.Uuid
-  ownerUserId          String                 @unique @db.Uuid
-  name                 String
-  businessType         BusinessType           @default(RESTAURANT)
-  description          String?
-  phone                String
-  status               RestaurantStatus       @default(PENDING)
-  isOpen               Boolean                @default(false)
+  id                     String                 @id @default(uuid()) @db.Uuid
+  ownerUserId            String                 @unique @db.Uuid
+  name                   String
+  businessType           BusinessType           @default(RESTAURANT)
+  description            String?
+  phone                  String
+  status                 RestaurantStatus       @default(PENDING)
+  isOpen                 Boolean                @default(false)
   /// Weekly opening/closing time as "HH:mm" (24h), applied to every day. Both null means no
   /// schedule, so openness follows the manual `isOpen` switch only. When set, the store is
   /// considered open for orders only inside this window (see isWithinWeeklyHours).
-  opensAt              String?
-  closesAt             String?
-  addressLine          String
-  latitude             Float?
-  longitude            Float?
+  opensAt                String?
+  closesAt               String?
+  addressLine            String
+  latitude               Float?
+  longitude              Float?
   /// When false, the store's latitude/longitude are withheld from every customer-facing view, so
   /// the app cannot show its location on the store profile. Admin-controlled per store — never a
   /// global toggle. Independent of delivery tracking, which reads the coordinates server-side.
-  showLocationToCustomer Boolean              @default(false)
-  logoUrl              String?
+  showLocationToCustomer Boolean                @default(false)
+  logoUrl                String?
   /// A promotional partner pays the reduced commission rate and is not billed the monthly
   /// subscription. Stored on the business rather than inferred, and snapshotted onto every order.
-  isPromotionalPartner Boolean                @default(false)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-  owner                User                   @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  categories           MenuCategory[]
-  items                MenuItem[]
-  offers               Offer[]
-  orders               Order[]
-  suppliers            Supplier[]
-  purchaseOrders       PurchaseOrder[]
-  inventoryMovements   InventoryMovement[]
-  members              BusinessMember[]
-  notifications        Notification[]
-  financialRecords     OrderFinancialRecord[]
-  earnings             PartnerEarning[]       @relation("PartnerEarningBusiness")
-  operatingCosts       OperatingCostEntry[]
-  subscriptionCharges  SubscriptionCharge[]
-  partnerSettlements   PartnerSettlement[]    @relation("PartnerSettlementBusiness")
-  partnerAccounts      PartnerAccount[]
+  isPromotionalPartner   Boolean                @default(false)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  owner                  User                   @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  categories             MenuCategory[]
+  items                  MenuItem[]
+  offers                 Offer[]
+  orders                 Order[]
+  suppliers              Supplier[]
+  purchaseOrders         PurchaseOrder[]
+  inventoryMovements     InventoryMovement[]
+  members                BusinessMember[]
+  notifications          Notification[]
+  financialRecords       OrderFinancialRecord[]
+  earnings               PartnerEarning[]       @relation("PartnerEarningBusiness")
+  operatingCosts         OperatingCostEntry[]
+  subscriptionCharges    SubscriptionCharge[]
+  partnerSettlements     PartnerSettlement[]    @relation("PartnerSettlementBusiness")
+  partnerAccounts        PartnerAccount[]
 
   @@index([businessType, status, isOpen])
 }
@@ -519,7 +519,7 @@ model Landmark {
 /// dedicated settings table rather than a per-product flag: whether customers may
 /// request "no substitution" is a platform policy, not a property of any product.
 model PlatformSetting {
-  id String @id
+  id                        String   @id
   /// When false, the customer app hides the "no substitution" choice at checkout,
   /// so every order allows substitution. Does not alter the per-item
   /// OrderItem.allowSubstitution field — it only governs whether customers can set it.
@@ -549,6 +549,9 @@ model MenuItem {
   name                   String
   description            String?
   priceMinor             Int
+  /// The price customers pay while a sale is on; null means no sale. Always below priceMinor
+  /// (enforced by the service and a CHECK). Orders freeze whichever price was actually charged.
+  salePriceMinor         Int?
   costPriceMinor         Int?
   imageUrl               String?
   sku                    String?
@@ -649,22 +652,26 @@ model OrderStatusHistory {
 }
 
 model OrderItem {
-  id                       String                 @id @default(uuid()) @db.Uuid
-  orderId                  String                 @db.Uuid
-  menuItemId               String                 @db.Uuid
-  nameSnapshot             String
-  priceMinorSnapshot       Int
-  quantity                 Int
-  unitLabelSnapshot        String                 @default("item")
+  id                        String                 @id @default(uuid()) @db.Uuid
+  orderId                   String                 @db.Uuid
+  menuItemId                String                 @db.Uuid
+  nameSnapshot              String
+  /// The price actually charged per unit: the sale price when one was active, else the regular price.
+  priceMinorSnapshot        Int
+  /// The regular price a sale line replaced (null when the line was not on sale). Display and
+  /// reporting only; the money is already in priceMinorSnapshot.
+  regularPriceMinorSnapshot Int?
+  quantity                  Int
+  unitLabelSnapshot         String                 @default("item")
   /// What the platform paid for this line's goods, frozen at order time. Null on lines whose
   /// product had no cost price recorded, and on every line placed before this column existed —
   /// the financial record flags those rather than silently treating the cost as zero.
-  costPriceMinorSnapshot   Int?
-  allowSubstitution        Boolean                @default(false)
-  isVariableWeightSnapshot Boolean                @default(false)
-  order                    Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem                 MenuItem               @relation(fields: [menuItemId], references: [id])
-  fulfillmentAdjustment    FulfillmentAdjustment?
+  costPriceMinorSnapshot    Int?
+  allowSubstitution         Boolean                @default(false)
+  isVariableWeightSnapshot  Boolean                @default(false)
+  order                     Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem                  MenuItem               @relation(fields: [menuItemId], references: [id])
+  fulfillmentAdjustment     FulfillmentAdjustment?
 
   @@index([orderId])
 }

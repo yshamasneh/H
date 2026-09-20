@@ -1,5 +1,7 @@
 import { Injectable, Optional } from "@nestjs/common";
 import { ApiException } from "../common/api.exception";
+import { assertValidSalePrice } from "./sale-price";
+import { assertAllowedImageUrl } from "../common/image-url.util";
 import { BusinessType, type MenuCategory, type MenuItem } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { ManagedImageUrlService } from "../uploads/managed-image-url.service";
@@ -75,10 +77,11 @@ export class MenuService {
     await this.requireOwnCategory(restaurantId, input.categoryId);
     await this.assertSkuAvailable(restaurantId, input.sku);
     await this.assertBarcodeAvailable(restaurantId, input.barcode);
+    assertValidSalePrice(input.priceMinor, input.salePriceMinor);
     if (await this.isSupermarket(restaurantId)) {
       assertSupermarketCostPrice(input.costPriceMinor);
     }
-    this.managedImages?.assertAllowedChange({
+    assertAllowedImageUrl({
       nextUrl: input.imageUrl,
       purpose: "PRODUCT",
       restaurantId
@@ -90,6 +93,7 @@ export class MenuService {
         name: input.name.trim(),
         description: input.description?.trim() || null,
         priceMinor: input.priceMinor,
+        salePriceMinor: input.salePriceMinor ?? null,
         costPriceMinor: input.costPriceMinor ?? null,
         imageUrl: input.imageUrl || null,
         sku: input.sku?.trim() || null,
@@ -112,7 +116,7 @@ export class MenuService {
     capabilities: { canManagePrices: boolean }
   ): Promise<MenuItemOwnerView> {
     const item = await this.requireOwnItem(restaurantId, itemId);
-    this.managedImages?.assertAllowedChange({
+    assertAllowedImageUrl({
       previousUrl: item.imageUrl,
       nextUrl: input.imageUrl,
       purpose: "PRODUCT",
@@ -124,7 +128,9 @@ export class MenuService {
     // a full edit form may always include the field.
     const changesPrice = input.priceMinor !== undefined && input.priceMinor !== item.priceMinor;
     const changesCostPrice = input.costPriceMinor !== undefined && input.costPriceMinor !== item.costPriceMinor;
-    if ((changesPrice || changesCostPrice) && !capabilities.canManagePrices) {
+    // A sale price is a price: starting, changing or ending a sale needs the same permission.
+    const changesSalePrice = input.salePriceMinor !== undefined && input.salePriceMinor !== item.salePriceMinor;
+    if ((changesPrice || changesCostPrice || changesSalePrice) && !capabilities.canManagePrices) {
       throw new ApiException(
         403,
         "FORBIDDEN_PERMISSION",
@@ -135,6 +141,12 @@ export class MenuService {
     if (input.categoryId) {
       await this.requireOwnCategory(restaurantId, input.categoryId);
     }
+    // Validate the pair as it will be stored, not just the field that changed: raising nothing but
+    // lowering the regular price to or below a running sale would otherwise slip through.
+    assertValidSalePrice(
+      input.priceMinor ?? item.priceMinor,
+      input.salePriceMinor === undefined ? item.salePriceMinor : input.salePriceMinor
+    );
     await this.assertSkuAvailable(restaurantId, input.sku, item.id);
     await this.assertBarcodeAvailable(restaurantId, input.barcode, item.id);
     // A supermarket product's cost is what the whole margin split is computed from, so it may be
@@ -150,6 +162,7 @@ export class MenuService {
         name: input.name?.trim(),
         description: input.description !== undefined ? input.description.trim() || null : undefined,
         priceMinor: input.priceMinor,
+        salePriceMinor: input.salePriceMinor,
         costPriceMinor: input.costPriceMinor,
         imageUrl: input.imageUrl !== undefined ? input.imageUrl || null : undefined,
         sku: input.sku !== undefined ? input.sku.trim() || null : undefined,
@@ -347,6 +360,7 @@ function toItemView(item: MenuItem): MenuItemOwnerView {
     name: item.name,
     description: item.description,
     priceMinor: item.priceMinor,
+    salePriceMinor: item.salePriceMinor,
     costPriceMinor: item.costPriceMinor,
     imageUrl: item.imageUrl,
     sku: item.sku,

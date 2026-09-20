@@ -33,7 +33,15 @@ export type MenuItemPublicView = {
   id: string;
   name: string;
   description: string | null;
+  /** The regular price. */
   priceMinor: number;
+  /** The sale price while a sale is on, else null. Always below priceMinor. */
+  salePriceMinor: number | null;
+  /**
+   * What one unit costs the customer right now: the sale price if on sale; otherwise the regular
+   * price less any product offer. Never combine this with `offer` when `salePriceMinor` is set —
+   * a sale item carries no offer (see calculatePromotionDiscounts).
+   */
   effectivePriceMinor: number;
   imageUrl: string | null;
   sku: string | null;

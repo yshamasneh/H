@@ -67,7 +67,12 @@ export function deserializeCart(raw: string | null): Cart | null {
       // field that is not named here is silently dropped on every reload — which is how the
       // picture vanished from the cart after a refresh. It is optional and display-only, so a
       // missing or malformed value degrades to "no picture" rather than discarding the whole cart.
-      ...(typeof line.imageUrl === "string" && line.imageUrl.trim() ? { imageUrl: line.imageUrl } : {})
+      ...(typeof line.imageUrl === "string" && line.imageUrl.trim() ? { imageUrl: line.imageUrl } : {}),
+      // Same rule as imageUrl: a field not named here is dropped on every reload. Only a sane
+      // reduction survives (a regular price above the charged one); anything else is ignored.
+      ...(typeof line.regularPriceMinor === "number" && line.regularPriceMinor > line.priceMinor
+        ? { regularPriceMinor: line.regularPriceMinor }
+        : {})
     });
   }
   if (items.length === 0) return null;

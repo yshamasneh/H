@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RemoteImage } from "../../components/remote-image";
+import { PriceDisplay, SaleBadge } from "../../components/sale-price";
 import {
   getSupermarketCatalog,
   listActiveRestaurantOffers,
@@ -368,12 +369,18 @@ function StorefrontProductCard(props: {
     <Pressable onPress={props.onOpen} style={styles.productCard}>
       <View style={styles.productArtwork}>
         <RemoteImage resizeMode="cover" uri={product.imageUrl} style={styles.fullImage} />
+        <SaleBadge item={product} />
       </View>
       <Text style={styles.productDepartment}>{product.categoryName}</Text>
       <Text numberOfLines={2} style={styles.productName}>{product.name}</Text>
       <Text style={styles.productUnit}>{product.unitLabel}</Text>
       <View style={styles.productPriceRow}>
-        <Text style={styles.productPrice}>{formatPrice(product.effectivePriceMinor)}</Text>
+        <PriceDisplay
+          effectiveMinor={product.effectivePriceMinor}
+          format={formatPrice}
+          priceStyle={styles.productPrice}
+          regularMinor={product.priceMinor}
+        />
         <Pressable
           accessibilityLabel={t("supermarket.addProductAccessibility", { name: product.name })}
           onPress={(event) => { event.stopPropagation(); props.onAdd(); }}

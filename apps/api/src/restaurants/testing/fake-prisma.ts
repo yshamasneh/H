@@ -52,6 +52,7 @@ type MenuItemRecord = {
   name: string;
   description: string | null;
   priceMinor: number;
+  salePriceMinor: number | null;
   costPriceMinor: number | null;
   imageUrl: string | null;
   sku: string | null;
@@ -381,6 +382,7 @@ export class FakeRestaurantPrisma {
         name: data.name,
         description: data.description ?? null,
         priceMinor: data.priceMinor,
+        salePriceMinor: data.salePriceMinor ?? null,
         costPriceMinor: data.costPriceMinor ?? null,
         imageUrl: data.imageUrl ?? null,
         sku: data.sku ?? null,
@@ -405,6 +407,7 @@ export class FakeRestaurantPrisma {
       if (data.name !== undefined) item.name = data.name;
       if (data.description !== undefined) item.description = data.description;
       if (data.priceMinor !== undefined) item.priceMinor = data.priceMinor;
+      if (data.salePriceMinor !== undefined) item.salePriceMinor = data.salePriceMinor;
       if (data.costPriceMinor !== undefined) item.costPriceMinor = data.costPriceMinor;
       if (data.imageUrl !== undefined) item.imageUrl = data.imageUrl;
       if (data.sku !== undefined) item.sku = data.sku;

@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "../api";
 import { type MenuCategoryOwner, type MenuItemOwner } from "../api.business";
-import { categoryCounts, emptyFilter, filterProducts, hiddenCount, paginate, type ProductFilter, type Visibility } from "../catalogue-view";
+import { categoryCounts, emptyFilter, filterProducts, hiddenCount, onSaleCount, paginate, type ProductFilter, type Visibility } from "../catalogue-view";
 import { parseMoneyToMinor, parseWholeNumber, toMoneyInput } from "../money";
+import { isBelowCost, parseSaleInput, salePercentOff } from "../sale";
 import { ConfirmModal } from "./ConfirmModal";
 import { FallbackImage } from "./FallbackImage";
 import { ImageUploadField } from "./ImageUploadField";
@@ -44,6 +45,7 @@ type ItemDraft = {
   name: string;
   description: string;
   price: string;
+  salePrice: string;
   costPrice: string;
   imageUrl: string;
   brand: string;
@@ -61,6 +63,7 @@ const emptyDraft: ItemDraft = {
   name: "",
   description: "",
   price: "",
+  salePrice: "",
   costPrice: "",
   imageUrl: "",
   brand: "",
@@ -132,6 +135,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       name: item.name,
       description: item.description ?? "",
       price: toMoneyInput(item.priceMinor),
+      salePrice: item.salePriceMinor === null ? "" : toMoneyInput(item.salePriceMinor),
       costPrice: item.costPriceMinor === null ? "" : toMoneyInput(item.costPriceMinor),
       imageUrl: item.imageUrl ?? "",
       brand: item.brand ?? "",
@@ -161,6 +165,8 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       if (draft.costPrice.trim() && parseMoneyToMinor(draft.costPrice) === null) {
         return t("catalogue.errorCostPriceInvalid");
       }
+      const sale = parseSaleInput(draft.price, draft.salePrice);
+      if (!sale.ok) return t(sale.error === "notBelowPrice" ? "catalogue.errorSaleNotBelow" : "catalogue.errorSaleInvalid");
     }
     if (isSupermarket) {
       for (const value of [draft.stockQuantity, draft.reorderLevel]) {
@@ -202,6 +208,9 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       // enforces the same rule independently.
       if (canManagePrices && draft.price) {
         body.priceMinor = parseMoneyToMinor(draft.price);
+        // Blank ends a running sale (null); on a new product a blank simply means no sale.
+        const sale = parseSaleInput(draft.price, draft.salePrice);
+        if (sale.ok && (sale.saleMinor !== null || editingId)) body.salePriceMinor = sale.saleMinor;
         body.costPriceMinor = draft.costPrice.trim()
           ? parseMoneyToMinor(draft.costPrice)
           : editingId
@@ -258,6 +267,9 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   const filtered = filterProducts(items, filter);
   const pageItems = paginate(filtered, page, productsPageSize);
   const hiddenTotal = hiddenCount(items);
+  const saleTotal = onSaleCount(items);
+  const draftSale = parseSaleInput(draft.price, draft.salePrice);
+  const draftBelowCost = draftSale.ok && isBelowCost(draftSale.saleMinor, draft.costPrice.trim() ? parseMoneyToMinor(draft.costPrice) : null);
   const categoryNameOf = (id: string) => categories.find((category) => category.id === id)?.name ?? "—";
   const canHide = canManageProducts || canManageOrders;
 
@@ -461,6 +473,16 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
               value={draft.price}
             />
             <input
+              aria-label={t("catalogue.salePrice")}
+              className="text-input"
+              dir="ltr"
+              disabled={!canManagePrices}
+              inputMode="decimal"
+              onChange={(event) => setDraft({ ...draft, salePrice: event.target.value })}
+              placeholder={t("catalogue.salePrice")}
+              value={draft.salePrice}
+            />
+            <input
               className="text-input"
               dir="ltr"
               disabled={!canManagePrices}
@@ -476,6 +498,21 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
               value={draft.unitLabel}
             />
           </div>
+          {canManagePrices ? (
+            <p className="field-hint">
+              {t("catalogue.salePriceHint")}
+              {draftSale.ok && draftSale.saleMinor !== null ? (
+                <>
+                  {" "}
+                  <strong>{t("catalogue.saleBadge", { percent: salePercentOff(parseMoneyToMinor(draft.price) ?? 0, draftSale.saleMinor) })}</strong>{" "}
+                  <button className="btn btn-outline btn-sm" onClick={() => setDraft({ ...draft, salePrice: "" })} type="button">
+                    {t("catalogue.clearSale")}
+                  </button>
+                </>
+              ) : null}
+            </p>
+          ) : null}
+          {draftBelowCost ? <div className="warning-banner">{t("catalogue.saleBelowCost")}</div> : null}
           <div className="filters-row">
             <input
               className="text-input"
@@ -608,6 +645,14 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
             </option>
           </select>
         </div>
+        <label className="checkbox-row">
+          <input
+            checked={filter.onSaleOnly}
+            onChange={(event) => changeFilter({ onSaleOnly: event.target.checked })}
+            type="checkbox"
+          />
+          {t("catalogue.onSaleOnly", { count: saleTotal })}
+        </label>
         <p className="field-hint">
           {t("catalogue.showing", { shown: filtered.length, total: items.length })}
           {hiddenTotal > 0 ? ` · ${t("catalogue.hiddenSummary", { count: hiddenTotal })}` : ""}
@@ -654,7 +699,20 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
                         categoryNameOf(item.categoryId)
                       )}
                     </td>
-                    <td className="money">{formatPrice(item.priceMinor)}</td>
+                    <td className="money">
+                      {item.salePriceMinor !== null ? (
+                        <>
+                          <s style={{ opacity: 0.6 }}>{formatPrice(item.priceMinor)}</s>{" "}
+                          <strong>{formatPrice(item.salePriceMinor)}</strong>
+                          <br />
+                          <span className="badge badge-attention">
+                            {t("catalogue.saleBadge", { percent: salePercentOff(item.priceMinor, item.salePriceMinor) })}
+                          </span>
+                        </>
+                      ) : (
+                        formatPrice(item.priceMinor)
+                      )}
+                    </td>
                     <td className="money">{item.costPriceMinor === null ? t("common.dash") : formatPrice(item.costPriceMinor)}</td>
                     {isSupermarket ? <td className="num">{item.stockQuantity ?? t("common.dash")}</td> : null}
                     <td>

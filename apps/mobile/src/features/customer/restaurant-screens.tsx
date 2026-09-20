@@ -14,6 +14,7 @@ import {
   View
 } from "react-native";
 import { RemoteImage } from "../../components/remote-image";
+import { PriceDisplay, SaleBadge } from "../../components/sale-price";
 import {
   getRestaurantMenu,
   listRestaurants,
@@ -248,12 +249,18 @@ function MenuCategorySection(props: { category: MenuCategorySummary; onAddItem: 
               </Text>
             ) : null}
             <View style={styles.itemPriceRow}>
-              {item.offer ? <Text style={styles.itemOriginalPrice}>{formatPrice(item.priceMinor)}</Text> : null}
-              <Text style={styles.itemPrice}>{formatPrice(item.effectivePriceMinor)}</Text>
+              <PriceDisplay
+                effectiveMinor={item.effectivePriceMinor}
+                format={formatPrice}
+                priceStyle={styles.itemPrice}
+                regularMinor={item.priceMinor}
+                regularStyle={styles.itemOriginalPrice}
+              />
             </View>
           </View>
           <View style={styles.itemVisual}>
             <RemoteImage resizeMode="cover" uri={item.imageUrl} style={styles.fullImage} />
+            <SaleBadge item={item} />
             <Pressable onPress={() => props.onAddItem(item)} style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}>
               <Text style={styles.addButtonText}>＋</Text>
             </Pressable>

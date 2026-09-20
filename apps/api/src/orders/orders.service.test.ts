@@ -1436,3 +1436,79 @@ function hhmm(totalMinutes: number): string {
   const wrapped = ((totalMinutes % 1440) + 1440) % 1440;
   return `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`;
 }
+
+// ------------------------------------------------------------------------------------ sale prices
+
+test("an order charges the sale price and freezes it, with the regular price it replaced", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 2000, salePriceMinor: 1000 });
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  assert.equal(order.items[0].priceMinorSnapshot, 1000, "the sale price is what is charged");
+  assert.equal(order.items[0].regularPriceMinorSnapshot, 2000, "and the regular price is kept for history");
+  assert.equal(order.subtotalMinor, 2000, "2 x 10.00, not 2 x 20.00");
+});
+
+test("a full-price line carries no regular-price snapshot", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 2000 });
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  assert.equal(order.items[0].priceMinorSnapshot, 2000);
+  assert.equal(order.items[0].regularPriceMinorSnapshot, null);
+});
+
+test("changing or removing a sale later never alters a past order", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 2000, salePriceMinor: 1000 });
+  const customerId = randomUUID();
+
+  const placed = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+  const stored = prisma.menuItems.find((item) => item.id === menuItem.id)!;
+
+  // The sale is deepened, then ended, then the regular price itself moves.
+  for (const change of [
+    () => { stored.salePriceMinor = 500; },
+    () => { stored.salePriceMinor = null; },
+    () => { stored.priceMinor = 9999; }
+  ]) {
+    change();
+    const again = await service.getForCustomer(customerId, placed.id);
+    assert.equal(again.items[0].priceMinorSnapshot, 1000);
+    assert.equal(again.items[0].regularPriceMinorSnapshot, 2000);
+    assert.equal(again.subtotalMinor, 2000);
+    assert.equal(again.totalMinor, placed.totalMinor);
+  }
+
+  // ...and once the sale is over, the next order pays the regular price.
+  const later = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+  assert.equal(later.items[0].priceMinorSnapshot, 9999);
+  assert.equal(later.items[0].regularPriceMinorSnapshot, null);
+});
+
+test("a product offer does not stack on a product that is already on sale", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const onSale = prisma.seedMenuItem(restaurant.id, { priceMinor: 2000, salePriceMinor: 1000, name: "On sale" });
+  const fullPrice = prisma.seedMenuItem(restaurant.id, { priceMinor: 1000, name: "Full price" });
+  for (const target of [onSale, fullPrice]) {
+    prisma.offers.push({
+      id: randomUUID(), type: "PRODUCT_PERCENTAGE", restaurantId: restaurant.id, menuItemId: target.id,
+      title: `10% off ${target.name}`, discountPercent: 10, minimumSubtotalMinor: 0, maxDiscountMinor: null,
+      startsAt: new Date(0), endsAt: null, isActive: true
+    });
+  }
+
+  const order = await service.createOrder(randomUUID(), {
+    ...baseInput(restaurant.id, onSale.id),
+    items: [{ menuItemId: onSale.id, quantity: 1 }, { menuItemId: fullPrice.id, quantity: 1 }]
+  } as never);
+
+  // 10.00 (sale) + 10.00 (full) = 20.00. Only the full-price product gets its 10% offer (1.00).
+  assert.equal(order.subtotalMinor, 2000);
+  assert.equal(order.merchandiseDiscountMinor, 100, "the offer applied to the full-price line only");
+  assert.deepEqual(order.appliedPromotions.map((promotion) => promotion.title), ["10% off Full price"]);
+});

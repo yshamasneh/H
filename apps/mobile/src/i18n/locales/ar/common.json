@@ -98,5 +98,6 @@
     "invalidTitle": "لم يتم اختيار الصورة",
     "tooLarge": "اختر صورة لا يزيد حجمها عن 5 ميجابايت.",
     "processingFailed": "تعذّر تجهيز الصورة. جرّب ملف JPEG أو PNG أو WebP آخر."
-  }
+  },
+  "saleBadge": "وفّر {{percent}}%"
 }

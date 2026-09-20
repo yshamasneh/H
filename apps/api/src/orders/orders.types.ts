@@ -14,6 +14,8 @@ export type OrderItemView = {
   menuItemId: string;
   nameSnapshot: string;
   priceMinorSnapshot: number;
+  /** The regular price a sale line replaced; null when the line was not on sale. Display only. */
+  regularPriceMinorSnapshot: number | null;
   /** Current product picture, display-only (not a snapshot). Null when the product has none. */
   imageUrl: string | null;
   quantity: number;

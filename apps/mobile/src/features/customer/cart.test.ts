@@ -94,3 +94,21 @@ test("the picture never changes what the cart charges", () => {
   const b = startCart(restaurant, sandwich);
   assert.equal(cartSubtotalMinor(a), cartSubtotalMinor(b));
 });
+
+test("a sale line remembers the regular price it replaced, and charges the sale price", () => {
+  const onSale = { id: "s1", name: "Olive Oil", priceMinor: 2000, salePriceMinor: 1000, effectivePriceMinor: 1000 };
+  const cart = startCart(restaurant, onSale);
+  assert.equal(cart.items[0].priceMinor, 1000, "the line charges the sale price");
+  assert.equal(cart.items[0].regularPriceMinor, 2000, "and keeps the regular price for the strike-through");
+  assert.equal(cartSubtotalMinor(cart), 1000);
+
+  const more = addCartItem(startCart(restaurant, sandwich), onSale, 3);
+  assert.equal(more.items[1].regularPriceMinor, 2000);
+  assert.equal(cartSubtotalMinor(more), 1500 + 3000);
+});
+
+test("a full-price line, or one reduced only by an offer, carries no regular price", () => {
+  assert.equal(startCart(restaurant, sandwich).items[0].regularPriceMinor, null);
+  const offerOnly = { ...sandwich, priceMinor: 2000, effectivePriceMinor: 1800, salePriceMinor: null };
+  assert.equal(startCart(restaurant, offerOnly).items[0].regularPriceMinor, null, "an offer has its own label");
+});

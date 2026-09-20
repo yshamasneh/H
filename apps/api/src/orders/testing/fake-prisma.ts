@@ -29,6 +29,8 @@ type MenuItemRecord = {
   restaurantId: string;
   name: string;
   priceMinor: number;
+  /** The price charged while a sale is on; null (or absent) means no sale. */
+  salePriceMinor?: number | null;
   /** Nullable exactly as in the schema: a product created without one carries null, and the
    *  supermarket order guard exists precisely to refuse selling such a product. */
   costPriceMinor: number | null;
@@ -44,6 +46,8 @@ type OrderItemRecord = {
   menuItemId: string;
   nameSnapshot: string;
   priceMinorSnapshot: number;
+  /** The regular price a sale line replaced (null when not on sale). */
+  regularPriceMinorSnapshot?: number | null;
   /** What the goods on this line cost, frozen at order time. Null on a line whose product had no
    *  cost recorded — which the financial record reports rather than treating as a zero cost. */
   costPriceMinorSnapshot: number | null;
@@ -337,6 +341,7 @@ export class FakeOrdersPrisma {
           menuItemId: itemData.menuItemId,
           nameSnapshot: itemData.nameSnapshot,
           priceMinorSnapshot: itemData.priceMinorSnapshot,
+          regularPriceMinorSnapshot: itemData.regularPriceMinorSnapshot ?? null,
           costPriceMinorSnapshot: itemData.costPriceMinorSnapshot ?? null,
           quantity: itemData.quantity,
           unitLabelSnapshot: itemData.unitLabelSnapshot ?? "item",

@@ -26,6 +26,7 @@ import { readFile } from "node:fs/promises";
 import dotenv from "dotenv";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { BusinessType, PrismaClient, type Prisma } from "../src/generated/prisma/client";
+import { checkImageUrl, imageUrlProblemMessage } from "../src/common/image-url.util";
 
 dotenv.config({ path: "../../.env" });
 
@@ -48,7 +49,8 @@ const LIMITS = {
   unitLabel: { min: 1, max: 60 },
   stockQuantity: { min: 0, max: 10_000_000 },
   barcode: { max: 80 },
-  reorderLevel: { min: 0, max: 10_000_000 }
+  reorderLevel: { min: 0, max: 10_000_000 },
+  imageUrl: { max: 2048 }
 } as const;
 
 const REQUIRED_COLUMNS = ["sku", "name", "category", "price", "costPrice"] as const;
@@ -61,7 +63,13 @@ const KNOWN_COLUMNS = [
   "stockQuantity",
   "isVariableWeight",
   "isFeatured",
-  "reorderLevel"
+  "reorderLevel",
+  // A picture that is already hosted somewhere, referenced by URL rather than uploaded. Blank on a
+  // re-run leaves whatever picture the product already has.
+  "imageUrl",
+  // Optional sale price, below `price`. When the column is present a blank clears the sale; when the
+  // column is absent existing sales are left alone.
+  "salePrice"
 ] as const;
 
 type ParsedRow = {
@@ -79,6 +87,10 @@ type ParsedRow = {
   isVariableWeight: boolean;
   isFeatured: boolean;
   reorderLevel: number | null;
+  imageUrl: string | null;
+  salePriceMinor: number | null;
+  /** True when the file has a salePrice column, so a blank cell means "end the sale". */
+  saleSpecified: boolean;
 };
 
 type RowError = { line: number; sku: string; errors: string[] };
@@ -206,6 +218,25 @@ function validateRows(header: string[], dataLines: string[][]): { rows: ParsedRo
     const barcode = get("barcode") || null;
     if (barcode && barcode.length > LIMITS.barcode.max) rowErrors.push(`barcode exceeds ${LIMITS.barcode.max} characters`);
 
+    const imageUrl = get("imageUrl") || null;
+    if (imageUrl) {
+      const problem = checkImageUrl(imageUrl);
+      if (problem) rowErrors.push(`imageUrl: ${imageUrlProblemMessage(problem)}`);
+    }
+
+    const saleSpecified = header.includes("salePrice");
+    let salePriceMinor: number | null = null;
+    if (get("salePrice")) {
+      salePriceMinor = parseMoney(get("salePrice"), "salePrice", rowErrors);
+      if (salePriceMinor !== null && priceMinor !== null) {
+        if (salePriceMinor < 1) rowErrors.push("salePrice must be greater than zero (leave it blank for no sale)");
+        else if (salePriceMinor >= priceMinor) rowErrors.push("salePrice must be lower than price");
+        else if (costPriceMinor !== null && salePriceMinor < costPriceMinor) {
+          rowErrors.push("salePrice is below costPrice — check for a units mistake (a deliberate loss-leader can be set in the admin console)");
+        }
+      }
+    }
+
     const stockQuantity = parseOptionalInt(get("stockQuantity"), "stockQuantity", LIMITS.stockQuantity, rowErrors);
     const reorderLevel = parseOptionalInt(get("reorderLevel"), "reorderLevel", LIMITS.reorderLevel, rowErrors);
     const isVariableWeight = parseBoolean(get("isVariableWeight"), "isVariableWeight", rowErrors);
@@ -241,7 +272,10 @@ function validateRows(header: string[], dataLines: string[][]): { rows: ParsedRo
       stockQuantity,
       isVariableWeight,
       isFeatured,
-      reorderLevel
+      reorderLevel,
+      imageUrl,
+      salePriceMinor,
+      saleSpecified
     });
   });
 
@@ -285,8 +319,26 @@ async function importRows(
       let created = 0;
       let updated = 0;
 
+      // A file that does not mention sale prices leaves existing sales alone — except where its new
+      // regular price would land on or below a running sale, which the database refuses (a "sale"
+      // must be a reduction). Those sales end, rather than failing the whole import.
+      const existingSales = new Map(
+        (
+          await tx.menuItem.findMany({
+            where: { restaurantId, sku: { in: rows.map((row) => row.sku) }, salePriceMinor: { not: null } },
+            select: { sku: true, salePriceMinor: true }
+          })
+        ).map((item) => [item.sku, item.salePriceMinor as number])
+      );
+
       for (const row of rows) {
         const categoryId = categoryIds.get(row.category.toLowerCase().trim())!;
+        const runningSale = existingSales.get(row.sku);
+        const updateSale = row.saleSpecified
+          ? row.salePriceMinor
+          : runningSale !== undefined && runningSale >= row.priceMinor
+            ? null
+            : undefined;
         const result = await tx.menuItem.upsert({
           where: { restaurantId_sku: { restaurantId, sku: row.sku } },
           create: {
@@ -295,6 +347,8 @@ async function importRows(
             name: row.name,
             description: row.description,
             priceMinor: row.priceMinor,
+            salePriceMinor: row.salePriceMinor,
+            imageUrl: row.imageUrl,
             costPriceMinor: row.costPriceMinor,
             sku: row.sku,
             brand: row.brand,
@@ -311,6 +365,9 @@ async function importRows(
             name: row.name,
             description: row.description,
             priceMinor: row.priceMinor,
+            salePriceMinor: updateSale,
+            // Blank leaves the current picture; a URL replaces it.
+            imageUrl: row.imageUrl ?? undefined,
             costPriceMinor: row.costPriceMinor,
             brand: row.brand,
             unitLabel: row.unitLabel,

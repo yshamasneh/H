@@ -17,6 +17,7 @@ import {
 import { writeInventoryMovement } from "../inventory/inventory.util";
 import { createBusinessNotification, createNotification } from "../notifications/notification.util";
 import { calculatePromotionDiscounts } from "../offers/offers.service";
+import { chargedUnitPriceMinor, isOnSale } from "../restaurants/sale-price";
 import type { AppliedPromotion } from "../offers/offers.types";
 import { isWithinWeeklyHours } from "../restaurants/restaurant.rules";
 import { PrismaService } from "../prisma/prisma.service";
@@ -384,7 +385,8 @@ export class OrdersService {
         }
       }
 
-      const unitPriceMinor = replacement?.priceMinor ?? orderItem.priceMinorSnapshot;
+      // A replacement is priced as the customer would be charged for it today, sale included.
+      const unitPriceMinor = replacement ? chargedUnitPriceMinor(replacement) : orderItem.priceMinorSnapshot;
       // The cost of what will actually be packed, frozen here for the same reason the price is:
       // a substitution changes which product's cost applies, and a re-weighed line changes how
       // much of it applies. Computing this later from the order item would value the margin
@@ -555,7 +557,12 @@ export class OrdersService {
       if (adjustment?.status === FulfillmentAdjustmentStatus.APPROVED) {
         return { menuItemId: adjustment.replacementMenuItemId ?? item.menuItemId, amountMinor: adjustment.lineTotalMinor };
       }
-      return { menuItemId: item.menuItemId, amountMinor: item.priceMinorSnapshot * item.quantity };
+      return {
+        menuItemId: item.menuItemId,
+        amountMinor: item.priceMinorSnapshot * item.quantity,
+        // Frozen at order time: a sale that has since ended must not start attracting product offers.
+        onSale: item.regularPriceMinorSnapshot != null
+      };
     });
     const subtotalMinor = lines.reduce((sum, line) => sum + line.amountMinor, 0);
 
@@ -565,7 +572,12 @@ export class OrdersService {
       offers,
       // Each effective line is passed as a single unit priced at its line total, so the
       // per-item discount math is faithful without having to model variable-weight quantities.
-      items: lines.map((line) => ({ menuItemId: line.menuItemId, priceMinor: line.amountMinor, quantity: 1 })),
+      items: lines.map((line) => ({
+        menuItemId: line.menuItemId,
+        priceMinor: line.amountMinor,
+        quantity: 1,
+        onSale: "onSale" in line ? line.onSale : false
+      })),
       subtotalMinor,
       deliveryFeeMinor: order.deliveryFeeMinor
     });
@@ -890,11 +902,19 @@ export class OrdersService {
     let subtotalMinor = 0;
     const itemsData = input.items.map((line) => {
       const menuItem = menuItemById.get(line.menuItemId)!;
-      subtotalMinor += menuItem.priceMinor * line.quantity;
+      // What is charged is the sale price when one is on, else the regular price — and that is
+      // what gets frozen. Everything downstream (the order total, the promotion engine, and the
+      // accounting layer's margin, which reads the order's subtotal) sees the price actually
+      // charged, so a sale reduces the margin exactly as much as it reduces the revenue.
+      const unitPriceMinor = chargedUnitPriceMinor(menuItem);
+      subtotalMinor += unitPriceMinor * line.quantity;
       return {
         menuItemId: menuItem.id,
         nameSnapshot: menuItem.name,
-        priceMinorSnapshot: menuItem.priceMinor,
+        priceMinorSnapshot: unitPriceMinor,
+        // The regular price this line replaced, so history can show what was saved. Null when the
+        // line was not on sale. Display only: the charge is priceMinorSnapshot.
+        regularPriceMinorSnapshot: isOnSale(menuItem) ? menuItem.priceMinor : null,
         // What the platform paid for these goods, frozen here rather than read back from the
         // product later: a cost price corrected next week must not restate last week's margin.
         costPriceMinorSnapshot: menuItem.costPriceMinor,
@@ -931,7 +951,8 @@ export class OrdersService {
       offers: activeOffers,
       items: input.items.map((line) => ({
         menuItemId: line.menuItemId,
-        priceMinor: menuItemById.get(line.menuItemId)!.priceMinor,
+        priceMinor: chargedUnitPriceMinor(menuItemById.get(line.menuItemId)!),
+        onSale: isOnSale(menuItemById.get(line.menuItemId)!),
         quantity: line.quantity
       })),
       subtotalMinor,
@@ -1181,6 +1202,7 @@ function toOrderDetailView(
         menuItemId: item.menuItemId,
         nameSnapshot: item.nameSnapshot,
         priceMinorSnapshot: item.priceMinorSnapshot,
+        regularPriceMinorSnapshot: item.regularPriceMinorSnapshot ?? null,
         // The product's picture *now*, for display only. Unlike the name, price and cost it is not
         // a financial fact, so it is read live rather than frozen: a corrected image should show on
         // old orders too, and nothing about it can affect what was charged.

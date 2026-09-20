@@ -11,27 +11,40 @@ const service = new ManagedImageUrlService(new ConfigService({
 }));
 
 describe("ManagedImageUrlService", () => {
-  it("accepts a newly uploaded URL only inside the expected store and purpose namespace", () => {
-    const url = `https://jovoimages.blob.core.windows.net/product-images/restaurants/${restaurantId}/products/file.webp`;
-    assert.doesNotThrow(() => service.assertAllowedChange({ purpose: "PRODUCT", restaurantId, nextUrl: url }));
-    assert.throws(
-      () => service.assertAllowedChange({ purpose: "LOGO", restaurantId, nextUrl: url }),
-      (error: unknown) => error instanceof ApiException && (error.getResponse() as { code: string }).code === "UNTRUSTED_IMAGE_URL"
+  it("accepts an uploaded blob URL and a plain external URL alike, for any purpose", () => {
+    const uploaded = `https://jovoimages.blob.core.windows.net/product-images/restaurants/${restaurantId}/products/file.webp`;
+    for (const purpose of ["PRODUCT", "LOGO", "OFFER"] as const) {
+      assert.doesNotThrow(() => service.assertAllowedChange({ purpose, restaurantId, nextUrl: uploaded }));
+      assert.doesNotThrow(() =>
+        service.assertAllowedChange({ purpose, restaurantId, nextUrl: "https://images.example.com/catalogue/milk.jpg" })
+      );
+    }
+  });
+
+  it("no longer rejects a URL just because it did not come from the uploader", () => {
+    const legacy = "https://legacy.example/product.jpg";
+    assert.doesNotThrow(() =>
+      service.assertAllowedChange({ purpose: "PRODUCT", restaurantId, previousUrl: legacy, nextUrl: "https://other.example/product.jpg" })
+    );
+    assert.doesNotThrow(() =>
+      service.assertAllowedChange({ purpose: "PRODUCT", restaurantId, previousUrl: legacy, nextUrl: legacy })
     );
   });
 
-  it("keeps an unchanged legacy external URL but rejects a new external URL", () => {
-    const legacy = "https://legacy.example/product.jpg";
-    assert.doesNotThrow(() => service.assertAllowedChange({
-      purpose: "PRODUCT", restaurantId, previousUrl: legacy, nextUrl: legacy
-    }));
-    assert.throws(() => service.assertAllowedChange({
-      purpose: "PRODUCT", restaurantId, previousUrl: legacy, nextUrl: "https://other.example/product.jpg"
-    }));
+  it("still refuses unsafe URLs, with a specific reason", () => {
+    const code = (error: unknown) => error instanceof ApiException && (error.getResponse() as { code: string }).code === "INVALID_IMAGE_URL";
+    for (const bad of ["http://cdn.example.com/a.jpg", "javascript:alert(1)", "not a url", "https://u:p@cdn.example.com/a.jpg"]) {
+      assert.throws(() => service.assertAllowedChange({ purpose: "PRODUCT", restaurantId, nextUrl: bad }), code, bad);
+    }
   });
 
-  it("rejects query strings so a SAS URL can never be persisted", () => {
-    const sas = `https://jovoimages.blob.core.windows.net/product-images/restaurants/${restaurantId}/products/file.webp?sig=secret`;
+  it("rejects a SAS URL so a signed link can never be persisted", () => {
+    const sas = `https://jovoimages.blob.core.windows.net/product-images/restaurants/${restaurantId}/products/file.webp?sv=2023-01-01&se=2030-01-01&sp=r&sig=secret`;
     assert.throws(() => service.assertAllowedChange({ purpose: "PRODUCT", restaurantId, nextUrl: sas }));
+  });
+
+  it("clearing the picture is always allowed", () => {
+    assert.doesNotThrow(() => service.assertAllowedChange({ purpose: "PRODUCT", restaurantId, previousUrl: "https://a.example.com/x.jpg", nextUrl: "" }));
+    assert.doesNotThrow(() => service.assertAllowedChange({ purpose: "PRODUCT", restaurantId, nextUrl: null }));
   });
 });

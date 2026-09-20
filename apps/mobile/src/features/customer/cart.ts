@@ -13,6 +13,12 @@ export type CartItem = {
    * menu, and so it survives a reload via the persisted cart.
    */
   imageUrl?: string | null;
+  /**
+   * The regular price this line replaced, present only while the product is on sale. Display
+   * only, like imageUrl: the order API re-prices every line itself, so nothing here can change
+   * what is charged.
+   */
+  regularPriceMinor?: number | null;
 };
 
 export type Cart = {
@@ -29,8 +35,14 @@ export type CartCandidateItem = {
   unitLabel?: string;
   allowSubstitution?: boolean;
   imageUrl?: string | null;
+  salePriceMinor?: number | null;
 };
 export type CartCandidateRestaurant = { id: string; name: string };
+
+/** The regular price to show struck through: only for a product whose sale price is what the line charges. */
+function regularPriceOf(item: CartCandidateItem): number | null {
+  return item.salePriceMinor != null && item.salePriceMinor < item.priceMinor ? item.priceMinor : null;
+}
 
 export function startCart(restaurant: CartCandidateRestaurant, item: CartCandidateItem, quantity = 1): Cart {
   return {
@@ -43,7 +55,8 @@ export function startCart(restaurant: CartCandidateRestaurant, item: CartCandida
       quantity: Math.max(1, Math.floor(quantity)),
       unitLabel: item.unitLabel ?? "item",
       allowSubstitution: item.allowSubstitution ?? false,
-      imageUrl: item.imageUrl ?? null
+      imageUrl: item.imageUrl ?? null,
+      regularPriceMinor: regularPriceOf(item)
     }]
   };
 }
@@ -68,7 +81,8 @@ export function addCartItem(cart: Cart, item: CartCandidateItem, quantity = 1): 
       quantity: amount,
       unitLabel: item.unitLabel ?? "item",
       allowSubstitution: item.allowSubstitution ?? false,
-      imageUrl: item.imageUrl ?? null
+      imageUrl: item.imageUrl ?? null,
+      regularPriceMinor: regularPriceOf(item)
     }]
   };
 }

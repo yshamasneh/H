@@ -120,7 +120,11 @@ export type MenuItemSummary = {
   id: string;
   name: string;
   description: string | null;
+  /** The regular price. */
   priceMinor: number;
+  /** The store's sale price while a sale is on, else null. Always below priceMinor. */
+  salePriceMinor: number | null;
+  /** What one unit costs right now: the sale price if on sale, else the price less any offer. */
   effectivePriceMinor: number;
   imageUrl: string | null;
   sku: string | null;
@@ -215,6 +219,8 @@ export type OrderItemView = {
   menuItemId: string;
   nameSnapshot: string;
   priceMinorSnapshot: number;
+  /** The regular price a sale line replaced; null when it was not on sale. */
+  regularPriceMinorSnapshot?: number | null;
   quantity: number;
   lineTotalMinor: number;
   unitLabelSnapshot: string;

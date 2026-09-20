@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { MenuItemOwner } from "./api.business";
-import { categoryCounts, emptyFilter, filterProducts, hiddenCount, normalizeSearch, paginate } from "./catalogue-view";
+import { categoryCounts, emptyFilter, filterProducts, hiddenCount, normalizeSearch, onSaleCount, paginate } from "./catalogue-view";
 
 const item = (over: Partial<MenuItemOwner>): MenuItemOwner => ({
   id: over.id ?? "i",
@@ -9,6 +9,7 @@ const item = (over: Partial<MenuItemOwner>): MenuItemOwner => ({
   name: "Item",
   description: null,
   priceMinor: 100,
+  salePriceMinor: over.salePriceMinor ?? null,
   costPriceMinor: null,
   imageUrl: null,
   sku: null,
@@ -53,8 +54,8 @@ test("the visibility filter separates visible products from hidden ones", () => 
 });
 
 test("filters combine", () => {
-  assert.deepEqual(ids(filterProducts(items, { search: "", categoryId: "c2", visibility: "HIDDEN" })), ["2"]);
-  assert.deepEqual(ids(filterProducts(items, { search: "hum", categoryId: "c1", visibility: "ALL" })), []);
+  assert.deepEqual(ids(filterProducts(items, { ...emptyFilter, categoryId: "c2", visibility: "HIDDEN" })), ["2"]);
+  assert.deepEqual(ids(filterProducts(items, { ...emptyFilter, search: "hum", categoryId: "c1" })), []);
 });
 
 test("category counts include hidden products, which still belong to their category", () => {
@@ -71,4 +72,11 @@ test("pagination slices pages and clamps a bad page number", () => {
   assert.deepEqual(paginate(rows, 3, 2), [4]);
   assert.deepEqual(paginate(rows, 0, 2), [0, 1]);
   assert.deepEqual(paginate(rows, 9, 2), []);
+});
+
+test("the on-sale filter shows only products with a sale running, and counts them", () => {
+  const withSales = [...items, item({ id: "5", name: "Juice", salePriceMinor: 50 }), item({ id: "6", name: "Tea", salePriceMinor: 70, isAvailable: false })];
+  assert.deepEqual(ids(filterProducts(withSales, { ...emptyFilter, onSaleOnly: true })), ["5", "6"]);
+  assert.deepEqual(ids(filterProducts(withSales, { ...emptyFilter, onSaleOnly: true, visibility: "VISIBLE" })), ["5"]);
+  assert.equal(onSaleCount(withSales), 2);
 });

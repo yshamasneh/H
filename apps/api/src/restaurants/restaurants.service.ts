@@ -6,6 +6,7 @@ import { writeAuditLog } from "../common/audit-log.util";
 import { grantBusinessMembership } from "../common/authorization/business-membership.util";
 import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
+import { assertAllowedImageUrl } from "../common/image-url.util";
 import {
   BusinessType,
   NotificationType,
@@ -233,7 +234,7 @@ export class RestaurantsService {
   }
 
   private async applyProfileUpdate(restaurant: Restaurant, input: UpdateRestaurantProfileDto): Promise<RestaurantProfileView> {
-    this.managedImages?.assertAllowedChange({
+    assertAllowedImageUrl({
       previousUrl: restaurant.logoUrl,
       nextUrl: input.logoUrl,
       purpose: "LOGO",
@@ -590,6 +591,7 @@ export class RestaurantsService {
           name: item.name,
           description: item.description,
           priceMinor: item.priceMinor,
+          salePriceMinor: item.salePriceMinor,
           costPriceMinor: item.costPriceMinor,
           imageUrl: item.imageUrl,
           sku: item.sku,
@@ -854,6 +856,7 @@ function toPublicItemView(
     name: string;
     description: string | null;
     priceMinor: number;
+    salePriceMinor: number | null;
     imageUrl: string | null;
     sku: string | null;
     brand: string | null;
@@ -864,7 +867,7 @@ function toPublicItemView(
     barcode: string | null;
     reorderLevel: number | null;
   },
-  offer?: {
+  offerInput?: {
     id: string;
     title: string;
     discountPercent: number | null;
@@ -872,6 +875,11 @@ function toPublicItemView(
     maxDiscountMinor: number | null;
   }
 ) {
+  // A product on sale is never also discounted by a product offer: the sale price *is* its
+  // promotion, and stacking a second markdown on it would quietly erode the margin. The order
+  // engine applies the same rule, so what this screen shows is what the order charges.
+  const onSale = item.salePriceMinor != null;
+  const offer = onSale ? undefined : offerInput;
   const discountMinor = offer && offer.minimumSubtotalMinor === 0
     ? Math.min(
         Math.floor(item.priceMinor * (offer.discountPercent ?? 0) / 100),
@@ -883,7 +891,8 @@ function toPublicItemView(
     name: item.name,
     description: item.description,
     priceMinor: item.priceMinor,
-    effectivePriceMinor: item.priceMinor - discountMinor,
+    salePriceMinor: item.salePriceMinor,
+    effectivePriceMinor: onSale ? item.salePriceMinor! : item.priceMinor - discountMinor,
     imageUrl: item.imageUrl,
     sku: item.sku,
     brand: item.brand,

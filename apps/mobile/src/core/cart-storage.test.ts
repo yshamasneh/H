@@ -180,3 +180,28 @@ test("a malformed picture value is dropped but the cart is kept", () => {
     assert.equal(cart.items[0].imageUrl, undefined);
   }
 });
+
+test("the regular price of a sale line survives a restart", async () => {
+  const onSale: Cart = {
+    ...sampleCart,
+    items: [{ ...sampleCart.items[0], priceMinor: 500, regularPriceMinor: 750 }, sampleCart.items[1]]
+  };
+  const { store } = memoryStore();
+  await createCartRepository(store).save(onSale);
+  const loaded = await createCartRepository(store).load();
+  assert.equal(loaded?.items[0].regularPriceMinor, 750);
+  assert.equal("regularPriceMinor" in (loaded?.items[1] ?? {}), false);
+});
+
+test("a nonsensical stored regular price is ignored but the cart is kept", () => {
+  for (const bad of [100, "750", null, -5]) {
+    const raw = JSON.stringify({
+      restaurantId: "store-1",
+      restaurantName: "JOVO MARKET",
+      items: [{ menuItemId: "m1", name: "Milk", priceMinor: 500, quantity: 1, unitLabel: "carton", allowSubstitution: false, regularPriceMinor: bad }]
+    });
+    const cart = deserializeCart(raw);
+    assert.ok(cart, `cart must survive regularPriceMinor=${JSON.stringify(bad)}`);
+    assert.equal(cart.items[0].regularPriceMinor, undefined);
+  }
+});

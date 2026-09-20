@@ -182,6 +182,13 @@ export class CreateMenuItemDto {
   @Max(100_000_000)
   priceMinor!: number;
 
+  @ApiPropertyOptional({ example: 1200, description: "Optional sale price; must be lower than priceMinor." })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100_000_000)
+  salePriceMinor?: number;
+
   @ApiPropertyOptional({
     example: 1000,
     description: "What the store paid for one unit, in minor currency units. Optional; kept for future margin/accounting reporting and never shown to customers."
@@ -275,6 +282,17 @@ export class UpdateMenuItemDto {
   @Min(0)
   @Max(100_000_000)
   priceMinor?: number;
+
+  @ApiPropertyOptional({
+    example: 1200,
+    description: "Sale price; must be lower than the regular price. Set to null to end the sale."
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100_000_000)
+  salePriceMinor?: number | null;
 
   @ApiPropertyOptional({ example: 1000, description: "Set to null to clear a previously recorded cost." })
   @IsOptional()
