@@ -180,7 +180,13 @@ export class FakeOrdersPrisma {
   readonly deliveries: DeliveryRecord[] = [];
   readonly notifications: NotificationRecord[] = [];
   readonly pushTokens: PushTokenRecord[] = [];
-  readonly driverProfiles: { userId: string; status: string; isOnline: boolean; isActive: boolean }[] = [];
+  readonly driverProfiles: {
+    userId: string;
+    status: string;
+    isOnline: boolean;
+    isActive: boolean;
+    appLeaseUntil: Date | null;
+  }[] = [];
   readonly pushDeliveries: PushDeliveryRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
   readonly offers: any[] = [];
@@ -562,7 +568,11 @@ export class FakeOrdersPrisma {
       this.driverProfiles
         .filter(
           (profile) =>
-            profile.status === where.status && profile.isOnline === where.isOnline && profile.isActive
+            profile.status === where.status &&
+            profile.isOnline === where.isOnline &&
+            profile.isActive &&
+            (where.appLeaseUntil?.gt === undefined ||
+              (profile.appLeaseUntil !== null && profile.appLeaseUntil > where.appLeaseUntil.gt))
         )
         .map((profile) => ({ userId: profile.userId }));
 
@@ -688,9 +698,27 @@ export class FakeOrdersPrisma {
     return { businessId, userId };
   }
 
-  /** An approved, online driver by default — the audience of a "delivery available" alert. */
-  seedDriver(overrides: Partial<{ userId: string; status: string; isOnline: boolean; isActive: boolean }> = {}) {
-    const record = { userId: randomUUID(), status: "APPROVED", isOnline: true, isActive: true, ...overrides };
+  /**
+   * An approved, online driver whose app is open by default (a lease an hour ahead) — the audience of
+   * a "delivery available" alert. Pass `appLeaseUntil: null` for a driver whose app is closed.
+   */
+  seedDriver(
+    overrides: Partial<{
+      userId: string;
+      status: string;
+      isOnline: boolean;
+      isActive: boolean;
+      appLeaseUntil: Date | null;
+    }> = {}
+  ) {
+    const record = {
+      userId: randomUUID(),
+      status: "APPROVED",
+      isOnline: true,
+      isActive: true,
+      appLeaseUntil: new Date(Date.now() + 60 * 60 * 1000),
+      ...overrides
+    };
     this.driverProfiles.push(record);
     return record;
   }

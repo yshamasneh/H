@@ -106,7 +106,7 @@ test("dry-run reports missing accounts and modifies nothing", async () => {
   const result = await service.reconcile({ dryRun: true });
   assert.equal(result.dryRun, true);
   assert.equal(result.created, 0);
-  assert.equal(result.missingKeys.length, 3);
+  assert.equal(result.missingKeys.length, 4);
   assert.equal(prisma.rows.length, 0);
 });
 
@@ -120,8 +120,8 @@ test("concurrent apply reconciliation cannot create duplicate reference accounts
     second.reconcile({ dryRun: false })
   ]);
 
-  assert.equal(prisma.rows.length, 3);
-  assert.equal(new Set(prisma.rows.map((row) => row.key)).size, 3);
+  assert.equal(prisma.rows.length, 4);
+  assert.equal(new Set(prisma.rows.map((row) => row.key)).size, 4);
   assert.equal((await first.validate()).ready, true);
 });
 

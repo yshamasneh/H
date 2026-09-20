@@ -162,6 +162,8 @@ export type OrderFinancialRecord = {
   unattributedDiscountMinor: number;
   deliveryFeeMinor: number;
   cashCollectedMinor: number;
+  /** The part of cash collected that is rounding up to a whole shekel, held by the platform account. */
+  cashRoundingMinor: number;
   goodsCostMinor: number;
   costDataComplete: boolean;
   marginMinor: number;

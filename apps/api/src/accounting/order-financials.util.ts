@@ -188,6 +188,7 @@ export async function recordOrderFinancials(
         discounts.merchandise.unattributedMinor + discounts.delivery.unattributedMinor,
       deliveryFeeMinor: order.deliveryFeeMinor,
       cashCollectedMinor: computation.cashCollectedMinor,
+      cashRoundingMinor: computation.cashRoundingMinor,
       goodsCostMinor: computation.goodsCostMinor,
       costDataComplete: computation.costDataComplete,
       marginMinor: computation.marginMinor,

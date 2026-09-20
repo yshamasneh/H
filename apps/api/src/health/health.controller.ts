@@ -59,6 +59,9 @@ export class HealthController {
       ok: true,
       service: "tasawaq-api",
       status: "ready",
+      // Which commit this process was built from (set by the Docker build), so an operator or the
+      // deploy workflow can confirm the live server runs the code that was just pushed.
+      commit: process.env.GIT_SHA || null,
       database: "connected",
       time: new Date().toISOString()
     };

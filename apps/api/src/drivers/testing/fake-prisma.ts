@@ -21,6 +21,9 @@ type DriverProfileRecord = {
   lastLatitude: number | null;
   lastLongitude: number | null;
   lastLocationAt: Date | null;
+  appState: "FOREGROUND" | "BACKGROUND" | null;
+  appLeaseUntil: Date | null;
+  appSeenAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -194,6 +197,9 @@ export class FakeDriversPrisma {
         lastLatitude: data.lastLatitude ?? null,
         lastLongitude: data.lastLongitude ?? null,
         lastLocationAt: data.lastLocationAt ?? null,
+        appState: data.appState ?? null,
+        appLeaseUntil: data.appLeaseUntil ?? null,
+        appSeenAt: data.appSeenAt ?? null,
         createdAt: now,
         updatedAt: now
       };
@@ -233,6 +239,9 @@ export class FakeDriversPrisma {
       if (data.lastLatitude !== undefined) profile.lastLatitude = data.lastLatitude;
       if (data.lastLongitude !== undefined) profile.lastLongitude = data.lastLongitude;
       if (data.lastLocationAt !== undefined) profile.lastLocationAt = data.lastLocationAt;
+      if (data.appState !== undefined) profile.appState = data.appState;
+      if (data.appLeaseUntil !== undefined) profile.appLeaseUntil = data.appLeaseUntil;
+      if (data.appSeenAt !== undefined) profile.appSeenAt = data.appSeenAt;
       profile.updatedAt = new Date();
       return include?.user ? { ...profile, user: this.users.find((user) => user.id === profile.userId)! } : profile;
     };
@@ -497,6 +506,9 @@ export class FakeDriversPrisma {
       lastLatitude: overrides.lastLatitude ?? null,
       lastLongitude: overrides.lastLongitude ?? null,
       lastLocationAt: overrides.lastLocationAt ?? null,
+      appState: overrides.appState ?? null,
+      appLeaseUntil: overrides.appLeaseUntil ?? null,
+      appSeenAt: null,
       createdAt: now,
       updatedAt: now
     });

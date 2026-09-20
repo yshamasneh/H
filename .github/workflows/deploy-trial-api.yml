@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker build --target runtime --tag "$IMAGE" .
+          docker build --target runtime --build-arg GIT_SHA="$GITHUB_SHA" --tag "$IMAGE" .
           az acr login --name "$ACR_NAME"
           docker push "$IMAGE"
 
@@ -93,6 +93,14 @@ jobs:
             if jq -e --arg image "$IMAGE" '.Image == $image and .Status == "Running"' <<< "$status" >/dev/null 2>&1; then
               response=$(curl --fail --silent --show-error --max-time 20 "https://${host}/api/v1/health")
               jq -e '.ok == true and .status == "ready" and .database == "connected"' <<< "$response" >/dev/null
+              # The running process must be this commit, not merely a healthy one: a healthy old
+              # container would otherwise pass this step.
+              jq -e --arg sha "$GITHUB_SHA" '.commit == $sha' <<< "$response" >/dev/null || {
+                echo "::error::Health is up but reports commit $(jq -r '.commit' <<< "$response"), expected $GITHUB_SHA"
+                exit 1
+              }
+              echo "Live host: https://${host}"
+              echo "Running image: $IMAGE"
               echo "$response"
               exit 0
             fi

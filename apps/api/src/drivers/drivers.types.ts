@@ -13,7 +13,19 @@ export type DriverProfileView = {
   lastLongitude: number | null;
 };
 
-export type AdminDriverView = {
+/**
+ * What the admin needs to tell a driver who is merely approved from one who is on shift with the app
+ * open. `appLeaseUntil` is sent as well as `appOpen` so the admin screen can watch a lease run out
+ * on its own clock, without the server having to announce every expiry.
+ */
+export type AdminDriverPresence = {
+  appState: "FOREGROUND" | "BACKGROUND" | null;
+  appLeaseUntil: Date | null;
+  /** True when the app is believed to be running right now (the lease has not run out). */
+  appOpen: boolean;
+};
+
+export type AdminDriverView = AdminDriverPresence & {
   userId: string;
   fullName: string;
   phone: string;
@@ -26,7 +38,7 @@ export type AdminDriverView = {
 };
 
 /** One driver's last reported position, for the admin live map. */
-export type AdminDriverLocationView = {
+export type AdminDriverLocationView = AdminDriverPresence & {
   userId: string;
   fullName: string;
   phone: string;
@@ -71,6 +83,15 @@ export type DriverStatsView = {
   /** Average payout per completed delivery, in minor units (earningsMinor / completedCount, since
    *  the payout scales with each delivery's actual fee and is no longer a flat rate). */
   perDeliveryMinor: number;
+};
+
+/** The reply to a location report: the profile, plus whether the driver still has a delivery to track. */
+export type DriverLocationReportView = DriverProfileView & {
+  /**
+   * False once the driver has no active delivery. The phone stops its background location task when
+   * it sees this, so tracking ends when the delivery does even if the app was not on screen.
+   */
+  hasActiveDelivery: boolean;
 };
 
 export const driverCashPeriods = ["SHIFT", "TODAY", "WEEK", "MONTH", "ALL"] as const;
@@ -133,6 +154,9 @@ export type DeliveryOrderSummary = {
   deliveryLabel: string;
   deliveryAddressLine: string;
   totalMinor: number;
+  /** The cash the driver collects at the door: totalMinor rounded UP to a whole shekel. */
+  cashDueMinor: number;
+  cashRoundingMinor: number;
   paymentMethod: OrderPaymentMethod;
   // The customer's delivery destination, captured at checkout. Optional because
   // orders placed before delivery coordinates were recorded may lack them.

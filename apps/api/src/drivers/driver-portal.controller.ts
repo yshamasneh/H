@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -8,6 +8,7 @@ import { UserRole } from "../generated/prisma/client";
 import {
   DeliveriesPaginationQueryDto,
   DriverCashSummaryQueryDto,
+  ReportPresenceDto,
   SetDriverOnlineStatusDto,
   UpdateDeliveryStatusDto,
   UpdateDriverLocationDto
@@ -32,6 +33,15 @@ export class DriverPortalController {
   @ApiOperation({ summary: "Toggle whether the driver is online and available for deliveries" })
   setStatus(@Req() request: AuthenticatedRequest, @Body() input: SetDriverOnlineStatusDto) {
     return this.drivers.setOnlineStatus(request.user.id, input.isOnline);
+  }
+
+  @Put("me/presence")
+  @ApiOperation({
+    summary:
+      "Report that the app is open (FOREGROUND, a heartbeat), has gone to the background, or is closed. Alerts are sent only while this lease is valid and the driver is online."
+  })
+  reportPresence(@Req() request: AuthenticatedRequest, @Body() input: ReportPresenceDto) {
+    return this.drivers.reportPresence(request.user.id, input.state);
   }
 
   @Patch("me/location")

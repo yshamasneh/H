@@ -953,6 +953,7 @@ export class AccountingService {
       unattributedDiscountMinor: record.unattributedDiscountMinor,
       deliveryFeeMinor: record.deliveryFeeMinor,
       cashCollectedMinor: record.cashCollectedMinor,
+      cashRoundingMinor: record.cashRoundingMinor,
       goodsCostMinor: record.goodsCostMinor,
       costDataComplete: record.costDataComplete,
       marginMinor: record.marginMinor,

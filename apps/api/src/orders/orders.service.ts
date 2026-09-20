@@ -1,6 +1,7 @@
 import { Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { writeAuditLog } from "../common/audit-log.util";
+import { cashDue } from "../common/cash-rounding";
 import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
 import {
@@ -197,6 +198,7 @@ export class OrdersService {
       merchandiseDiscountMinor: quote.merchandiseDiscountMinor,
       deliveryDiscountMinor: quote.deliveryDiscountMinor,
       totalMinor: quote.totalMinor,
+      ...cashDue(quote.totalMinor),
       appliedPromotions: quote.appliedPromotions
     };
   }
@@ -1270,6 +1272,7 @@ function toOrderDetailView(
     merchandiseDiscountMinor: order.merchandiseDiscountMinor,
     deliveryDiscountMinor: order.deliveryDiscountMinor,
     totalMinor: order.totalMinor,
+    ...cashDue(order.totalMinor),
     createdAt: order.createdAt,
     requiresCustomerReview: order.items.some(
       (item) => item.fulfillmentAdjustment?.status === FulfillmentAdjustmentStatus.PENDING

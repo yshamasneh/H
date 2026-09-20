@@ -143,7 +143,11 @@ function distribute(itemSubtotalMinor: number, goodsCostMinor: number) {
     ownerA: share("PARTNER:OWNER_A", "SUPERMARKET_MARGIN_SHARE"),
     ownerB: share("PARTNER:OWNER_B", "SUPERMARKET_MARGIN_SHARE"),
     driver: share("DRIVER:driver-1", "DRIVER_DELIVERY_SHARE"),
-    distributed: computation.earnings.reduce((sum, earning) => sum + earning.amountMinor, 0)
+    // The revenue split only: cash rounding is a separate platform-account row and is not part of
+    // how the order's money is divided between the parties this suite is about.
+    distributed: computation.earnings
+      .filter((earning) => earning.component !== "CASH_ROUNDING")
+      .reduce((sum, earning) => sum + earning.amountMinor, 0)
   };
 }
 

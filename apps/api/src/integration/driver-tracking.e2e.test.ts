@@ -96,7 +96,7 @@ test(
     const adminEvents: { event: string; payload: any }[] = [];
     const driverAEvents: { event: string; payload: any }[] = [];
     const customerEvents: { event: string; payload: any }[] = [];
-    for (const event of ["driver.location.updated", "driver.status.changed", "delivery.status.changed"]) {
+    for (const event of ["driver.location.updated", "driver.status.changed", "driver.presence.changed", "delivery.status.changed"]) {
       adminSocket.on(event, (payload) => adminEvents.push({ event, payload }));
     }
     driverASocket.on("delivery.available", (payload) => driverAEvents.push({ event: "delivery.available", payload }));
@@ -333,6 +333,200 @@ test(
       await http.get("/api/v1/driver/me/cash-summary?period=FOREVER").set("Authorization", `Bearer ${actors.driverAToken}`).expect(400);
       await http.get("/api/v1/driver/me/cash-summary").set("Authorization", `Bearer ${actors.customerToken}`).expect(403);
     });
+
+    // ------------------------------------------------------------------ alerts need the app running
+    const deliveryIdByOrder = new Map<string, string>();
+    const alertsFor = (userId: string, sinceOrderId?: string) =>
+      prisma.notification.count({
+        where: {
+          userId,
+          type: "DELIVERY_AVAILABLE",
+          ...(sinceOrderId
+            ? { relatedEntityId: (deliveryIdByOrder.get(sinceOrderId) ?? "00000000-0000-4000-8000-000000000000") }
+            : {})
+        }
+      });
+    async function readyOrder(): Promise<string> {
+      const placed = await placeOrder(http, actors);
+      await advanceToReady(http, actors, placed.id);
+      const row = await prisma.delivery.findUniqueOrThrow({ where: { orderId: placed.id } });
+      deliveryIdByOrder.set(placed.id, row.id);
+      return placed.id;
+    }
+
+    await context.test("online + app open = alerted; online + app CLOSED = no alert is attempted", async () => {
+      // Driver B is on shift. First the app is open...
+      await reportPresence(http, actors.driverBToken, "FOREGROUND").then((response) => assert.equal(response.status, 200));
+      await reportPresence(http, actors.driverAToken, "FOREGROUND");
+      const open = await readyOrder();
+      assert.equal(await alertsFor(actors.driverBId, open), 1, "app open: alerted");
+      const queuedOpen = await prisma.pushDelivery.count({
+        where: { notification: { userId: actors.driverBId, relatedEntityId: deliveryIdByOrder.get(open) } }
+      });
+      assert.equal(queuedOpen, 1);
+
+      // ...then the app is closed (logout / lease gone) while the online flag is still set.
+      const closed = await reportPresence(http, actors.driverBToken, "CLOSED");
+      assert.equal(closed.body.appOpen, false);
+      const stillOnline = await http.get("/api/v1/driver/me").set("Authorization", `Bearer ${actors.driverBToken}`).expect(200);
+      assert.equal(stillOnline.body.isOnline, true, "the online flag is untouched: it is the stale flag the lease overrides");
+      const afterClose = await readyOrder();
+      assert.equal(await alertsFor(actors.driverBId, afterClose), 0, "app closed: no alert row");
+      assert.equal(
+        await prisma.pushDelivery.count({
+          where: { notification: { userId: actors.driverBId, relatedEntityId: deliveryIdByOrder.get(afterClose) } }
+        }),
+        0,
+        "and no push was attempted"
+      );
+      assert.equal(await alertsFor(actors.driverAId, afterClose), 1, "the driver whose app is open still is");
+    });
+
+    await context.test("offline + app open = no alert; a lapsed lease is treated as closed", async () => {
+      await reportPresence(http, actors.driverOfflineToken, "FOREGROUND");
+      const offline = await http.get("/api/v1/driver/me").set("Authorization", `Bearer ${actors.driverOfflineToken}`).expect(200);
+      assert.equal(offline.body.isOnline, false);
+      const order = await readyOrder();
+      assert.equal(await alertsFor(actors.driverOfflineId, order), 0, "offline: not alerted even with the app open");
+
+      // A lease that ran out on its own: the phone stopped reporting (force-closed).
+      await reportPresence(http, actors.driverBToken, "FOREGROUND");
+      await prisma.driverProfile.update({
+        where: { userId: actors.driverBId },
+        data: { appLeaseUntil: new Date(Date.now() - 1_000) }
+      });
+      const lapsed = await readyOrder();
+      assert.equal(await alertsFor(actors.driverBId, lapsed), 0, "lease lapsed: treated as closed");
+    });
+
+    await context.test("the admin sees who is connected, live, and tells them apart from the merely approved", async () => {
+      await reportPresence(http, actors.driverBToken, "CLOSED");
+      adminEvents.length = 0;
+      await reportPresence(http, actors.driverBToken, "FOREGROUND");
+      await eventually(() => adminEvents.some((entry) => entry.event === "driver.presence.changed"));
+      const opened = adminEvents.find((entry) => entry.event === "driver.presence.changed")!.payload;
+      assert.equal(opened.userId, actors.driverBId);
+      assert.equal(opened.appOpen, true);
+      assert.equal(opened.appState, "FOREGROUND");
+      assert.ok(Date.parse(opened.appLeaseUntil) > Date.now());
+
+      const heartbeats = adminEvents.length;
+      await reportPresence(http, actors.driverBToken, "FOREGROUND");
+      await sleep(250);
+      assert.equal(adminEvents.length, heartbeats, "a routine heartbeat is not broadcast");
+
+      const list = await http.get("/api/v1/admin/drivers").set("Authorization", `Bearer ${actors.adminToken}`).expect(200);
+      const byId = new Map<string, any>(list.body.map((row: any) => [row.userId, row]));
+      assert.equal(byId.get(actors.driverBId).appOpen, true);
+      assert.equal(byId.get(actors.driverBId).isOnline, true);
+      assert.equal(byId.get(actors.driverOfflineId).isOnline, false);
+      await reportPresence(http, actors.driverBToken, "CLOSED");
+      const afterClose = await http.get("/api/v1/admin/drivers").set("Authorization", `Bearer ${actors.adminToken}`).expect(200);
+      const closedRow = afterClose.body.find((row: any) => row.userId === actors.driverBId);
+      assert.equal(closedRow.isOnline, true, "still marked online");
+      assert.equal(closedRow.appOpen, false, "but not connected");
+    });
+
+    await context.test("only a driver can report presence", async () => {
+      await http.put("/api/v1/driver/me/presence").send({ state: "FOREGROUND" }).expect(401);
+      await http.put("/api/v1/driver/me/presence").set("Authorization", `Bearer ${actors.customerToken}`).send({ state: "FOREGROUND" }).expect(403);
+      await http.put("/api/v1/driver/me/presence").set("Authorization", `Bearer ${actors.driverAToken}`).send({ state: "SLEEPING" }).expect(400);
+    });
+
+    // ------------------------------------------------------------------ cash rounding, worked example
+    await context.test("WORKED EXAMPLE — a 23.40 order is collected as 24.00 and the ledger still balances to the agora", async () => {
+      const overviewBefore = (await http.get("/api/v1/admin/accounting/overview").set("Authorization", `Bearer ${actors.adminToken}`).expect(200)).body;
+
+      const placed = await placeOrder(http, actors, actors.roundingItemId, 1);
+      // The order itself stays exact...
+      assert.equal(placed.body.subtotalMinor, 1_340);
+      assert.equal(placed.body.deliveryFeeMinor, 1_000);
+      assert.equal(placed.body.totalMinor, 2_340);
+      // ...and the customer is told the cash due, rounded UP.
+      assert.equal(placed.body.cashDueMinor, 2_400);
+      assert.equal(placed.body.cashRoundingMinor, 60);
+
+      await advanceToReady(http, actors, placed.id);
+      await reportPresence(http, actors.driverAToken, "FOREGROUND");
+      const available = await http.get("/api/v1/driver/me/deliveries/available").set("Authorization", `Bearer ${actors.driverAToken}`).expect(200);
+      const offered = available.body.find((candidate: any) => candidate.order.id === placed.id);
+      assert.equal(offered.order.totalMinor, 2_340);
+      assert.equal(offered.order.cashDueMinor, 2_400, "the driver is told to collect 24.00");
+      await http.post(`/api/v1/driver/me/deliveries/${offered.id}/accept`).set("Authorization", `Bearer ${actors.driverAToken}`).expect(201);
+      for (const status of ["PICKED_UP", "ON_THE_WAY", "DELIVERED"] as const) {
+        await http.patch(`/api/v1/driver/me/deliveries/${offered.id}/status`).set("Authorization", `Bearer ${actors.driverAToken}`).send({ status }).expect(200);
+      }
+
+      const record = (await http.get(`/api/v1/admin/accounting/orders/${placed.id}`).set("Authorization", `Bearer ${actors.adminToken}`).expect(200)).body;
+      //   items 13.40 + delivery 10.00               23.40   exact order value
+      //   rounded UP to a whole shekel               24.00   cash collected
+      //   difference                                  0.60   CASH_ROUNDING -> platform account
+      assert.equal(record.itemSubtotalMinor, 1_340);
+      assert.equal(record.deliveryFeeMinor, 1_000);
+      assert.equal(record.cashCollectedMinor, 2_400);
+      assert.equal(record.cashRoundingMinor, 60);
+      assert.equal(record.driverShareMinor, 700, "the driver's 70% of the exact 10.00 fee is unchanged");
+
+      const rounding = record.entries.filter((entry: any) => entry.component === "CASH_ROUNDING");
+      assert.equal(rounding.length, 1, "exactly one rounding row");
+      assert.equal(rounding[0].amountMinor, 60);
+      assert.equal(rounding[0].payeeType, "PARTNER");
+      const account = await prisma.partnerAccount.findUniqueOrThrow({ where: { key: "PLATFORM_ROUNDING" } });
+      assert.equal(rounding[0].payeeKey, `PARTNER:${account.id}`, "held by the dedicated platform account, not an owner or partner");
+
+      const sumAll = record.entries.reduce((sum: number, entry: any) => sum + entry.amountMinor, 0);
+      const sumWithoutRounding = record.entries
+        .filter((entry: any) => entry.component !== "CASH_ROUNDING")
+        .reduce((sum: number, entry: any) => sum + entry.amountMinor, 0);
+      assert.equal(sumWithoutRounding, 2_340, "every partner's share still adds up to the exact order value");
+      assert.equal(sumAll, 2_400, "and with the rounding row, to the cash actually collected");
+      assert.equal(record.reconciliation.distributedMinor, 2_400);
+      assert.equal(record.reconciliation.balancedMinor, 0, "the ledger balances exactly");
+
+      const custody = await prisma.driverCashCustody.findUniqueOrThrow({ where: { orderId: placed.id } });
+      assert.equal(custody.collectedAmountMinor, 2_400, "the driver holds the 24.00 that was collected");
+      const stored = await prisma.order.findUniqueOrThrow({ where: { id: placed.id } });
+      assert.equal(stored.totalMinor, 2_340, "the order itself was never rewritten");
+
+      const overviewAfter = (await http.get("/api/v1/admin/accounting/overview").set("Authorization", `Bearer ${actors.adminToken}`).expect(200)).body;
+      assert.equal(
+        overviewAfter.ledgerImbalanceMinor - overviewBefore.ledgerImbalanceMinor,
+        0,
+        "the platform-wide ledger imbalance did not move"
+      );
+
+      const summary = (await http.get("/api/v1/driver/me/cash-summary?period=ALL").set("Authorization", `Bearer ${actors.driverAToken}`).expect(200)).body;
+      const line = summary.lines.find((candidate: any) => candidate.orderId === placed.id);
+      assert.equal(line.cashCollectedMinor, 2_400, "the driver's screen shows what they actually hold");
+      assert.equal(summary.balance.cashOwedToPlatformMinor, 2_400);
+
+      const customerView = (await http.get(`/api/v1/orders/${placed.id}`).set("Authorization", `Bearer ${actors.customerToken}`).expect(200)).body;
+      assert.equal(customerView.totalMinor, 2_340);
+      assert.equal(customerView.cashDueMinor, 2_400);
+    });
+
+    await context.test("the database itself refuses a rounding row that is not a small platform credit", async () => {
+      const record = await prisma.orderFinancialRecord.findFirstOrThrow({ where: { cashRoundingMinor: 60 } });
+      const account = await prisma.partnerAccount.findUniqueOrThrow({ where: { key: "PLATFORM_ROUNDING" } });
+      const attempt = (amountMinor: number, payee: { partnerAccountId?: string; driverUserId?: string }) =>
+        prisma.partnerEarning.create({
+          data: {
+            sourceType: "ORDER",
+            sourceId: record.id,
+            orderFinancialRecordId: record.id,
+            payeeType: payee.driverUserId ? "DRIVER" : "PARTNER",
+            payeeKey: payee.driverUserId ? `DRIVER:${payee.driverUserId}` : `PARTNER:${payee.partnerAccountId}`,
+            partnerAccountId: payee.partnerAccountId ?? null,
+            driverUserId: payee.driverUserId ?? null,
+            component: "CASH_ROUNDING",
+            amountMinor,
+            occurredAt: new Date()
+          }
+        });
+      await assert.rejects(attempt(150, { partnerAccountId: account.id }), /cash_rounding_shape|check constraint/i, "a shekel or more is not rounding");
+      await assert.rejects(attempt(-10, { partnerAccountId: account.id }), /cash_rounding_shape|check constraint/i, "rounding is never a debit");
+      await assert.rejects(attempt(10, { driverUserId: actors.driverAId }), /cash_rounding_shape|check constraint|payee/i, "rounding never goes to a driver");
+    });
   }
 );
 
@@ -399,6 +593,12 @@ async function createActors(http: Http, prisma: PrismaService) {
     .set("Authorization", `Bearer ${marketToken}`)
     .send({ categoryId: category.body.id, name: "Tracking Olive Oil", priceMinor: 5_000, costPriceMinor: 3_500 })
     .expect(201);
+  // 13.40 + the 10.00 minimum delivery fee = 23.40, which is collected as 24.00 (rounded UP).
+  const roundingItem = await http
+    .post("/api/v1/restaurant/me/menu/items")
+    .set("Authorization", `Bearer ${marketToken}`)
+    .send({ categoryId: category.body.id, name: "Tracking Rounding Item", priceMinor: 1_340, costPriceMinor: 900 })
+    .expect(201);
 
   async function driver(fullName: string, phone: string, online: boolean, platform: "android" | "ios") {
     const created = await http
@@ -430,6 +630,7 @@ async function createActors(http: Http, prisma: PrismaService) {
     marketToken,
     marketId,
     itemId: item.body.id as string,
+    roundingItemId: roundingItem.body.id as string,
     driverAId: driverA.userId,
     driverAToken: driverA.token,
     driverAToken_push: driverA.pushToken,
@@ -441,20 +642,24 @@ async function createActors(http: Http, prisma: PrismaService) {
   };
 }
 
-async function placeOrder(http: Http, actors: Actors): Promise<{ id: string }> {
+async function placeOrder(http: Http, actors: Actors, itemId = actors.itemId, quantity = 2): Promise<{ id: string; body: any }> {
   const order = await http
     .post("/api/v1/orders")
     .set("Authorization", `Bearer ${actors.customerToken}`)
     .send({
       restaurantId: actors.marketId,
-      items: [{ menuItemId: actors.itemId, quantity: 2 }],
+      items: [{ menuItemId: itemId, quantity }],
       deliveryLabel: "Home",
       deliveryAddressLine: "Secret Lane 12",
       ...customerLocation,
       paymentMethod: "CASH"
     })
     .expect(201);
-  return { id: order.body.id as string };
+  return { id: order.body.id as string, body: order.body };
+}
+
+async function reportPresence(http: Http, token: string, state: "FOREGROUND" | "BACKGROUND" | "CLOSED") {
+  return http.put("/api/v1/driver/me/presence").set("Authorization", `Bearer ${token}`).send({ state });
 }
 
 async function advanceToReady(http: Http, actors: Actors, orderId: string): Promise<void> {

@@ -617,7 +617,8 @@
       "OPERATING_COST_SHARE": "Share of operating costs",
       "SUBSCRIPTION_CHARGE": "Monthly subscription",
       "SUBSCRIPTION_SHARE": "Share of subscriptions",
-      "ADJUSTMENT": "Correction"
+      "ADJUSTMENT": "Correction",
+      "CASH_ROUNDING": "Cash rounding (platform)"
     },
     "balances": {
       "empty": "No entitlements have been recorded yet.",
@@ -963,7 +964,8 @@
     "costIncomplete": "This order was valued without a cost price on at least one line, so the shares may be wrong. Add the cost price, then record an adjustment.",
     "entries": "What each party was credited",
     "reconciliation": "Ledger reconciliation",
-    "correct": "Record a correction for this order"
+    "correct": "Record a correction for this order",
+    "cashRounding": "of which rounding up to a whole shekel (platform)"
   },
   "liveDrivers": {
     "openMap": "Live map",

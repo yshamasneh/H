@@ -20,6 +20,10 @@ FROM build AS production-dependencies
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime
+# The commit this image was built from, reported by /health so a deploy can prove which code is
+# actually serving traffic. Passed by the deploy workflow; null when built by hand.
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
 ENV NODE_ENV=production
 # Store opening hours are compared against the server's local wall clock (isWithinWeeklyHours
 # reads Date#getHours), so the container must run on Palestinian local time. Without this a

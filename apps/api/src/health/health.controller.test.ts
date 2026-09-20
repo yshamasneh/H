@@ -68,3 +68,19 @@ test("correcting the invariant makes readiness recover on the next request", asy
   ready = true;
   assert.equal((await controller.ready()).status, "ready");
 });
+
+test("readiness reports the commit the process was built from, so a deploy can prove what is running", async () => {
+  const prisma = { $queryRaw: async () => [{ ok: 1 }] };
+  const partners = { validate: async () => ({ ready: true, issues: [] }), logInvalid: () => {} };
+  const controller = new HealthController(prisma as never, partners as never);
+  const original = process.env.GIT_SHA;
+  try {
+    process.env.GIT_SHA = "0123456789abcdef0123456789abcdef01234567";
+    assert.equal((await controller.health()).commit, "0123456789abcdef0123456789abcdef01234567");
+    delete process.env.GIT_SHA;
+    assert.equal((await controller.health()).commit, null, "a hand-built image reports no commit rather than a wrong one");
+  } finally {
+    if (original === undefined) delete process.env.GIT_SHA;
+    else process.env.GIT_SHA = original;
+  }
+});

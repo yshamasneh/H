@@ -1,5 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { writeAuditLog } from "../common/audit-log.util";
+import { cashDue } from "../common/cash-rounding";
 import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { ApiException } from "../common/api.exception";
@@ -34,6 +36,14 @@ import {
   orderStatusesAllowingDeliveryProgress
 } from "./delivery.rules";
 import { buildCashLines, resolvePeriodStart, type OrderFact } from "./driver-cash-summary";
+import {
+  defaultPresenceDurations,
+  isAppOpen,
+  nextPresence,
+  renewedPresence,
+  type PresenceDurations,
+  type PresenceReport
+} from "./presence.rules";
 import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
 import type {
   AdminDriverLocationView,
@@ -41,7 +51,9 @@ import type {
   AdminOrderTrackingView,
   DeliveryView,
   DriverCashPeriod,
+  AdminDriverPresence,
   DriverCashSummaryView,
+  DriverLocationReportView,
   DriverProfileView,
   DriverStatsView,
   Page
@@ -59,8 +71,20 @@ const cashSummaryLineLimit = 100;
 export class DriversService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly realtime: RealtimeGateway
+    private readonly realtime: RealtimeGateway,
+    @Optional() private readonly config?: ConfigService
   ) {}
+
+  private presenceDurations(): PresenceDurations {
+    return {
+      foregroundLeaseMs:
+        (this.config?.get<number>("DRIVER_PRESENCE_FOREGROUND_LEASE_SECONDS") ??
+          defaultPresenceDurations.foregroundLeaseMs / 1_000) * 1_000,
+      backgroundGraceMs:
+        (this.config?.get<number>("DRIVER_PRESENCE_BACKGROUND_GRACE_MINUTES") ??
+          defaultPresenceDurations.backgroundGraceMs / 60_000) * 60_000
+    };
+  }
 
   async register(input: DriverRegisterDto): Promise<{ message: string; userId: string }> {
     this.assertPasswordsMatch(input.password, input.confirmPassword);
@@ -121,17 +145,65 @@ export class DriversService {
         "Your driver account has not been approved yet. Please wait for admin approval."
       );
     }
-    const updated = await this.prisma.driverProfile.update({ where: { userId: profile.userId }, data: { isOnline } });
+    const now = new Date();
+    // Tapping the switch is proof the app is open in the foreground right now.
+    const presence = isOnline ? nextPresence("FOREGROUND", now, this.presenceDurations()) : {};
+    const updated = await this.prisma.driverProfile.update({
+      where: { userId: profile.userId },
+      data: { isOnline, ...presence, ...(isOnline ? { appSeenAt: now } : {}) }
+    });
     this.realtime.emitToAdmins("driver.status.changed", { userId: profile.userId, isOnline });
+    this.emitPresence(updated, now);
     return toProfileView(updated);
   }
 
-  async updateLocation(driverUserId: string, latitude: number, longitude: number): Promise<DriverProfileView> {
+  /**
+   * The app says it is open (a heartbeat), has gone to the background, or is closed.
+   *
+   * This is the only thing that tells the server the app is running, because a force-close cannot
+   * be observed directly; it can only be inferred from the reports stopping. See presence.rules.ts
+   * for the lease and what it means for alerts.
+   */
+  async reportPresence(
+    driverUserId: string,
+    report: PresenceReport
+  ): Promise<{ appOpen: boolean; appLeaseUntil: Date | null }> {
     const profile = await this.requireOwnProfile(driverUserId);
-    const reportedAt = new Date();
+    const now = new Date();
+    const wasOpen = isAppOpen(profile, now);
+    const previousState = profile.appState;
+    const next = nextPresence(report, now, this.presenceDurations());
     const updated = await this.prisma.driverProfile.update({
       where: { userId: profile.userId },
-      data: { lastLatitude: latitude, lastLongitude: longitude, lastLocationAt: reportedAt }
+      data: { ...next, appSeenAt: now }
+    });
+    // Announce only changes (the app opening, closing, or moving between foreground and background),
+    // not every heartbeat, so a room of admins is not woken by each driver's every 45 seconds.
+    if (wasOpen !== isAppOpen(updated, now) || previousState !== updated.appState) {
+      this.emitPresence(updated, now);
+    }
+    return { appOpen: isAppOpen(updated, now), appLeaseUntil: updated.appLeaseUntil };
+  }
+
+  private emitPresence(profile: DriverProfile, now: Date): void {
+    this.realtime.emitToAdmins("driver.presence.changed", {
+      userId: profile.userId,
+      isOnline: profile.isOnline,
+      ...presenceView(profile, now)
+    });
+  }
+
+  async updateLocation(driverUserId: string, latitude: number, longitude: number): Promise<DriverLocationReportView> {
+    const profile = await this.requireOwnProfile(driverUserId);
+    const reportedAt = new Date();
+    // A fix is proof the app is running, and keeps whichever state it last announced.
+    const presence = renewedPresence(profile, reportedAt, this.presenceDurations());
+    const updated = await this.prisma.driverProfile.update({
+      where: { userId: profile.userId },
+      data: { lastLatitude: latitude, lastLongitude: longitude, lastLocationAt: reportedAt, ...presence, appSeenAt: reportedAt }
+    });
+    const activeDeliveries = await this.prisma.delivery.count({
+      where: { driverId: profile.userId, status: { in: activeDeliveryStatuses } }
     });
     // Admins only: a driver's position is operational data for dispatch, not something the customer
     // or the business is shown, so it never goes to an order room.
@@ -141,7 +213,7 @@ export class DriversService {
       longitude,
       lastLocationAt: reportedAt
     });
-    return toProfileView(updated);
+    return { ...toProfileView(updated), hasActiveDelivery: activeDeliveries > 0 };
   }
 
   /**
@@ -584,8 +656,9 @@ export class DriversService {
       }
     }
 
+    const now = new Date();
     return profiles.map((profile) =>
-      toAdminView(profile, completedByDriver.get(profile.userId) ?? 0, activeByDriver.get(profile.userId) ?? null)
+      toAdminView(profile, completedByDriver.get(profile.userId) ?? 0, activeByDriver.get(profile.userId) ?? null, now)
     );
   }
 
@@ -611,7 +684,8 @@ export class DriversService {
       include: { user: true },
       orderBy: { createdAt: "asc" }
     });
-    return profiles.map((profile) => toLocationView(profile, activeByDriver.get(profile.userId) ?? null));
+    const now = new Date();
+    return profiles.map((profile) => toLocationView(profile, activeByDriver.get(profile.userId) ?? null, now));
   }
 
   /** Where the assigned driver of one order is right now. */
@@ -631,7 +705,7 @@ export class DriversService {
         include: { user: true }
       });
       if (profile) {
-        driver = toLocationView(profile, { ...delivery, order } as unknown as DeliveryWithRelations);
+        driver = toLocationView(profile, { ...delivery, order } as unknown as DeliveryWithRelations, new Date());
       }
     }
     return {
@@ -723,7 +797,7 @@ export class DriversService {
     });
     emitter.flush();
 
-    return toAdminView(updated, 0, null);
+    return toAdminView(updated, 0, null, new Date());
   }
 
   private async requireOwnProfile(driverUserId: string): Promise<DriverProfile> {
@@ -830,9 +904,22 @@ function toProfileView(profile: DriverProfile): DriverProfileView {
   };
 }
 
-function toLocationView(profile: DriverWithUser, active: DeliveryWithRelations | null): AdminDriverLocationView {
+function presenceView(profile: DriverProfile, now: Date): AdminDriverPresence {
+  return {
+    appState: profile.appState,
+    appLeaseUntil: profile.appLeaseUntil,
+    appOpen: isAppOpen(profile, now)
+  };
+}
+
+function toLocationView(
+  profile: DriverWithUser,
+  active: DeliveryWithRelations | null,
+  now: Date
+): AdminDriverLocationView {
   const live = active && activeDeliveryStatuses.includes(active.status) ? active : null;
   return {
+    ...presenceView(profile, now),
     userId: profile.userId,
     fullName: profile.user.fullName,
     phone: profile.user.phone,
@@ -852,8 +939,14 @@ function toLocationView(profile: DriverWithUser, active: DeliveryWithRelations |
   };
 }
 
-function toAdminView(profile: DriverWithUser, completedDeliveriesCount: number, activeDeliveryId: string | null): AdminDriverView {
+function toAdminView(
+  profile: DriverWithUser,
+  completedDeliveriesCount: number,
+  activeDeliveryId: string | null,
+  now: Date
+): AdminDriverView {
   return {
+    ...presenceView(profile, now),
     userId: profile.userId,
     fullName: profile.user.fullName,
     phone: profile.user.phone,
@@ -875,6 +968,7 @@ function toDeliveryView(delivery: DeliveryWithRelations): DeliveryView {
       deliveryLabel: delivery.order.deliveryLabel,
       deliveryAddressLine: delivery.order.deliveryAddressLine,
       totalMinor: delivery.order.totalMinor,
+      ...cashDue(delivery.order.totalMinor),
       paymentMethod: delivery.order.paymentMethod,
       latitude: delivery.order.deliveryLatitude,
       longitude: delivery.order.deliveryLongitude

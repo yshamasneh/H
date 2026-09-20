@@ -81,6 +81,17 @@ export class UpdateDeliveryStatusDto {
   failureNote?: string;
 }
 
+export const presenceReportValues = ["FOREGROUND", "BACKGROUND", "CLOSED"] as const;
+
+export class ReportPresenceDto {
+  @ApiProperty({
+    enum: presenceReportValues,
+    description: "FOREGROUND while the app is open, BACKGROUND as it goes to the background, CLOSED on logout"
+  })
+  @IsIn(presenceReportValues)
+  state!: (typeof presenceReportValues)[number];
+}
+
 export class DriverCashSummaryQueryDto {
   @ApiPropertyOptional({ enum: driverCashPeriods, example: "SHIFT" })
   @IsOptional()

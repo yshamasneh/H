@@ -175,6 +175,9 @@ enum PartnerAccountKind {
   PLATFORM_OWNER
   DELIVERY_OPS
   SUPERMARKET_PARTNER
+  /// A system account that belongs to the platform itself rather than to any owner or partner.
+  /// Holds the cash-rounding surplus, so it never lands in anybody's share by accident.
+  PLATFORM_ACCOUNT
 }
 
 /// Whether a ledger row is owed to a fixed partner, to a business, or to a driver. Exactly one of
@@ -210,6 +213,10 @@ enum EarningComponent {
   /// Negative. A platform-scoped offer, absorbed by the platform owners.
   PLATFORM_DISCOUNT_ABSORBED
   DRIVER_DELIVERY_SHARE
+  /// Positive, platform account only. The customer pays cash rounded UP to a whole shekel; this is
+  /// the difference between that and the exact order total, so the ledger still balances to the
+  /// cash actually collected without touching any partner's split.
+  CASH_ROUNDING
   DELIVERY_OPS_SHARE
   PLATFORM_DELIVERY_SHARE
   /// Negative. The whole uncollected order value, charged to whoever absorbs a failed delivery.
@@ -778,10 +785,23 @@ model PurchaseOrderItem {
   @@index([menuItemId])
 }
 
+/// Whether a driver's app last said it was in the foreground or had gone to the background.
+enum DriverAppState {
+  FOREGROUND
+  BACKGROUND
+}
+
 model DriverProfile {
   userId         String               @id @db.Uuid
   status         DriverApprovalStatus @default(PENDING)
+  /// The driver's own "I am on shift" switch. It says nothing about whether the app is running:
+  /// an alert needs this AND a valid app lease.
   isOnline       Boolean              @default(false)
+  /// What the app last reported, and when that report stops counting as proof the app is running
+  /// (see drivers/presence.rules.ts). Null lease = app closed or never seen.
+  appState       DriverAppState?
+  appLeaseUntil  DateTime?
+  appSeenAt      DateTime?
   lastLatitude   Float?
   lastLongitude  Float?
   lastLocationAt DateTime?
@@ -790,6 +810,7 @@ model DriverProfile {
   user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status, isOnline])
+  @@index([status, isOnline, appLeaseUntil])
 }
 
 model Delivery {
@@ -997,8 +1018,12 @@ model OrderFinancialRecord {
   /// platform, because a business must never be billed for a discount nobody can attribute.
   unattributedDiscountMinor              Int @default(0)
   deliveryFeeMinor                       Int
-  /// What the driver actually had to collect at the door. Zero on a failed delivery.
+  /// What the driver actually had to collect at the door: the order total rounded UP to a whole
+  /// shekel. Zero on a failed delivery.
   cashCollectedMinor                     Int
+  /// How much of cashCollectedMinor is rounding rather than order value (0-99). Recorded in the
+  /// ledger as a CASH_ROUNDING entry to the platform account.
+  cashRoundingMinor                      Int @default(0)
 
   /// Outputs.
   goodsCostMinor         Int                 @default(0)

@@ -83,6 +83,8 @@ export type OrderFinancialRecordView = {
   unattributedDiscountMinor: number;
   deliveryFeeMinor: number;
   cashCollectedMinor: number;
+  /** How much of cashCollectedMinor is rounding up to a whole shekel rather than order value. */
+  cashRoundingMinor: number;
   goodsCostMinor: number;
   costDataComplete: boolean;
   marginMinor: number;

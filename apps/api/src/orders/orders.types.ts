@@ -85,6 +85,13 @@ export type OrderDetailView = {
   merchandiseDiscountMinor: number;
   deliveryDiscountMinor: number;
   totalMinor: number;
+  /**
+   * What the customer pays in cash: totalMinor rounded UP to a whole shekel. totalMinor itself stays
+   * exact; only this is collected and shown as the amount due.
+   */
+  cashDueMinor: number;
+  /** The rounding included in cashDueMinor (0-99), shown so the difference is never a surprise. */
+  cashRoundingMinor: number;
   acceptedByUserId: string | null;
   acceptedAt: Date | null;
   /**
@@ -106,6 +113,12 @@ export type OrderQuoteView = {
   merchandiseDiscountMinor: number;
   deliveryDiscountMinor: number;
   totalMinor: number;
+  /**
+   * What the customer pays in cash: totalMinor rounded UP to a whole shekel. totalMinor itself stays
+   * exact; only this is collected and shown as the amount due.
+   */
+  cashDueMinor: number;
+  cashRoundingMinor: number;
   appliedPromotions: AppliedPromotion[];
 };
 

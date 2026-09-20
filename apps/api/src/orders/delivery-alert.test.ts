@@ -122,3 +122,67 @@ test("marking an order ready still succeeds when no driver is on shift", async (
   assert.ok(prisma.deliveries.some((delivery) => delivery.orderId === order.id && delivery.status === "PENDING_ASSIGNMENT"));
   assert.equal(prisma.notifications.filter((item) => item.type === "DELIVERY_AVAILABLE").length, 0);
 });
+
+// ---------------------------------------------------------------------------------------------
+// When is a driver alerted? Online AND the app running. The three cases that define it:
+
+test("online + app open = alert", async () => {
+  const { prisma, service } = setup();
+  const driver = prisma.seedDriver({ isOnline: true, appLeaseUntil: new Date(Date.now() + 60_000) });
+  prisma.seedPushToken(driver.userId);
+  const { restaurant, order } = await preparingOrder(prisma, service);
+
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+
+  assert.equal(alertsFor(prisma, driver.userId).length, 1);
+  assert.equal(prisma.pushDeliveries.length, 1);
+});
+
+test("online + app closed = no alert attempted at all, not even a queued push", async () => {
+  const { prisma, realtime, service } = setup();
+  // Marked online, but the app stopped reporting in: never reported, or the lease has run out.
+  const neverReported = prisma.seedDriver({ isOnline: true, appLeaseUntil: null });
+  const leaseExpired = prisma.seedDriver({ isOnline: true, appLeaseUntil: new Date(Date.now() - 1_000) });
+  const forgotYesterday = prisma.seedDriver({ isOnline: true, appLeaseUntil: new Date(Date.now() - 24 * 3_600_000) });
+  for (const stale of [neverReported, leaseExpired, forgotYesterday]) prisma.seedPushToken(stale.userId);
+  const { restaurant, order } = await preparingOrder(prisma, service);
+
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+
+  for (const stale of [neverReported, leaseExpired, forgotYesterday]) {
+    assert.equal(alertsFor(prisma, stale.userId).length, 0, "no notification row");
+  }
+  assert.equal(prisma.pushDeliveries.length, 0, "no push was queued for a closed app");
+  assert.ok(
+    !realtime.emitted.some(
+      (event) => event.event === "notification.created" && (event.payload as { type?: string }).type === "DELIVERY_AVAILABLE"
+    ),
+    "and no delivery alert was signalled to anyone"
+  );
+});
+
+test("offline + app open = no alert", async () => {
+  const { prisma, service } = setup();
+  const driver = prisma.seedDriver({ isOnline: false, appLeaseUntil: new Date(Date.now() + 60_000) });
+  prisma.seedPushToken(driver.userId);
+  const { restaurant, order } = await preparingOrder(prisma, service);
+
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+
+  assert.equal(alertsFor(prisma, driver.userId).length, 0);
+  assert.equal(prisma.pushDeliveries.length, 0);
+});
+
+test("a backgrounded app is still alerted inside its grace, and dropped once the grace has run out", async () => {
+  const { prisma, service } = setup();
+  const insideGrace = prisma.seedDriver({ appLeaseUntil: new Date(Date.now() + 20 * 60_000) });
+  const pastGrace = prisma.seedDriver({ appLeaseUntil: new Date(Date.now() - 60_000) });
+  prisma.seedPushToken(insideGrace.userId);
+  prisma.seedPushToken(pastGrace.userId);
+  const { restaurant, order } = await preparingOrder(prisma, service);
+
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+
+  assert.equal(alertsFor(prisma, insideGrace.userId).length, 1);
+  assert.equal(alertsFor(prisma, pastGrace.userId).length, 0);
+});

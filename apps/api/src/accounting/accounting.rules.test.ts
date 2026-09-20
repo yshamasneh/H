@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { roundCashUpMinor } from "../common/cash-rounding";
 import {
   allocateByWeights,
   applyBp,
@@ -87,6 +88,7 @@ function totalFor(earnings: ComputedEarning[], payeeKey: string): number {
 const ownerA = `PARTNER:${partnerKeys.ownerA}`;
 const ownerB = `PARTNER:${partnerKeys.ownerB}`;
 const deliveryOps = `PARTNER:${partnerKeys.deliveryOps}`;
+const platformRounding = `PARTNER:${partnerKeys.platformRounding}`;
 const business = "BUSINESS:business-1";
 const driver = "DRIVER:driver-1";
 
@@ -154,7 +156,12 @@ test("a percentage of an amount is whole minor units", () => {
  *   driver         70% of 11.50                8.05
  *   remainder      11.50 - 8.05                3.45  -> Abdullah 1.15, Mohammad 1.15, Khaldoun 1.15
  *   ------------------------------------------------
- *   80.00 + 20.00 + 8.05 + 3.45              111.50  = what the customer paid
+ *   80.00 + 20.00 + 8.05 + 3.45              111.50  = what the customer's order is worth
+ *
+ *   The customer pays cash rounded UP to a whole shekel: 112.00. The 0.50 difference is not part of
+ *   anybody's share; it is its own credit to the platform account, so the ledger still balances to
+ *   the cash in the driver's hand.
+ *   111.50 + 0.50 rounding                    112.00  = cash collected
  */
 test("worked example: a standard restaurant order distributes to the shekel", () => {
   const input = baseOrder({
@@ -182,11 +189,62 @@ test("worked example: a standard restaurant order distributes to the shekel", ()
   assert.equal(totalFor(result.earnings, deliveryOps), 115);
   assert.equal(totalFor(result.earnings, ownerA), 1_115);
   assert.equal(totalFor(result.earnings, ownerB), 1_115);
+  // The revenue model on its own still adds up to the exact order total, to the agora...
+  const withoutRounding = result.earnings
+    .filter((earning) => earning.component !== "CASH_ROUNDING")
+    .reduce((sum, earning) => sum + earning.amountMinor, 0);
+  assert.equal(withoutRounding, 11_150);
+  // ...the rounding is one explicit row on the platform account, in nobody's share...
+  assert.equal(result.cashRoundingMinor, 50);
+  assert.equal(amountFor(result.earnings, platformRounding, "CASH_ROUNDING"), 50);
+  assert.equal(totalFor(result.earnings, ownerA), 1_115, "rounding did not touch an owner's share");
+  assert.equal(totalFor(result.earnings, ownerB), 1_115);
+  assert.equal(totalFor(result.earnings, deliveryOps), 115);
+  // ...and everything together balances to the cash actually collected.
+  assert.equal(result.cashCollectedMinor, 11_200);
   assert.equal(
     result.earnings.reduce((sum, earning) => sum + earning.amountMinor, 0),
-    11_150
+    11_200
   );
-  assert.equal(result.cashCollectedMinor, 11_150);
+});
+
+test("a total that is already a whole shekel has no rounding row at all", () => {
+  const result = computeOrderFinancials(
+    baseOrder({ itemSubtotalMinor: 10_000, deliveryFeeMinor: 1_000, orderTotalMinor: 11_000 }),
+    agreedRates
+  );
+  assert.equal(result.cashRoundingMinor, 0);
+  assert.equal(result.cashCollectedMinor, 11_000);
+  assert.ok(!result.earnings.some((earning) => earning.component === "CASH_ROUNDING"));
+});
+
+test("a failed delivery collects nothing, so there is nothing to round", () => {
+  const result = computeOrderFinancials(
+    baseOrder({
+      outcome: "DELIVERY_FAILED",
+      faultParty: "CUSTOMER",
+      itemSubtotalMinor: 10_000,
+      deliveryFeeMinor: 1_150,
+      orderTotalMinor: 11_150
+    }),
+    agreedRates
+  );
+  assert.equal(result.cashCollectedMinor, 0);
+  assert.equal(result.cashRoundingMinor, 0);
+  assert.ok(!result.earnings.some((earning) => earning.component === "CASH_ROUNDING"));
+});
+
+test("rounding is credited only to the platform account, never to a partner, business or driver", () => {
+  for (const total of [10_001, 10_050, 10_099, 12_345]) {
+    const result = computeOrderFinancials(
+      baseOrder({ itemSubtotalMinor: total - 1_000, deliveryFeeMinor: 1_000, orderTotalMinor: total }),
+      agreedRates
+    );
+    const rounding = result.earnings.filter((earning) => earning.component === "CASH_ROUNDING");
+    assert.equal(rounding.length, 1);
+    assert.deepEqual(rounding[0].payee, { type: "PARTNER", partnerKey: "PLATFORM_ROUNDING" });
+    assert.ok(rounding[0].amountMinor > 0 && rounding[0].amountMinor < 100);
+  }
 });
 
 test("a promotional restaurant is charged the reduced commission", () => {
@@ -606,7 +664,12 @@ test("awkward amounts still reconcile exactly across both verticals", () => {
         baseOrder({ itemSubtotalMinor: subtotal, deliveryFeeMinor: fee, orderTotalMinor: subtotal + fee }),
         agreedRates
       );
-      assert.equal(restaurant.earnings.reduce((sum, e) => sum + e.amountMinor, 0), subtotal + fee);
+      // Cash is collected rounded UP to a whole shekel; the split itself stays exact.
+      assert.equal(restaurant.earnings.reduce((sum, e) => sum + e.amountMinor, 0), roundCashUpMinor(subtotal + fee));
+      assert.equal(
+        restaurant.earnings.filter((e) => e.component !== "CASH_ROUNDING").reduce((sum, e) => sum + e.amountMinor, 0),
+        subtotal + fee
+      );
 
       const supermarket = computeOrderFinancials(
         baseOrder({
@@ -619,7 +682,11 @@ test("awkward amounts still reconcile exactly across both verticals", () => {
         }),
         agreedRates
       );
-      assert.equal(supermarket.earnings.reduce((sum, e) => sum + e.amountMinor, 0), subtotal + fee);
+      assert.equal(supermarket.earnings.reduce((sum, e) => sum + e.amountMinor, 0), roundCashUpMinor(subtotal + fee));
+      assert.equal(
+        supermarket.earnings.filter((e) => e.component !== "CASH_ROUNDING").reduce((sum, e) => sum + e.amountMinor, 0),
+        subtotal + fee
+      );
     }
   }
 });

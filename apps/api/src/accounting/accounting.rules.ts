@@ -1,4 +1,5 @@
 import type { DeliveryFaultParty, EarningComponent, LossAbsorber } from "../generated/prisma/enums";
+import { roundCashUpMinor } from "../common/cash-rounding";
 import type { AppliedPromotion } from "../offers/offers.types";
 
 /**
@@ -28,7 +29,13 @@ export const partnerKeys = {
   /** Platform owner B. */
   ownerB: "OWNER_B",
   /** Delivery operations. Takes a share of the delivery fee and nothing else. */
-  deliveryOps: "DELIVERY_OPS"
+  deliveryOps: "DELIVERY_OPS",
+  /**
+   * The platform's own account, which holds the cash-rounding surplus. Deliberately not an owner
+   * or a partner: rounding is a by-product of collecting whole shekels, not anybody's revenue
+   * share, and giving it a home of its own keeps it visible and out of every split.
+   */
+  platformRounding: "PLATFORM_ROUNDING"
 } as const;
 
 export type PartnerKey = (typeof partnerKeys)[keyof typeof partnerKeys];
@@ -113,8 +120,13 @@ export type OrderFinancialComputation = {
   marginMinor: number;
   driverShareMinor: number;
   deliveryRemainderMinor: number;
-  /** What the driver had to collect at the door. Zero on a failed delivery. */
+  /**
+   * What the driver had to collect at the door: the order total rounded UP to a whole shekel. Zero
+   * on a failed delivery.
+   */
   cashCollectedMinor: number;
+  /** The part of cashCollectedMinor that is rounding rather than order value (0-99). */
+  cashRoundingMinor: number;
   lossAbsorber: LossAbsorber;
   absorbedLossMinor: number;
   earnings: ComputedEarning[];
@@ -375,7 +387,8 @@ export function computeOrderFinancials(
   // ---- a delivery that collected nothing ---------------------------------------------------
   let lossAbsorber: LossAbsorber = "NONE";
   let absorbedLossMinor = 0;
-  const cashCollectedMinor = input.outcome === "DELIVERED" ? input.orderTotalMinor : 0;
+  // What the order is worth to the customer, to the agora. Every split above adds up to exactly this.
+  const exactCashMinor = input.outcome === "DELIVERED" ? input.orderTotalMinor : 0;
 
   if (input.outcome === "DELIVERY_FAILED") {
     lossAbsorber = resolveLossAbsorber(input.faultParty);
@@ -387,6 +400,18 @@ export function computeOrderFinancials(
   }
 
   const merged = mergeEarnings(earnings);
+  // First: the revenue model on its own reconciles to the exact total, exactly as before. Rounding
+  // is not allowed to hide a mistake in the split.
+  assertReconciles(merged, exactCashMinor, input);
+
+  // Then the cash actually asked for: the total rounded UP to a whole shekel. The difference is a
+  // credit to the platform account, written as its own row, so the ledger balances to the cash in
+  // the driver's hand and the rounding can never be silently absorbed into somebody's share.
+  const cashCollectedMinor = input.outcome === "DELIVERED" ? roundCashUpMinor(input.orderTotalMinor) : 0;
+  const cashRoundingMinor = cashCollectedMinor - exactCashMinor;
+  if (cashRoundingMinor > 0) {
+    merged.push(partnerEarning(partnerKeys.platformRounding, "CASH_ROUNDING", cashRoundingMinor));
+  }
   assertReconciles(merged, cashCollectedMinor, input);
 
   return {
@@ -401,6 +426,7 @@ export function computeOrderFinancials(
     driverShareMinor,
     deliveryRemainderMinor,
     cashCollectedMinor,
+    cashRoundingMinor,
     lossAbsorber,
     absorbedLossMinor,
     earnings: merged

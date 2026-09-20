@@ -139,6 +139,9 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   environment.OTP_MAX_GLOBAL_PER_DAY = readPositiveInteger(environment, "OTP_MAX_GLOBAL_PER_DAY", 2_000);
   environment.OTP_WEBHOOK_TIMEOUT_MS = readPositiveInteger(environment, "OTP_WEBHOOK_TIMEOUT_MS", 5_000);
   environment.ERROR_TRACKING_TIMEOUT_MS = readPositiveInteger(environment, "ERROR_TRACKING_TIMEOUT_MS", 3_000);
+  // How long a driver's app report counts as proof the app is running (drivers/presence.rules.ts).
+  environment.DRIVER_PRESENCE_FOREGROUND_LEASE_SECONDS = readPositiveInteger(environment, "DRIVER_PRESENCE_FOREGROUND_LEASE_SECONDS", 120);
+  environment.DRIVER_PRESENCE_BACKGROUND_GRACE_MINUTES = readPositiveInteger(environment, "DRIVER_PRESENCE_BACKGROUND_GRACE_MINUTES", 30);
   environment.PUSH_WORKER_ENABLED = readBoolean(environment, "PUSH_WORKER_ENABLED", true);
   environment.PUSH_WORKER_POLL_INTERVAL_MS = readPositiveInteger(environment, "PUSH_WORKER_POLL_INTERVAL_MS", 5_000);
   environment.PUSH_WORKER_MAX_BATCHES_PER_RUN = readPositiveInteger(environment, "PUSH_WORKER_MAX_BATCHES_PER_RUN", 10);

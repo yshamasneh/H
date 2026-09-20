@@ -16,6 +16,11 @@ export const requiredPartnerAccounts = [
     key: partnerKeys.deliveryOps,
     name: "Abdullah (delivery operations)",
     kind: PartnerAccountKind.DELIVERY_OPS
+  },
+  {
+    key: partnerKeys.platformRounding,
+    name: "JOVO platform (cash rounding)",
+    kind: PartnerAccountKind.PLATFORM_ACCOUNT
   }
 ] as const;
 

@@ -91,7 +91,8 @@ export class FakeAccountingStore {
   readonly partnerAccounts = [
     { id: "partner-owner-a", key: partnerKeys.ownerA, name: "Owner A" },
     { id: "partner-owner-b", key: partnerKeys.ownerB, name: "Owner B" },
-    { id: "partner-delivery-ops", key: partnerKeys.deliveryOps, name: "Delivery operations" }
+    { id: "partner-delivery-ops", key: partnerKeys.deliveryOps, name: "Delivery operations" },
+    { id: "partner-platform-rounding", key: partnerKeys.platformRounding, name: "JOVO platform (cash rounding)" }
   ];
   readonly orderFinancialRecords: Record<string, unknown>[] = [];
   readonly partnerEarnings: FakeEarningRecord[] = [];

@@ -60,6 +60,9 @@ export function OrderFinancialCard({ orderId }: { orderId: string }) {
     [t("orderFinancial.merchandiseDiscount"), <Money minor={record.merchandiseDiscountMinor} />],
     [t("orderFinancial.deliveryFee"), <Money minor={record.deliveryFeeMinor} />],
     [t("orderFinancial.cashCollected"), <Money minor={record.cashCollectedMinor} />],
+    ...(record.cashRoundingMinor > 0
+      ? ([[t("orderFinancial.cashRounding"), <Money minor={record.cashRoundingMinor} />]] as [string, React.ReactNode][])
+      : []),
     [t("orderFinancial.commission"), <Money minor={record.commissionMinor} />],
     [t("orderFinancial.driverShare"), <Money minor={record.driverShareMinor} />]
   ];
