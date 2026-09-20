@@ -1,0 +1,98 @@
+name: Deploy Trial API
+
+on:
+  push:
+    branches:
+      - agent/phase-15-and-jovo-brand
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-trial-api
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      AZURE_SUBSCRIPTION_ID: e3e66992-6146-4a39-a173-9a916c66bdcd
+      AZURE_TENANT_ID: bb4fc368-77bb-45aa-80a3-9a53558d8552
+      AZURE_CLIENT_ID: bc6ffa2a-6b3d-4e37-a47e-967e9317757c
+      RESOURCE_GROUP: jovo-trial
+      WEBAPP: jovo-market-api
+      ACR_NAME: jovomarketacshamasneh
+      DB_SERVER: jovo-market-db-shamasneh
+      IMAGE: jovomarketacshamasneh.azurecr.io/jovo-api:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Sign in to Trial Azure subscription
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push API image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --target runtime --tag "$IMAGE" .
+          az acr login --name "$ACR_NAME"
+          docker push "$IMAGE"
+
+      - name: Apply pending Trial migrations once
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --workspace @wasel/api --include-workspace-root
+          db_url=$(az webapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query "[?name=='DATABASE_URL'].value | [0]" --output tsv)
+          if [[ -z "$db_url" || "$db_url" == None ]]; then
+            echo '::error::DATABASE_URL is missing from Trial App Service settings'
+            exit 1
+          fi
+          echo "::add-mask::$db_url"
+          runner_ip=$(curl --fail --silent --show-error https://api.ipify.org)
+          rule_name="github-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          rule_created=0
+          cleanup() {
+            if [[ "$rule_created" == 1 ]]; then
+              az postgres flexible-server firewall-rule delete --resource-group "$RESOURCE_GROUP" --server-name "$DB_SERVER" --name "$rule_name" --yes --output none || true
+            fi
+          }
+          trap cleanup EXIT
+          az postgres flexible-server firewall-rule create --resource-group "$RESOURCE_GROUP" --server-name "$DB_SERVER" --name "$rule_name" --start-ip-address "$runner_ip" --end-ip-address "$runner_ip" --output none
+          rule_created=1
+          sleep 15
+          DATABASE_URL="$db_url" npm run prisma:deploy --workspace @wasel/api
+          az postgres flexible-server firewall-rule delete --resource-group "$RESOURCE_GROUP" --server-name "$DB_SERVER" --name "$rule_name" --yes --output none
+          rule_created=0
+
+      - name: Deploy image to Trial App Service
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp sitecontainers update --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --container-name main --image "$IMAGE" --output none
+
+      - name: Verify running image and API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          host=$(az webapp show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query defaultHostName --output tsv)
+          for attempt in {1..18}; do
+            status=$(az webapp sitecontainers status --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --container-name main --output json 2>/dev/null || true)
+            if jq -e --arg image "$IMAGE" '.Image == $image and .Status == "Running"' <<< "$status" >/dev/null 2>&1; then
+              response=$(curl --fail --silent --show-error --max-time 20 "https://${host}/api/v1/health")
+              jq -e '.ok == true and .status == "ready" and .database == "connected"' <<< "$response" >/dev/null
+              echo "$response"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo '::error::Trial App Service did not start the image for this commit'
+          exit 1
