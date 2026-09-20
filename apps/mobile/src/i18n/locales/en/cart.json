@@ -27,7 +27,7 @@
     "stepDone": "Done",
     "orderSummaryEstimate": "Order summary (estimate)",
     "quantityTimesName": "{{quantity}} x {{name}}",
-    "finalTotalNote": "The final total, including delivery and service fees, is confirmed by the server after you place the order.",
+    "finalTotalNote": "Delivery and the final total are calculated by the store when you request a quote.",
     "deliveryAddressTitle": "Delivery address",
     "labelField": "Label",
     "labelPlaceholder": "Home",
@@ -53,6 +53,8 @@
     "quoteRequiredError": "Select the delivery pin and calculate the final total before placing the order.",
     "storeClosed": "JOVO MARKET is closed right now. Your cart is saved; please return when it reopens.",
     "storeStatusUnavailable": "We could not check the store status. Please try again.",
+    "priceChanged": "The price changed. Review the updated total and confirm it before placing your order.",
+    "confirmUpdatedPrice": "Confirm updated price",
     "cashOnDelivery": "Cash on Delivery",
     "selectedDeliveryLocationFallback": "Selected delivery location"
   },

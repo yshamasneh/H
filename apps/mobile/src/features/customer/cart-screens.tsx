@@ -84,6 +84,13 @@ function isStoreClosedError(error: unknown): boolean {
   return error instanceof ApiError && error.code === "RESTAURANT_CLOSED";
 }
 
+function changedQuote(error: unknown): OrderQuote | null {
+  if (!(error instanceof ApiError) || error.code !== "ORDER_PRICE_CHANGED") return null;
+  const quote = (error.details as { currentQuote?: OrderQuote } | null)?.currentQuote;
+  return quote && Number.isInteger(quote.deliveryFeeMinor) && Number.isInteger(quote.totalMinor) &&
+    Array.isArray(quote.appliedPromotions) ? quote : null;
+}
+
 type CartScreenProps = {
   cart: Cart | null;
   onBack: () => void;
@@ -238,6 +245,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   const [locating, setLocating] = useState(false);
   const [coordinates, setCoordinates] = useState<CurrentCoordinates>(defaultMapCoordinate);
   const [quote, setQuote] = useState<OrderQuote | null>(null);
+  const [priceChanged, setPriceChanged] = useState(false);
+  const hasQuotedRef = useRef(false);
+  const quoteGenerationRef = useRef(0);
+  const quoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+    quoteGenerationRef.current += 1;
+  }, []);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   // Named landmarks render on the checkout map as static orientation pins alongside the
@@ -291,8 +306,58 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   function selectSavedAddress(address: SavedAddress) {
     setDeliveryLabel(address.label);
     setDeliveryAddressLine(address.addressLine);
-    setCoordinates({ latitude: address.latitude, longitude: address.longitude });
+    const nextCoordinates = { latitude: address.latitude, longitude: address.longitude };
+    setCoordinates(nextCoordinates);
+    scheduleQuote(address.addressLine, nextCoordinates, address.label);
+  }
+
+  function orderInput(address: string, point: CurrentCoordinates, label: string): CreateOrderInput | null {
+    if (!props.cart || address.trim().length < 3) return null;
+    return {
+      restaurantId: props.cart.restaurantId,
+      items: buildOrderItems(),
+      deliveryLabel: label.trim() || t("checkout.labelPlaceholder"),
+      deliveryAddressLine: address.trim(),
+      deliveryLatitude: point.latitude,
+      deliveryLongitude: point.longitude,
+      paymentMethod
+    };
+  }
+
+  async function requestQuote(input: CreateOrderInput, generation: number) {
+    setLocating(true);
+    setError(null);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error(t("common:sessionExpired"));
+      const result = await getOrderQuote(accessToken, input);
+      if (generation === quoteGenerationRef.current) {
+        setQuote(result);
+        setPriceChanged(false);
+        store.setStatus("open");
+      }
+    } catch (requestError) {
+      if (generation === quoteGenerationRef.current) {
+        setQuote(null);
+        if (isStoreClosedError(requestError)) store.setStatus("closed");
+        setError(readError(requestError));
+      }
+    } finally {
+      if (generation === quoteGenerationRef.current) setLocating(false);
+    }
+  }
+
+  function scheduleQuote(address: string, point: CurrentCoordinates, label: string) {
+    quoteGenerationRef.current += 1;
+    if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+    setLocating(false);
     setQuote(null);
+    setPriceChanged(false);
+    if (!hasQuotedRef.current) return;
+    const input = orderInput(address, point, label);
+    if (!input) return;
+    const generation = quoteGenerationRef.current;
+    quoteTimerRef.current = setTimeout(() => { void requestQuote(input, generation); }, 400);
   }
 
   async function chooseCurrentLocation() {
@@ -302,19 +367,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       const nextCoordinates = await getCurrentCoordinates();
       setCoordinates(nextCoordinates);
       const address = await reverseGeocode(nextCoordinates);
-      if (address) setDeliveryAddressLine(address);
-      if (!props.cart) throw new Error(t("checkout.emptyCartError"));
-      const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error(t("common:sessionExpired"));
-      setQuote(await getOrderQuote(accessToken, {
-        restaurantId: props.cart.restaurantId,
-        items: buildOrderItems(),
-        deliveryLabel: deliveryLabel.trim() || t("checkout.labelPlaceholder"),
-        deliveryAddressLine: deliveryAddressLine.trim().length >= 3 ? deliveryAddressLine.trim() : t("checkout.selectedDeliveryLocationFallback"),
-        deliveryLatitude: nextCoordinates.latitude,
-        deliveryLongitude: nextCoordinates.longitude,
-        paymentMethod
-      }));
+      const resolvedAddress = address || (deliveryAddressLine.trim().length >= 3 ? deliveryAddressLine : t("checkout.selectedDeliveryLocationFallback"));
+      setDeliveryAddressLine(resolvedAddress);
+      const input = orderInput(resolvedAddress, nextCoordinates, deliveryLabel);
+      if (!input) throw new Error(t("checkout.emptyCartError"));
+      hasQuotedRef.current = true;
+      if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+      quoteGenerationRef.current += 1;
+      await requestQuote(input, quoteGenerationRef.current);
     } catch (requestError) {
       setQuote(null);
       if (isStoreClosedError(requestError)) store.setStatus("closed");
@@ -326,10 +386,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
 
   async function chooseMapLocation(nextCoordinates: MapCoordinate) {
     setCoordinates(nextCoordinates);
-    setQuote(null);
+    scheduleQuote(deliveryAddressLine, nextCoordinates, deliveryLabel);
+    const generation = quoteGenerationRef.current;
     try {
       const address = await reverseGeocode(nextCoordinates);
-      if (address) setDeliveryAddressLine(address);
+      if (address && generation === quoteGenerationRef.current) {
+        setDeliveryAddressLine(address);
+        scheduleQuote(address, nextCoordinates, deliveryLabel);
+      }
     } catch {
       // The coordinates remain valid if the platform geocoder is temporarily unavailable.
     }
@@ -344,27 +408,12 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       setError(t("checkout.addressRequiredError"));
       return;
     }
-    setLocating(true);
-    setError(null);
-    try {
-      const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error(t("common:sessionExpired"));
-      setQuote(await getOrderQuote(accessToken, {
-        restaurantId: props.cart.restaurantId,
-        items: buildOrderItems(),
-        deliveryLabel: deliveryLabel.trim() || t("checkout.labelPlaceholder"),
-        deliveryAddressLine: deliveryAddressLine.trim(),
-        deliveryLatitude: coordinates.latitude,
-        deliveryLongitude: coordinates.longitude,
-        paymentMethod
-      }));
-    } catch (requestError) {
-      setQuote(null);
-      if (isStoreClosedError(requestError)) store.setStatus("closed");
-      setError(readError(requestError));
-    } finally {
-      setLocating(false);
-    }
+    const input = orderInput(deliveryAddressLine, coordinates, deliveryLabel);
+    if (!input) return;
+    hasQuotedRef.current = true;
+    if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+    quoteGenerationRef.current += 1;
+    await requestQuote(input, quoteGenerationRef.current);
   }
 
   async function submit() {
@@ -421,16 +470,25 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         deliveryLongitude: coordinates.longitude,
         paymentMethod,
         customerNote: customerNote.trim() || undefined,
+        expectedDeliveryFeeMinor: quote.deliveryFeeMinor,
+        expectedTotalMinor: quote.totalMinor,
         idempotencyKey: idempotencyRef.current.key
       };
       const order = await createOrder(accessToken, input);
       props.onPlaced(order);
     } catch (requestError) {
-      if (isStoreClosedError(requestError)) {
+      const updatedQuote = changedQuote(requestError);
+      if (updatedQuote) {
+        setQuote(updatedQuote);
+        setPriceChanged(true);
+        setError(t("checkout.priceChanged"));
+      } else if (isStoreClosedError(requestError)) {
         store.setStatus("closed");
         setQuote(null);
+        setError(readError(requestError));
+      } else {
+        setError(readError(requestError));
       }
-      setError(readError(requestError));
     } finally {
       setLoading(false);
       submittingRef.current = false;
@@ -492,7 +550,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         ) : null}
         <Text style={styles.label}>{t("checkout.labelField")}</Text>
         <TextInput
-          onChangeText={setDeliveryLabel}
+          onChangeText={(value) => {
+            setDeliveryLabel(value);
+            scheduleQuote(deliveryAddressLine, coordinates, value);
+          }}
           placeholder={t("checkout.labelPlaceholder")}
           placeholderTextColor={customerTheme.colors.textMuted}
           style={styles.input}
@@ -501,7 +562,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         <Text style={styles.label}>{t("checkout.fullAddressField")}</Text>
         <TextInput
           multiline
-          onChangeText={setDeliveryAddressLine}
+          onChangeText={(value) => {
+            setDeliveryAddressLine(value);
+            scheduleQuote(value, coordinates, deliveryLabel);
+          }}
           placeholder={t("checkout.addressPlaceholder")}
           placeholderTextColor={customerTheme.colors.textMuted}
           style={[styles.input, styles.multilineInput]}
@@ -538,7 +602,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           <Pressable
             accessibilityRole="button"
             key={method}
-            onPress={() => setPaymentMethod(method)}
+            onPress={() => {
+              setPaymentMethod(method);
+              scheduleQuote(deliveryAddressLine, coordinates, deliveryLabel);
+            }}
             style={[styles.paymentOption, paymentMethod === method && styles.paymentOptionSelected]}
           >
             <Text style={[styles.paymentOptionText, paymentMethod === method && styles.paymentOptionTextSelected]}>
@@ -564,7 +631,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           <SecondaryButton label={t("cart.retryStoreStatus")} onPress={() => void store.refresh()} />
         ) : null}
         <ErrorText message={error} />
-        <PrimaryButton disabled={store.status !== "open"} label={t("checkout.placeOrder")} loading={loading} onPress={submit} />
+        <PrimaryButton disabled={store.status !== "open"} label={t(priceChanged ? "checkout.confirmUpdatedPrice" : "checkout.placeOrder")} loading={loading} onPress={submit} />
       </ScrollView>
     </SafeAreaView>
   );

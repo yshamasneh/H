@@ -134,6 +134,57 @@ test("quote reports a closed store separately from a connection failure", async 
   expect(createOrder).not.toHaveBeenCalled();
 });
 
+test("editing the delivery address invalidates and refreshes an existing quote", async () => {
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await driveToQuote();
+  fireEvent.changeText(screen.getByPlaceholderText(i18n.t("cart:checkout.addressPlaceholder")), "456 New Street, Ramallah");
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(2), { timeout: 2000 });
+  expect((getOrderQuote as jest.Mock).mock.calls[1][1].deliveryAddressLine).toBe("456 New Street, Ramallah");
+});
+
+test("choosing another saved location requests a quote with its coordinates", async () => {
+  (listMyAddresses as jest.Mock).mockResolvedValue([
+    { id: "a1", label: "Home", addressLine: "123 Home Street", latitude: 31.9, longitude: 35.2, isDefault: true },
+    { id: "a2", label: "Work", addressLine: "456 Work Street", latitude: 32.0, longitude: 35.3, isDefault: false }
+  ]);
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await screen.findByText("Work");
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.calculateDeliveryPrice"))); });
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(1));
+  fireEvent.press(screen.getByText("Work"));
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(2), { timeout: 2000 });
+  const revisedInput = (getOrderQuote as jest.Mock).mock.calls[1][1];
+  expect(revisedInput.deliveryAddressLine).toBe("456 Work Street");
+  expect(revisedInput.deliveryLatitude).toBe(32.0);
+  expect(revisedInput.deliveryLongitude).toBe(35.3);
+});
+
+test("a changed server price requires a second explicit confirmation using the new quote", async () => {
+  const updated = {
+    subtotalMinor: 750,
+    deliveryDistanceMeters: 5000,
+    deliveryFeeMinor: 1500,
+    discountMinor: 0,
+    totalMinor: 2250,
+    appliedPromotions: []
+  };
+  (createOrder as jest.Mock)
+    .mockRejectedValueOnce(new ApiError(409, "ORDER_PRICE_CHANGED", "Price changed", { currentQuote: updated }))
+    .mockResolvedValueOnce({ id: "order-1" });
+  const onPlaced = jest.fn();
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={onPlaced} substitutionEnabled />);
+  await driveToQuote();
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.placeOrder"))); });
+  expect(onPlaced).not.toHaveBeenCalled();
+  expect(screen.getByText(i18n.t("cart:checkout.priceChanged"))).toBeTruthy();
+  expect(screen.getByText("22.50 ILS")).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.confirmUpdatedPrice"))); });
+  expect((createOrder as jest.Mock).mock.calls[0][1].expectedDeliveryFeeMinor).toBe(1000);
+  expect((createOrder as jest.Mock).mock.calls[1][1].expectedDeliveryFeeMinor).toBe(1500);
+  expect((createOrder as jest.Mock).mock.calls[1][1].expectedTotalMinor).toBe(2250);
+  expect(onPlaced).toHaveBeenCalledTimes(1);
+});
+
 async function driveToQuote() {
   fireEvent.changeText(
     screen.getByPlaceholderText(i18n.t("cart:checkout.addressPlaceholder")),

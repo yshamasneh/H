@@ -27,7 +27,7 @@
     "stepDone": "تم",
     "orderSummaryEstimate": "ملخص الطلب (تقديري)",
     "quantityTimesName": "{{quantity}} × {{name}}",
-    "finalTotalNote": "يقوم الخادم بتأكيد الإجمالي النهائي، شاملاً رسوم التوصيل والخدمة، بعد إرسال الطلب.",
+    "finalTotalNote": "يحسب المتجر رسوم التوصيل والإجمالي النهائي عند طلب التسعير.",
     "deliveryAddressTitle": "عنوان التوصيل",
     "labelField": "الاسم",
     "labelPlaceholder": "المنزل",
@@ -53,6 +53,8 @@
     "quoteRequiredError": "حدد موقع التوصيل واحسب الإجمالي النهائي قبل إرسال الطلب.",
     "storeClosed": "متجر JOVO MARKET مغلق حاليًا. سلتك محفوظة؛ عد لإكمال الطلب عند فتحه.",
     "storeStatusUnavailable": "تعذر التحقق من حالة المتجر. حاول مرة أخرى.",
+    "priceChanged": "تغيّر السعر. راجع الإجمالي الجديد وأكّده قبل إرسال الطلب.",
+    "confirmUpdatedPrice": "تأكيد السعر الجديد",
     "cashOnDelivery": "الدفع نقدًا عند الاستلام",
     "selectedDeliveryLocationFallback": "موقع التوصيل المحدد"
   },

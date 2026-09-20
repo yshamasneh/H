@@ -19,14 +19,15 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 - Group 1: product upload remains SAS → direct Blob PUT → complete → persistent `imageUrl`; save and old-image cleanup are now ordered safely. File upload is primary; an external HTTPS URL is under an advanced control and signed URLs are refused.
 - Group 2: copied the exact untracked `products/missingProducts.jpg` into tracked Mobile and Admin assets without moving or deleting the source. Product images now use it for absent, invalid, and failed URLs; cart emoji fallback removed. Checkout and order summaries show product images. Cards crop to square, and product detail contains the full image.
 - Group 3: the cart and Checkout query the current supermarket status by ID on entry. Closed and network failure have distinct messages; the cart remains visible and stored. Checkout rechecks immediately before order creation, and the API still rejects a closure inside the transaction before stock or order writes. A retry enables checkout after reopening.
+- Group 4: Checkout invalidates stale quotes and automatically requotes after address, saved location, pin, or label changes. The client submits the delivery fee and total the customer saw; the API recalculates both inside the order transaction and returns `ORDER_PRICE_CHANGED` with the current quote before reserving stock if either differs. The customer reviews the updated amount and confirms in a separate action. Driver delivery views already read the saved order `totalMinor`.
 
 ## In progress
 
-- Group 4: align delivery quote, order totals, and driver cash display.
+- Group 5: driver route display and foreground tracking lifecycle.
 
 ## Remaining
 
-- Groups 4–9 and final verification.
+- Groups 5–9 and final verification.
 
 ## Checks, commits, and Actions
 
@@ -36,7 +37,8 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 | 2 | Mobile image UI 7/7, cart/checkout UI 8/8, cart storage 15/15, Admin image tests 6/6; Mobile/Admin typechecks and `git diff --check` passed | `e5c29bcfada1a06a9f61e652f17ccdd727ee5a93` | https://github.com/yshamasneh/H/actions/runs/35490180598 | Build, migration status, and image update passed; verification timed out before Azure reported the new container running. Repair pending. |
 | Deploy repair 1 | Workflow YAML parsed and `git diff --check` passed | `c79b74d249fcab1908bb92a0d5f566bc577e6c7c` | https://github.com/yshamasneh/H/actions/runs/35490717780 | Run passed, but a concurrent manual stop/start left the site briefly stopped; a later explicit start restored stable readiness. |
 | Deploy repair 2 | Workflow YAML parsed and `git diff --check` passed | `8e1f093f226f3223f698f94c2ff58de8d9602d76` | https://github.com/yshamasneh/H/actions/runs/35491336857 | Deployment passed; Azure image matched commit; readiness HTTP 200 and database connected. |
-| 3 | API focused service tests 119/119; Mobile cart/Checkout UI 12/12; API/Mobile typechecks and `git diff --check` passed | Pending | Pending | Pending |
+| 3 | API focused service tests 119/119; Mobile cart/Checkout UI 12/12; API/Mobile typechecks and `git diff --check` passed | `a7c044c4b42e09399d86ba3d68f23a0e3096d98b` | https://github.com/yshamasneh/H/actions/runs/35498874685 | Deployment passed; Trial readiness HTTP 200 and database connected. |
+| 4 | API order/pricing tests 87/87 plus changed-product-price test 1/1; Mobile cart/Checkout UI 15/15; API/Mobile typechecks and `git diff --check` passed | Pending | Pending | Pending |
 
 ## New issues and decisions
 
@@ -51,3 +53,4 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 - Azure's [deployment guidance](https://learn.microsoft.com/en-us/azure/app-service/deploy-best-practices) says changing the image property automatically restarts the app and pulls the new image. An immediate explicit restart can cancel that startup. Removed the redundant restart while retaining 48 bounded image-status polls and one readiness request after the new image is running. Current Trial readiness returned HTTP 200 with `ready` and `database: connected` on `c79b74d` after restoring the site.
 - The new public supermarket status endpoint returns only `isOpenNow` for approved stores. The API's existing `RESTAURANT_CLOSED` error remains the final checkout guard. Existing carts are not modified when a store closes, an item becomes unavailable, or a network request fails.
 - Local API generated Prisma client was stale after `npm ci`; `prisma generate` fixed typecheck without touching Trial. The first direct API test invocation was from the wrong directory and missed its decorator configuration; rerunning from `apps/api` passed.
+- The API still owns distance, delivery fee, promotions, and saved order snapshots; client expected amounts are only a guard against a surprise charge. Existing driver screens use the saved order total for collection. `ORDER_PRICE_CHANGED` is additive and accepts older clients that omit expected amounts, while the updated Checkout always sends them.

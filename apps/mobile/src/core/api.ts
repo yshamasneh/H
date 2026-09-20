@@ -356,6 +356,8 @@ export type CreateOrderInput = {
   customerNote?: string;
   /** Makes placement idempotent: a retry of the same checkout returns the original order. */
   idempotencyKey?: string;
+  expectedDeliveryFeeMinor?: number;
+  expectedTotalMinor?: number;
 };
 
 // Must be a plain `process.env.X` member expression: babel-preset-expo's

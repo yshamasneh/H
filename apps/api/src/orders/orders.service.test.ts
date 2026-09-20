@@ -199,6 +199,54 @@ test("a delivery just inside the max radius is accepted", async () => {
   assert.equal(order.status, "PLACED");
 });
 
+test("a changed delivery fee returns the new quote and creates no order or inventory movement", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id, { stockQuantity: 5 });
+  const nearInput = baseInput(restaurant.id, item.id);
+  const nearQuote = await service.quoteOrder(nearInput as never);
+  const fartherInput = baseInput(restaurant.id, item.id, {
+    deliveryLatitude: 32.0038,
+    expectedDeliveryFeeMinor: nearQuote.deliveryFeeMinor,
+    expectedTotalMinor: nearQuote.totalMinor
+  });
+  const fartherQuote = await service.quoteOrder(fartherInput as never);
+  assert.notEqual(fartherQuote.deliveryFeeMinor, nearQuote.deliveryFeeMinor);
+  await assert.rejects(service.createOrder(randomUUID(), fartherInput as never), (error: unknown) => {
+    if (!(error instanceof ApiException)) return false;
+    const response = error.getResponse() as { code: string; details: { currentQuote: { deliveryFeeMinor: number; totalMinor: number } } };
+    assert.equal(response.code, "ORDER_PRICE_CHANGED");
+    assert.equal(response.details.currentQuote.deliveryFeeMinor, fartherQuote.deliveryFeeMinor);
+    assert.equal(response.details.currentQuote.totalMinor, fartherQuote.totalMinor);
+    return true;
+  });
+  assert.equal(prisma.orders.length, 0);
+  assert.equal(item.stockQuantity, 5);
+  assert.equal(prisma.inventoryMovements.length, 0);
+  const confirmed = await service.createOrder(randomUUID(), {
+    ...fartherInput,
+    expectedDeliveryFeeMinor: fartherQuote.deliveryFeeMinor,
+    expectedTotalMinor: fartherQuote.totalMinor
+  } as never);
+  assert.equal(confirmed.deliveryFeeMinor, fartherQuote.deliveryFeeMinor);
+  assert.equal(confirmed.totalMinor, fartherQuote.totalMinor);
+});
+
+test("a changed product price also requires a new confirmation even when delivery fee stays the same", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id);
+  const input = baseInput(restaurant.id, item.id);
+  const original = await service.quoteOrder(input as never);
+  item.priceMinor += 100;
+  await assert.rejects(service.createOrder(randomUUID(), {
+    ...input,
+    expectedDeliveryFeeMinor: original.deliveryFeeMinor,
+    expectedTotalMinor: original.totalMinor
+  } as never), hasCode("ORDER_PRICE_CHANGED"));
+  assert.equal(prisma.orders.length, 0);
+});
+
 test("order totals match server-computed subtotal, fees, and total", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();

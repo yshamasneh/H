@@ -76,6 +76,23 @@ export class OrdersService {
     try {
       order = await this.prisma.$transaction(async (tx) => {
       const quote = await this.calculateOrderQuote(tx, input);
+      if (
+        (input.expectedDeliveryFeeMinor !== undefined && input.expectedDeliveryFeeMinor !== quote.deliveryFeeMinor) ||
+        (input.expectedTotalMinor !== undefined && input.expectedTotalMinor !== quote.totalMinor)
+      ) {
+        throw new ApiException(409, "ORDER_PRICE_CHANGED", "The order price changed. Review the updated quote before placing your order.", {
+          currentQuote: {
+            subtotalMinor: quote.subtotalMinor,
+            deliveryDistanceMeters: quote.deliveryDistanceMeters,
+            deliveryFeeMinor: quote.deliveryFeeMinor,
+            discountMinor: quote.discountMinor,
+            merchandiseDiscountMinor: quote.merchandiseDiscountMinor,
+            deliveryDiscountMinor: quote.deliveryDiscountMinor,
+            totalMinor: quote.totalMinor,
+            appliedPromotions: quote.appliedPromotions
+          }
+        });
+      }
       const { restaurant, itemsData } = quote;
       const inventoryReservations = await this.reserveTrackedInventory(tx, quote.inventoryReservations);
       // The commercial terms are stamped on the order as it is taken. Everything the accounting

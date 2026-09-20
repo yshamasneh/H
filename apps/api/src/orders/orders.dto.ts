@@ -88,6 +88,18 @@ export class CreateOrderDto {
   @IsOptional()
   @IsUUID()
   idempotencyKey?: string;
+
+  @ApiPropertyOptional({ description: "Delivery fee from the quote the customer approved, in minor units." })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  expectedDeliveryFeeMinor?: number;
+
+  @ApiPropertyOptional({ description: "Total from the quote the customer approved, in minor units." })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  expectedTotalMinor?: number;
 }
 
 export const restaurantOrderStatusActionValues = ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "REJECTED"] as const;
