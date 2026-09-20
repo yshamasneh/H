@@ -396,6 +396,7 @@
     "unitLabel": "Unit",
     "description": "Description",
     "imageUrl": "Image URL",
+    "advancedImageUrl": "Advanced: external HTTPS image URL",
     "image": "Image",
     "imagePreviewAlt": "Product image preview",
     "addImage": "Add image",

@@ -9,7 +9,7 @@ import { ConfirmModal } from "./ConfirmModal";
 import { FallbackImage } from "./FallbackImage";
 import { ImageUploadField } from "./ImageUploadField";
 import { Pager } from "./Pager";
-import { removeUploadedImage, uploadImage } from "../image-upload";
+import { isSafeExternalImageUrl, saveProductWithImage } from "../image-upload";
 
 const currencyCode = "ILS";
 const productsPageSize = 40;
@@ -95,6 +95,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   const [pendingCategoryDelete, setPendingCategoryDelete] = useState<MenuCategoryOwner | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null | undefined>(undefined);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [savingItem, setSavingItem] = useState(false);
 
   const { isSupermarket, canManagePrices, canManageProducts, canManageMenu, canManageOrders } = capabilities;
 
@@ -173,7 +174,10 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
         if (value.trim() && parseWholeNumber(value) === null) return t("catalogue.errorStockInvalid");
       }
     }
-    if (draft.imageUrl.trim() && !/^https?:\/\//i.test(draft.imageUrl.trim())) return t("catalogue.errorImageUrlInvalid");
+    const previousUrl = editingId ? items.find((item) => item.id === editingId)?.imageUrl : null;
+    if (selectedImage === undefined && draft.imageUrl.trim() && draft.imageUrl.trim() !== previousUrl && !isSafeExternalImageUrl(draft.imageUrl)) {
+      return t("catalogue.errorImageUrlInvalid");
+    }
     return null;
   }
 
@@ -184,24 +188,15 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       return;
     }
 
-    let uploadedUrl: string | null = null;
     const previousUrl = editingId ? items.find((item) => item.id === editingId)?.imageUrl ?? null : null;
+    setSavingItem(true);
     try {
-      if (selectedImage instanceof File) {
-        setUploadProgress(0);
-        uploadedUrl = await uploadImage({
-          file: selectedImage,
-          purpose: "PRODUCT",
-          restaurantId,
-          onProgress: setUploadProgress
-        });
-      }
+      if (selectedImage instanceof File) setUploadProgress(0);
 
       const body: Record<string, unknown> = {
         categoryId: draft.categoryId || categories[0]?.id,
         name: draft.name.trim(),
         description: draft.description.trim() || undefined,
-        imageUrl: selectedImage === null ? "" : uploadedUrl ?? (draft.imageUrl.trim() || undefined),
         unitLabel: draft.unitLabel.trim() || "item"
       };
       // Price and cost price are only ever sent by someone allowed to set prices, and the API
@@ -235,31 +230,26 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
         body.isVariableWeight = draft.isVariableWeight;
       }
 
-      const success = await run(async () => {
-        if (editingId) await api.updateItem(editingId, body);
-        else {
-          await api.createItem({
-            ...body,
-            priceMinor: parseMoneyToMinor(draft.price || "0") ?? 0
-          });
-        }
+      await saveProductWithImage({
+        selection: selectedImage,
+        previousUrl,
+        draftUrl: draft.imageUrl,
+        restaurantId,
+        onProgress: setUploadProgress,
+        save: (imageUrl) => editingId
+          ? api.updateItem(editingId, { ...body, imageUrl })
+          : api.createItem({ ...body, imageUrl, priceMinor: parseMoneyToMinor(draft.price || "0") ?? 0 })
       });
-      if (success) {
-        if (previousUrl && previousUrl !== uploadedUrl && selectedImage !== undefined) {
-          await removeUploadedImage({ purpose: "PRODUCT", restaurantId, imageUrl: previousUrl });
-        }
-        setDraft(emptyDraft);
-        setEditingId(null);
-        setSelectedImage(undefined);
-        setNotice(t("catalogue.saved"));
-      } else if (uploadedUrl) {
-        await removeUploadedImage({ purpose: "PRODUCT", restaurantId, imageUrl: uploadedUrl });
-      }
+      setDraft(emptyDraft);
+      setEditingId(null);
+      setSelectedImage(undefined);
+      setNotice(t("catalogue.saved"));
+      await load();
     } catch (requestError) {
-      if (uploadedUrl) await removeUploadedImage({ purpose: "PRODUCT", restaurantId, imageUrl: uploadedUrl });
       setError(requestError instanceof ApiError ? requestError.message : t("catalogue.uploadError"));
     } finally {
       setUploadProgress(null);
+      setSavingItem(false);
     }
   }
 
@@ -521,25 +511,28 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
               value={draft.description}
             />
           </div>
-          <div className="filters-row">
-            <input
-              aria-label={t("catalogue.imageUrl")}
-              className="text-input"
-              dir="ltr"
-              onChange={(event) => setDraft({ ...draft, imageUrl: event.target.value })}
-              placeholder={`${t("catalogue.imageUrl")} — ${t("catalogue.imageUrlPlaceholder")}`}
-              style={{ minWidth: 320 }}
-              value={draft.imageUrl}
-            />
-            <span className="field-hint">{t("catalogue.imageUrlHint")}</span>
-          </div>
           <ImageUploadField
             currentUrl={draft.imageUrl}
-            disabled={uploadProgress !== null}
+            disabled={savingItem}
             onChange={setSelectedImage}
             progress={uploadProgress}
             selection={selectedImage}
           />
+          <details>
+            <summary>{t("catalogue.advancedImageUrl")}</summary>
+            <div className="filters-row">
+              <input
+                aria-label={t("catalogue.imageUrl")}
+                className="text-input"
+                dir="ltr"
+                onChange={(event) => { setSelectedImage(undefined); setDraft({ ...draft, imageUrl: event.target.value }); }}
+                placeholder={`${t("catalogue.imageUrl")} — ${t("catalogue.imageUrlPlaceholder")}`}
+                style={{ minWidth: 320 }}
+                value={draft.imageUrl}
+              />
+              <span className="field-hint">{t("catalogue.imageUrlHint")}</span>
+            </div>
+          </details>
           {isSupermarket ? (
             <>
               <div className="filters-row">
@@ -596,7 +589,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
             </>
           ) : null}
           <div className="filters-row">
-            <button className="btn btn-primary btn-sm" disabled={uploadProgress !== null} onClick={() => void submitItem()} type="button">
+            <button className="btn btn-primary btn-sm" disabled={savingItem} onClick={() => void submitItem()} type="button">
               {editingId ? t("common.save") : t("catalogue.addProduct")}
             </button>
             {editingId ? (

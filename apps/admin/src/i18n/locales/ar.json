@@ -396,6 +396,7 @@
     "unitLabel": "وحدة القياس",
     "description": "الوصف",
     "imageUrl": "رابط الصورة",
+    "advancedImageUrl": "متقدم: رابط صورة HTTPS خارجي",
     "image": "الصورة",
     "imagePreviewAlt": "معاينة صورة المنتج",
     "addImage": "إضافة صورة",
