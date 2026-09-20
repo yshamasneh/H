@@ -21,7 +21,7 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 
 ## In progress
 
-- Group 2: deployment verification repair; wait for a successful rerun before Group 3.
+- Group 2: deployment reliability repair; validate automatic image activation without a second restart before Group 3.
 
 ## Remaining
 
@@ -33,6 +33,8 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 | --- | --- | --- | --- | --- |
 | 1 | Image upload tests 6/6; Admin typecheck passed; `git diff --check` passed | `e97369d6b72b5926b22a7b8fa8063fd3ccd7e776` | https://github.com/yshamasneh/H/actions/runs/35489471407 | Deployment and readiness passed |
 | 2 | Mobile image UI 7/7, cart/checkout UI 8/8, cart storage 15/15, Admin image tests 6/6; Mobile/Admin typechecks and `git diff --check` passed | `e5c29bcfada1a06a9f61e652f17ccdd727ee5a93` | https://github.com/yshamasneh/H/actions/runs/35490180598 | Build, migration status, and image update passed; verification timed out before Azure reported the new container running. Repair pending. |
+| Deploy repair 1 | Workflow YAML parsed and `git diff --check` passed | `c79b74d249fcab1908bb92a0d5f566bc577e6c7c` | https://github.com/yshamasneh/H/actions/runs/35490717780 | Run passed, but a concurrent manual stop/start left the site briefly stopped; a later explicit start restored stable readiness. |
+| Deploy repair 2 | Pending | Pending | Pending | Pending |
 
 ## New issues and decisions
 
@@ -44,3 +46,4 @@ Branch: `agent/phase-15-and-jovo-brand`. Scope: Trial/Development only. Preserve
 - Mobile UI tests cover square, wide, and tall image load events with `cover`/`contain` props; actual device visual inspection remains unverified.
 - Local `node_modules` lacked Jest; `npm ci` restored it from the lockfile. The focused UI suite passes, though existing Icon tests print React `act(...)` warnings. The install reported 27 dependency advisories; dependency upgrades are outside this image task.
 - Trial deployment verification used 18 image-status polls and timed out while App Service still reported the new image as `NeverStarted`. Increased the bounded wait to 48 polls and allowed image-setting propagation before restart; no data or Production resources changed.
+- Azure's [deployment guidance](https://learn.microsoft.com/en-us/azure/app-service/deploy-best-practices) says changing the image property automatically restarts the app and pulls the new image. An immediate explicit restart can cancel that startup. Removed the redundant restart while retaining 48 bounded image-status polls and one readiness request after the new image is running. Current Trial readiness returned HTTP 200 with `ready` and `database: connected` on `c79b74d` after restoring the site.

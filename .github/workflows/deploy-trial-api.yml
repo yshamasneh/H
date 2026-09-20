@@ -82,8 +82,6 @@ jobs:
         run: |
           set -euo pipefail
           az webapp sitecontainers update --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --container-name main --image "$IMAGE" --output none
-          sleep 15
-          az webapp restart --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --output none
 
       - name: Verify running image and API health
         shell: bash
