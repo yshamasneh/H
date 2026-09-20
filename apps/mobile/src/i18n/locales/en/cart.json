@@ -14,7 +14,11 @@
     "increaseQuantityAccessibility": "Increase quantity of {{name}}",
     "estimatedSubtotal": "Estimated subtotal",
     "feesNote": "Delivery and service fees are calculated at checkout. This subtotal is an estimate only.",
-    "proceedToCheckout": "Proceed to Checkout"
+    "proceedToCheckout": "Proceed to Checkout",
+    "storeClosed": "JOVO MARKET is closed right now. Your cart is saved; you can check out when it reopens.",
+    "storeStatusUnavailable": "We could not check the store status. Your cart is safe. Try again.",
+    "checkingStore": "Checking if the store is open...",
+    "retryStoreStatus": "Check store again"
   },
   "checkout": {
     "title": "Checkout",
@@ -47,6 +51,8 @@
     "addressRequiredError": "Please enter your full delivery address.",
     "labelRequiredError": "Please enter a label for this address, like Home or Work.",
     "quoteRequiredError": "Select the delivery pin and calculate the final total before placing the order.",
+    "storeClosed": "JOVO MARKET is closed right now. Your cart is saved; please return when it reopens.",
+    "storeStatusUnavailable": "We could not check the store status. Please try again.",
     "cashOnDelivery": "Cash on Delivery",
     "selectedDeliveryLocationFallback": "Selected delivery location"
   },

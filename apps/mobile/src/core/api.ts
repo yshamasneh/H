@@ -527,6 +527,10 @@ export function listSupermarkets(page = 1, pageSize = 20, includeClosed = false)
   return request(`/api/v1/supermarkets?page=${page}&pageSize=${pageSize}${includeClosed ? "&includeClosed=true" : ""}`);
 }
 
+export function getSupermarketStatus(supermarketId: string): Promise<{ isOpenNow: boolean }> {
+  return request(`/api/v1/supermarkets/${supermarketId}/status`);
+}
+
 export function getSupermarketCatalog(
   supermarketId: string,
   params: { page?: number; pageSize?: number; search?: string; categoryId?: string; featured?: boolean } = {}

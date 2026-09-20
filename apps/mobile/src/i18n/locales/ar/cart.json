@@ -14,7 +14,11 @@
     "increaseQuantityAccessibility": "زيادة كمية {{name}}",
     "estimatedSubtotal": "المجموع الفرعي التقديري",
     "feesNote": "تُحسب رسوم التوصيل والخدمة عند إتمام الطلب. هذا المجموع الفرعي تقديري فقط.",
-    "proceedToCheckout": "المتابعة لإتمام الطلب"
+    "proceedToCheckout": "المتابعة لإتمام الطلب",
+    "storeClosed": "متجر JOVO MARKET مغلق حاليًا. سلتك محفوظة ويمكنك إكمال الطلب عند فتحه.",
+    "storeStatusUnavailable": "تعذر التحقق من حالة المتجر. سلتك محفوظة؛ حاول مرة أخرى.",
+    "checkingStore": "جارٍ التحقق من حالة المتجر...",
+    "retryStoreStatus": "تحقق من المتجر مجددًا"
   },
   "checkout": {
     "title": "إتمام الطلب",
@@ -47,6 +51,8 @@
     "addressRequiredError": "يرجى إدخال عنوان التوصيل الكامل.",
     "labelRequiredError": "يرجى إدخال اسم لهذا العنوان، مثل المنزل أو العمل.",
     "quoteRequiredError": "حدد موقع التوصيل واحسب الإجمالي النهائي قبل إرسال الطلب.",
+    "storeClosed": "متجر JOVO MARKET مغلق حاليًا. سلتك محفوظة؛ عد لإكمال الطلب عند فتحه.",
+    "storeStatusUnavailable": "تعذر التحقق من حالة المتجر. حاول مرة أخرى.",
     "cashOnDelivery": "الدفع نقدًا عند الاستلام",
     "selectedDeliveryLocationFallback": "موقع التوصيل المحدد"
   },

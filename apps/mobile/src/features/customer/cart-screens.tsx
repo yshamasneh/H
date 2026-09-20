@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -19,6 +19,7 @@ import {
   createOrder,
   decideOrderFulfillment,
   getOrderQuote,
+  getSupermarketStatus,
   getMyOrder,
   listLandmarks,
   listMyAddresses,
@@ -32,6 +33,7 @@ import {
   type OrderPaymentMethod,
   type SavedAddress
 } from "../../core/api";
+import { ApiError } from "../../core/api-error";
 import {
   cartItemCount,
   cartSubtotalMinor,
@@ -60,6 +62,28 @@ const currencyCode = "ILS";
 // the customer's saved/detected location is available.
 const defaultMapCoordinate: MapCoordinate = { latitude: 31.83804, longitude: 35.14047 };
 
+type StoreAvailability = "checking" | "open" | "closed" | "error";
+
+function useStoreAvailability(restaurantId: string | undefined) {
+  const [status, setStatus] = useState<StoreAvailability>("checking");
+  const refresh = useCallback(async () => {
+    if (!restaurantId) return;
+    setStatus("checking");
+    try {
+      const store = await getSupermarketStatus(restaurantId);
+      setStatus(store.isOpenNow ? "open" : "closed");
+    } catch {
+      setStatus("error");
+    }
+  }, [restaurantId]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  return { status, setStatus, refresh };
+}
+
+function isStoreClosedError(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "RESTAURANT_CLOSED";
+}
+
 type CartScreenProps = {
   cart: Cart | null;
   onBack: () => void;
@@ -79,6 +103,7 @@ export function CartScreen(props: CartScreenProps) {
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const isEmpty = !props.cart || props.cart.items.length === 0;
+  const store = useStoreAvailability(props.cart?.restaurantId);
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
       <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
@@ -160,12 +185,18 @@ export function CartScreen(props: CartScreenProps) {
             )}
           />
           <View style={styles.footer}>
+            {store.status === "closed" ? <Text style={styles.inlineErrorText}>{t("cart.storeClosed")}</Text> : null}
+            {store.status === "error" ? <Text style={styles.inlineErrorText}>{t("cart.storeStatusUnavailable")}</Text> : null}
+            {store.status === "checking" ? <Text style={styles.footerNote}>{t("cart.checkingStore")}</Text> : null}
+            {store.status === "closed" || store.status === "error" ? (
+              <SecondaryButton label={t("cart.retryStoreStatus")} onPress={() => void store.refresh()} />
+            ) : null}
             <View style={styles.footerRow}>
               <Text style={styles.footerLabel}>{t("cart.estimatedSubtotal")}</Text>
               <Text style={styles.footerValue}>{formatPrice(cartSubtotalMinor(props.cart!))}</Text>
             </View>
             <Text style={styles.footerNote}>{t("cart.feesNote")}</Text>
-            <PrimaryButton label={t("cart.proceedToCheckout")} onPress={props.onCheckout} />
+            <PrimaryButton disabled={store.status !== "open"} label={t("cart.proceedToCheckout")} onPress={props.onCheckout} />
           </View>
         </>
       )}
@@ -186,6 +217,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   const { colors } = useTheme();
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
+  const store = useStoreAvailability(props.cart?.restaurantId);
 
   // The one place order lines are built for both the quote and the final order. When the admin has
   // disabled the substitution option, the customer can't choose, so every line allows substitution
@@ -285,6 +317,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       }));
     } catch (requestError) {
       setQuote(null);
+      if (isStoreClosedError(requestError)) store.setStatus("closed");
       setError(readError(requestError));
     } finally {
       setLocating(false);
@@ -327,6 +360,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       }));
     } catch (requestError) {
       setQuote(null);
+      if (isStoreClosedError(requestError)) store.setStatus("closed");
       setError(readError(requestError));
     } finally {
       setLocating(false);
@@ -336,6 +370,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   async function submit() {
     if (submittingRef.current) return;
     setError(null);
+    if (store.status !== "open") {
+      setError(t(store.status === "closed" ? "checkout.storeClosed" : "checkout.storeStatusUnavailable"));
+      return;
+    }
     if (!props.cart || props.cart.items.length === 0) {
       setError(t("checkout.emptyCartError"));
       return;
@@ -360,6 +398,20 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         setError(t("common:sessionExpired"));
         return;
       }
+      let currentStore: { isOpenNow: boolean };
+      try {
+        currentStore = await getSupermarketStatus(props.cart.restaurantId);
+      } catch {
+        store.setStatus("error");
+        setError(t("checkout.storeStatusUnavailable"));
+        return;
+      }
+      if (!currentStore.isOpenNow) {
+        store.setStatus("closed");
+        setQuote(null);
+        setError(t("checkout.storeClosed"));
+        return;
+      }
       const input: CreateOrderInput = {
         restaurantId: props.cart.restaurantId,
         items: buildOrderItems(),
@@ -374,6 +426,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       const order = await createOrder(accessToken, input);
       props.onPlaced(order);
     } catch (requestError) {
+      if (isStoreClosedError(requestError)) {
+        store.setStatus("closed");
+        setQuote(null);
+      }
       setError(readError(requestError));
     } finally {
       setLoading(false);
@@ -502,8 +558,13 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           value={customerNote}
         />
 
+        {store.status === "closed" ? <ErrorText message={t("checkout.storeClosed")} /> : null}
+        {store.status === "error" ? <ErrorText message={t("checkout.storeStatusUnavailable")} /> : null}
+        {store.status === "closed" || store.status === "error" ? (
+          <SecondaryButton label={t("cart.retryStoreStatus")} onPress={() => void store.refresh()} />
+        ) : null}
         <ErrorText message={error} />
-        <PrimaryButton label={t("checkout.placeOrder")} loading={loading} onPress={submit} />
+        <PrimaryButton disabled={store.status !== "open"} label={t("checkout.placeOrder")} loading={loading} onPress={submit} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -1021,18 +1082,19 @@ function ErrorText({ message }: { message: string | null }) {
   return <Text style={styles.inlineErrorText}>{message}</Text>;
 }
 
-function PrimaryButton(props: { label: string; loading?: boolean; destructive?: boolean; onPress: () => void }) {
+function PrimaryButton(props: { label: string; loading?: boolean; disabled?: boolean; destructive?: boolean; onPress: () => void }) {
   const { colors } = useTheme();
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return (
     <Pressable
-      disabled={props.loading}
+      accessibilityRole="button"
+      disabled={props.loading || props.disabled}
       onPress={props.onPress}
       style={({ pressed }) => [
         styles.primaryButton,
         props.destructive && styles.destructiveButton,
-        (pressed || props.loading) && styles.buttonPressed
+        (pressed || props.loading || props.disabled) && styles.buttonPressed
       ]}
     >
       {props.loading ? <ActivityIndicator color={colors.textInverse} /> : <Text style={styles.primaryButtonText}>{props.label}</Text>}

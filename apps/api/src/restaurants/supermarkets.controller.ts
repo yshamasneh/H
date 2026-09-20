@@ -14,6 +14,12 @@ export class SupermarketsController {
     return this.restaurants.listPublicSupermarkets(query.page ?? 1, query.pageSize ?? 20, query.includeClosed ?? false);
   }
 
+  @Get(":supermarketId/status")
+  @ApiOperation({ summary: "Get current ordering availability for an approved supermarket" })
+  status(@Param("supermarketId", new ParseUUIDPipe()) supermarketId: string) {
+    return this.restaurants.getSupermarketStatus(supermarketId);
+  }
+
   @Get(":supermarketId/catalog")
   @ApiOperation({ summary: "Browse and search a supermarket catalog by department" })
   catalog(

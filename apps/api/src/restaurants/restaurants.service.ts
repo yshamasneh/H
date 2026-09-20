@@ -398,6 +398,11 @@ export class RestaurantsService {
     return { items: supermarkets.map(toPublicView), page, pageSize, total };
   }
 
+  async getSupermarketStatus(supermarketId: string): Promise<{ isOpenNow: boolean }> {
+    const supermarket = await this.requireApprovedRestaurant(supermarketId, BusinessType.SUPERMARKET);
+    return { isOpenNow: supermarket.isOpen && isWithinWeeklyHours(supermarket.opensAt, supermarket.closesAt, new Date()) };
+  }
+
   async getSupermarketCatalog(
     supermarketId: string,
     query: SupermarketCatalogQueryDto

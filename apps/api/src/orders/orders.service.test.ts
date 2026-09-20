@@ -75,6 +75,21 @@ test("order creation is rejected when the restaurant is closed", async () => {
   assert.equal(prisma.orders.length, 0);
 });
 
+test("a saved cart can be quoted after reopening; closing after quote blocks checkout without stock or order changes", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant({ isOpen: false });
+  const item = prisma.seedMenuItem(restaurant.id, { stockQuantity: 5 });
+  const input = baseInput(restaurant.id, item.id);
+  await assert.rejects(service.quoteOrder(input as never), hasCode("RESTAURANT_CLOSED"));
+  restaurant.isOpen = true;
+  await service.quoteOrder(input as never);
+  restaurant.isOpen = false;
+  await assert.rejects(service.createOrder(randomUUID(), input as never), hasCode("RESTAURANT_CLOSED"));
+  assert.equal(prisma.orders.length, 0);
+  assert.equal(item.stockQuantity, 5);
+  assert.equal(prisma.inventoryMovements.length, 0);
+});
+
 test("order creation is rejected outside working hours even when the store switch is on", async () => {
   const { prisma, service } = createService();
   const now = new Date();

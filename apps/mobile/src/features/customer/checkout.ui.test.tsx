@@ -3,8 +3,9 @@ import { Image } from "react-native";
 import i18n from "../../i18n";
 import { CheckoutScreen } from "./cart-screens";
 import type { Cart } from "./cart";
-import { createOrder, getOrderQuote, listMyAddresses } from "../../core/api";
+import { createOrder, getOrderQuote, getSupermarketStatus, listMyAddresses } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import { ApiError } from "../../core/api-error";
 
 // Mock the whole network + native surface CheckoutScreen touches. We only exercise the
 // UI double-submit guard, so the API/session/location layers are stubbed.
@@ -12,6 +13,7 @@ jest.mock("../../core/api", () => ({
   orderPaymentMethods: ["CASH"],
   createOrder: jest.fn(),
   getOrderQuote: jest.fn(),
+  getSupermarketStatus: jest.fn(),
   listMyAddresses: jest.fn(),
   cancelMyOrder: jest.fn(),
   decideOrderFulfillment: jest.fn(),
@@ -42,7 +44,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (getSupermarketStatus as jest.Mock).mockReset();
   (listMyAddresses as jest.Mock).mockResolvedValue([]);
+  (getSupermarketStatus as jest.Mock).mockResolvedValue({ isOpenNow: true });
   (getAccessToken as jest.Mock).mockResolvedValue("access-token");
   (getOrderQuote as jest.Mock).mockResolvedValue({
     subtotalMinor: 750,
@@ -107,6 +111,29 @@ test("Place order is refused until a delivery quote has been calculated", async 
   expect(createOrder).not.toHaveBeenCalled();
 });
 
+test("store closing after quote prevents order creation and retains the basket", async () => {
+  (getSupermarketStatus as jest.Mock)
+    .mockResolvedValueOnce({ isOpenNow: true })
+    .mockResolvedValueOnce({ isOpenNow: false });
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await driveToQuote();
+  await act(async () => {
+    fireEvent.press(screen.getByText(i18n.t("cart:checkout.placeOrder")));
+  });
+  expect(createOrder).not.toHaveBeenCalled();
+  expect(screen.getByText("1 x Milk")).toBeTruthy();
+  expect(screen.getAllByText(i18n.t("cart:checkout.storeClosed")).length).toBeGreaterThan(0);
+});
+
+test("quote reports a closed store separately from a connection failure", async () => {
+  (getOrderQuote as jest.Mock).mockRejectedValueOnce(new ApiError(409, "RESTAURANT_CLOSED", "Store closed"));
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await driveToQuote();
+  await screen.findByText(i18n.t("cart:checkout.storeClosed"));
+  expect(screen.getByText("1 x Milk")).toBeTruthy();
+  expect(createOrder).not.toHaveBeenCalled();
+});
+
 async function driveToQuote() {
   fireEvent.changeText(
     screen.getByPlaceholderText(i18n.t("cart:checkout.addressPlaceholder")),
@@ -124,15 +151,13 @@ test("the idempotency key is reused across retries within one checkout attempt (
   (createOrder as jest.Mock).mockRejectedValueOnce(new Error("network")).mockResolvedValue({ id: "order-1" });
   render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled={true} />);
   await driveToQuote();
-  const placeOrder = await screen.findByText(i18n.t("cart:checkout.placeOrder"));
-
   // First attempt fails; retry of the same basket succeeds.
   await act(async () => {
-    fireEvent.press(placeOrder);
+    fireEvent.press(screen.getByText(i18n.t("cart:checkout.placeOrder")));
   });
   await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(1));
   await act(async () => {
-    fireEvent.press(placeOrder);
+    fireEvent.press(screen.getByText(i18n.t("cart:checkout.placeOrder")));
   });
   await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(2));
 

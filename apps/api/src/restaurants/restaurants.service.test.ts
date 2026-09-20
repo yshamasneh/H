@@ -250,6 +250,16 @@ test("an approved-but-closed restaurant's menu is still viewable by id, just not
   assert.equal(page.total, 0);
 });
 
+test("supermarket status reflects closing and reopening without hiding its public identity", async () => {
+  const { prisma, service } = createService();
+  const market = prisma.seedApprovedOpenRestaurant({ businessType: BusinessType.SUPERMARKET, isOpen: false });
+  assert.deepEqual(await service.getSupermarketStatus(market.id), { isOpenNow: false });
+  market.isOpen = true;
+  assert.deepEqual(await service.getSupermarketStatus(market.id), { isOpenNow: true });
+  market.status = RestaurantStatus.SUSPENDED;
+  await assert.rejects(service.getSupermarketStatus(market.id), hasCode("RESTAURANT_NOT_FOUND"));
+});
+
 test("admin can approve a pending restaurant exactly once", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedApprovedOpenRestaurant({ status: RestaurantStatus.PENDING, isOpen: false });
