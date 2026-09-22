@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import { ApiError } from "../api";
+import { ApiError, readApiError } from "../api";
 import { useAuth } from "../auth";
 import {
   decideOperatingCost,
@@ -56,7 +56,7 @@ export function AccountingPage() {
 
   const reload = () => setReloadToken((token) => token + 1);
   const report = (requestError: unknown, fallback: string) =>
-    setError(requestError instanceof ApiError ? requestError.message : fallback);
+    setError(readApiError(requestError, fallback));
   const changed = (message?: string) => {
     if (message) setNotice(message);
     reload();
@@ -375,7 +375,7 @@ function PayoutForm({
       });
       onDone();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
     }
@@ -520,7 +520,7 @@ function DriverCashSection({
       setOpenDriver(null);
       onChanged(t("accounting.cash.recorded", { name }));
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
     }

@@ -6,6 +6,7 @@ import {
   fetchCurrentUser,
   getAccessToken,
   login as apiLogin,
+  readApiError,
   logout as apiLogout,
   storeSession,
   type AccessContext,
@@ -86,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // permissions change later needs no client change.
       await loadCurrent();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("login.errorGeneric"));
+      setError(readApiError(requestError, t("login.errorGeneric")));
     }
   }
 

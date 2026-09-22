@@ -5,6 +5,7 @@ import {
   createLandmark,
   deleteLandmark,
   listLandmarks,
+  readApiError,
   updateLandmark,
   type Landmark
 } from "../api";
@@ -69,7 +70,7 @@ export function LandmarksPage() {
       await load();
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
     }
@@ -83,7 +84,7 @@ export function LandmarksPage() {
       await load();
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
     }

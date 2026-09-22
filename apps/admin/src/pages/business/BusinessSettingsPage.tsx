@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError } from "../../api";
+import { ApiError, readApiError } from "../../api";
 import { getBusinessProfile, updateBusinessProfile, type BusinessProfile } from "../../api.business";
 import { useAuth } from "../../auth";
 import { Field } from "../../components/Field";
@@ -74,7 +74,7 @@ export function BusinessSettingsPage() {
       setDraft(profileToDraft(saved));
       setNotice(t("common.saved"));
     } catch (requestError) {
-      setError({ message: requestError instanceof ApiError ? requestError.message : t("common.genericActionError") });
+      setError({ message: readApiError(requestError, t("common.genericActionError")) });
     } finally {
       setBusy(false);
     }

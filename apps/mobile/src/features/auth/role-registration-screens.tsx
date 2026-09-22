@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
-  ApiError,
   registerDriver,
   registerRestaurant,
   type BusinessType,
@@ -29,6 +28,7 @@ import {
 } from "../../core/phone";
 import type { PhonePrefill } from "../../navigation/navigation";
 import i18n from "../../i18n";
+import { readError } from "../../core/errors";
 import { colors, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { strongPasswordPattern } from "./auth.rules";
@@ -328,9 +328,10 @@ function validateCommon(
 }
 
 function readRegistrationError(error: unknown): string {
-  if (error instanceof ApiError || error instanceof PhoneValidationError) return error.message;
-  if (error instanceof Error) return error.message;
-  return i18n.t("auth:shared.requestFailed");
+  // A phone-format error is already a localized, user-facing message. Everything else — including a
+  // VALIDATION_ERROR whose real reason is in `details` — goes through the shared reader.
+  if (error instanceof PhoneValidationError) return error.message;
+  return readError(error);
 }
 
 const styles = StyleSheet.create({

@@ -186,6 +186,36 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The most specific, useful message an error carries.
+ *
+ * A `VALIDATION_ERROR` puts a generic sentence in `message` ("Please check the submitted
+ * information.") and the real, field-level reasons in `details` as `[{ field, messages }]`.
+ * Showing only `message` hides the actual problem (e.g. the price is above the maximum), so the
+ * field messages are preferred, then the API's own message, then the caller's localized fallback.
+ */
+export function readApiError(error: unknown, fallback: string): string {
+  if (error instanceof ApiError) {
+    const detail = validationDetail(error.details);
+    if (detail) return detail;
+    if (error.message) return error.message;
+  }
+  return fallback;
+}
+
+function validationDetail(details: unknown): string | null {
+  if (!Array.isArray(details)) return null;
+  const messages: string[] = [];
+  for (const entry of details) {
+    if (entry && typeof entry === "object" && Array.isArray((entry as { messages?: unknown }).messages)) {
+      for (const message of (entry as { messages: unknown[] }).messages) {
+        if (typeof message === "string" && message.trim()) messages.push(message.trim());
+      }
+    }
+  }
+  return messages.length > 0 ? messages.join(" ") : null;
+}
+
 export const accessTokenStorageKey = "wasel_admin_access_token";
 export const refreshTokenStorageKey = "wasel_admin_refresh_token";
 

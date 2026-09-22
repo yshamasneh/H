@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { ApiError, approveDriver, listAdminDrivers, reactivateDriver, rejectDriver, suspendDriver, type AdminDriverView } from "../api";
+import { ApiError, approveDriver, listAdminDrivers, reactivateDriver, readApiError, rejectDriver, suspendDriver, type AdminDriverView } from "../api";
 import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { applyOnlineChange, applyPresenceUpdate, connectionState, countConnections } from "../driver-tracking";
@@ -54,7 +54,7 @@ export function DriversPage() {
     try {
       setDrivers(await listAdminDrivers());
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("drivers.loadError"));
+      setError(readApiError(requestError, t("drivers.loadError")));
     }
   }
 
@@ -68,7 +68,7 @@ export function DriversPage() {
       await action();
       await load();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusyId(null);
     }

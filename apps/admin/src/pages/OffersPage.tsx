@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, fetchAllPages, listAdminRestaurants, type RestaurantProfile } from "../api";
+import { ApiError, fetchAllPages, listAdminRestaurants, readApiError, type RestaurantProfile } from "../api";
 import { listStoreItems, type MenuItemOwner } from "../api.business";
 import { createOffer, listOffers, updateOffer } from "../api.offers";
 import { Field } from "../components/Field";
@@ -54,7 +54,7 @@ export function OffersPage() {
   const [storeFilter, setStoreFilter] = useState("");
 
   const report = (requestError: unknown, fallback: string) =>
-    setError(requestError instanceof ApiError ? requestError.message : fallback);
+    setError(readApiError(requestError, fallback));
 
   const load = async () => {
     try {
@@ -266,7 +266,7 @@ function OfferForm({
     let cancelled = false;
     void listStoreItems(draft.restaurantId)
       .then((items) => !cancelled && setProducts(items))
-      .catch((requestError) => !cancelled && setApiError(requestError instanceof ApiError ? requestError.message : t("offers.loadError")));
+      .catch((requestError) => !cancelled && setApiError(readApiError(requestError, t("offers.loadError"))));
     return () => {
       cancelled = true;
     };
@@ -286,7 +286,7 @@ function OfferForm({
       else await createOffer(result.body);
       await onSaved(t(offer ? "offers.updated" : "offers.created"));
     } catch (requestError) {
-      setApiError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setApiError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
     }

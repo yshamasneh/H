@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError } from "../../api";
+import { ApiError, readApiError } from "../../api";
 import {
   addBusinessStaff,
   listBusinessStaff,
@@ -48,7 +48,7 @@ export function StaffPage() {
       await load();
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     }
   }
 

@@ -6,6 +6,7 @@ import {
   assignPlatformRole,
   createAdminUser,
   listAdminUsers,
+  readApiError,
   setUserActive,
   type AdminUserView
 } from "../api";
@@ -70,7 +71,7 @@ export function UsersPage() {
       await load();
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     }
   }
 

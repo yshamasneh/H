@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, getPlatformSettings, updatePlatformSettings, type PlatformSettings } from "../api";
+import { ApiError, getPlatformSettings, readApiError, updatePlatformSettings, type PlatformSettings } from "../api";
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -34,7 +34,7 @@ export function SettingsPage() {
       setNotice(t("settings.savedNotice"));
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
     }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ApiError } from "../../api";
+import { ApiError, readApiError } from "../../api";
 import { getLiveOrders, setBusinessOpenStatus, type BusinessOrder, type LiveOrderQueue } from "../../api.business";
 import { useNewOrderAlert } from "../../alert-sound";
 import { useAuth } from "../../auth";
@@ -52,7 +52,7 @@ export function LiveOrdersPage() {
       await setBusinessOpenStatus(!queue.business.isOpen);
       await Promise.all([load(), refreshAccess()]);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     }
   }
 

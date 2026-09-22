@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError } from "../api";
+import { ApiError, readApiError } from "../api";
 import { type MenuCategoryOwner, type MenuItemOwner } from "../api.business";
 import { categoryCounts, emptyFilter, filterProducts, hiddenCount, onSaleCount, paginate, type ProductFilter, type Visibility } from "../catalogue-view";
 import { parseMoneyToMinor, parseWholeNumber, toMoneyInput } from "../money";
@@ -106,7 +106,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       setItems(nextItems);
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("catalogue.loadError"));
+      setError(readApiError(requestError, t("catalogue.loadError")));
     }
   }
 
@@ -123,7 +123,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       setError(null);
       return true;
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
       return false;
     }
   }
@@ -246,7 +246,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       setNotice(t("catalogue.saved"));
       await load();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("catalogue.uploadError"));
+      setError(readApiError(requestError, t("catalogue.uploadError")));
     } finally {
       setUploadProgress(null);
       setSavingItem(false);

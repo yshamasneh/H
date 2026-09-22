@@ -8,6 +8,7 @@ import {
   createBusiness,
   listAdminRestaurants,
   reactivateRestaurant,
+  readApiError,
   rejectRestaurant,
   suspendRestaurant,
   type RestaurantProfile
@@ -40,7 +41,7 @@ export function RestaurantsPage() {
       setRestaurants(result.items);
       setTotal(result.total);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("restaurants.loadError"));
+      setError(readApiError(requestError, t("restaurants.loadError")));
     }
   }
 
@@ -61,7 +62,7 @@ export function RestaurantsPage() {
       await action();
       await load();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusyId(null);
     }
@@ -308,7 +309,7 @@ function CreateBusinessCard({ onCreated }: { onCreated: () => void }) {
               setDraft({ ...draft, businessName: "", ownerFullName: "", phoneNumber: "", password: "", addressLine: "" });
               onCreated();
             } catch (requestError) {
-              setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+              setError(readApiError(requestError, t("common.genericActionError")));
             }
           }}
           type="button"

@@ -5,6 +5,7 @@ import {
   ApiError,
   getAdminRestaurant,
   getAdminRestaurantOrders,
+  readApiError,
   updateStoreLocation,
   type AdminRestaurantView
 } from "../api";
@@ -47,7 +48,7 @@ export function RestaurantDetailPage() {
         setRestaurant(restaurantData);
         setOrders(ordersData.items);
       } catch (requestError) {
-        setError(requestError instanceof ApiError ? requestError.message : t("restaurantDetail.loadError"));
+        setError(readApiError(requestError, t("restaurantDetail.loadError")));
       }
     }
     void load();
@@ -197,7 +198,7 @@ function StoreLocationCard(props: {
       props.onUpdated(updated as AdminRestaurantView);
       setNotice(t("restaurantDetail.locationSaved"));
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
     }

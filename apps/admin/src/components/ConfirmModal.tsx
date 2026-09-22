@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { readApiError } from "../api";
 
 type ConfirmModalProps = {
   title: string;
@@ -23,7 +24,7 @@ export function ConfirmModal(props: ConfirmModalProps) {
     try {
       await props.onConfirm();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setSubmitting(false);
     }

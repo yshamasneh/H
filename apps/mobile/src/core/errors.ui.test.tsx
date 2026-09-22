@@ -24,6 +24,16 @@ test("an uncatalogued code falls back to the server-provided message (TC-173)", 
   expect(message).toBe("the server said so");
 });
 
+test("a validation error surfaces its field-level reasons, not the generic translated code", () => {
+  const message = readError(
+    new ApiError(400, "VALIDATION_ERROR", "Please check the submitted information.", [
+      { field: "priceMinor", messages: ["priceMinor must not be greater than 100000000"] }
+    ])
+  );
+  expect(message).toBe("priceMinor must not be greater than 100000000");
+  expect(message).not.toBe(i18n.t("errors:VALIDATION_ERROR"));
+});
+
 test("a plain Error returns its message; a non-error returns a localized generic (TC-173)", () => {
   expect(readError(new Error("boom"))).toBe("boom");
   const generic = readError({ not: "an error" });

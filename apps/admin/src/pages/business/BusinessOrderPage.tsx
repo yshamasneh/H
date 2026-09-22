@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ApiError } from "../../api";
+import { ApiError, readApiError } from "../../api";
 import {
   getBusinessOrder,
   listBusinessItems,
@@ -134,7 +134,7 @@ export function BusinessOrderPage() {
                         setError(null);
                       } catch (requestError) {
                         setError(
-                          requestError instanceof ApiError ? requestError.message : t("common.genericActionError")
+                          readApiError(requestError, t("common.genericActionError"))
                         );
                       }
                     }}

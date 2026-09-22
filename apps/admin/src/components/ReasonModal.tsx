@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { readApiError } from "../api";
 
 type ReasonModalProps = {
   title: string;
@@ -25,7 +26,7 @@ export function ReasonModal(props: ReasonModalProps) {
     try {
       await props.onConfirm(reason.trim());
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setSubmitting(false);
     }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, request } from "../../api";
+import { ApiError, readApiError, request } from "../../api";
 import { type OperatingCostEntry } from "../../api.accounting";
 import { Money } from "../../components/Money";
 import { parsePositiveMoneyToMinor } from "../../money";
@@ -82,7 +82,7 @@ export function OperatingCostsPage() {
       setDraft({ ...draft, description: "", amount: "" });
       await load();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("common.genericActionError"));
+      setError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
     }

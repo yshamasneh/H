@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, updateAdminRestaurant, type RestaurantProfile } from "../api";
+import { readApiError, updateAdminRestaurant, type RestaurantProfile } from "../api";
 import { buildProfileUpdate, profileToDraft, type ProfileDraft } from "../business-profile";
 import { Field } from "./Field";
 
@@ -45,7 +45,7 @@ export function StoreDetailsCard({
       setDraft(profileToDraft(saved));
       setNotice(t("common.saved"));
     } catch (requestError) {
-      setError({ message: requestError instanceof ApiError ? requestError.message : t("common.genericActionError") });
+      setError({ message: readApiError(requestError, t("common.genericActionError")) });
     } finally {
       setBusy(false);
     }
