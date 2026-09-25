@@ -13,5 +13,8 @@ export const nextRestaurantActionsByStatus: Record<
   READY_FOR_PICKUP: [],
   DELIVERED: [],
   REJECTED: [],
-  CANCELLED: []
+  CANCELLED: [],
+  // The driver reported the delivery as failed. Terminal for the store: the goods already left,
+  // and putting the order back in the store's hands here would misrepresent what happened.
+  DELIVERY_FAILED: []
 };

@@ -93,7 +93,19 @@
     "tryAgain": "حاول مرة أخرى",
     "cashOnDelivery": "الدفع نقدًا عند الاستلام",
     "collectLabel": "المبلغ المطلوب تحصيله نقدًا",
-    "collectBreakdown": "الطلب {{total}} + {{rounding}} تقريب لأعلى إلى شيكل كامل · {{method}}"
+    "collectBreakdown": "الطلب {{total}} + {{rounding}} تقريب لأعلى إلى شيكل كامل · {{method}}",
+    "cannotDeliver": "تعذّر إتمام هذا التوصيل",
+    "failurePrompt": "لماذا تعذّر إتمام هذا التوصيل؟",
+    "failedTitle": "تم تسجيل التوصيل كفاشل",
+    "failedGeneric": "لم يكتمل هذا التوصيل.",
+    "failureReasons": {
+      "CUSTOMER_UNREACHABLE": "الزبون لم يردّ",
+      "CUSTOMER_REFUSED": "الزبون رفض الطلبية",
+      "WRONG_ADDRESS": "العنوان خاطئ أو يتعذّر العثور عليه",
+      "BUSINESS_ERROR": "مشكلة في المتجر أو البضاعة",
+      "DRIVER_ISSUE": "مشكلة من طرفي",
+      "OTHER": "سبب آخر"
+    }
   },
   "map": {
     "you": "أنت",

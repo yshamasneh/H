@@ -1034,6 +1034,10 @@ function toDeliveryView(delivery: DeliveryWithRelations): DeliveryView {
     pickedUpAt: delivery.pickedUpAt,
     onTheWayAt: delivery.onTheWayAt,
     deliveredAt: delivery.deliveredAt,
+    failedAt: delivery.failedAt,
+    cancelledAt: delivery.cancelledAt,
+    failureReason: delivery.failureReason,
+    failureNote: delivery.failureNote,
     createdAt: delivery.createdAt
   };
 }

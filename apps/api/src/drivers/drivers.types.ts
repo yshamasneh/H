@@ -1,4 +1,5 @@
 import type {
+  DeliveryFailureReason,
   DeliveryStatus,
   DriverApprovalStatus,
   OrderFinancialOutcome,
@@ -202,6 +203,11 @@ export type DeliveryView = {
   pickedUpAt: Date | null;
   onTheWayAt: Date | null;
   deliveredAt: Date | null;
+  failedAt: Date | null;
+  cancelledAt: Date | null;
+  /** Why a FAILED delivery could not be completed; null for every other status. */
+  failureReason: DeliveryFailureReason | null;
+  failureNote: string | null;
   createdAt: Date;
 };
 

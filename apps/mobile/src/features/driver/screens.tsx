@@ -22,6 +22,7 @@ import {
   setDriverOnlineStatus,
   updateDeliveryStatus,
   updateDriverLocation,
+  type DeliveryFailureReason,
   type DeliveryStatusValue,
   type DeliveryView,
   type DriverDeliveryStatusAction,
@@ -43,7 +44,7 @@ import { HandoverBanner } from "./handover-banner";
 import { useBackgroundLocation } from "./use-background-location";
 import { areDeliveryAlertsEnabled, deliveryAlertsSupported, enableDeliveryAlerts } from "./delivery-alerts";
 import { cashDueMinorOf, cashRoundingMinorOf } from "../../core/cash";
-import { activeDeliveryStatuses, nextDriverActionByStatus } from "./delivery.rules";
+import { activeDeliveryStatuses, canReportFailure, driverFailureReasons, nextDriverActionByStatus } from "./delivery.rules";
 import { useDriverLocationTracking } from "./location-tracking";
 import { deliveryPins as buildDeliveryPins } from "./navigation-target";
 
@@ -395,6 +396,9 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  // Failure reporting is deliberately two-step: the reason picker opens first, so "could not
+  // deliver" can never be a single mistaken tap on a job the driver is still able to finish.
+  const [choosingFailure, setChoosingFailure] = useState(false);
   const [coordinate, setCoordinate] = useState<MapCoordinate | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
@@ -468,6 +472,26 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
     }
   }
 
+  async function reportFailure(failureReason: DeliveryFailureReason) {
+    if (!delivery) return;
+    setActing(true);
+    setActionError(null);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setActionError(t("common:sessionExpired"));
+        return;
+      }
+      const updated = await updateDeliveryStatus(accessToken, delivery.id, "FAILED", { failureReason });
+      setDelivery(updated);
+      setChoosingFailure(false);
+    } catch (requestError) {
+      setActionError(readError(requestError));
+    } finally {
+      setActing(false);
+    }
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
@@ -522,15 +546,64 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
             <HandoverBanner onOpen={props.onOpenCash ?? props.onBack} refreshKey={delivery.status} showWhenZero />
           ) : null}
 
+          {delivery.status === "FAILED" ? (
+            <View style={styles.failureCard}>
+              <Text style={styles.failureTitle}>{t("detail.failedTitle")}</Text>
+              <Text style={styles.failureBody}>
+                {delivery.failureReason
+                  ? t(`detail.failureReasons.${delivery.failureReason}`)
+                  : t("detail.failedGeneric")}
+              </Text>
+            </View>
+          ) : null}
+
           {nextDriverActionByStatus[delivery.status] ? (
             <ActionButton
               label={t(nextDriverActionByStatus[delivery.status]!.labelKey)}
               loading={acting}
               onPress={advance}
             />
-          ) : (
+          ) : delivery.status === "FAILED" || delivery.status === "CANCELLED" ? null : (
             <Text style={styles.footerNote}>{t("detail.deliveryComplete")}</Text>
           )}
+
+          {/* The way out of a job that cannot be completed. Without it the one-delivery-at-a-time
+              rule leaves the driver unable to accept any further work. */}
+          {canReportFailure(delivery.status) ? (
+            choosingFailure ? (
+              <View style={styles.failureCard}>
+                <Text style={styles.failureTitle}>{t("detail.failurePrompt")}</Text>
+                {driverFailureReasons.map((reason) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={acting}
+                    key={reason}
+                    onPress={() => void reportFailure(reason)}
+                    style={({ pressed }) => [styles.failureReasonButton, pressed && styles.buttonPressed]}
+                  >
+                    <Text style={styles.failureReasonText}>{t(`detail.failureReasons.${reason}`)}</Text>
+                  </Pressable>
+                ))}
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={acting}
+                  onPress={() => setChoosingFailure(false)}
+                  style={({ pressed }) => [styles.failureCancelButton, pressed && styles.buttonPressed]}
+                >
+                  <Text style={styles.failureCancelText}>{t("common:cancel")}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                disabled={acting}
+                onPress={() => setChoosingFailure(true)}
+                style={({ pressed }) => [styles.failureOpenButton, pressed && styles.buttonPressed]}
+              >
+                <Text style={styles.failureOpenText}>{t("detail.cannotDeliver")}</Text>
+              </Pressable>
+            )
+          ) : null}
           <ErrorText message={actionError} />
         </ScrollView>
       )}
@@ -713,6 +786,36 @@ const styles = StyleSheet.create({
   },
   actionButtonText: { ...text("bodySm", "bold"), color: colors.textInverse },
   buttonPressed: { opacity: 0.85 },
+  failureOpenButton: {
+    alignItems: "center",
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginTop: spacing[3],
+    paddingVertical: spacing[3]
+  },
+  failureOpenText: { ...text("caption", "bold"), color: colors.textMuted },
+  failureCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginTop: spacing[3],
+    padding: spacing[4]
+  },
+  failureTitle: { ...text("bodySm", "bold"), color: colors.text, marginBottom: spacing[3] },
+  failureBody: { ...text("bodySm"), color: colors.textMuted },
+  failureReasonButton: {
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginBottom: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3]
+  },
+  failureReasonText: { ...text("bodySm"), color: colors.text },
+  failureCancelButton: { alignItems: "center", marginTop: spacing[1], paddingVertical: spacing[2] },
+  failureCancelText: { ...text("caption", "bold"), color: colors.textMuted },
   footerNote: { ...text("caption"), color: colors.textMuted, marginTop: spacing[2], textAlign: "center" },
   errorBox: { alignItems: "center" },
   errorText: { ...text("bodySm"), color: colors.error, textAlign: "center" },

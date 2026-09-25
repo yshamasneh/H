@@ -89,7 +89,19 @@
     "tryAgain": "Try Again",
     "cashOnDelivery": "Cash on Delivery",
     "collectLabel": "Collect in cash",
-    "collectBreakdown": "Order {{total}} + {{rounding}} rounding up to a whole shekel · {{method}}"
+    "collectBreakdown": "Order {{total}} + {{rounding}} rounding up to a whole shekel · {{method}}",
+    "cannotDeliver": "Can't complete this delivery",
+    "failurePrompt": "Why can't this delivery be completed?",
+    "failedTitle": "Delivery reported as failed",
+    "failedGeneric": "This delivery was not completed.",
+    "failureReasons": {
+      "CUSTOMER_UNREACHABLE": "Customer did not answer",
+      "CUSTOMER_REFUSED": "Customer refused the order",
+      "WRONG_ADDRESS": "Address is wrong or cannot be found",
+      "BUSINESS_ERROR": "Problem with the store or the goods",
+      "DRIVER_ISSUE": "A problem on my side",
+      "OTHER": "Another reason"
+    }
   },
   "map": {
     "you": "You",

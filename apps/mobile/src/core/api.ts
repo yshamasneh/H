@@ -206,15 +206,34 @@ export type OrderStatusValue =
   | "READY_FOR_PICKUP"
   | "DELIVERED"
   | "REJECTED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "DELIVERY_FAILED";
 
 export const restaurantOrderStatusActions = ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "REJECTED"] as const;
 export type RestaurantOrderStatusAction = (typeof restaurantOrderStatusActions)[number];
 
-export type DeliveryStatusValue = "PENDING_ASSIGNMENT" | "ASSIGNED" | "PICKED_UP" | "ON_THE_WAY" | "DELIVERED" | "CANCELLED";
+export type DeliveryStatusValue =
+  | "PENDING_ASSIGNMENT"
+  | "ASSIGNED"
+  | "PICKED_UP"
+  | "ON_THE_WAY"
+  | "DELIVERED"
+  | "CANCELLED"
+  | "FAILED";
 
-export const driverDeliveryStatusActions = ["PICKED_UP", "ON_THE_WAY", "DELIVERED"] as const;
+export const driverDeliveryStatusActions = ["PICKED_UP", "ON_THE_WAY", "DELIVERED", "FAILED"] as const;
 export type DriverDeliveryStatusAction = (typeof driverDeliveryStatusActions)[number];
+
+/** Why a delivery could not be completed. Mirrors the API's deliveryFailureReasonValues. */
+export const deliveryFailureReasons = [
+  "CUSTOMER_UNREACHABLE",
+  "CUSTOMER_REFUSED",
+  "WRONG_ADDRESS",
+  "BUSINESS_ERROR",
+  "DRIVER_ISSUE",
+  "OTHER"
+] as const;
+export type DeliveryFailureReason = (typeof deliveryFailureReasons)[number];
 
 export type OrderItemView = {
   id: string;
@@ -346,6 +365,11 @@ export type DeliveryView = {
   pickedUpAt: string | null;
   onTheWayAt: string | null;
   deliveredAt: string | null;
+  failedAt?: string | null;
+  cancelledAt?: string | null;
+  /** Why a FAILED delivery could not be completed; null for every other status. */
+  failureReason?: DeliveryFailureReason | null;
+  failureNote?: string | null;
   createdAt: string;
 };
 
@@ -713,11 +737,14 @@ export function acceptDelivery(accessToken: string, deliveryId: string): Promise
 export function updateDeliveryStatus(
   accessToken: string,
   deliveryId: string,
-  status: DriverDeliveryStatusAction
+  status: DriverDeliveryStatusAction,
+  // Required by the API when the status is FAILED: a failure with no recorded reason is refused
+  // (DELIVERY_FAILURE_REASON_REQUIRED) and is useless to accounting downstream.
+  failure?: { failureReason: DeliveryFailureReason; failureNote?: string }
 ): Promise<DeliveryView> {
   return request(`/api/v1/driver/me/deliveries/${deliveryId}/status`, {
     method: "PATCH",
-    body: { status },
+    body: { status, ...(failure ? { failureReason: failure.failureReason, ...(failure.failureNote ? { failureNote: failure.failureNote } : {}) } : {}) },
     accessToken
   });
 }
