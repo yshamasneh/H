@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { ApiError } from "../api";
+import { ApiError, readApiError } from "../api";
 import { formatBp, getOrderFinancialRecord, type OrderFinancialRecord } from "../api.accounting";
 import { useAuth } from "../auth";
 import { Money } from "./Money";
@@ -35,7 +35,7 @@ export function OrderFinancialCard({ orderId }: { orderId: string }) {
         if (cancelled) return;
         setRecord(null);
         if (!(requestError instanceof ApiError && requestError.statusCode === 404)) {
-          setError(requestError instanceof ApiError ? requestError.message : t("orderFinancial.loadError"));
+          setError(readApiError(requestError, t("orderFinancial.loadError")));
         }
       }
     })();

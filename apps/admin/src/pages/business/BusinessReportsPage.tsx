@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError } from "../../api";
+import { readApiError } from "../../api";
 import { getBusinessStats, type BusinessStats, type PeriodStats } from "../../api.business";
 import { Money } from "../../components/Money";
 
@@ -24,7 +24,7 @@ export function BusinessReportsPage() {
       setStats(await getBusinessStats());
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("businessReports.loadError"));
+      setError(readApiError(requestError, t("businessReports.loadError")));
     }
   };
 

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ApiError,
   createLandmark,
   deleteLandmark,
   listLandmarks,
@@ -30,7 +29,7 @@ export function LandmarksPage() {
       setLandmarks(await listLandmarks());
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("landmarks.loadError"));
+      setError(readApiError(requestError, t("landmarks.loadError")));
     }
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pager } from "../components/Pager";
-import { ApiError, listAuditLog, type AuditLogEntry } from "../api";
+import { listAuditLog, readApiError, type AuditLogEntry } from "../api";
 
 const listPageSize = 20;
 
@@ -20,7 +20,7 @@ export function AuditLogPage() {
         setEntries(result.items);
         setTotal(result.total);
       } catch (requestError) {
-        setError(requestError instanceof ApiError ? requestError.message : t("auditLog.loadError"));
+        setError(readApiError(requestError, t("auditLog.loadError")));
       }
     }
     void load();

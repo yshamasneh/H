@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ApiException } from "../common/api.exception";
 import { WebhookOtpProvider } from "./otp.provider";
 
 test("webhook OTP provider sends the expected authenticated payload", async () => {
@@ -36,6 +37,26 @@ test("webhook OTP provider returns a sanitized error", async () => {
 
   await assert.rejects(
     provider.send({ phone: "+970590000000", purpose: "PASSWORD_RESET", code: "987654" }),
-    (error: Error) => error.message === "The OTP delivery service rejected the request with status 503."
+    (error: unknown) =>
+      error instanceof ApiException &&
+      (error.getResponse() as { code?: string }).code === "OTP_DELIVERY_FAILED"
+  );
+});
+
+test("a network failure reaching the OTP webhook is also reported as OTP_DELIVERY_FAILED", async () => {
+  const provider = new WebhookOtpProvider(
+    "https://messaging.example.com/otp",
+    "secret-token",
+    2_000,
+    (async () => {
+      throw new Error("fetch failed");
+    }) as typeof fetch
+  );
+
+  await assert.rejects(
+    provider.send({ phone: "+970590000000", purpose: "PASSWORD_RESET", code: "987654" }),
+    (error: unknown) =>
+      error instanceof ApiException &&
+      (error.getResponse() as { code?: string }).code === "OTP_DELIVERY_FAILED"
   );
 });

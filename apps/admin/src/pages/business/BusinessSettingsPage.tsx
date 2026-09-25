@@ -39,7 +39,7 @@ export function BusinessSettingsPage() {
         setProfile(loaded);
         setDraft(profileToDraft(loaded));
       } catch (requestError) {
-        setError({ message: requestError instanceof ApiError ? requestError.message : t("businessSettings.loadError") });
+        setError({ message: readApiError(requestError, t("businessSettings.loadError")) });
       }
     })();
   }, []);

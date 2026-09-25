@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, getPlatformSettings, readApiError, updatePlatformSettings, type PlatformSettings } from "../api";
+import { getPlatformSettings, readApiError, updatePlatformSettings, type PlatformSettings } from "../api";
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -14,7 +14,7 @@ export function SettingsPage() {
       setSettings(await getPlatformSettings());
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("settings.loadError"));
+      setError(readApiError(requestError, t("settings.loadError")));
     }
   }
 

@@ -54,7 +54,7 @@ export function InventoryPage() {
       setPurchaseOrders(nextOrders);
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("inventory.loadError"));
+      setError(readApiError(requestError, t("inventory.loadError")));
     }
   }
 

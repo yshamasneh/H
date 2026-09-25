@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError } from "../../api";
+import { ApiError, readApiError } from "../../api";
 import {
   listInventoryMovements,
   lookupInventoryBarcode,
@@ -32,9 +32,7 @@ export function BarcodeLookup({ onShowHistory }: { onShowHistory: (product: Inve
       setError(
         requestError instanceof ApiError && requestError.statusCode === 404
           ? t("inventory.barcodeNotFound")
-          : requestError instanceof ApiError
-            ? requestError.message
-            : t("common.genericActionError")
+          : readApiError(requestError, t("common.genericActionError"))
       );
     }
   };
@@ -107,7 +105,7 @@ export function MovementsCard({
         setTotal(result.total);
         setError(null);
       } catch (requestError) {
-        if (!cancelled) setError(requestError instanceof ApiError ? requestError.message : t("inventory.movementsLoadError"));
+        if (!cancelled) setError(readApiError(requestError, t("inventory.movementsLoadError")));
       }
     })();
     return () => {

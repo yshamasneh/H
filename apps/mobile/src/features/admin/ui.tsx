@@ -12,7 +12,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import i18n from "../../i18n";
+import { readError } from "../../core/errors";
 import { colors, radius, shadow, spacing, statusFamily, statusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 
@@ -191,7 +191,7 @@ export function formatDate(value: string): string {
 }
 
 export function readAdminError(error: unknown): string {
-  return error instanceof Error ? error.message : i18n.t("common:genericError");
+  return readError(error);
 }
 
 export const adminStyles = StyleSheet.create({

@@ -33,7 +33,7 @@ export function StaffPage() {
       setStaff(await listBusinessStaff());
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("staff.loadError"));
+      setError(readApiError(requestError, t("staff.loadError")));
     }
   }
 

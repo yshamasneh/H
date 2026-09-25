@@ -28,7 +28,7 @@ export function LiveOrdersPage() {
       setLastRefreshAt(new Date());
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("liveOrders.loadError"));
+      setError(readApiError(requestError, t("liveOrders.loadError")));
     }
   }
 

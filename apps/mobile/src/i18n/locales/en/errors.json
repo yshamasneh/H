@@ -18,6 +18,7 @@
   "OTP_ALREADY_USED": "This verification code has already been used.",
   "OTP_TOO_MANY_ATTEMPTS": "Too many incorrect attempts. Please request a new code.",
   "OTP_RESEND_COOLDOWN": "Please wait before requesting another code.",
+  "OTP_DELIVERY_FAILED": "The verification code could not be sent. Please try again.",
   "SIGNUP_REQUEST_NOT_FOUND": "This sign-up request could not be found. Please start again.",
   "UNAUTHORIZED": "Please log in to continue.",
   "USER_NOT_FOUND": "This account could not be found.",

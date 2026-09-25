@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError } from "../api";
+import { readApiError } from "../api";
 import { getOrderTracking, type OrderTracking } from "../api.tracking";
 import { StatusBadge } from "./StatusBadge";
 import { TrackingMap } from "./TrackingMap";
@@ -26,7 +26,7 @@ export function OrderTrackingCard({ orderId }: { orderId: string }) {
       setError(null);
       setNow(Date.now());
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("tracking.loadError"));
+      setError(readApiError(requestError, t("tracking.loadError")));
     }
   }
 

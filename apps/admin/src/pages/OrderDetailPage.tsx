@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ApiError, cancelAdminOrder, getAdminOrder, type OrderDetail } from "../api";
+import { cancelAdminOrder, getAdminOrder, readApiError, type OrderDetail } from "../api";
 import { OrderFinancialCard } from "../components/OrderFinancialCard";
 import { OrderTrackingCard } from "../components/OrderTrackingCard";
 import { ReasonModal } from "../components/ReasonModal";
@@ -23,7 +23,7 @@ export function OrderDetailPage() {
     try {
       setOrder(await getAdminOrder(orderId));
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("orderDetail.loadError"));
+      setError(readApiError(requestError, t("orderDetail.loadError")));
     }
   }
 

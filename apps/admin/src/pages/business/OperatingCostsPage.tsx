@@ -43,7 +43,7 @@ export function OperatingCostsPage() {
     try {
       setEntries(await listOwnCosts());
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("operatingCosts.loadError"));
+      setError(readApiError(requestError, t("operatingCosts.loadError")));
     }
   };
 

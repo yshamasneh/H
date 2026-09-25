@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, getDashboard, type DashboardOverview } from "../api";
+import { getDashboard, readApiError, type DashboardOverview } from "../api";
 import { useRealtimeEvent } from "../socket";
 
 const currencyCode = "ILS";
@@ -14,7 +14,7 @@ export function DashboardPage() {
     try {
       setData(await getDashboard());
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("dashboard.loadError"));
+      setError(readApiError(requestError, t("dashboard.loadError")));
     }
   }
 

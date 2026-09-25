@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { ApiError } from "../api";
+import { readApiError } from "../api";
 import { listDriverLocations } from "../api.tracking";
 import { StatusBadge } from "../components/StatusBadge";
 import { TrackingMap } from "../components/TrackingMap";
@@ -48,7 +48,7 @@ export function LiveDriversPage() {
       setError(null);
       setNow(Date.now());
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("liveDrivers.loadError"));
+      setError(readApiError(requestError, t("liveDrivers.loadError")));
     }
   }
 

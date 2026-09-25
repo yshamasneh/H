@@ -43,7 +43,7 @@ export function BusinessOrderPage() {
       setOrder(await getBusinessOrder(orderId));
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("businessOrder.loadError"));
+      setError(readApiError(requestError, t("businessOrder.loadError")));
     }
   }
 

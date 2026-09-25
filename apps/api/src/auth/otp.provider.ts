@@ -1,4 +1,5 @@
 import { Logger } from "@nestjs/common";
+import { ApiException } from "../common/api.exception";
 import type { OtpPurpose } from "../generated/prisma/enums";
 
 export const OTP_PROVIDER = Symbol("OTP_PROVIDER");
@@ -54,11 +55,11 @@ export class WebhookOtpProvider implements OtpProvider {
         signal: AbortSignal.timeout(this.timeoutMs)
       });
     } catch {
-      throw new Error("The OTP delivery service is unavailable.");
+      throw new ApiException(503, "OTP_DELIVERY_FAILED", "The verification code could not be sent. Please try again.");
     }
 
     if (!response.ok) {
-      throw new Error(`The OTP delivery service rejected the request with status ${response.status}.`);
+      throw new ApiException(503, "OTP_DELIVERY_FAILED", "The verification code could not be sent. Please try again.");
     }
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, fetchAllPages, listAdminDrivers, listAdminRestaurants } from "../../api";
+import { ApiError, fetchAllPages, listAdminDrivers, listAdminRestaurants, readApiError } from "../../api";
 import { getOrderFinancialRecord, recordAdjustment, type OrderFinancialRecord } from "../../api.accounting";
 import {
   adjustmentNetMinor,
@@ -68,7 +68,7 @@ export function AdjustmentsSection({
         setBusinesses(stores.map((store) => ({ id: store.id, label: store.name })));
         setDrivers(driverList.map((driver) => ({ id: driver.userId, label: `${driver.fullName} (${driver.phone})` })));
       } catch (requestError) {
-        setError({ message: requestError instanceof ApiError ? requestError.message : t("accounting.loadError") });
+        setError({ message: readApiError(requestError, t("accounting.loadError")) });
       }
     })();
   }, []);
@@ -83,9 +83,7 @@ export function AdjustmentsSection({
       setOrderError(
         requestError instanceof ApiError && requestError.statusCode === 404
           ? t("accounting.adjustments.orderNotFound")
-          : requestError instanceof ApiError
-            ? requestError.message
-            : t("common.genericActionError")
+          : readApiError(requestError, t("common.genericActionError"))
       );
     }
   };

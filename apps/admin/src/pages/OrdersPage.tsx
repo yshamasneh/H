@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ApiError, listAdminOrders, type OrderDetail } from "../api";
+import { listAdminOrders, readApiError, type OrderDetail } from "../api";
 import { Pager } from "../components/Pager";
 import { StatusBadge } from "../components/StatusBadge";
 import { useRealtimeEvent } from "../socket";
@@ -44,7 +44,7 @@ export function OrdersPage() {
       setOrders(result.items);
       setTotal(result.total);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("orders.loadError"));
+      setError(readApiError(requestError, t("orders.loadError")));
     }
   }
 

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pager } from "../components/Pager";
 import {
-  ApiError,
   assignPlatformRole,
   createAdminUser,
   listAdminUsers,
@@ -51,7 +50,7 @@ export function UsersPage() {
       setTotal(result.total);
       setError(null);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : t("users.loadError"));
+      setError(readApiError(requestError, t("users.loadError")));
     }
   }
 
