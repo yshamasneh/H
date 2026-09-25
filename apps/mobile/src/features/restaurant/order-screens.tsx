@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -27,10 +29,24 @@ import {
   type RestaurantOrderStatusAction
 } from "../../core/api";
 import { readError } from "../../core/errors";
+import { kvStore } from "../../core/kv-storage";
+import i18n from "../../i18n";
+import { RemoteImage } from "../../components/remote-image";
+import { Icon } from "../../theme/icon";
 import { getAccessToken } from "../../core/session";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { nextRestaurantActionsByStatus } from "./order.rules";
+import {
+  isPackingStatus,
+  packLineState,
+  packProgress,
+  packedStorageKey,
+  parsePicked,
+  serializePicked,
+  togglePicked,
+  type PackLineState
+} from "./pack-checklist";
 
 const currencyCode = "ILS";
 
@@ -127,6 +143,30 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
   const [actionError, setActionError] = useState<string | null>(null);
   const [actingOn, setActingOn] = useState<RestaurantOrderStatusAction | null>(null);
   const [proposingFor, setProposingFor] = useState<string | null>(null);
+  const lineIds = useMemo(() => (order?.items ?? []).map((item) => item.id), [order]);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+
+  // What has been put in the bag is remembered on this device, per order, so backing out of the
+  // screen or a live refresh does not lose the packer's place.
+  const lineIdsKey = lineIds.join(",");
+  useEffect(() => {
+    if (lineIds.length === 0) return;
+    let cancelled = false;
+    kvStore.getItem(packedStorageKey(props.orderId)).then(
+      (raw) => { if (!cancelled) setPicked(parsePicked(raw, lineIds)); },
+      () => undefined
+    );
+    return () => { cancelled = true; };
+    // Re-read only when the order or its set of lines changes, not on every refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.orderId, lineIdsKey]);
+
+  function toggleLine(lineId: string) {
+    if (!order) return;
+    const next = togglePicked(order.items, picked, lineId);
+    setPicked(next);
+    void kvStore.setItem(packedStorageKey(props.orderId), serializePicked(next)).catch(() => undefined);
+  }
 
   async function load() {
     setError(null);
@@ -164,6 +204,10 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
       }
       const updated = await updateOrderStatus(accessToken, props.orderId, action);
       setOrder(updated);
+      if (!isPackingStatus(updated.status) && updated.status !== "PLACED") {
+        // Packing is finished (or the order left the store's hands): the working state is done with.
+        void kvStore.removeItem(packedStorageKey(props.orderId)).catch(() => undefined);
+      }
     } catch (requestError) {
       setActionError(readError(requestError));
     } finally {
@@ -191,6 +235,26 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
     }
   }
 
+  const isPacking = order !== null && isPackingStatus(order.status);
+  const progress = packProgress(order?.items ?? [], picked);
+
+  // The escape hatch for an item that genuinely cannot be found at packing time: a substitution can
+  // only be proposed before the order is accepted, so the packer must still be able to move on. It
+  // names exactly what is unchecked so it is a decision, not a slip.
+  async function readyAnyway() {
+    if (!order) return;
+    const missing = order.items
+      .filter((item) => progress.remainingIds.includes(item.id))
+      .map((item) => `• ${item.nameSnapshot}`)
+      .join("\n");
+    const confirmed = await confirmPackedAnyway(
+      t("orders.pack.readyAnywayTitle"),
+      t("orders.pack.readyAnywayBody", { items: missing }),
+      t("orders.pack.readyAnywayConfirm")
+    );
+    if (confirmed) await performAction("READY_FOR_PICKUP");
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
@@ -210,8 +274,30 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
               <Text style={styles.sectionTitle}>{t("orders.statusLabel")}</Text>
               <StatusBadge status={order.status} />
             </View>
+            {isPacking ? (
+              <View style={styles.packHeader}>
+                <View style={styles.packHeaderRow}>
+                  <Text style={styles.packTitle}>{t("orders.pack.title")}</Text>
+                  <Text style={[styles.packProgressText, progress.complete && styles.packProgressDone]}>
+                    {progress.complete ? t("orders.pack.allPacked") : t("orders.pack.progress", { packed: progress.packed, total: progress.total })}
+                  </Text>
+                </View>
+                <View style={styles.packBarTrack}>
+                  <View style={[styles.packBarFill, progress.complete && styles.packBarFillDone, { width: `${progress.total ? Math.round((progress.packed / progress.total) * 100) : 0}%` }]} />
+                </View>
+                {!progress.complete ? <Text style={styles.packHint}>{t("orders.pack.hint")}</Text> : null}
+              </View>
+            ) : null}
             {order.items.map((item) => (
               <View key={item.id} style={styles.orderItemBlock}>
+                {isPacking || item.fulfillmentAdjustment?.status === "PENDING" ? (
+                  <PackLineRow
+                    item={item}
+                    onToggle={() => toggleLine(item.id)}
+                    packable={isPacking}
+                    state={packLineState(item, picked)}
+                  />
+                ) : (
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryRowLabel}>
                     {t("orders.quantityUnitLine", { quantity: item.quantity, name: item.nameSnapshot, unit: item.unitLabelSnapshot })}
@@ -219,7 +305,8 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
                   </Text>
                   <Text style={styles.summaryRowValue}>{formatPrice(item.lineTotalMinor)}</Text>
                 </View>
-                {item.fulfillmentAdjustment ? <FulfillmentSummary item={item} /> : null}
+                )}
+                {item.fulfillmentAdjustment && !isPacking ? <FulfillmentSummary item={item} /> : null}
                 {order.status === "PLACED" && item.fulfillmentAdjustment?.status !== "APPROVED" &&
                 (item.allowSubstitution || item.isVariableWeightSnapshot) ? (
                   <FulfillmentEditor
@@ -247,15 +334,32 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
 
           {nextRestaurantActionsByStatus[order.status].length > 0 ? (
             <View style={styles.actionRow}>
-              {nextRestaurantActionsByStatus[order.status].map(({ action, labelKey }) => (
-                <ActionButton
-                  destructive={action === "REJECTED"}
-                  key={action}
-                  label={t(labelKey)}
-                  loading={actingOn === action}
-                  onPress={() => performAction(action)}
-                />
-              ))}
+              {nextRestaurantActionsByStatus[order.status].map(({ action, labelKey }) => {
+                // "Ready" is the one step that hands the order to a driver, so it waits until every
+                // item is checked off. Nothing else about the flow is gated.
+                const blocked = action === "READY_FOR_PICKUP" && !progress.complete;
+                return (
+                  <View key={action}>
+                    <ActionButton
+                      destructive={action === "REJECTED"}
+                      disabled={blocked}
+                      label={t(labelKey)}
+                      loading={actingOn === action}
+                      onPress={() => performAction(action)}
+                    />
+                    {blocked ? (
+                      <>
+                        <Text style={styles.readyBlockedText}>
+                          {t("orders.pack.readyBlocked")} {t("orders.pack.remaining", { count: progress.remainingIds.length })}
+                        </Text>
+                        <Pressable accessibilityRole="button" onPress={() => void readyAnyway()} style={styles.readyAnywayButton}>
+                          <Text style={styles.readyAnywayText}>{t("orders.pack.readyAnyway")}</Text>
+                        </Pressable>
+                      </>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           ) : (
             <Text style={styles.footerNote}>{t("orders.noFurtherAction")}</Text>
@@ -265,6 +369,90 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
       )}
     </SafeAreaView>
   );
+}
+
+function confirmPackedAnyway(title: string, body: string, confirmLabel: string): Promise<boolean> {
+  if (Platform.OS === "web") {
+    return Promise.resolve(typeof globalThis.confirm === "function" ? globalThis.confirm(`${title}\n\n${body}`) : false);
+  }
+  return new Promise((resolve) => Alert.alert(title, body, [
+    { text: i18n.t("common:cancel"), style: "cancel", onPress: () => resolve(false) },
+    { text: confirmLabel, onPress: () => resolve(true) }
+  ], { cancelable: true, onDismiss: () => resolve(false) }));
+}
+
+/**
+ * One line of the packing checklist: a big tap target (the whole row), the product photo so the
+ * packer can confirm the right item by sight, and a state that is never ambiguous:
+ *   empty box            still to pack
+ *   green tick           packed as ordered
+ *   amber swap           packed, but it is the approved REPLACEMENT
+ *   amber clock, no box  waiting for the customer to decide (cannot be ticked)
+ */
+function PackLineRow(props: { item: OrderItemView; state: PackLineState; packable: boolean; onToggle: () => void }) {
+  const { t } = useTranslation(["restaurantOps", "common"]);
+  const { item, state } = props;
+  const adjustment = item.fulfillmentAdjustment;
+  const replacement = adjustment?.status === "APPROVED" && adjustment.replacementMenuItemId ? adjustment : null;
+  const awaiting = state === "awaitingCustomer";
+  const packed = state === "picked" || state === "pickedReplacement";
+  // What the packer actually picks up: the approved replacement and/or the re-weighed quantity.
+  const shownName = replacement?.replacementNameSnapshot ?? item.nameSnapshot;
+  const shownImage = replacement ? replacement.replacementImageUrl : item.imageUrl;
+  const approvedQuantity = adjustment?.status === "APPROVED" ? adjustment.actualQuantityMilli / 1_000 : item.quantity;
+  const shownUnit = replacement?.replacementUnitLabelSnapshot ?? item.unitLabelSnapshot;
+  const quantityText = t("orders.pack.packQuantity", { quantity: trimQuantity(approvedQuantity), unit: shownUnit });
+
+  return (
+    <Pressable
+      accessibilityLabel={t("orders.pack.itemLabel", { name: shownName, quantity: quantityText })}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: packed, disabled: awaiting || !props.packable }}
+      disabled={awaiting || !props.packable}
+      onPress={props.onToggle}
+      style={({ pressed }) => [
+        styles.packRow,
+        state === "picked" && styles.packRowPicked,
+        state === "pickedReplacement" && styles.packRowReplacement,
+        awaiting && styles.packRowAwaiting,
+        pressed && styles.packRowPressed
+      ]}
+    >
+      {props.packable ? (
+        <View
+          style={[
+            styles.packBox,
+            state === "picked" && styles.packBoxPicked,
+            state === "pickedReplacement" && styles.packBoxReplacement,
+            awaiting && styles.packBoxAwaiting
+          ]}
+        >
+          {state === "picked" ? <Icon color={colors.textInverse} name="checkmark" size="md" /> : null}
+          {state === "pickedReplacement" ? <Icon color={colors.textInverse} name="swap" size="md" /> : null}
+          {awaiting ? <Icon color={colors.warning} name="time" size="md" /> : null}
+        </View>
+      ) : null}
+      <RemoteImage resizeMode="cover" style={styles.packImage} uri={shownImage} />
+      <View style={styles.packBody}>
+        <Text numberOfLines={2} style={[styles.packName, packed && styles.packNameDone]}>{shownName}</Text>
+        <Text style={styles.packQuantity}>{quantityText}</Text>
+        {replacement ? (
+          <Text style={styles.packReplacementNote}>
+            <Text style={styles.packReplacementTag}>{t("orders.pack.replacementTag")} </Text>
+            {t("orders.pack.replaces", { name: item.nameSnapshot })}
+          </Text>
+        ) : null}
+        {adjustment?.status === "REJECTED" ? <Text style={styles.packMuted}>{t("orders.pack.declined")}</Text> : null}
+        {awaiting ? <Text style={styles.packAwaitingNote}>{t("orders.pack.awaitingCustomer")}</Text> : null}
+      </View>
+      <Text style={styles.packPrice}>{formatPrice(item.lineTotalMinor)}</Text>
+    </Pressable>
+  );
+}
+
+/** 2 → "2", 1.5 → "1.5", 1.234 → "1.234": no trailing zeros for whole or short quantities. */
+function trimQuantity(value: number): string {
+  return String(Number(value.toFixed(3)));
 }
 
 function FulfillmentSummary(props: { item: OrderItemView }) {
@@ -531,6 +719,55 @@ const styles = StyleSheet.create({
   replacementChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   replacementChipText: { ...text("label", "bold"), color: colors.textMuted },
   replacementChipTextActive: { color: colors.textInverse },
+  packHeader: { marginBottom: spacing[3] },
+  packHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  packTitle: { ...text("h3", "bold"), color: colors.text },
+  packProgressText: { ...text("bodySm", "bold"), color: colors.textMuted },
+  packProgressDone: { color: colors.success },
+  packBarTrack: { backgroundColor: colors.neutralSubtle, borderRadius: radius.pill, height: 8, marginTop: spacing[2], overflow: "hidden" },
+  packBarFill: { backgroundColor: colors.primary, borderRadius: radius.pill, height: 8 },
+  packBarFillDone: { backgroundColor: colors.success },
+  packHint: { ...text("label"), color: colors.textMuted, marginTop: spacing[2] },
+  packRow: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing[3],
+    minHeight: 80,
+    padding: spacing[2]
+  },
+  packRowPicked: { backgroundColor: colors.successSubtle, borderColor: colors.success },
+  packRowReplacement: { backgroundColor: colors.warningSubtle, borderColor: colors.warning },
+  packRowAwaiting: { backgroundColor: colors.warningSubtle, borderColor: colors.warning, borderStyle: "dashed" },
+  packRowPressed: { opacity: 0.8 },
+  packBox: {
+    alignItems: "center",
+    borderColor: colors.borderStrong,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    height: 32,
+    justifyContent: "center",
+    width: 32
+  },
+  packBoxPicked: { backgroundColor: colors.success, borderColor: colors.success },
+  packBoxReplacement: { backgroundColor: colors.warning, borderColor: colors.warning },
+  packBoxAwaiting: { backgroundColor: colors.surface, borderColor: colors.warning, borderStyle: "dashed" },
+  packImage: { backgroundColor: colors.neutralSubtle, borderRadius: radius.sm, height: 64, width: 64 },
+  packBody: { flex: 1 },
+  packName: { ...text("bodySm", "bold"), color: colors.text },
+  packNameDone: { color: colors.textMuted },
+  packQuantity: { ...text("label"), color: colors.textMuted, marginTop: 2 },
+  packReplacementNote: { ...text("label"), color: colors.text, marginTop: 2 },
+  packReplacementTag: { ...text("label", "bold"), color: colors.warning },
+  packMuted: { ...text("label"), color: colors.textMuted, fontStyle: "italic", marginTop: 2 },
+  packAwaitingNote: { ...text("label", "bold"), color: colors.warning, marginTop: 2 },
+  packPrice: { ...text("label", "bold"), color: colors.text },
+  readyBlockedText: { ...text("label"), color: colors.textMuted, marginTop: spacing[2], textAlign: "center" },
+  readyAnywayButton: { alignItems: "center", marginTop: spacing[1], paddingVertical: spacing[3] },
+  readyAnywayText: { ...text("bodySm", "bold"), color: colors.warning, textDecorationLine: "underline" },
   footerNote: { ...text("caption"), color: colors.textMuted, marginTop: spacing[2], textAlign: "center" },
   errorBox: { alignItems: "center" },
   errorText: { ...text("bodySm"), color: colors.error, textAlign: "center" },

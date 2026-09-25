@@ -256,6 +256,8 @@ export type FulfillmentAdjustmentView = {
   replacementMenuItemId: string | null;
   replacementNameSnapshot: string | null;
   replacementUnitLabelSnapshot: string | null;
+  /** The replacement product's picture (display only); absent on older servers. */
+  replacementImageUrl?: string | null;
   actualQuantityMilli: number;
   unitPriceMinor: number;
   lineTotalMinor: number;

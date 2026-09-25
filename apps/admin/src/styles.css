@@ -687,6 +687,77 @@ textarea.text-input { width: 100%; min-height: 80px; resize: vertical; font-fami
 /* ----------------------------------------------------------------------------
    Live order queue. The one board that has to be readable from across a kitchen.
    -------------------------------------------------------------------------- */
+/* Packing checklist: a big tap target per item, the product photo, and a state that is never
+   ambiguous — empty box (to pack), green tick (packed), amber swap (packed replacement), dashed
+   amber "!" (waiting for the customer, cannot be ticked). */
+.pack-header { margin-bottom: var(--space-3); }
+.pack-header-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.pack-title { font-size: var(--fs-h3); font-weight: var(--fw-bold); color: var(--text); margin: 0; }
+.pack-progress-text { font-weight: var(--fw-semibold); color: var(--text-muted); }
+.pack-progress-text.is-done { color: var(--success); }
+.pack-bar { height: 8px; border-radius: 999px; background: var(--neutral-subtle); margin-top: var(--space-2); overflow: hidden; }
+.pack-bar-fill { height: 100%; background: var(--primary); border-radius: 999px; transition: width var(--duration-fast) var(--ease); }
+.pack-bar-fill.is-done { background: var(--success); }
+.pack-hint { color: var(--text-muted); font-size: var(--fs-caption, 13px); margin: var(--space-2) 0 0; }
+
+.pack-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 80px;
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+}
+.pack-row:hover:not(:disabled) { border-color: var(--border-strong); }
+.pack-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.pack-row:disabled { cursor: not-allowed; }
+.pack-row.is-picked { background: var(--success-subtle); border-color: var(--success); }
+.pack-row.is-replacement { background: var(--warning-subtle); border-color: var(--warning); }
+.pack-row.is-awaiting { background: var(--warning-subtle); border: 1px dashed var(--warning); }
+
+.pack-box {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-inverse);
+  font-weight: var(--fw-bold);
+  font-size: 18px;
+  line-height: 1;
+}
+.pack-row.is-picked .pack-box { background: var(--success); border-color: var(--success); }
+.pack-row.is-replacement .pack-box { background: var(--warning); border-color: var(--warning); }
+.pack-row.is-awaiting .pack-box { border: 2px dashed var(--warning); color: var(--warning); }
+
+.pack-image { flex: none; width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-sm); background: var(--neutral-subtle); }
+.pack-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pack-name { font-weight: var(--fw-semibold); color: var(--text); }
+.pack-row.is-picked .pack-name { color: var(--text-muted); }
+.pack-qty, .pack-muted { font-size: var(--fs-caption, 13px); color: var(--text-muted); }
+.pack-muted { font-style: italic; }
+.pack-replaces { font-size: var(--fs-caption, 13px); color: var(--text); }
+.pack-tag { font-weight: var(--fw-bold); color: var(--warning); }
+.pack-awaiting-note { font-size: var(--fs-caption, 13px); font-weight: var(--fw-bold); color: var(--warning); }
+.pack-price { flex: none; font-weight: var(--fw-semibold); }
+.pack-ready-note { color: var(--text-muted); font-size: var(--fs-caption, 13px); margin: var(--space-2) 0 0; }
+.pack-anyway { background: none; border: none; padding: var(--space-2) 0; font: inherit; font-weight: var(--fw-bold); color: var(--warning); text-decoration: underline; cursor: pointer; }
+.order-ticket-packed { font-weight: var(--fw-semibold); }
+.order-ticket-packed.is-done { color: var(--success); }
+
 .queue-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

@@ -28,6 +28,8 @@ export type OrderItemView = {
     replacementMenuItemId: string | null;
     replacementNameSnapshot: string | null;
     replacementUnitLabelSnapshot: string | null;
+    /** The replacement product's picture now (display only); null when it has none or was deleted. */
+    replacementImageUrl: string | null;
     actualQuantityMilli: number;
     unitPriceMinor: number;
     lineTotalMinor: number;

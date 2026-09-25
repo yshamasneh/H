@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError, readApiError } from "../../api";
@@ -11,7 +11,20 @@ import {
   type MenuItemOwner
 } from "../../api.business";
 import { useAuth } from "../../auth";
+import { ConfirmModal } from "../../components/ConfirmModal";
+import { FallbackImage } from "../../components/FallbackImage";
 import { ReasonModal } from "../../components/ReasonModal";
+import {
+  clearPicked,
+  isPackingStatus,
+  loadPicked,
+  packLineState,
+  packProgress,
+  savePicked,
+  togglePicked,
+  trimQuantity,
+  type PackLineState
+} from "../../packChecklist";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useLiveRefresh } from "../../socket";
 
@@ -35,6 +48,8 @@ export function BusinessOrderPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [showReject, setShowReject] = useState(false);
+  const [showReadyAnyway, setShowReadyAnyway] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const isSupermarket = access?.business?.businessType === "SUPERMARKET";
 
@@ -56,12 +71,30 @@ export function BusinessOrderPage() {
 
   useLiveRefresh(["order.status.changed", "order.fulfillment.changed"], () => void load());
 
+  // What has been put in the bag is remembered in this browser, per order, so a refresh or a live
+  // update does not lose the packer's place.
+  const lineIdsKey = useMemo(() => (order?.items ?? []).map((item) => item.id).join(","), [order]);
+  useEffect(() => {
+    if (!lineIdsKey) return;
+    setPicked(loadPicked(orderId, lineIdsKey.split(",")));
+  }, [orderId, lineIdsKey]);
+
+  function toggleLine(lineId: string) {
+    if (!order) return;
+    const next = togglePicked(order.items, picked, lineId);
+    setPicked(next);
+    savePicked(orderId, next);
+  }
+
   async function advance(status: "ACCEPTED" | "PREPARING" | "READY_FOR_PICKUP" | "REJECTED", note?: string) {
     setIsWorking(true);
     setNotice(null);
     try {
-      setOrder(await updateBusinessOrderStatus(orderId, status, note));
+      const updated = await updateBusinessOrderStatus(orderId, status, note);
+      setOrder(updated);
       setError(null);
+      // Packing is finished (or the order left the store's hands): the working state is done with.
+      if (!isPackingStatus(updated.status) && updated.status !== "PLACED") clearPicked(orderId);
     } catch (requestError) {
       const apiError = requestError instanceof ApiError ? requestError : null;
       // Losing an acceptance race is normal, not a fault: re-fetch and say who won.
@@ -81,6 +114,12 @@ export function BusinessOrderPage() {
 
   const action = nextAction[order.status];
   const canAct = can("MANAGE_ORDERS");
+  const isPacking = isPackingStatus(order.status);
+  const progress = packProgress(order.items, picked);
+  // "Ready" is the one step that hands the order to a driver, so it waits until every item is
+  // checked off. Nothing else about the flow is gated.
+  const readyBlocked = action === "READY_FOR_PICKUP" && !progress.complete;
+  const missingNames = order.items.filter((item) => progress.remainingIds.includes(item.id)).map((item) => item.nameSnapshot);
 
   return (
     <div>
@@ -104,8 +143,35 @@ export function BusinessOrderPage() {
         <div>
           <div className="card">
             <h2 className="card-title">{t("businessOrder.items")}</h2>
+            {isPacking ? (
+              <div className="pack-header">
+                <div className="pack-header-row">
+                  <h3 className="pack-title">{t("businessOrder.pack.title")}</h3>
+                  <span className={`pack-progress-text${progress.complete ? " is-done" : ""}`}>
+                    {progress.complete
+                      ? t("businessOrder.pack.allPacked")
+                      : t("businessOrder.pack.progress", { packed: progress.packed, total: progress.total })}
+                  </span>
+                </div>
+                <div aria-hidden="true" className="pack-bar">
+                  <div
+                    className={`pack-bar-fill${progress.complete ? " is-done" : ""}`}
+                    style={{ width: `${progress.total ? Math.round((progress.packed / progress.total) * 100) : 0}%` }}
+                  />
+                </div>
+                {!progress.complete ? <p className="pack-hint">{t("businessOrder.pack.hint")}</p> : null}
+              </div>
+            ) : null}
             {order.items.map((item) => (
               <div key={item.id}>
+                {isPacking || item.fulfillmentAdjustment?.status === "PENDING" ? (
+                  <PackRow
+                    item={item}
+                    onToggle={() => toggleLine(item.id)}
+                    packable={isPacking && canAct}
+                    state={packLineState(item, picked)}
+                  />
+                ) : (
                 <div className="kv-row">
                   <span className="kv-label">
                     {t("businessOrder.lineItem", { quantity: item.quantity, name: item.nameSnapshot })}
@@ -113,7 +179,8 @@ export function BusinessOrderPage() {
                   </span>
                   <span className="kv-value">{formatPrice(item.lineTotalMinor)}</span>
                 </div>
-                {item.fulfillmentAdjustment ? (
+                )}
+                {item.fulfillmentAdjustment && !isPacking ? (
                   <div className="kv-row">
                     <span className="kv-label" style={{ paddingInlineStart: 14 }}>
                       {t("businessOrder.adjustmentSummary", {
@@ -185,7 +252,7 @@ export function BusinessOrderPage() {
               {action ? (
                 <button
                   className="btn btn-primary"
-                  disabled={isWorking || order.requiresCustomerReview}
+                  disabled={isWorking || order.requiresCustomerReview || readyBlocked}
                   onClick={() => void advance(action)}
                   type="button"
                 >
@@ -201,6 +268,16 @@ export function BusinessOrderPage() {
           ) : null}
           {order.requiresCustomerReview ? (
             <div className="empty-state">{t("businessOrder.blockedByReview")}</div>
+          ) : null}
+          {canAct && readyBlocked ? (
+            <div>
+              <p className="pack-ready-note">
+                {t("businessOrder.pack.readyBlocked")} {t("businessOrder.pack.remaining", { count: progress.remainingIds.length })}
+              </p>
+              <button className="pack-anyway" onClick={() => setShowReadyAnyway(true)} type="button">
+                {t("businessOrder.pack.readyAnyway")}
+              </button>
+            </div>
           ) : null}
         </div>
 
@@ -218,6 +295,20 @@ export function BusinessOrderPage() {
         </div>
       </div>
 
+      {showReadyAnyway ? (
+        <ConfirmModal
+          confirmLabel={t("businessOrder.pack.readyAnywayConfirm")}
+          description={t("businessOrder.pack.readyAnywayBody", { items: missingNames.join(", ") })}
+          onCancel={() => setShowReadyAnyway(false)}
+          onConfirm={async () => {
+            await advance("READY_FOR_PICKUP");
+            setShowReadyAnyway(false);
+          }}
+          title={t("businessOrder.pack.readyAnywayTitle")}
+          tone="primary"
+        />
+      ) : null}
+
       {showReject ? (
         <ReasonModal
           confirmLabel={t("businessOrder.action.REJECTED")}
@@ -231,6 +322,65 @@ export function BusinessOrderPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One line of the packing checklist: the whole row is the tap target, with the product photo so the
+ * packer can confirm the right item by sight, and a state that is never ambiguous.
+ */
+function PackRow({
+  item,
+  state,
+  packable,
+  onToggle
+}: {
+  item: BusinessOrder["items"][number];
+  state: PackLineState;
+  packable: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useTranslation();
+  const adjustment = item.fulfillmentAdjustment;
+  const replacement = adjustment?.status === "APPROVED" && adjustment.replacementMenuItemId ? adjustment : null;
+  const awaiting = state === "awaitingCustomer";
+  const packed = state === "picked" || state === "pickedReplacement";
+  // What the packer actually picks up: the approved replacement and/or the re-weighed quantity.
+  const shownName = replacement?.replacementNameSnapshot ?? item.nameSnapshot;
+  const shownImage = replacement ? replacement.replacementImageUrl : item.imageUrl;
+  const quantity = adjustment?.status === "APPROVED" ? adjustment.actualQuantityMilli / 1_000 : item.quantity;
+  const unit = replacement?.replacementUnitLabelSnapshot ?? item.unitLabelSnapshot;
+  const quantityText = t("businessOrder.pack.packQuantity", { quantity: trimQuantity(quantity), unit });
+  const stateClass =
+    state === "picked" ? " is-picked" : state === "pickedReplacement" ? " is-replacement" : awaiting ? " is-awaiting" : "";
+  const glyph = state === "picked" ? "\u2713" : state === "pickedReplacement" ? "\u21C4" : awaiting ? "!" : "";
+
+  return (
+    <button
+      aria-checked={packed}
+      aria-label={t("businessOrder.pack.itemLabel", { name: shownName, quantity: quantityText })}
+      className={`pack-row${stateClass}`}
+      disabled={awaiting || !packable}
+      onClick={onToggle}
+      role="checkbox"
+      type="button"
+    >
+      <span aria-hidden="true" className="pack-box">{glyph}</span>
+      <FallbackImage alt="" className="pack-image" src={shownImage ?? undefined} />
+      <span className="pack-body">
+        <span className="pack-name">{shownName}</span>
+        <span className="pack-qty">{quantityText}</span>
+        {replacement ? (
+          <span className="pack-replaces">
+            <span className="pack-tag">{t("businessOrder.pack.replacementTag")} </span>
+            {t("businessOrder.pack.replaces", { name: item.nameSnapshot })}
+          </span>
+        ) : null}
+        {adjustment?.status === "REJECTED" ? <span className="pack-muted">{t("businessOrder.pack.declined")}</span> : null}
+        {awaiting ? <span className="pack-awaiting-note">{t("businessOrder.pack.awaitingCustomer")}</span> : null}
+      </span>
+      <span className="pack-price">{formatPrice(item.lineTotalMinor)}</span>
+    </button>
   );
 }
 

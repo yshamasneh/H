@@ -343,7 +343,8 @@
     "soundBlocked": "المتصفح يمنع تشغيل الصوت. اضغط على الصفحة ثم فعّل التنبيه من جديد.",
     "openStore": "فتح المتجر",
     "closeStore": "إغلاق المتجر",
-    "storeClosed": "المتجر مغلق ولا يستقبل طلبات جديدة."
+    "storeClosed": "المتجر مغلق ولا يستقبل طلبات جديدة.",
+    "packed": "تم تجهيز {{packed}}/{{total}}"
   },
   "businessOrder": {
     "title": "طلب {{reference}}",
@@ -373,6 +374,24 @@
       "PREPARING": "بدء التحضير",
       "READY_FOR_PICKUP": "جاهز للاستلام",
       "REJECTED": "رفض الطلب"
+    },
+    "pack": {
+      "title": "تجهيز الطلب",
+      "hint": "أشّر على كل منتج عند وضعه في الكيس.",
+      "progress": "تم تجهيز {{packed}} من {{total}}",
+      "allPacked": "تم تجهيز كل شيء",
+      "replacementTag": "بديل",
+      "replaces": "بديل عن: {{name}}",
+      "declined": "رفض العميل البديل. جهّز المنتج الأصلي.",
+      "awaitingCustomer": "بانتظار قرار العميل",
+      "packQuantity": "جهّز {{quantity}} {{unit}}",
+      "remaining": "{{count}} منتج بانتظار التجهيز",
+      "readyBlocked": "جهّز كل المنتجات قبل تحديد الطلب كجاهز.",
+      "readyAnyway": "تحديد كجاهز رغم ذلك",
+      "readyAnywayTitle": "بعض المنتجات لم يتم تجهيزها",
+      "readyAnywayBody": "هذه المنتجات لم يتم تأشيرها: {{items}}. هل تريد تحديد الطلب كجاهز رغم ذلك؟",
+      "readyAnywayConfirm": "تحديد كجاهز",
+      "itemLabel": "{{name}}، {{quantity}}"
     }
   },
   "catalogue": {

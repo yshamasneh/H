@@ -60,9 +60,15 @@ export type BusinessOrderItem = {
   allowSubstitution: boolean;
   isVariableWeightSnapshot: boolean;
   lineTotalMinor: number;
+  /** The product's picture now (display only); null when it has none. */
+  imageUrl?: string | null;
   fulfillmentAdjustment: {
     id: string;
+    replacementMenuItemId?: string | null;
     replacementNameSnapshot: string | null;
+    replacementUnitLabelSnapshot?: string | null;
+    /** The replacement product's picture (display only). */
+    replacementImageUrl?: string | null;
     actualQuantityMilli: number;
     lineTotalMinor: number;
     status: "PENDING" | "APPROVED" | "REJECTED";

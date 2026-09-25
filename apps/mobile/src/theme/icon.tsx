@@ -39,6 +39,7 @@ const registry = {
   star: { outline: "star-outline", filled: "star" },
   checkCircle: { outline: "checkmark-circle-outline", filled: "checkmark-circle" },
   checkmark: { outline: "checkmark" },
+  swap: { outline: "swap-horizontal" },
   alertCircle: { outline: "alert-circle-outline", filled: "alert-circle" },
   closeCircle: { outline: "close-circle-outline", filled: "close-circle" },
   bicycle: { outline: "bicycle-outline", filled: "bicycle" },

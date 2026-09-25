@@ -5,6 +5,7 @@ import { ApiError, readApiError } from "../../api";
 import { getLiveOrders, setBusinessOpenStatus, type BusinessOrder, type LiveOrderQueue } from "../../api.business";
 import { useNewOrderAlert } from "../../alert-sound";
 import { useAuth } from "../../auth";
+import { isPackingStatus, loadPicked, packProgress } from "../../packChecklist";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useLiveRefresh } from "../../socket";
 
@@ -154,6 +155,7 @@ function QueueColumn({
               <div className="order-ticket-foot">
                 <span className="order-ticket-age">{t("liveOrders.elapsed", { minutes: Math.floor(ageMs / 60_000) })}</span>
                 {order.requiresCustomerReview ? <span>{t("liveOrders.awaitingCustomer")}</span> : null}
+                <PackedBadge order={order} />
                 {order.acceptedByFullName ? (
                   <span>{t("liveOrders.acceptedBy", { name: order.acceptedByFullName })}</span>
                 ) : null}
@@ -163,6 +165,18 @@ function QueueColumn({
         })
       )}
     </div>
+  );
+}
+
+/** "Packed 2/5" on a ticket whose order is being packed, so the board shows who is nearly done. */
+function PackedBadge({ order }: { order: BusinessOrder }) {
+  const { t } = useTranslation();
+  if (!isPackingStatus(order.status)) return null;
+  const progress = packProgress(order.items, loadPicked(order.id, order.items.map((item) => item.id)));
+  return (
+    <span className={`order-ticket-packed${progress.complete ? " is-done" : ""}`}>
+      {t("liveOrders.packed", { packed: progress.packed, total: progress.total })}
+    </span>
   );
 }
 

@@ -199,6 +199,24 @@
     "acceptOrder": "Accept Order",
     "rejectOrder": "Reject Order",
     "startPreparing": "Start Preparing",
-    "markReadyForPickup": "Mark Ready for Pickup"
+    "markReadyForPickup": "Mark Ready for Pickup",
+    "pack": {
+      "title": "Pack the order",
+      "hint": "Tap each item as you put it in the bag.",
+      "progress": "Packed {{packed}} of {{total}}",
+      "allPacked": "Everything is packed",
+      "replacementTag": "Replacement",
+      "replaces": "Replaces: {{name}}",
+      "declined": "The customer declined the replacement. Pack the original.",
+      "awaitingCustomer": "Waiting for the customer to decide",
+      "packQuantity": "Pack {{quantity}} {{unit}}",
+      "remaining": "{{count}} item(s) still to pack",
+      "readyBlocked": "Pack every item before marking the order ready.",
+      "readyAnyway": "Mark ready anyway",
+      "readyAnywayTitle": "Some items are not packed",
+      "readyAnywayBody": "These items are not checked off:\n{{items}}\n\nMark the order ready anyway?",
+      "readyAnywayConfirm": "Mark ready",
+      "itemLabel": "{{name}}, {{quantity}}"
+    }
   }
 }

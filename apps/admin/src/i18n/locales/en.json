@@ -343,7 +343,8 @@
     "soundBlocked": "The browser is blocking audio. Click anywhere on the page, then enable sound again.",
     "openStore": "Open store",
     "closeStore": "Close store",
-    "storeClosed": "The store is closed and is not receiving new orders."
+    "storeClosed": "The store is closed and is not receiving new orders.",
+    "packed": "Packed {{packed}}/{{total}}"
   },
   "businessOrder": {
     "title": "Order {{reference}}",
@@ -373,6 +374,24 @@
       "PREPARING": "Start preparing",
       "READY_FOR_PICKUP": "Ready for pickup",
       "REJECTED": "Reject order"
+    },
+    "pack": {
+      "title": "Pack the order",
+      "hint": "Tick each item as you put it in the bag.",
+      "progress": "Packed {{packed}} of {{total}}",
+      "allPacked": "Everything is packed",
+      "replacementTag": "Replacement",
+      "replaces": "Replaces: {{name}}",
+      "declined": "The customer declined the replacement. Pack the original.",
+      "awaitingCustomer": "Waiting for the customer to decide",
+      "packQuantity": "Pack {{quantity}} {{unit}}",
+      "remaining": "{{count}} item(s) still to pack",
+      "readyBlocked": "Pack every item before marking the order ready.",
+      "readyAnyway": "Mark ready anyway",
+      "readyAnywayTitle": "Some items are not packed",
+      "readyAnywayBody": "These items are not checked off: {{items}}. Mark the order ready anyway?",
+      "readyAnywayConfirm": "Mark ready",
+      "itemLabel": "{{name}}, {{quantity}}"
     }
   },
   "catalogue": {

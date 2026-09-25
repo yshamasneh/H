@@ -49,7 +49,12 @@ import { resolveCurrentRateSet } from "../accounting/order-financials.util";
 import { calculateOrderFees, defaultDeliveryPricing, type DeliveryPricingConfig } from "./pricing";
 
 const orderInclude = {
-  items: { include: { fulfillmentAdjustment: true, menuItem: { select: { imageUrl: true } } } },
+  items: {
+    include: {
+      fulfillmentAdjustment: { include: { replacementMenuItem: { select: { imageUrl: true } } } },
+      menuItem: { select: { imageUrl: true } }
+    }
+  },
   restaurant: true,
   acceptedBy: { select: { id: true, fullName: true } },
   statusHistory: { orderBy: { createdAt: "asc" as const } },
@@ -1238,6 +1243,9 @@ function toOrderDetailView(
           replacementMenuItemId: adjustment.replacementMenuItemId,
           replacementNameSnapshot: adjustment.replacementNameSnapshot,
           replacementUnitLabelSnapshot: adjustment.replacementUnitLabelSnapshot,
+          // Display only, like the line's own imageUrl: lets whoever packs the order see what the
+          // replacement looks like, not just what it is called.
+          replacementImageUrl: adjustment.replacementMenuItem?.imageUrl ?? null,
           actualQuantityMilli: adjustment.actualQuantityMilli,
           unitPriceMinor: adjustment.unitPriceMinor,
           lineTotalMinor: adjustment.lineTotalMinor,

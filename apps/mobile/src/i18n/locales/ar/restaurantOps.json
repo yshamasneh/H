@@ -199,6 +199,24 @@
     "acceptOrder": "قبول الطلب",
     "rejectOrder": "رفض الطلب",
     "startPreparing": "بدء التحضير",
-    "markReadyForPickup": "تعليم كجاهز للاستلام"
+    "markReadyForPickup": "تعليم كجاهز للاستلام",
+    "pack": {
+      "title": "تجهيز الطلب",
+      "hint": "اضغط على كل منتج عند وضعه في الكيس.",
+      "progress": "تم تجهيز {{packed}} من {{total}}",
+      "allPacked": "تم تجهيز كل شيء",
+      "replacementTag": "بديل",
+      "replaces": "بديل عن: {{name}}",
+      "declined": "رفض العميل البديل. جهّز المنتج الأصلي.",
+      "awaitingCustomer": "بانتظار قرار العميل",
+      "packQuantity": "جهّز {{quantity}} {{unit}}",
+      "remaining": "{{count}} منتج بانتظار التجهيز",
+      "readyBlocked": "جهّز كل المنتجات قبل تحديد الطلب كجاهز.",
+      "readyAnyway": "تحديد كجاهز رغم ذلك",
+      "readyAnywayTitle": "بعض المنتجات لم يتم تجهيزها",
+      "readyAnywayBody": "هذه المنتجات لم يتم تأشيرها:\n{{items}}\n\nهل تريد تحديد الطلب كجاهز رغم ذلك؟",
+      "readyAnywayConfirm": "تحديد كجاهز",
+      "itemLabel": "{{name}}، {{quantity}}"
+    }
   }
 }
