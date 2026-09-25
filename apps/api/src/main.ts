@@ -6,6 +6,7 @@ import helmet from "helmet";
 import { AppModule } from "./app.module";
 import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 import { ApiException } from "./common/api.exception";
+import { corsAllowedMethods } from "./common/cors-methods";
 import { ConfiguredSocketIoAdapter } from "./config/socket-io.adapter";
 import { ErrorReporterService } from "./observability/error-reporter.service";
 import { MetricsService } from "./observability/metrics.service";
@@ -33,7 +34,7 @@ async function bootstrap() {
   );
   app.enableCors({
     origin: allowedOrigins,
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    methods: [...corsAllowedMethods],
     allowedHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
     exposedHeaders: ["X-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset"],
     credentials: false,
