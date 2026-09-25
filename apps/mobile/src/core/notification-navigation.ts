@@ -12,7 +12,9 @@ const orderNotificationTypes = new Set([
   "ORDER_PLACED",
   "ORDER_STATUS_CHANGED",
   "DELIVERY_ASSIGNED",
-  "DELIVERY_STATUS_CHANGED"
+  "DELIVERY_STATUS_CHANGED",
+  // An operator alert (a failed delivery) points at the order that needs a decision.
+  "ADMIN_ALERT"
 ]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -119,6 +121,13 @@ export class NotificationOrderNavigator {
 
     if (parsed.kind === "delivery-alert") {
       if (session.user.role !== "DRIVER") return "ignored";
+      this.deps.navigate(goToDriverHome(session.user));
+      return "navigated";
+    }
+
+    // A driver has no order screen: their work lives on the home screen (an active delivery, or the
+    // waiting list). A notification about one of their deliveries, such as a cancellation, lands there.
+    if (session.user.role === "DRIVER") {
       this.deps.navigate(goToDriverHome(session.user));
       return "navigated";
     }

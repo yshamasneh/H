@@ -354,10 +354,11 @@ test("a delivery alert to an iOS driver names the bundled JOVO sound file", asyn
   assert.equal(payload.channelId, "delivery-alerts");
 });
 
-test("ordinary notifications are sent exactly as before: default sound, no channel, no expiry", async () => {
+test("ordinary notifications keep the default sound and no expiry, and go to the app's order-updates channel", async () => {
   const payload = await sentPayload(deliveryFor("ORDER_PLACED", "android"));
 
   assert.equal(payload.sound, "default");
-  assert.equal("channelId" in payload, false);
+  // The high-importance channel the app creates for order updates, not the JOVO delivery-alert one.
+  assert.equal(payload.channelId, "orders");
   assert.equal("ttl" in payload, false);
 });

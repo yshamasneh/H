@@ -542,7 +542,7 @@ test("customer cancels their own PLACED order", async () => {
   assert.equal(cancelled.status, "CANCELLED");
 
   const restaurantNotification = prisma.notifications.find(
-    (entry) => entry.userId === restaurant.ownerUserId && entry.title === "Order cancelled by customer"
+    (entry) => entry.userId === restaurant.ownerUserId && entry.title.includes("Order cancelled by customer")
   );
   assert.ok(restaurantNotification);
 });
@@ -707,7 +707,7 @@ test("admin cancels an ACCEPTED order with a reason, writing an AuditLog entry a
   assert.equal(auditEntry!.actorUserId, adminId);
   assert.equal(auditEntry!.reason, "Restaurant called in sick, no capacity");
 
-  assert.ok(prisma.notifications.some((entry) => entry.userId === customerId && entry.title === "Your order was cancelled"));
+  assert.ok(prisma.notifications.some((entry) => entry.userId === customerId && entry.title.includes("Your order was cancelled")));
   assert.ok(prisma.notifications.some((entry) => entry.userId === restaurant.ownerUserId));
 });
 
@@ -1602,4 +1602,103 @@ test("a freshly placed order is in the store's live queue even behind a backlog 
   // Still presented first-come-first-served, so the newest sits at the end, not the top.
   assert.equal(ids[ids.length - 1], fresh.id, "the queue reads oldest first");
   assert.ok(ids.length <= 100, "the bucket is still capped");
+});
+
+// --- notification audit: who is told what, once, at each step -----------------------------------
+
+const hasArabic = (text: string) => /[؀-ۿ]/.test(text);
+const hasLatin = (text: string) => /[A-Za-z]/.test(text);
+
+test("placing an order notifies every active member of the business exactly once, in Arabic and English", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const staffId = randomUUID();
+  prisma.businessMembers.push({ businessId: restaurant.id, userId: staffId, isActive: true });
+  prisma.businessMembers.push({ businessId: restaurant.id, userId: randomUUID(), isActive: false });
+
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const placed = prisma.notifications.filter((entry) => entry.type === "ORDER_PLACED");
+  assert.deepEqual(placed.map((entry) => entry.userId).sort(), [restaurant.ownerUserId, staffId].sort());
+  for (const entry of placed) {
+    assert.equal(entry.relatedEntityId, order.id, "tapping it must open this order");
+    assert.ok(hasArabic(entry.title) && hasLatin(entry.title));
+    assert.ok(hasArabic(entry.body) && hasLatin(entry.body));
+  }
+});
+
+test("each status step tells the customer once, about their own order, in both languages", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+
+  for (const status of ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP"] as const) {
+    const before = prisma.notifications.filter((entry) => entry.userId === customerId).length;
+    await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, status, undefined);
+    const mine = prisma.notifications.filter((entry) => entry.userId === customerId);
+    assert.equal(mine.length, before + 1, `${status} must notify the customer exactly once`);
+    const latest = mine[mine.length - 1];
+    assert.equal(latest.type, "ORDER_STATUS_CHANGED");
+    assert.equal(latest.relatedEntityId, order.id);
+    assert.ok(hasArabic(latest.title) && hasLatin(latest.title), status);
+  }
+  // Nobody but the customer hears about the customer's own status changes.
+  const others = prisma.notifications.filter(
+    (entry) => entry.type === "ORDER_STATUS_CHANGED" && entry.userId !== customerId
+  );
+  assert.equal(others.length, 0);
+});
+
+test("a rejection carries the store's reason to the customer in both languages", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "REJECTED", "Out of stock");
+
+  const note = prisma.notifications.find((entry) => entry.userId === customerId && entry.title.includes("rejected"));
+  assert.ok(note);
+  assert.ok(note!.body.includes("Out of stock"));
+  assert.ok(hasArabic(note!.body) && hasLatin(note!.body));
+});
+
+test("cancelling an order after a driver accepted it tells that driver, and only that driver", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "PREPARING", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+  const driverId = randomUUID();
+  prisma.deliveries[0].driverId = driverId;
+  prisma.deliveries[0].status = "ASSIGNED";
+
+  await service.adminCancelOrder(randomUUID(), order.id, "Customer changed their mind");
+
+  const told = prisma.notifications.filter((entry) => entry.userId === driverId);
+  assert.equal(told.length, 1);
+  assert.equal(told[0].type, "DELIVERY_STATUS_CHANGED");
+  assert.equal(told[0].relatedEntityId, order.id);
+  assert.ok(hasArabic(told[0].title) && hasLatin(told[0].title));
+});
+
+test("cancelling an order nobody has accepted yet does not notify any driver", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id);
+  const order = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "PREPARING", undefined);
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+  const before = prisma.notifications.filter((entry) => entry.type === "DELIVERY_STATUS_CHANGED").length;
+
+  await service.adminCancelOrder(randomUUID(), order.id, "Customer changed their mind");
+
+  assert.equal(prisma.notifications.filter((entry) => entry.type === "DELIVERY_STATUS_CHANGED").length, before);
 });

@@ -25,6 +25,7 @@ import { calculatePromotionDiscounts } from "../offers/offers.service";
 import { chargedUnitPriceMinor, isOnSale } from "../restaurants/sale-price";
 import type { AppliedPromotion } from "../offers/offers.types";
 import { isWithinWeeklyHours } from "../restaurants/restaurant.rules";
+import * as copy from "../notifications/notification-copy";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
@@ -157,8 +158,7 @@ export class OrdersService {
       await createBusinessNotification(tx, emitter, {
         businessId: created.restaurantId,
         type: NotificationType.ORDER_PLACED,
-        title: "New order received",
-        body: `A new order for ${formatPrice(created.totalMinor)} is waiting for your response.`,
+        ...copy.newOrderForBusiness(created.totalMinor),
         relatedEntityId: created.id
       });
       return { ...created, statusHistory: await tx.orderStatusHistory.findMany({ where: { orderId: created.id } }) };
@@ -465,10 +465,7 @@ export class OrdersService {
       await createNotification(tx, emitter, {
         userId: order.customerId,
         type: NotificationType.ORDER_STATUS_CHANGED,
-        title: "Your supermarket needs a product decision",
-        body: replacement
-          ? `${orderItem.nameSnapshot} has a proposed replacement. Review it before the store accepts your order.`
-          : `${orderItem.nameSnapshot} has a packed quantity update. Review it before the store accepts your order.`,
+        ...copy.productDecisionNeeded(orderItem.nameSnapshot, Boolean(replacement)),
         relatedEntityId: order.id
       });
       return tx.order.findUnique({ where: { id: order.id }, include: orderInclude });
@@ -559,10 +556,7 @@ export class OrdersService {
       await createBusinessNotification(tx, emitter, {
         businessId: order.restaurantId,
         type: NotificationType.ORDER_STATUS_CHANGED,
-        title: decision === "APPROVED" ? "Fulfillment change approved" : "Fulfillment change rejected",
-        body: decision === "APPROVED"
-          ? "The customer approved the proposed product or packed quantity."
-          : "The customer rejected the proposal. You can send a revised proposal or fulfill the original product.",
+        ...copy.fulfillmentDecisionForBusiness(decision),
         relatedEntityId: order.id
       });
       return tx.order.findUnique({ where: { id: order.id }, include: orderInclude });
@@ -696,8 +690,7 @@ export class OrdersService {
         // the pickup store — a lock-screen notification must not expose the customer's address.
         await createNotificationsForUsers(tx, emitter, await findDispatchableDriverIds(tx), {
           type: NotificationType.DELIVERY_AVAILABLE,
-          title: "طلب توصيل جديد · New delivery",
-          body: `${restaurant.name} — افتح التطبيق للقبول · Open the app to accept`,
+          ...copy.deliveryAvailable(restaurant.name),
           relatedEntityId: delivery.id
         });
         emitter.emitToDrivers("delivery.available", { deliveryId: delivery.id, orderId });
@@ -708,8 +701,7 @@ export class OrdersService {
       await createNotification(tx, emitter, {
         userId: existing.customerId,
         type: NotificationType.ORDER_STATUS_CHANGED,
-        title: orderStatusNotificationTitle(targetStatus),
-        body: orderStatusNotificationBody(targetStatus, note),
+        ...copy.orderStatusForCustomer(targetStatus, note),
         relatedEntityId: orderId
       });
       return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
@@ -757,8 +749,7 @@ export class OrdersService {
       await createBusinessNotification(tx, emitter, {
         businessId: existing.restaurantId,
         type: NotificationType.ORDER_STATUS_CHANGED,
-        title: "Order cancelled by customer",
-        body: "The customer cancelled this order before it was accepted.",
+        ...copy.orderCancelledByCustomerForBusiness(),
         relatedEntityId: orderId
       });
       return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
@@ -816,17 +807,26 @@ export class OrdersService {
       await createNotification(tx, emitter, {
         userId: existing.customerId,
         type: NotificationType.ORDER_STATUS_CHANGED,
-        title: "Your order was cancelled",
-        body: `An administrator cancelled this order. Reason: ${reason}`,
+        ...copy.orderCancelledByAdminForCustomer(reason),
         relatedEntityId: orderId
       });
       await createBusinessNotification(tx, emitter, {
         businessId: existing.restaurantId,
         type: NotificationType.ORDER_STATUS_CHANGED,
-        title: "An order was cancelled by an administrator",
-        body: `Reason: ${reason}`,
+        ...copy.orderCancelledByAdminForBusiness(reason),
         relatedEntityId: orderId
       });
+      // A driver who had already accepted the delivery is on their way to the store; without this
+      // they learn the order is gone only when they arrive. Only a claimed delivery has a driver.
+      const cancelledDelivery = await tx.delivery.findUnique({ where: { orderId } });
+      if (cancelledDelivery?.driverId && cancelledDelivery.status === DeliveryStatus.CANCELLED) {
+        await createNotification(tx, emitter, {
+          userId: cancelledDelivery.driverId,
+          type: NotificationType.DELIVERY_STATUS_CHANGED,
+          ...copy.deliveryCancelledForDriver(),
+          relatedEntityId: orderId
+        });
+      }
       return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
     });
     emitter.flush();
@@ -1155,10 +1155,6 @@ function invalidTransition(from: OrderStatus, to: OrderStatus): ApiException {
   return new ApiException(409, "ORDER_INVALID_TRANSITION", `Order cannot move from ${from} to ${to}.`);
 }
 
-function formatPrice(priceMinor: number): string {
-  return `${(priceMinor / 100).toFixed(2)} ILS`;
-}
-
 function reservedUnits(actualQuantityMilli: number): number {
   return Math.max(1, Math.ceil(actualQuantityMilli / 1_000));
 }
@@ -1171,33 +1167,6 @@ function reservedUnits(actualQuantityMilli: number): number {
  */
 function lineAmount(unitAmountMinor: number, actualQuantityMilli: number): number {
   return Math.floor((unitAmountMinor * actualQuantityMilli) / 1_000);
-}
-
-function orderStatusNotificationTitle(status: OrderStatus): string {
-  switch (status) {
-    case OrderStatus.ACCEPTED:
-      return "Your order was accepted";
-    case OrderStatus.PREPARING:
-      return "Your order is being prepared";
-    case OrderStatus.READY_FOR_PICKUP:
-      return "Your order is ready and waiting for a driver";
-    case OrderStatus.REJECTED:
-      return "Your order was rejected";
-    case OrderStatus.DELIVERED:
-      return "Your order has been delivered";
-    case OrderStatus.CANCELLED:
-      return "Your order was cancelled";
-    default:
-      return "Your order status has changed";
-  }
-}
-
-function orderStatusNotificationBody(status: OrderStatus, note: string | undefined): string {
-  const trimmedNote = note?.trim();
-  if (status === OrderStatus.REJECTED && trimmedNote) {
-    return `The restaurant could not accept this order. Reason: ${trimmedNote}`;
-  }
-  return trimmedNote || orderStatusNotificationTitle(status);
 }
 
 function toOrderDetailView(

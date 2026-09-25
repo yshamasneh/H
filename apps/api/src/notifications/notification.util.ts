@@ -1,4 +1,4 @@
-import type { NotificationType, Prisma } from "../generated/prisma/client";
+import { UserRole, type NotificationType, type Prisma } from "../generated/prisma/client";
 import type { RealtimeEmitter } from "../realtime/deferred-emitter";
 
 export type CreateNotificationInput = {
@@ -138,4 +138,17 @@ export async function createNotificationsForUsers(
   if (deliveries.length > 0) {
     await tx.pushDelivery.createMany({ data: deliveries, skipDuplicates: true });
   }
+}
+
+/**
+ * Every active admin account. Used for the few events an operator has to act on rather than merely
+ * watch, such as a failed delivery: the admin console already gets a live socket event, but an admin
+ * with the console closed only hears about it through a push.
+ */
+export async function findAdminUserIds(tx: Prisma.TransactionClient): Promise<string[]> {
+  const admins = await tx.user.findMany({
+    where: { role: UserRole.ADMIN, isActive: true },
+    select: { id: true }
+  });
+  return admins.map((admin) => admin.id);
 }

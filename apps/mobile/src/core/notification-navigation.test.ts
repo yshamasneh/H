@@ -231,3 +231,23 @@ test("a delivery alert with a malformed id is rejected rather than trusted", asy
   assert.equal(result, "ignored");
   assert.equal(screens.length, 0);
 });
+
+test("a driver tapping a notification about their delivery (e.g. a cancellation) opens their home, not 'unavailable'", async () => {
+  const { navigator, screens, unavailable } = harness();
+  await navigator.setSession({ accessToken: "access", user: driver });
+  const result = await navigator.handleResponse(response({ id: "cancel-1", type: "DELIVERY_STATUS_CHANGED" }));
+  assert.equal(result, "navigated");
+  assert.deepEqual(screens, [{ name: "driver-home", user: driver }]);
+  assert.equal(unavailable(), 0);
+});
+
+const admin: PublicUser = { id: "admin-1", fullName: "Sami", phone: "+970590000002", role: "ADMIN" };
+
+test("an admin alert opens the order that needs a decision", async () => {
+  const { navigator, screens } = harness();
+  await navigator.setSession({ accessToken: "access", user: admin });
+  const result = await navigator.handleResponse(response({ id: "admin-alert-1", type: "ADMIN_ALERT" }));
+  assert.equal(result, "navigated");
+  assert.equal(screens.length, 1);
+  assert.equal(screens[0].orderId, orderId);
+});

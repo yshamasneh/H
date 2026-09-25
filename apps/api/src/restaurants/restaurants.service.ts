@@ -16,6 +16,7 @@ import {
   UserRole,
   type Restaurant
 } from "../generated/prisma/client";
+import * as copy from "../notifications/notification-copy";
 import { createBusinessNotification } from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
@@ -725,12 +726,7 @@ export class RestaurantsService {
       await createBusinessNotification(tx, emitter, {
         businessId: restaurant.id,
         type: isApproval ? NotificationType.RESTAURANT_APPROVED : NotificationType.RESTAURANT_REJECTED,
-        title: isApproval ? "Your restaurant was approved" : "Your restaurant application was rejected",
-        body: isApproval
-          ? "Congratulations! Your restaurant is now live and can start accepting orders."
-          : reason
-            ? `Your restaurant application was not approved. Reason: ${reason}`
-            : "Your restaurant application was not approved. Please contact support for details.",
+        ...copy.restaurantReview(isApproval, reason),
         relatedEntityId: restaurantId
       });
       return next;
@@ -776,8 +772,7 @@ export class RestaurantsService {
       await createBusinessNotification(tx, emitter, {
         businessId: restaurant.id,
         type: targetStatus === RestaurantStatus.SUSPENDED ? NotificationType.RESTAURANT_SUSPENDED : NotificationType.RESTAURANT_APPROVED,
-        title: targetStatus === RestaurantStatus.SUSPENDED ? "Your restaurant has been suspended" : "Your restaurant has been reactivated",
-        body: reason ? `Reason: ${reason}` : "Your restaurant can accept orders again.",
+        ...copy.restaurantSuspension(targetStatus === RestaurantStatus.SUSPENDED, reason),
         relatedEntityId: restaurantId
       });
       return next;

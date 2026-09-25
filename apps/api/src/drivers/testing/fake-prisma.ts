@@ -168,6 +168,12 @@ export class FakeDriversPrisma {
     this.pushToken.findMany = async () => [];
     this.user.findUnique = async ({ where }: any) =>
       this.users.find((user) => (where.phone ? user.phone === where.phone : user.id === where.id)) ?? null;
+    this.user.findMany = async ({ where }: any) =>
+      this.users.filter(
+        (user) =>
+          (where?.role === undefined || user.role === where.role) &&
+          (where?.isActive === undefined || user.isActive === where.isActive)
+      );
     this.user.create = async ({ data }: any) => {
       if (this.users.some((user) => user.phone === data.phone)) {
         throw new Error("duplicate user phone");

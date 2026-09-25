@@ -24,7 +24,13 @@ import {
   recordOrderFinancials,
   type FinancialOutcome
 } from "../accounting/order-financials.util";
-import { createBusinessNotification, createNotification } from "../notifications/notification.util";
+import * as copy from "../notifications/notification-copy";
+import {
+  createBusinessNotification,
+  createNotification,
+  createNotificationsForUsers,
+  findAdminUserIds
+} from "../notifications/notification.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { DeferredEmitter } from "../realtime/deferred-emitter";
 import { RealtimeGateway } from "../realtime/realtime.gateway";
@@ -533,8 +539,7 @@ export class DriversService {
         await createNotification(tx, emitter, {
           userId: order.customerId,
           type: NotificationType.DELIVERY_ASSIGNED,
-          title: "A driver is on the way",
-          body: "A driver has been assigned to pick up your order.",
+          ...copy.driverAssignedForCustomer(),
           relatedEntityId: order.id
         });
         emitter.emitToOrder(order.id, "delivery.status.changed", { deliveryId, status: DeliveryStatus.ASSIGNED });
@@ -648,8 +653,7 @@ export class DriversService {
       await createNotification(tx, emitter, {
         userId: order.customerId,
         type: NotificationType.DELIVERY_STATUS_CHANGED,
-        title: deliveryStatusNotificationTitle(targetStatus),
-        body: deliveryStatusNotificationBody(targetStatus),
+        ...copy.deliveryStatusForCustomer(targetStatus),
         relatedEntityId: order.id
       });
       if (targetStatus === DeliveryStatus.FAILED) {
@@ -657,8 +661,14 @@ export class DriversService {
         await createBusinessNotification(tx, emitter, {
           businessId: order.restaurantId,
           type: NotificationType.ORDER_STATUS_CHANGED,
-          title: "A delivery could not be completed",
-          body: `The driver reported: ${failure!.failureReason}.`,
+          ...copy.deliveryFailedForBusiness(failure!.failureReason),
+          relatedEntityId: order.id
+        });
+        // The order is now stuck between "left the store" and "handed over" and only an operator can
+        // decide what happens to it (re-dispatch, refund, return to store), so admins are pushed too.
+        await createNotificationsForUsers(tx, emitter, await findAdminUserIds(tx), {
+          type: NotificationType.ADMIN_ALERT,
+          ...copy.deliveryFailedForAdmin(order.id.slice(0, 8), failure!.failureReason),
           relatedEntityId: order.id
         });
       }
@@ -838,8 +848,7 @@ export class DriversService {
       await createNotification(tx, emitter, {
         userId: driverUserId,
         type: notificationType,
-        title: driverStatusNotificationTitle(targetStatus),
-        body: reason ? `Reason: ${reason}` : driverStatusNotificationTitle(targetStatus),
+        ...copy.driverAccountStatus(targetStatus, reason),
         relatedEntityId: driverUserId
       });
 
@@ -899,49 +908,6 @@ function orderStatusForDelivery(status: DeliveryStatus): OrderStatus | null {
   if (status === DeliveryStatus.DELIVERED) return OrderStatus.DELIVERED;
   if (status === DeliveryStatus.FAILED) return OrderStatus.DELIVERY_FAILED;
   return null;
-}
-
-function deliveryStatusNotificationTitle(status: DeliveryStatus): string {
-  switch (status) {
-    case DeliveryStatus.PICKED_UP:
-      return "Your order has been picked up";
-    case DeliveryStatus.ON_THE_WAY:
-      return "Your order is on the way";
-    case DeliveryStatus.DELIVERED:
-      return "Your order has been delivered";
-    case DeliveryStatus.FAILED:
-      return "Your order could not be delivered";
-    default:
-      return "Delivery update";
-  }
-}
-
-function deliveryStatusNotificationBody(status: DeliveryStatus): string {
-  switch (status) {
-    case DeliveryStatus.PICKED_UP:
-      return "The driver has picked up your order from the restaurant.";
-    case DeliveryStatus.ON_THE_WAY:
-      return "The driver is on the way to your delivery address.";
-    case DeliveryStatus.DELIVERED:
-      return "Enjoy your meal! Your order has been marked delivered.";
-    case DeliveryStatus.FAILED:
-      return "The driver could not complete this delivery. Please contact support if you need help.";
-    default:
-      return "Your delivery status has changed.";
-  }
-}
-
-function driverStatusNotificationTitle(status: DriverApprovalStatus): string {
-  switch (status) {
-    case DriverApprovalStatus.APPROVED:
-      return "Your driver account has been approved";
-    case DriverApprovalStatus.REJECTED:
-      return "Your driver application was not approved";
-    case DriverApprovalStatus.SUSPENDED:
-      return "Your driver account has been suspended";
-    default:
-      return "Your driver account status has changed";
-  }
 }
 
 function toProfileView(profile: DriverProfile): DriverProfileView {

@@ -566,3 +566,63 @@ test("updating a driver's location persists the coordinates (TC-116)", async () 
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }
+
+// --- notification audit: delivery steps ---------------------------------------------------------
+
+const hasArabicText = (text: string) => /[؀-ۿ]/.test(text);
+const hasLatinText = (text: string) => /[A-Za-z]/.test(text);
+
+test("accepting, picking up and delivering each tell the customer once, about their own order", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id);
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+
+  const steps: Array<[() => Promise<unknown>, string]> = [
+    [() => service.acceptDelivery(driver.userId, delivery.id), "DELIVERY_ASSIGNED"],
+    [() => service.updateDeliveryStatus(driver.userId, delivery.id, "PICKED_UP"), "DELIVERY_STATUS_CHANGED"],
+    [() => service.updateDeliveryStatus(driver.userId, delivery.id, "ON_THE_WAY"), "DELIVERY_STATUS_CHANGED"],
+    [() => service.updateDeliveryStatus(driver.userId, delivery.id, "DELIVERED"), "DELIVERY_STATUS_CHANGED"]
+  ];
+  for (const [step, type] of steps) {
+    const before = prisma.notifications.length;
+    await step();
+    const added = prisma.notifications.slice(before);
+    assert.equal(added.length, 1, "exactly one notification per step, no duplicates");
+    assert.equal(added[0].type, type);
+    assert.equal(added[0].userId, order.customerId);
+    assert.equal(added[0].relatedEntityId, order.id);
+    assert.ok(hasArabicText(added[0].title) && hasLatinText(added[0].title));
+  }
+});
+
+test("a failed delivery tells the customer, the business (with a readable reason) and active admins", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const order = prisma.seedOrder(restaurant.id);
+  const delivery = prisma.seedDelivery(order.id);
+  const driver = prisma.seedDriver({ isOnline: true });
+  const now = new Date();
+  const admin = { id: randomUUID(), fullName: "Admin", phone: "+970590000901", passwordHash: "x", role: "ADMIN", phoneVerifiedAt: now, isActive: true, createdAt: now, updatedAt: now };
+  const inactiveAdmin = { ...admin, id: randomUUID(), phone: "+970590000902", isActive: false };
+  prisma.users.push(admin as never, inactiveAdmin as never);
+  await service.acceptDelivery(driver.userId, delivery.id);
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "PICKED_UP");
+  const before = prisma.notifications.length;
+
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "FAILED", { failureReason: "CUSTOMER_UNREACHABLE" });
+
+  const added = prisma.notifications.slice(before);
+  const forCustomer = added.filter((entry) => entry.userId === order.customerId);
+  const forBusiness = added.filter((entry) => entry.type === "ORDER_STATUS_CHANGED");
+  const forAdmins = added.filter((entry) => entry.type === "ADMIN_ALERT");
+  assert.equal(forCustomer.length, 1);
+  assert.equal(forBusiness.length >= 1, true);
+  assert.ok(!forBusiness[0].body.includes("CUSTOMER_UNREACHABLE"), "no raw enum in a notification");
+  assert.ok(hasArabicText(forBusiness[0].body) && hasLatinText(forBusiness[0].body));
+  assert.deepEqual(forAdmins.map((entry) => entry.userId), [admin.id], "active admins only");
+  assert.equal(forAdmins[0].relatedEntityId, order.id);
+  assert.ok(!forAdmins[0].body.includes("CUSTOMER_UNREACHABLE"));
+  assert.equal(added.length, forCustomer.length + forBusiness.length + forAdmins.length, "nothing else is sent");
+});
