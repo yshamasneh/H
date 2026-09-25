@@ -1575,3 +1575,31 @@ test("a product offer does not stack on a product that is already on sale", asyn
   assert.equal(order.merchandiseDiscountMinor, 100, "the offer applied to the full-price line only");
   assert.deepEqual(order.appliedPromotions.map((promotion) => promotion.title), ["10% off Full price"]);
 });
+
+// --- the live queue must never hide a new order behind an old backlog -----------------------
+
+test("a freshly placed order is in the store's live queue even behind a backlog larger than the cap", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 1000 });
+
+  // A backlog of un-actioned orders bigger than the queue's cap, all older than what follows.
+  // This is what a real store accumulates when orders are placed and never accepted or rejected.
+  const backlogSize = 120;
+  for (let index = 0; index < backlogSize; index += 1) {
+    await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  }
+  const backlogCutoff = new Date(Date.now() - 60 * 60 * 1000);
+  for (const order of prisma.orders) order.createdAt = backlogCutoff;
+
+  const fresh = await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+
+  const queue = await service.listLiveForBusiness(restaurant.ownerUserId);
+  const ids = queue.new.map((order) => order.id);
+
+  // Selecting the oldest N and capping dropped exactly this order — the one the store must act on.
+  assert.ok(ids.includes(fresh.id), "the newest order must be visible to the store that has to accept it");
+  // Still presented first-come-first-served, so the newest sits at the end, not the top.
+  assert.equal(ids[ids.length - 1], fresh.id, "the queue reads oldest first");
+  assert.ok(ids.length <= 100, "the bucket is still capped");
+});

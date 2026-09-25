@@ -58,6 +58,9 @@ const orderInclude = {
 /** Business and admin callers see who accepted an order; customers deliberately do not. */
 const withActorNames = { includeActorNames: true } as const;
 
+/** How many orders each live-queue bucket returns. See listLiveForBusiness for why the newest win. */
+const liveQueueLimit = 100;
+
 type OrderWithRelations = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 
 @Injectable()
@@ -250,9 +253,10 @@ export class OrdersService {
   /**
    * The operational queue for a business, grouped the way the floor thinks about it.
    *
-   * One request rather than three so the 30-second safety poll stays cheap, and ordered oldest
+   * One request rather than three so the 30-second safety poll stays cheap, and presented oldest
    * first because the oldest unhandled order is always the most urgent. Uses the
-   * (restaurantId, status, createdAt) index.
+   * (restaurantId, status, createdAt) index. Each bucket is capped; see below for why the cap has
+   * to fall on the oldest orders and not the newest.
    */
   async listLiveForBusiness(memberUserId: string): Promise<LiveOrderQueueView> {
     const restaurant = await this.requireOwnRestaurant(memberUserId);
@@ -262,14 +266,23 @@ export class OrdersService {
       ready: [OrderStatus.READY_FOR_PICKUP]
     } as const;
 
+    // Take the NEWEST hundred, then present them oldest-first.
+    //
+    // Selecting oldest-first and capping meant that once a store accumulated more than `take`
+    // un-actioned orders, the cap fell on the newest ones: the queue froze on an old backlog and a
+    // freshly placed order was invisible to the store that had to accept it. Ordering the query the
+    // other way makes the cap drop the stale tail instead, and the reverse below keeps the
+    // first-come-first-served reading order the counter staff work from.
     const [newOrders, inProgress, ready] = await Promise.all(
-      Object.values(groups).map((statuses) =>
-        this.prisma.order.findMany({
-          where: { restaurantId: restaurant.id, status: { in: [...statuses] } },
-          include: orderInclude,
-          orderBy: { createdAt: "asc" },
-          take: 100
-        })
+      Object.values(groups).map(async (statuses) =>
+        (
+          await this.prisma.order.findMany({
+            where: { restaurantId: restaurant.id, status: { in: [...statuses] } },
+            include: orderInclude,
+            orderBy: { createdAt: "desc" },
+            take: liveQueueLimit
+          })
+        ).reverse()
       )
     );
 
