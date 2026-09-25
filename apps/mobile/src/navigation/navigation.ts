@@ -1,4 +1,4 @@
-import type { AuthResult, DeliveryView, OrderDetail, OtpRequestResult, PublicUser, RestaurantSummary, SignupInput } from "../core/api";
+import type { AuthResult, DeliveryView, OrderDetail, OtpRequestResult, PublicUser, RestaurantOffer, RestaurantSummary, SignupInput } from "../core/api";
 import type { CountryCode } from "../core/phone";
 
 export type PhonePrefill = { countryCode: CountryCode; phoneNumber: string };
@@ -37,6 +37,10 @@ export type AppScreen =
       supermarketName: string;
       productId: string;
     }
+  // The offer is carried whole (not just an id) the same way "order-confirmation" carries its
+  // order: there is no GET-one-offer endpoint, and the caller (the offers list, a notification
+  // payload, or a deep link resolver) already has the full record in hand.
+  | { name: "offer-detail"; user: PublicUser; offer: RestaurantOffer }
   | { name: "cart"; user: PublicUser }
   | { name: "checkout"; user: PublicUser }
   | { name: "order-confirmation"; user: PublicUser; order: OrderDetail }
@@ -151,6 +155,13 @@ export function homeForUser(user: PublicUser): AppScreen {
   if (user.role === "ADMIN") return { name: "admin-dashboard", user };
   if (user.role === "DRIVER") return { name: "driver-home", user };
   return { name: "home", user };
+}
+
+export function goToOfferDetail(
+  user: PublicUser,
+  offer: RestaurantOffer
+): Extract<AppScreen, { name: "offer-detail" }> {
+  return { name: "offer-detail", user, offer };
 }
 
 export function goToCart(user: PublicUser): Extract<AppScreen, { name: "cart" }> {

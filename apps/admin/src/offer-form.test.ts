@@ -21,8 +21,15 @@ test("builds a valid order-percentage offer with money converted exactly", () =>
     discountPercent: 10,
     minimumSubtotalMinor: 3550,
     maxDiscountMinor: 515,
-    isActive: true
+    isActive: true,
+    isFeatured: false
   });
+});
+
+test("the featured flag is carried into the built body", () => {
+  const result = buildOffer(draft({ isFeatured: true }));
+  assert.ok(result.ok);
+  assert.equal(result.body.isFeatured, true);
 });
 
 test("free delivery carries no percentage, no cap and needs no restaurant", () => {
@@ -84,6 +91,7 @@ const stored: OfferView = {
   startsAt: "2026-09-01T08:00:00.000Z",
   endsAt: "2026-10-01T08:00:00.000Z",
   isActive: true,
+  isFeatured: false,
   createdAt: "2026-08-30T08:00:00.000Z"
 };
 
@@ -113,8 +121,14 @@ test("pausing changes only isActive and drops nothing else", () => {
     imageUrl: "https://blob.example/offers/rest-1/a.jpg",
     startsAt: "2026-09-01T08:00:00.000Z",
     endsAt: "2026-10-01T08:00:00.000Z",
-    isActive: false
+    isActive: false,
+    isFeatured: false
   });
+});
+
+test("featuring an offer is preserved through a pause/resume toggle", () => {
+  const featured: OfferView = { ...stored, isFeatured: true };
+  assert.equal(offerToggleBody(featured, false).isFeatured, true);
 });
 
 test("toLocalInput round-trips an instant to the minute", () => {

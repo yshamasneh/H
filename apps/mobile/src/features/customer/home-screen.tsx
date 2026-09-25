@@ -11,7 +11,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { RemoteImage } from "../../components/remote-image";
+import { displayableImageUri, RemoteImage } from "../../components/remote-image";
 import { PriceDisplay, SaleBadge } from "../../components/sale-price";
 import {
   getSupermarketCatalog,
@@ -73,6 +73,7 @@ export function CustomerHomeScreen(props: {
   notice?: string;
   onOpenCatalog: (store: MarketStore, filters?: CatalogFilters) => void;
   onOpenProduct: (store: MarketStore, productId: string) => void;
+  onOpenOffer: (offer: RestaurantOffer) => void;
   onAddItem: (store: MarketStore, item: MenuItemSummary) => void;
   onViewCart: () => void;
   onOpenNotifications: () => void;
@@ -135,6 +136,9 @@ export function CustomerHomeScreen(props: {
   const visibleOffers = offers?.filter(
     (offer) => !offer.restaurantId || offer.restaurantBusinessType === "SUPERMARKET"
   );
+  // The admin picks at most one offer to feature (see OffersService); nothing renders below when
+  // none is active or visible, so the screen just keeps its normal appearance.
+  const featuredOffer = visibleOffers?.find((offer) => offer.isFeatured);
 
   const storeName = store?.name ?? t("home.marketFallbackName");
   const marketClosed = store != null && !store.isOpenNow;
@@ -172,6 +176,29 @@ export function CustomerHomeScreen(props: {
           </View>
         </View>
 
+        {/* The admin's one featured offer, when there is one: a single full-width call-out ahead
+            of the regular offers row, which lists every active offer without this distinction. */}
+        {featuredOffer ? (
+          <Pressable
+            onPress={() => props.onOpenOffer(featuredOffer)}
+            style={({ pressed }) => [styles.featuredBanner, pressed && styles.offerCardPressed]}
+          >
+            {displayableImageUri(featuredOffer.imageUrl) ? (
+              <RemoteImage resizeMode="cover" uri={featuredOffer.imageUrl} style={styles.featuredBannerImage} />
+            ) : null}
+            <View style={styles.featuredBannerCopy}>
+              <Text style={styles.featuredBannerEyebrow}>{t("home.featuredOfferEyebrow")}</Text>
+              <Text numberOfLines={1} style={styles.featuredBannerTitle}>{featuredOffer.title}</Text>
+              <View style={styles.featuredBannerRow}>
+                <View style={styles.offerDiscountBadge}>
+                  <Text style={styles.offerDiscountBadgeText}>{offerLabel(featuredOffer, t)}</Text>
+                </View>
+                <Text style={styles.featuredBannerCta}>{t("home.featuredOfferCta")}</Text>
+              </View>
+            </View>
+          </Pressable>
+        ) : null}
+
         {/* Offers sit directly under the identity block: a horizontally scrollable promo row. */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
@@ -202,17 +229,25 @@ export function CustomerHomeScreen(props: {
             {visibleOffers.map((offer) => (
               <Pressable
                 key={offer.id}
-                onPress={() => store && props.onOpenCatalog(store)}
-                style={styles.offerCard}
+                onPress={() => props.onOpenOffer(offer)}
+                style={({ pressed }) => [styles.offerCard, pressed && styles.offerCardPressed]}
               >
                 <View style={styles.offerVisual}>
-                  <RemoteImage resizeMode="cover" uri={offer.imageUrl} style={styles.fullImage} />
+                  {displayableImageUri(offer.imageUrl) ? (
+                    <RemoteImage resizeMode="cover" uri={offer.imageUrl} style={styles.fullImage} />
+                  ) : offer.type === "FREE_DELIVERY" ? (
+                    <Icon color={customerTheme.colors.primary} name="bicycle" size="xxl" />
+                  ) : (
+                    <Text style={styles.offerPercentFallback}>{offer.discountPercent}%</Text>
+                  )}
                 </View>
                 <View style={styles.offerCopy}>
                   <Text style={styles.offerRestaurant}>{offer.restaurantName ?? t("home.tasawaqWideOffer")}</Text>
-                  <Text style={styles.offerTitle}>{offer.title}</Text>
+                  <Text numberOfLines={1} style={styles.offerTitle}>{offer.title}</Text>
                   {offer.description ? <Text numberOfLines={2} style={styles.offerDescription}>{offer.description}</Text> : null}
-                  <Text style={styles.offerDiscount}>{offerLabel(offer, t)}</Text>
+                  <View style={styles.offerDiscountBadge}>
+                    <Text style={styles.offerDiscountBadgeText}>{offerLabel(offer, t)}</Text>
+                  </View>
                   {offer.endsAt ? (
                     <Text style={styles.offerExpiry}>{t("home.offerEndsLabel", { date: new Date(offer.endsAt).toLocaleDateString() })}</Text>
                   ) : null}
@@ -401,7 +436,7 @@ function formatPrice(priceMinor: number): string {
   return `${(priceMinor / 100).toFixed(2)} ILS`;
 }
 
-function offerLabel(offer: RestaurantOffer, t: (key: string, options?: Record<string, unknown>) => string): string {
+export function offerLabel(offer: RestaurantOffer, t: (key: string, options?: Record<string, unknown>) => string): string {
   if (offer.type === "FREE_DELIVERY") return t("home.freeDeliveryOffer");
   const percent = offer.discountPercent ?? 0;
   if (offer.type === "DELIVERY_PERCENTAGE") return t("home.percentOffDeliveryLabel", { percent });
@@ -439,6 +474,19 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   marketEyebrow: { ...text("label", "bold"), color: onDark.medium },
   marketTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
   marketDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
+  featuredBanner: {
+    backgroundColor: customerTheme.colors.inverseSurface,
+    borderRadius: radius.lg,
+    marginTop: spacing[6],
+    overflow: "hidden",
+    ...customerTheme.shadow
+  },
+  featuredBannerImage: { height: 140, width: "100%" },
+  featuredBannerCopy: { padding: spacing[4] },
+  featuredBannerEyebrow: { ...text("label", "bold"), color: customerTheme.colors.primary },
+  featuredBannerTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
+  featuredBannerRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[3] },
+  featuredBannerCta: { ...text("bodySm", "bold"), color: onDark.medium },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[4], marginTop: spacing[7] },
   offersRow: { marginBottom: spacing[1] },
   offersRowContent: { gap: spacing[4], paddingEnd: spacing[2] },
@@ -472,15 +520,17 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   departmentName: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
   departmentCount: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
   offerCard: { backgroundColor: customerTheme.colors.inverseSurface, borderRadius: radius.lg, flexDirection: "row", minHeight: 150, overflow: "hidden", width: 320, ...customerTheme.shadow },
+  offerCardPressed: { opacity: 0.9 },
   offerVisual: { alignItems: "center", backgroundColor: colors.neutralSubtle, justifyContent: "center", minHeight: 150, width: "38%" },
   fullImage: { height: "100%", width: "100%" },
-  offerEmoji: { color: customerTheme.colors.primary, fontSize: iconSize.xxxl, fontWeight: "900" },
+  offerPercentFallback: { color: customerTheme.colors.primary, fontSize: iconSize.xxxl, fontWeight: "900" },
   offerCopy: { flex: 1, justifyContent: "center", padding: spacing[4] },
   offerRestaurant: { ...text("label", "bold"), color: onDark.medium },
   offerTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
   offerDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
-  offerDiscount: { ...text("bodySm", "bold"), color: customerTheme.colors.primary, marginTop: spacing[2] },
-  offerExpiry: { ...text("label"), color: onDark.soft },
+  offerDiscountBadge: { alignSelf: "flex-start", backgroundColor: customerTheme.colors.primary, borderRadius: radius.pill, marginTop: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[1] },
+  offerDiscountBadgeText: { ...text("label", "bold"), color: colors.textInverse },
+  offerExpiry: { ...text("label"), color: onDark.soft, marginTop: spacing[1] },
   productGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
   productCard: {
     backgroundColor: customerTheme.colors.surface,

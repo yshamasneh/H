@@ -17,6 +17,7 @@ export type OfferView = {
   startsAt: Date;
   endsAt: Date | null;
   isActive: boolean;
+  isFeatured: boolean;
   createdAt: Date;
 };
 

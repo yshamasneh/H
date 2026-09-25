@@ -8,6 +8,8 @@
     "supermarketTitle": "Online supermarket",
     "supermarketDescription": "Search groceries by department, brand or product.",
     "offersSectionTitle": "Offers",
+    "featuredOfferEyebrow": "Special offer",
+    "featuredOfferCta": "Tap to view",
     "noOffersTitle": "No active offers right now",
     "noOffersText": "New restaurant offers will appear here when they are published.",
     "tasawaqWideOffer": "JOVO-wide offer",
@@ -42,6 +44,14 @@
     "noOffersTextMarket": "New JOVO MARKET offers will appear here when they are published.",
     "restaurantsComingSoonTitle": "Restaurants — coming soon",
     "restaurantsComingSoonText": "We are onboarding local kitchens. Grocery delivery from JOVO MARKET is live now."
+  },
+  "offerDetail": {
+    "headerTitle": "Offer",
+    "minimumOrderLabel": "Minimum order: {{amount}}",
+    "maxDiscountLabel": "Discount capped at {{amount}}",
+    "shopThisItem": "Shop this item",
+    "shopNow": "Shop now",
+    "unavailableText": "This offer isn't available for ordering right now."
   },
   "account": {
     "headerTitle": "My Account & Addresses",

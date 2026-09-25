@@ -93,6 +93,14 @@ export class CreateOfferDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: "Shows this offer on the customer app's home banner. At most one offer is featured at a time; featuring this one un-features any other."
+  })
+  @IsOptional()
+  @IsBoolean()
+  isFeatured?: boolean;
 }
 
 export class UpdateOfferDto extends CreateOfferDto {}

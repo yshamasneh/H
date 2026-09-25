@@ -65,6 +65,8 @@ export class OffersService {
       restaurantId: normalized.restaurantId
     });
     const created = await this.prisma.$transaction(async (tx) => {
+      // At most one offer is featured at a time: featuring this one un-features any other.
+      if (normalized.isFeatured) await tx.offer.updateMany({ where: { isFeatured: true }, data: { isFeatured: false } });
       const offer = await tx.offer.create({ data: { ...normalized, createdByUserId: adminUserId }, include: offerInclude });
       await writeAuditLog(tx, {
         actorUserId: adminUserId,
@@ -89,6 +91,10 @@ export class OffersService {
       restaurantId: normalized.restaurantId
     });
     const updated = await this.prisma.$transaction(async (tx) => {
+      // At most one offer is featured at a time: featuring this one un-features any other.
+      if (normalized.isFeatured) {
+        await tx.offer.updateMany({ where: { isFeatured: true, id: { not: offerId } }, data: { isFeatured: false } });
+      }
       const offer = await tx.offer.update({ where: { id: offerId }, data: normalized, include: offerInclude });
       await writeAuditLog(tx, {
         actorUserId: adminUserId,
@@ -147,7 +153,8 @@ export class OffersService {
       imageUrl: input.imageUrl?.trim() || null,
       startsAt,
       endsAt,
-      isActive: input.isActive ?? true
+      isActive: input.isActive ?? true,
+      isFeatured: input.isFeatured ?? false
     };
   }
 }
@@ -246,6 +253,7 @@ function toOfferView(offer: OfferWithRelations): OfferView {
     startsAt: offer.startsAt,
     endsAt: offer.endsAt,
     isActive: offer.isActive,
+    isFeatured: offer.isFeatured,
     createdAt: offer.createdAt
   };
 }

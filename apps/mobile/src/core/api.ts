@@ -170,6 +170,8 @@ export type RestaurantOffer = {
   minimumSubtotalMinor: number;
   maxDiscountMinor: number | null;
   isActive: boolean;
+  /** At most one offer is featured at a time: the customer app's home banner shows this one. */
+  isFeatured: boolean;
   createdAt: string;
 };
 

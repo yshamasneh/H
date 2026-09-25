@@ -202,6 +202,12 @@ export function OffersPage() {
                       </td>
                       <td>
                         <span className={`badge ${statusBadge[status]}`}>{t(`offers.status.${status}`)}</span>
+                        {offer.isFeatured ? (
+                          <>
+                            <br />
+                            <span className="badge badge-attention">{t("offers.featuredBadge")}</span>
+                          </>
+                        ) : null}
                       </td>
                       <td>
                         <div className="row-actions">
@@ -399,6 +405,11 @@ function OfferForm({
         <input checked={draft.isActive} onChange={(event) => patch({ isActive: event.target.checked })} type="checkbox" />
         {t("offers.active")}
       </label>
+      <label className="checkbox-row">
+        <input checked={draft.isFeatured} onChange={(event) => patch({ isFeatured: event.target.checked })} type="checkbox" />
+        {t("offers.featured")}
+      </label>
+      {draft.isFeatured ? <p className="field-hint">{t("offers.featuredHint")}</p> : null}
       <div className="row-actions" style={{ marginTop: 12 }}>
         <button className="btn btn-primary" disabled={busy} onClick={() => void submit()} type="button">
           {busy ? t("common.working") : t("offers.save")}

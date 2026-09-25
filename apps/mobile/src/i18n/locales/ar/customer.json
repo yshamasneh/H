@@ -8,6 +8,8 @@
     "supermarketTitle": "سوبر ماركت أونلاين",
     "supermarketDescription": "ابحث عن البقالة حسب القسم أو العلامة التجارية أو المنتج.",
     "offersSectionTitle": "العروض",
+    "featuredOfferEyebrow": "عرض خاص",
+    "featuredOfferCta": "اضغط للعرض",
     "noOffersTitle": "لا توجد عروض نشطة حاليًا",
     "noOffersText": "ستظهر هنا عروض المطاعم الجديدة فور نشرها.",
     "tasawaqWideOffer": "عرض على مستوى جوفو",
@@ -42,6 +44,14 @@
     "noOffersTextMarket": "ستظهر هنا عروض جوفو ماركت الجديدة فور نشرها.",
     "restaurantsComingSoonTitle": "المطاعم — قريبًا",
     "restaurantsComingSoonText": "نعمل على انضمام المطاعم المحلية. توصيل البقالة من جوفو ماركت متاح الآن."
+  },
+  "offerDetail": {
+    "headerTitle": "العرض",
+    "minimumOrderLabel": "الحد الأدنى للطلب: {{amount}}",
+    "maxDiscountLabel": "الخصم بحد أقصى {{amount}}",
+    "shopThisItem": "تسوّق هذا المنتج",
+    "shopNow": "تسوّق الآن",
+    "unavailableText": "هذا العرض غير متاح للطلب حاليًا."
   },
   "account": {
     "headerTitle": "حسابي وعناويني",

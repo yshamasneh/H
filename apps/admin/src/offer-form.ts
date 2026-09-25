@@ -32,6 +32,8 @@ export type OfferView = {
   startsAt: string;
   endsAt: string | null;
   isActive: boolean;
+  /** At most one offer is featured at a time: the customer app's home banner shows this one. */
+  isFeatured: boolean;
   createdAt: string;
 };
 
@@ -48,6 +50,7 @@ export type OfferBody = {
   startsAt?: string;
   endsAt?: string;
   isActive: boolean;
+  isFeatured: boolean;
 };
 
 export type OfferDraft = {
@@ -63,6 +66,7 @@ export type OfferDraft = {
   startsAt: string;
   endsAt: string;
   isActive: boolean;
+  isFeatured: boolean;
 };
 
 export type OfferError =
@@ -89,7 +93,8 @@ export const emptyOfferDraft = (): OfferDraft => ({
   maxDiscount: "",
   startsAt: "",
   endsAt: "",
-  isActive: true
+  isActive: true,
+  isFeatured: false
 });
 
 export const offerNeedsRestaurant = (type: OfferType): boolean =>
@@ -117,7 +122,8 @@ export function offerToDraft(offer: OfferView): OfferDraft {
     maxDiscount: offer.maxDiscountMinor === null ? "" : toMoneyInput(offer.maxDiscountMinor),
     startsAt: toLocalInput(offer.startsAt),
     endsAt: toLocalInput(offer.endsAt),
-    isActive: offer.isActive
+    isActive: offer.isActive,
+    isFeatured: offer.isFeatured
   };
 }
 
@@ -198,7 +204,8 @@ export function buildOffer(
       ...(existing?.imageUrl ? { imageUrl: existing.imageUrl } : {}),
       ...(startsAt ? { startsAt } : {}),
       ...(endsAt ? { endsAt } : {}),
-      isActive: draft.isActive
+      isActive: draft.isActive,
+      isFeatured: draft.isFeatured
     }
   };
 }
@@ -219,6 +226,7 @@ export function offerToggleBody(offer: OfferView, isActive: boolean): OfferBody 
     ...(offer.imageUrl ? { imageUrl: offer.imageUrl } : {}),
     startsAt: offer.startsAt,
     ...(offer.endsAt ? { endsAt: offer.endsAt } : {}),
-    isActive
+    isActive,
+    isFeatured: offer.isFeatured
   };
 }

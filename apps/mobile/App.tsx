@@ -84,6 +84,7 @@ import {
   goToDriverSignup,
   goToLogin,
   goToNotifications,
+  goToOfferDetail,
   goToOrderDetail,
   goToOrderHistory,
   goToRestaurantManagement,
@@ -143,6 +144,7 @@ import {
   SupermarketCatalogScreen,
   SupermarketProductScreen
 } from "./src/features/customer/supermarket-screens";
+import { OfferDetailScreen } from "./src/features/customer/offer-screens";
 
 const splashDurationMs = 3000;
 const logo = require("./assets/logo/jovo-wordmark.png");
@@ -593,6 +595,7 @@ function TasawaQApp() {
               onAddItem={(store, item) => handleAddToCart(store, item)}
               onOpenCatalog={(store, filters) => setScreen(goToSupermarketCatalog(user, store, filters))}
               onOpenNotifications={() => setScreen(goToNotifications(user))}
+              onOpenOffer={(offer) => setScreen(goToOfferDetail(user, offer))}
               onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(user, store, productId))}
               onViewCart={() => setScreen(goToCart(user))}
               cart={cart}
@@ -713,6 +716,15 @@ function TasawaQApp() {
           onViewCart={() => setScreen(goToCart(screen.user))}
           productId={screen.productId}
           supermarketId={screen.supermarketId}
+        />
+      );
+    case "offer-detail":
+      return (
+        <OfferDetailScreen
+          offer={screen.offer}
+          onBack={() => setScreen(homeForUser(screen.user))}
+          onOpenCatalog={(store) => setScreen(goToSupermarketCatalog(screen.user, store))}
+          onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(screen.user, store, productId))}
         />
       );
     case "cart":
