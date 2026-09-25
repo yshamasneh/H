@@ -21,6 +21,7 @@ const item = (over: Partial<MenuItemOwner>): MenuItemOwner => ({
   isFeatured: false,
   isVariableWeight: false,
   isAvailable: true,
+  displayPriority: 0,
   ...over
 });
 

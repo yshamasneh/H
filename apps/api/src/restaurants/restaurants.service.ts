@@ -347,7 +347,7 @@ export class RestaurantsService {
       this.prisma.menuCategory.findMany({
         where: { restaurantId, isActive: true },
         orderBy: { sortOrder: "asc" },
-        include: { items: { where: { isAvailable: true }, orderBy: { name: "asc" } } }
+        include: { items: { where: { isAvailable: true }, orderBy: [{ displayPriority: "desc" }, { name: "asc" }] } }
       }),
       this.prisma.offer.findMany({
         where: {
@@ -446,7 +446,7 @@ export class RestaurantsService {
     const [products, total, allAvailable, offers] = await Promise.all([
       this.prisma.menuItem.findMany({
         where,
-        orderBy: [{ isFeatured: "desc" }, { name: "asc" }],
+        orderBy: [{ displayPriority: "desc" }, { isFeatured: "desc" }, { name: "asc" }],
         skip: (page - 1) * pageSize,
         take: pageSize
       }),
@@ -607,6 +607,7 @@ export class RestaurantsService {
           isVariableWeight: item.isVariableWeight,
           barcode: item.barcode,
           reorderLevel: item.reorderLevel,
+          displayPriority: item.displayPriority,
           isAvailable: item.isAvailable
         }))
       }))
@@ -871,6 +872,7 @@ function toPublicItemView(
     isVariableWeight: boolean;
     barcode: string | null;
     reorderLevel: number | null;
+    displayPriority: number;
   },
   offerInput?: {
     id: string;
@@ -907,6 +909,7 @@ function toPublicItemView(
     isVariableWeight: item.isVariableWeight,
     barcode: item.barcode,
     reorderLevel: item.reorderLevel,
+    displayPriority: item.displayPriority,
     offer: offer
       ? {
           id: offer.id,

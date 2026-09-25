@@ -103,7 +103,8 @@ export class MenuService {
         isFeatured: input.isFeatured ?? false,
         isVariableWeight: input.isVariableWeight ?? false,
         barcode: input.barcode?.trim() || null,
-        reorderLevel: input.reorderLevel ?? null
+        reorderLevel: input.reorderLevel ?? null,
+        displayPriority: input.displayPriority ?? 0
       }
     });
     return toItemView(item);
@@ -172,7 +173,8 @@ export class MenuService {
         isFeatured: input.isFeatured,
         isVariableWeight: input.isVariableWeight,
         barcode: input.barcode !== undefined ? input.barcode.trim() || null : undefined,
-        reorderLevel: input.reorderLevel
+        reorderLevel: input.reorderLevel,
+        displayPriority: input.displayPriority
       }
     });
     return toItemView(updated);
@@ -371,6 +373,7 @@ function toItemView(item: MenuItem): MenuItemOwnerView {
     isVariableWeight: item.isVariableWeight,
     barcode: item.barcode,
     reorderLevel: item.reorderLevel,
+    displayPriority: item.displayPriority,
     isAvailable: item.isAvailable
   };
 }

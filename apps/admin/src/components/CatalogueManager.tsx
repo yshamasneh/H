@@ -54,6 +54,7 @@ type ItemDraft = {
   unitLabel: string;
   stockQuantity: string;
   reorderLevel: string;
+  displayPriority: string;
   isFeatured: boolean;
   isVariableWeight: boolean;
 };
@@ -72,6 +73,7 @@ const emptyDraft: ItemDraft = {
   unitLabel: "item",
   stockQuantity: "",
   reorderLevel: "",
+  displayPriority: "",
   isFeatured: false,
   isVariableWeight: false
 };
@@ -145,6 +147,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       unitLabel: item.unitLabel,
       stockQuantity: item.stockQuantity === null ? "" : String(item.stockQuantity),
       reorderLevel: item.reorderLevel === null ? "" : String(item.reorderLevel),
+      displayPriority: item.displayPriority === 0 ? "" : String(item.displayPriority),
       isFeatured: item.isFeatured,
       isVariableWeight: item.isVariableWeight
     });
@@ -174,6 +177,9 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
         if (value.trim() && parseWholeNumber(value) === null) return t("catalogue.errorStockInvalid");
       }
     }
+    if (draft.displayPriority.trim() && parseWholeNumber(draft.displayPriority) === null) {
+      return t("catalogue.errorPriorityInvalid");
+    }
     const previousUrl = editingId ? items.find((item) => item.id === editingId)?.imageUrl : null;
     if (selectedImage === undefined && draft.imageUrl.trim() && draft.imageUrl.trim() !== previousUrl && !isSafeExternalImageUrl(draft.imageUrl)) {
       return t("catalogue.errorImageUrlInvalid");
@@ -197,7 +203,8 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
         categoryId: draft.categoryId || categories[0]?.id,
         name: draft.name.trim(),
         description: draft.description.trim() || undefined,
-        unitLabel: draft.unitLabel.trim() || "item"
+        unitLabel: draft.unitLabel.trim() || "item",
+        displayPriority: draft.displayPriority.trim() ? parseWholeNumber(draft.displayPriority) : editingId ? 0 : undefined
       };
       // Price and cost price are only ever sent by someone allowed to set prices, and the API
       // enforces the same rule independently.
@@ -487,7 +494,18 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
               placeholder={t("catalogue.unitLabel")}
               value={draft.unitLabel}
             />
+            <input
+              aria-label={t("catalogue.displayPriority")}
+              className="text-input"
+              dir="ltr"
+              inputMode="numeric"
+              onChange={(event) => setDraft({ ...draft, displayPriority: event.target.value })}
+              placeholder={t("catalogue.displayPriority")}
+              style={{ maxWidth: 140 }}
+              value={draft.displayPriority}
+            />
           </div>
+          <p className="field-hint">{t("catalogue.displayPriorityHint")}</p>
           {canManagePrices ? (
             <p className="field-hint">
               {t("catalogue.salePriceHint")}

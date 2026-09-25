@@ -255,6 +255,17 @@ export class CreateMenuItemDto {
   @Min(0)
   @Max(10_000_000)
   reorderLevel?: number;
+
+  @ApiPropertyOptional({
+    example: 0,
+    description: "Manual display ordering for customer-facing listings; higher sorts first. 0 (default) means no explicit priority."
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  displayPriority?: number;
 }
 
 export class UpdateMenuItemDto {
@@ -358,6 +369,14 @@ export class UpdateMenuItemDto {
   @Min(0)
   @Max(10_000_000)
   reorderLevel?: number | null;
+
+  @ApiPropertyOptional({ description: "Manual display ordering for customer-facing listings; higher sorts first." })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  displayPriority?: number;
 }
 
 export class SetItemAvailabilityDto {

@@ -63,6 +63,7 @@ type MenuItemRecord = {
   isVariableWeight: boolean;
   barcode: string | null;
   reorderLevel: number | null;
+  displayPriority: number;
   isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -292,7 +293,7 @@ export class FakeRestaurantPrisma {
               item.categoryId === category.id &&
               (include.items.where?.isAvailable === undefined || item.isAvailable === include.items.where.isAvailable)
           )
-          .sort((left, right) => left.name.localeCompare(right.name))
+          .sort((left, right) => right.displayPriority - left.displayPriority || left.name.localeCompare(right.name))
       }));
     };
     this.menuCategory.create = async ({ data }: any) => {
@@ -355,7 +356,10 @@ export class FakeRestaurantPrisma {
       const orderings = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [{ name: "asc" }];
       items = [...items].sort((left, right) => {
         for (const ordering of orderings) {
-          if (ordering.isFeatured === "desc") {
+          if (ordering.displayPriority === "desc") {
+            const diff = right.displayPriority - left.displayPriority;
+            if (diff !== 0) return diff;
+          } else if (ordering.isFeatured === "desc") {
             const diff = Number(right.isFeatured) - Number(left.isFeatured);
             if (diff !== 0) return diff;
           } else if (ordering.name === "asc") {
@@ -393,6 +397,7 @@ export class FakeRestaurantPrisma {
         isVariableWeight: data.isVariableWeight ?? false,
         barcode: data.barcode ?? null,
         reorderLevel: data.reorderLevel ?? null,
+        displayPriority: data.displayPriority ?? 0,
         isAvailable: data.isAvailable ?? true,
         createdAt: now,
         updatedAt: now
@@ -418,6 +423,7 @@ export class FakeRestaurantPrisma {
       if (data.isVariableWeight !== undefined) item.isVariableWeight = data.isVariableWeight;
       if (data.barcode !== undefined) item.barcode = data.barcode;
       if (data.reorderLevel !== undefined) item.reorderLevel = data.reorderLevel;
+      if (data.displayPriority !== undefined) item.displayPriority = data.displayPriority;
       if (data.isAvailable !== undefined) item.isAvailable = data.isAvailable;
       item.updatedAt = new Date();
       return item;

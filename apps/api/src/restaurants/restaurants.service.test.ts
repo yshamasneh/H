@@ -250,6 +250,21 @@ test("an approved-but-closed restaurant's menu is still viewable by id, just not
   assert.equal(page.total, 0);
 });
 
+test("the public restaurant menu sorts a higher displayPriority first within its category", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedApprovedOpenRestaurant();
+  const category = await prisma.menuCategory.create({ data: { restaurantId: restaurant.id, name: "Mains", sortOrder: 0 } });
+  const addItem = (overrides: Record<string, unknown>) =>
+    prisma.menuItem.create({
+      data: { restaurantId: restaurant.id, categoryId: category.id, priceMinor: 1000, isAvailable: true, ...overrides }
+    });
+  await addItem({ name: "Burger" });
+  await addItem({ name: "Special", displayPriority: 5 });
+
+  const menu = await service.getPublicMenu(restaurant.id);
+  assert.deepEqual(menu.categories[0].items.map((item) => item.name), ["Special", "Burger"]);
+});
+
 test("supermarket status reflects closing and reopening without hiding its public identity", async () => {
   const { prisma, service } = createService();
   const market = prisma.seedApprovedOpenRestaurant({ businessType: BusinessType.SUPERMARKET, isOpen: false });
@@ -564,6 +579,17 @@ test("the featured filter returns only featured products (TC-048)", async () => 
   const featured = await service.getSupermarketCatalog(market.id, { featured: true } as never);
   assert.equal(featured.products.length, 1);
   assert.equal(featured.products[0].name, "Star");
+});
+
+test("a higher displayPriority sorts a product first, ahead of isFeatured and name, and ties fall back to the existing order", async () => {
+  const { prisma, service } = createService();
+  const { market, addProduct } = await seedCatalog(prisma);
+  await addProduct({ name: "Bread" });
+  await addProduct({ name: "Apple", isFeatured: true });
+  await addProduct({ name: "Zucchini", displayPriority: 10 });
+  // Unprioritized (0) products keep the pre-existing isFeatured/name order between themselves.
+  const catalog = await service.getSupermarketCatalog(market.id, {} as never);
+  assert.deepEqual(catalog.products.map((product) => product.name), ["Zucchini", "Apple", "Bread"]);
 });
 
 test("catalog pagination respects page size, reports the true total, and tolerates a page past the end (TC-049)", async () => {

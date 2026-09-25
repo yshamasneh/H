@@ -156,6 +156,8 @@ export type MenuItemOwner = {
   isFeatured: boolean;
   isVariableWeight: boolean;
   isAvailable: boolean;
+  /** Manual display ordering for customer-facing listings; higher sorts first. */
+  displayPriority: number;
 };
 
 export function listBusinessCategories(): Promise<MenuCategoryOwner[]> {

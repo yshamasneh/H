@@ -35,6 +35,21 @@ test("a restaurant owner can create and update their own category and item", asy
   assert.equal(updatedCategory.name, "Wraps");
 });
 
+test("a new item defaults to no display priority, and it round-trips through an update", async () => {
+  const { menu } = createServices();
+  const restaurantA = "restaurant-a";
+  const category = await menu.createCategory(restaurantA, { name: "Sandwiches" });
+  const item = await menu.createItem(restaurantA, { categoryId: category.id, name: "Falafel Sandwich", priceMinor: 1500 });
+  assert.equal(item.displayPriority, 0);
+
+  const prioritized = await menu.updateItem(restaurantA, item.id, { displayPriority: 5 }, { canManagePrices: true });
+  assert.equal(prioritized.displayPriority, 5);
+
+  // An unrelated update leaves it alone.
+  const renamed = await menu.updateItem(restaurantA, item.id, { name: "Falafel Wrap" }, { canManagePrices: true });
+  assert.equal(renamed.displayPriority, 5);
+});
+
 test("a category name cannot repeat within one store, case-insensitively", async () => {
   const { menu } = createServices();
   await menu.createCategory("restaurant-a", { name: "Sandwiches", sortOrder: 0 });

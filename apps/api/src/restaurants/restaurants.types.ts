@@ -52,6 +52,8 @@ export type MenuItemPublicView = {
   isVariableWeight: boolean;
   barcode: string | null;
   reorderLevel: number | null;
+  /** Manual display ordering for customer-facing listings; higher sorts first. */
+  displayPriority: number;
   offer: { id: string; title: string; discountPercent: number; minimumSubtotalMinor: number } | null;
 };
 
