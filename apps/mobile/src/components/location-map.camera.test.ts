@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { boundsForCoordinates, regionForCoordinates } from "./location-map.camera";
+import { boundsForCoordinates, regionForCoordinates, sameSpot } from "./location-map.camera";
 
 test("bounds enclose every point, in west-south-east-north order", () => {
   const bounds = boundsForCoordinates([
@@ -38,4 +38,9 @@ test("a single point, or points a few metres apart, never zoom to street-corner 
     { latitude: 31.8501, longitude: 35.2001 }
   ])!;
   assert.equal(close.latitudeDelta, 0.006);
+});
+
+test("sameSpot treats sub-centimetre differences as the same place but not a real move", () => {
+  assert.equal(sameSpot({ latitude: 31.9, longitude: 35.2 }, { latitude: 31.90000001, longitude: 35.2 }), true);
+  assert.equal(sameSpot({ latitude: 31.9, longitude: 35.2 }, { latitude: 31.9001, longitude: 35.2 }), false);
 });

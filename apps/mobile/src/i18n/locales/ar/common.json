@@ -99,5 +99,8 @@
     "tooLarge": "اختر صورة لا يزيد حجمها عن 5 ميجابايت.",
     "processingFailed": "تعذّر تجهيز الصورة. جرّب ملف JPEG أو PNG أو WebP آخر."
   },
-  "saleBadge": "وفّر {{percent}}%"
+  "saleBadge": "وفّر {{percent}}%",
+  "locationPermissionRequired": "اسمح بالوصول إلى الموقع لاستخدام موقعك الحالي، أو حرّك الدبوس على الخريطة.",
+  "locationPermissionRequiredDelivery": "إذن الموقع مطلوب أثناء تنفيذ توصيلة نشطة.",
+  "locationUnavailable": "تعذّر تحديد موقعك. حرّك الدبوس على الخريطة أو اكتب عنوانك."
 }

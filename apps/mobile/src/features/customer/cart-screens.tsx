@@ -43,7 +43,7 @@ import {
 import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import { newUuid } from "../../core/uuid";
-import { getCurrentCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
+import { getCurrentCoordinates, getPassiveCoordinates, reverseGeocode, type CurrentCoordinates } from "../../core/location";
 import { useOrderRealtime } from "../../core/socket";
 import { OrderDetailSkeleton, OrderListSkeleton } from "../../components/skeleton";
 import { RemoteImage } from "../../components/remote-image";
@@ -79,6 +79,10 @@ function useStoreAvailability(restaurantId: string | undefined) {
   }, [restaurantId]);
   useEffect(() => { void refresh(); }, [refresh]);
   return { status, setStatus, refresh };
+}
+
+function isOutOfRangeError(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "DELIVERY_OUT_OF_RANGE";
 }
 
 function isStoreClosedError(error: unknown): boolean {
@@ -245,6 +249,18 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
   const [coordinates, setCoordinates] = useState<CurrentCoordinates>(defaultMapCoordinate);
+  // The pin starts on a default spot. It only counts as the customer's delivery location once they
+  // have moved it, chosen a saved address, or used their current location — otherwise an order could
+  // be placed to the default point without the customer ever having looked at the map.
+  const [pinSet, setPinSet] = useState(false);
+  const pinSetRef = useRef(false);
+  // What the address box is doing: looking the pin up, filled from it, or unable to read it.
+  const [addressStatus, setAddressStatus] = useState<"idle" | "resolving" | "filled" | "notFound">("idle");
+  const [outOfRange, setOutOfRange] = useState(false);
+  // Bumped when the customer types, and when the pin moves, so a slow geocode never overwrites
+  // an address they have since typed or a pin they have since moved again.
+  const addressEditRef = useRef(0);
+  const geocodeGenerationRef = useRef(0);
   const [quote, setQuote] = useState<OrderQuote | null>(null);
   const [priceChanged, setPriceChanged] = useState(false);
   const hasQuotedRef = useRef(false);
@@ -295,6 +311,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       .catch(() => setSavedAddresses([]));
   }, []);
 
+  // Start the map on where the customer already is when the device can tell us without a prompt,
+  // instead of a fixed spot that may be nowhere near them. Skipped once they have picked a spot.
+  useEffect(() => {
+    void getPassiveCoordinates().then((point) => {
+      if (point && !pinSetRef.current) setCoordinates(point);
+    }).catch(() => {});
+  }, []);
+
   // Landmarks are orientation aids only, so their own fetch stays non-fatal (mirrors
   // account-screen.tsx): a failure just leaves the map without reference pins.
   useEffect(() => {
@@ -304,12 +328,29 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       .catch(() => setLandmarks([]));
   }, []);
 
+  function markPinSet() {
+    pinSetRef.current = true;
+    setPinSet(true);
+    // From here every change re-quotes on its own, so a location outside the delivery area is
+    // flagged as soon as the pin lands rather than when the customer next presses a button.
+    hasQuotedRef.current = true;
+  }
+
   function selectSavedAddress(address: SavedAddress) {
+    geocodeGenerationRef.current += 1;
+    setAddressStatus("idle");
     setDeliveryLabel(address.label);
     setDeliveryAddressLine(address.addressLine);
     const nextCoordinates = { latitude: address.latitude, longitude: address.longitude };
     setCoordinates(nextCoordinates);
+    markPinSet();
     scheduleQuote(address.addressLine, nextCoordinates, address.label);
+  }
+
+  // The quote does not depend on the address text, only the pin — so while the address is still
+  // being looked up (or could not be read) the quote runs against a stand-in rather than waiting.
+  function quoteAddress(address: string): string {
+    return address.trim().length >= 3 ? address : t("checkout.selectedDeliveryLocationFallback");
   }
 
   function orderInput(address: string, point: CurrentCoordinates, label: string): CreateOrderInput | null {
@@ -328,6 +369,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   async function requestQuote(input: CreateOrderInput, generation: number) {
     setLocating(true);
     setError(null);
+    setOutOfRange(false);
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) throw new Error(t("common:sessionExpired"));
@@ -341,7 +383,9 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       if (generation === quoteGenerationRef.current) {
         setQuote(null);
         if (isStoreClosedError(requestError)) store.setStatus("closed");
-        setError(readError(requestError));
+        // Out of range gets its own banner under the map instead of a generic error line.
+        if (isOutOfRangeError(requestError)) setOutOfRange(true);
+        else setError(readError(requestError));
       }
     } finally {
       if (generation === quoteGenerationRef.current) setLocating(false);
@@ -354,8 +398,9 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     setLocating(false);
     setQuote(null);
     setPriceChanged(false);
+    setOutOfRange(false);
     if (!hasQuotedRef.current) return;
-    const input = orderInput(address, point, label);
+    const input = orderInput(quoteAddress(address), point, label);
     if (!input) return;
     const generation = quoteGenerationRef.current;
     quoteTimerRef.current = setTimeout(() => { void requestQuote(input, generation); }, 400);
@@ -364,18 +409,30 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   async function chooseCurrentLocation() {
     setLocating(true);
     setError(null);
+    setOutOfRange(false);
     try {
       const nextCoordinates = await getCurrentCoordinates();
       setCoordinates(nextCoordinates);
-      const address = await reverseGeocode(nextCoordinates);
-      const resolvedAddress = address || (deliveryAddressLine.trim().length >= 3 ? deliveryAddressLine : t("checkout.selectedDeliveryLocationFallback"));
-      setDeliveryAddressLine(resolvedAddress);
-      const input = orderInput(resolvedAddress, nextCoordinates, deliveryLabel);
+      markPinSet();
+      // Quote straight away against the pin so the customer isn't waiting on the address lookup.
+      const editVersion = addressEditRef.current;
+      const generation = ++geocodeGenerationRef.current;
+      const input = orderInput(quoteAddress(deliveryAddressLine), nextCoordinates, deliveryLabel);
       if (!input) throw new Error(t("checkout.emptyCartError"));
-      hasQuotedRef.current = true;
       if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
       quoteGenerationRef.current += 1;
-      await requestQuote(input, quoteGenerationRef.current);
+      const quoteRun = requestQuote(input, quoteGenerationRef.current);
+      setAddressStatus("resolving");
+      const address = await reverseGeocode(nextCoordinates).catch(() => null);
+      if (generation === geocodeGenerationRef.current) {
+        if (address && editVersion === addressEditRef.current) {
+          setDeliveryAddressLine(address);
+          setAddressStatus("filled");
+        } else {
+          setAddressStatus(address ? "idle" : "notFound");
+        }
+      }
+      await quoteRun;
     } catch (requestError) {
       setQuote(null);
       if (isStoreClosedError(requestError)) store.setStatus("closed");
@@ -387,22 +444,31 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
 
   async function chooseMapLocation(nextCoordinates: MapCoordinate) {
     setCoordinates(nextCoordinates);
+    markPinSet();
     scheduleQuote(deliveryAddressLine, nextCoordinates, deliveryLabel);
-    const generation = quoteGenerationRef.current;
-    try {
-      const address = await reverseGeocode(nextCoordinates);
-      if (address && generation === quoteGenerationRef.current) {
-        setDeliveryAddressLine(address);
-        scheduleQuote(address, nextCoordinates, deliveryLabel);
-      }
-    } catch {
-      // The coordinates remain valid if the platform geocoder is temporarily unavailable.
+    // The address box follows the pin: show that it is being looked up, then fill it in. A newer
+    // pin move or a keystroke in the box cancels an older lookup's result.
+    const generation = ++geocodeGenerationRef.current;
+    const editVersion = addressEditRef.current;
+    setAddressStatus("resolving");
+    const address = await reverseGeocode(nextCoordinates).catch(() => null);
+    if (generation !== geocodeGenerationRef.current) return;
+    if (address && editVersion === addressEditRef.current) {
+      setDeliveryAddressLine(address);
+      setAddressStatus("filled");
+    } else {
+      // The coordinates remain valid when no address can be read; the customer can type it.
+      setAddressStatus(address ? "idle" : "notFound");
     }
   }
 
   async function calculateQuote() {
     if (!props.cart) {
       setError(t("checkout.emptyCartError"));
+      return;
+    }
+    if (!pinSet) {
+      setError(t("checkout.pinNotSetError"));
       return;
     }
     if (deliveryAddressLine.trim().length < 3) {
@@ -430,6 +496,10 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     }
     if (deliveryLabel.trim().length < 1) {
       setError(t("checkout.labelRequiredError"));
+      return;
+    }
+    if (!pinSet) {
+      setError(t("checkout.pinNotSetError"));
       return;
     }
     if (deliveryAddressLine.trim().length < 3) {
@@ -564,6 +634,8 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         <TextInput
           multiline
           onChangeText={(value) => {
+            addressEditRef.current += 1;
+            setAddressStatus("idle");
             setDeliveryAddressLine(value);
             scheduleQuote(value, coordinates, deliveryLabel);
           }}
@@ -572,8 +644,28 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           style={[styles.input, styles.multilineInput]}
           value={deliveryAddressLine}
         />
-        <Text style={styles.locationNote}>{t("checkout.locationNoteMove")}</Text>
+        {addressStatus === "resolving" ? (
+          <View style={styles.addressStatusRow}>
+            <ActivityIndicator color={customerTheme.colors.primary} size="small" />
+            <Text style={styles.locationNote}>{t("checkout.resolvingAddress")}</Text>
+          </View>
+        ) : null}
+        {addressStatus === "filled" ? <Text style={styles.locationNote}>{t("checkout.addressFromPin")}</Text> : null}
+        {addressStatus === "notFound" ? <Text style={styles.locationNote}>{t("checkout.addressNotFound")}</Text> : null}
+        <Text style={styles.locationNote}>{t(pinSet ? "checkout.locationNoteMove" : "checkout.pinNotSetNote")}</Text>
         <LocationMap coordinate={coordinates} markers={landmarkMarkers} onCoordinateChange={(value) => void chooseMapLocation(value)} />
+        {outOfRange ? (
+          <View accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.rangeBanner}>
+            <Text style={styles.rangeBannerTitle}>{t("checkout.outOfRangeTitle")}</Text>
+            <Text style={styles.rangeBannerBody}>{t("checkout.outOfRangeBody")}</Text>
+          </View>
+        ) : null}
+        {locating && !outOfRange && !quote && pinSet ? (
+          <View style={styles.addressStatusRow}>
+            <ActivityIndicator color={customerTheme.colors.primary} size="small" />
+            <Text style={styles.locationNote}>{t("checkout.checkingArea")}</Text>
+          </View>
+        ) : null}
         <SecondaryButton
           label={locating ? t("checkout.findingLocation") : t("checkout.useCurrentLocation")}
           onPress={() => void chooseCurrentLocation()}
@@ -639,7 +731,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           <SecondaryButton label={t("cart.retryStoreStatus")} onPress={() => void store.refresh()} />
         ) : null}
         <ErrorText message={error} />
-        <PrimaryButton disabled={store.status !== "open"} label={t(priceChanged ? "checkout.confirmUpdatedPrice" : "checkout.placeOrder")} loading={loading} onPress={submit} />
+        <PrimaryButton disabled={store.status !== "open" || outOfRange} label={t(priceChanged ? "checkout.confirmUpdatedPrice" : "checkout.placeOrder")} loading={loading} onPress={submit} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -1340,6 +1432,10 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   summaryDivider: { backgroundColor: customerTheme.colors.border, height: 1, marginVertical: spacing[2] },
   label: { ...text("caption", "bold"), color: customerTheme.colors.text, marginBottom: spacing[2], marginTop: spacing[3] },
   addressText: { ...text("caption"), color: customerTheme.colors.text },
+  addressStatusRow: { alignItems: "center", flexDirection: "row", gap: spacing[2] },
+  rangeBanner: { backgroundColor: colors.errorSubtle, borderColor: colors.error, borderRadius: radius.md, borderWidth: 1, gap: spacing[1], marginBottom: spacing[2], padding: spacing[3] },
+  rangeBannerTitle: { ...text("label", "bold"), color: colors.error },
+  rangeBannerBody: { ...text("label"), color: colors.text },
   locationNote: { ...text("label"), color: customerTheme.colors.textMuted, marginBottom: spacing[2], marginTop: spacing[2] },
   promotionText: { ...text("caption", "bold"), color: customerTheme.colors.success, marginBottom: spacing[1] },
   fulfillmentReviewCard: { backgroundColor: colors.warningSubtle, borderColor: colors.warning, borderRadius: radius.lg, borderWidth: 1, marginBottom: spacing[5], padding: spacing[5] },

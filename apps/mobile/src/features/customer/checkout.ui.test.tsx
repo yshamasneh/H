@@ -24,10 +24,19 @@ jest.mock("../../core/api", () => ({
 jest.mock("../../core/session", () => ({ getAccessToken: jest.fn() }));
 jest.mock("../../core/location", () => ({
   getCurrentCoordinates: jest.fn().mockResolvedValue({ latitude: 31.9, longitude: 35.2 }),
+  getPassiveCoordinates: jest.fn().mockResolvedValue(null),
   reverseGeocode: jest.fn().mockResolvedValue("Somewhere")
 }));
 jest.mock("../../core/socket", () => ({ useOrderRealtime: () => {} }));
-jest.mock("../../components/location-map", () => ({ LocationMap: () => null }));
+jest.mock("../../components/location-map", () => {
+  const { createElement } = require("react");
+  const { Pressable } = require("react-native");
+  // A stand-in map with one tappable spot, so a test can "place the pin" like a customer would.
+  return {
+    LocationMap: (props: { onCoordinateChange?: (c: { latitude: number; longitude: number }) => void }) =>
+      createElement(Pressable, { testID: "map-pin", onPress: () => props.onCoordinateChange?.({ latitude: 31.9, longitude: 35.2 }) })
+  };
+});
 
 const cart: Cart = {
   restaurantId: "s1",
@@ -76,7 +85,8 @@ test("a rapid double-tap on Place order submits exactly one order", async () => 
 
   render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled={true} />);
 
-  // Provide a valid delivery address, then get a delivery quote (Place order is gated on it).
+  // Place the pin, provide a valid delivery address, then get a delivery quote (Place order is gated on it).
+  await placePin();
   fireEvent.changeText(
     screen.getByPlaceholderText(i18n.t("cart:checkout.addressPlaceholder")),
     "123 Testing Street, Ramallah"
@@ -185,7 +195,14 @@ test("a changed server price requires a second explicit confirmation using the n
   expect(onPlaced).toHaveBeenCalledTimes(1);
 });
 
+async function placePin() {
+  await act(async () => {
+    fireEvent.press(screen.getByTestId("map-pin"));
+  });
+}
+
 async function driveToQuote() {
+  await placePin();
   fireEvent.changeText(
     screen.getByPlaceholderText(i18n.t("cart:checkout.addressPlaceholder")),
     "123 Testing Street, Ramallah"
@@ -238,4 +255,33 @@ test("a new checkout attempt (different basket) mints a fresh idempotency key (T
   await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(2));
 
   expect(keyOfCall(1)).not.toBe(keyOfCall(0));
+});
+
+test("an order can't be quoted or placed while the pin is still on its default spot", async () => {
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  fireEvent.changeText(screen.getByPlaceholderText(i18n.t("cart:checkout.addressPlaceholder")), "123 Testing Street, Ramallah");
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.calculateDeliveryPrice"))); });
+  expect(getOrderQuote).not.toHaveBeenCalled();
+  expect(screen.getByText(i18n.t("cart:checkout.pinNotSetError"))).toBeTruthy();
+});
+
+test("placing the pin fills the address from it and quotes straight away", async () => {
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await placePin();
+  // reverseGeocode is mocked to "Somewhere"
+  await waitFor(() => expect(screen.getByDisplayValue("Somewhere")).toBeTruthy());
+  await screen.findByText(i18n.t("cart:checkout.addressFromPin"));
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(1), { timeout: 2000 });
+  expect((getOrderQuote as jest.Mock).mock.calls[0][1].deliveryLatitude).toBe(31.9);
+});
+
+test("a pin outside the delivery area shows a clear banner and blocks Place order", async () => {
+  (getOrderQuote as jest.Mock).mockRejectedValue(new ApiError(422, "DELIVERY_OUT_OF_RANGE", "outside the 25 km delivery area"));
+  (createOrder as jest.Mock).mockResolvedValue({ id: "order-1" });
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await placePin();
+  await screen.findByText(i18n.t("cart:checkout.outOfRangeTitle"), undefined, { timeout: 2000 });
+  expect(screen.getByText(i18n.t("cart:checkout.outOfRangeBody"))).toBeTruthy();
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.placeOrder"))); });
+  expect(createOrder).not.toHaveBeenCalled();
 });

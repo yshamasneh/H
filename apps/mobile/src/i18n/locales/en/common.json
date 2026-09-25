@@ -99,5 +99,8 @@
     "tooLarge": "Choose an image no larger than 5 MB.",
     "processingFailed": "The image could not be prepared. Try another JPEG, PNG, or WebP file."
   },
-  "saleBadge": "Save {{percent}}%"
+  "saleBadge": "Save {{percent}}%",
+  "locationPermissionRequired": "Allow location access to use your current location. You can also move the pin on the map.",
+  "locationPermissionRequiredDelivery": "Location permission is required while you are handling an active delivery.",
+  "locationUnavailable": "We couldn't get your location. Move the pin on the map or type your address."
 }

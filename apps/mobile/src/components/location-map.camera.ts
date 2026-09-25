@@ -50,3 +50,16 @@ export function regionForCoordinates(
 export const followZoom = 16;
 /** The same framing for Apple Maps, which is region-based rather than zoom-based. */
 export const followDelta = 0.006;
+
+/**
+ * Whether two coordinates are the same spot for camera purposes. A map that emitted a coordinate
+ * (the customer dragged or tapped) already shows it, so only a coordinate that arrives from outside
+ * — "use my location", a saved address — should move the camera to bring the pin into view.
+ */
+export function sameSpot(a: MapCoordinate, b: MapCoordinate): boolean {
+  return Math.abs(a.latitude - b.latitude) < 1e-7 && Math.abs(a.longitude - b.longitude) < 1e-7;
+}
+
+/** Street level, so a pin set from outside is close enough to nudge into place. */
+export const pinFocusZoom = 17;
+export const pinFocusDelta = 0.003;

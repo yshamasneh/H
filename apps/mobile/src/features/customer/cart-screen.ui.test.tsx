@@ -18,7 +18,7 @@ jest.mock("../../core/api", () => ({
   ApiError: class ApiError extends Error {}
 }));
 jest.mock("../../core/session", () => ({ getAccessToken: jest.fn() }));
-jest.mock("../../core/location", () => ({ getCurrentCoordinates: jest.fn(), reverseGeocode: jest.fn() }));
+jest.mock("../../core/location", () => ({ getCurrentCoordinates: jest.fn(), getPassiveCoordinates: jest.fn().mockResolvedValue(null), reverseGeocode: jest.fn() }));
 jest.mock("../../core/socket", () => ({ useOrderRealtime: () => {} }));
 jest.mock("../../components/location-map", () => ({ LocationMap: () => null }));
 

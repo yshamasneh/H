@@ -59,7 +59,15 @@
     "selectedDeliveryLocationFallback": "Selected delivery location",
     "orderTotal": "Order total",
     "roundedUp": "Rounded up to a whole shekel",
-    "roundedUpNote": "Cash is collected in whole shekels, so the amount is rounded up. The extra is only ever the difference to the next shekel."
+    "roundedUpNote": "Cash is collected in whole shekels, so the amount is rounded up. The extra is only ever the difference to the next shekel.",
+    "resolvingAddress": "Finding the address for this pin...",
+    "addressFromPin": "Address filled in from the pin. Edit it if it isn't quite right.",
+    "addressNotFound": "We couldn't read an address for this spot. Type it above, keeping the pin where it is.",
+    "pinNotSetError": "Set your delivery location first: move the pin on the map, choose a saved address, or use your current location.",
+    "pinNotSetNote": "The pin is on a default spot. Move it to your entrance or use your current location.",
+    "outOfRangeTitle": "Outside the delivery area",
+    "outOfRangeBody": "This store doesn't deliver to the pin's location. Move the pin closer, or pick another address.",
+    "checkingArea": "Checking delivery to this spot..."
   },
   "confirmation": {
     "title": "Order Placed",

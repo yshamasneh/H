@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -30,7 +30,7 @@ import {
   type SavedAddress
 } from "../../core/api";
 import { readError } from "../../core/errors";
-import { getCurrentCoordinates, reverseGeocode } from "../../core/location";
+import { getCurrentCoordinates, getPassiveCoordinates, reverseGeocode } from "../../core/location";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
 import { Icon, backIconName } from "../../theme/icon";
@@ -62,6 +62,14 @@ export function AccountScreen(props: {
   const [label, setLabel] = useState(() => t("account.defaultAddressLabel"));
   const [addressLine, setAddressLine] = useState("");
   const [coordinate, setCoordinate] = useState(defaultCoordinate);
+  // The pin starts on a default spot; an address is only saved once the customer has actually placed
+  // it (moved the pin, used their location) or it came from a saved address.
+  const [pinSet, setPinSet] = useState(false);
+  const pinSetRef = useRef(false);
+  const [addressStatus, setAddressStatus] = useState<"idle" | "resolving" | "filled" | "notFound">("idle");
+  // A newer pin move or a keystroke in the address box cancels an older lookup's result.
+  const geocodeGenerationRef = useRef(0);
+  const addressEditRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -83,6 +91,10 @@ export function AccountScreen(props: {
 
   useEffect(() => {
     void load();
+    // Open on where the device already is (no permission prompt) rather than a fixed spot.
+    void getPassiveCoordinates().then((point) => {
+      if (point && !pinSetRef.current) setCoordinate(point);
+    }).catch(() => {});
   }, []);
 
   async function token() {
@@ -111,7 +123,11 @@ export function AccountScreen(props: {
       setEmail(nextProfile.email ?? "");
       setAddresses(nextAddresses);
       const preferred = nextAddresses.find((item) => item.isDefault) ?? nextAddresses[0];
-      if (preferred) setCoordinate(preferred);
+      if (preferred) {
+        setCoordinate(preferred);
+        pinSetRef.current = true;
+        setPinSet(true);
+      }
       setLandmarks(nextLandmarks);
     } catch (requestError) {
       setError(readError(requestError));
@@ -138,11 +154,20 @@ export function AccountScreen(props: {
 
   async function selectCoordinate(value: MapCoordinate) {
     setCoordinate(value);
-    try {
-      const resolved = await reverseGeocode(value);
-      if (resolved) setAddressLine(resolved);
-    } catch {
-      // The customer can still type the address while keeping the selected pin.
+    pinSetRef.current = true;
+    setPinSet(true);
+    const generation = ++geocodeGenerationRef.current;
+    const editVersion = addressEditRef.current;
+    setAddressStatus("resolving");
+    // The customer can still type the address while keeping the selected pin, so a failed or empty
+    // lookup only changes the hint, never blocks anything.
+    const resolved = await reverseGeocode(value).catch(() => null);
+    if (generation !== geocodeGenerationRef.current) return;
+    if (resolved && editVersion === addressEditRef.current) {
+      setAddressLine(resolved);
+      setAddressStatus("filled");
+    } else {
+      setAddressStatus(resolved ? "idle" : "notFound");
     }
   }
 
@@ -163,6 +188,10 @@ export function AccountScreen(props: {
       setError(t("account.addressRequiredError"));
       return;
     }
+    if (!pinSet) {
+      setError(t("checkout.pinNotSetError"));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -175,6 +204,7 @@ export function AccountScreen(props: {
       });
       setAddresses(await listMyAddresses(await token()));
       setAddressLine("");
+      setAddressStatus("idle");
       setNotice(t("account.addressSavedNotice"));
     } catch (requestError) {
       setError(readError(requestError));
@@ -270,9 +300,28 @@ export function AccountScreen(props: {
               ))}
               <Text style={styles.subtitle}>{t("account.addNewAddressTitle")}</Text>
               <TextInput onChangeText={setLabel} placeholder={t("account.labelPlaceholder")} style={styles.input} value={label} />
-              <TextInput multiline onChangeText={setAddressLine} placeholder={t("account.addressLinePlaceholder")} style={[styles.input, styles.multiline]} value={addressLine} />
+              <TextInput
+                multiline
+                onChangeText={(value) => {
+                  addressEditRef.current += 1;
+                  setAddressStatus("idle");
+                  setAddressLine(value);
+                }}
+                placeholder={t("account.addressLinePlaceholder")}
+                style={[styles.input, styles.multiline]}
+                value={addressLine}
+              />
+              {addressStatus === "resolving" ? (
+                <View style={styles.statusRow}>
+                  <ActivityIndicator color={colors.primary} size="small" />
+                  <Text style={styles.helper}>{t("checkout.resolvingAddress")}</Text>
+                </View>
+              ) : null}
+              {addressStatus === "filled" ? <Text style={styles.helper}>{t("checkout.addressFromPin")}</Text> : null}
+              {addressStatus === "notFound" ? <Text style={styles.helper}>{t("checkout.addressNotFound")}</Text> : null}
+              {!pinSet ? <Text style={styles.helper}>{t("checkout.pinNotSetNote")}</Text> : null}
               <LocationMap coordinate={coordinate} markers={landmarkMarkers} onCoordinateChange={(value) => void selectCoordinate(value)} />
-              <SmallButton label={t("account.useCurrentLocationButton")} onPress={() => void useCurrentLocation()} />
+              <SmallButton label={busy ? t("checkout.findingLocation") : t("account.useCurrentLocationButton")} onPress={() => void useCurrentLocation()} />
               <Button disabled={busy} label={t("account.saveAddressButton")} onPress={() => void saveAddress()} />
             </View>
 
@@ -356,6 +405,7 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   addressCard: { borderBottomColor: customerTheme.colors.border, borderBottomWidth: 1, paddingVertical: spacing[3] },
   addressTitle: { ...text("bodySm", "bold"), color: customerTheme.colors.text, textAlign: "auto" },
   row: { flexDirection: "row", gap: spacing[2], justifyContent: "flex-end", marginTop: spacing[2] },
+  statusRow: { alignItems: "center", flexDirection: "row", gap: spacing[2] },
   smallButton: { borderColor: customerTheme.colors.primary, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   smallText: { ...text("label", "bold"), color: customerTheme.colors.primary },
   smallDanger: { borderColor: customerTheme.colors.danger },

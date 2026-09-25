@@ -9,11 +9,11 @@ import {
   type CameraRef,
   type StyleSpecification
 } from "@maplibre/maplibre-react-native";
-import { boundsForCoordinates, followZoom } from "./location-map.camera";
+import { boundsForCoordinates, followZoom, sameSpot, pinFocusZoom } from "./location-map.camera";
 import i18n from "../i18n";
 import { LandmarkFlag } from "./landmark-flag";
 import { MapDot } from "./map-pin";
-import { landmarkMarkerColor, landmarkVisibilityMinZoom, routeLineColor, type LocationMapProps } from "./location-map.types";
+import { landmarkMarkerColor, landmarkVisibilityMinZoom, routeLineColor, type LocationMapProps, type MapCoordinate } from "./location-map.types";
 import { radius, spacing, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/theme-context";
 
@@ -101,6 +101,22 @@ export function LocationMap(props: LocationMapProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey]);
 
+  // A coordinate that arrives from outside (current location, saved address, passive fix) moves the
+  // pin; without this the camera stayed put and the pin could land off-screen. One the map itself
+  // emitted (a tap or drag) is already in view and is not re-centred under the customer's finger.
+  const shownRef = useRef<MapCoordinate>(props.coordinate);
+  useEffect(() => {
+    if (camera || sameSpot(shownRef.current, props.coordinate)) return;
+    shownRef.current = props.coordinate;
+    cameraRef.current?.easeTo({
+      center: [props.coordinate.longitude, props.coordinate.latitude],
+      zoom: Math.max(zoom, pinFocusZoom),
+      duration: 600
+    });
+    // Only the coordinate itself should re-run this; `zoom` is read as the current value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.coordinate.latitude, props.coordinate.longitude]);
+
   // The first frame: fitted to the points when the camera asks for it, otherwise on `coordinate`.
   const initialFitBounds = camera?.mode === "fit" ? boundsForCoordinates(camera.coordinates) : null;
   const initialViewState =
@@ -123,6 +139,7 @@ export function LocationMap(props: LocationMapProps) {
 
   // MapLibre coordinates are [longitude, latitude]; our contract is {latitude, longitude}.
   function emit(lngLat: [number, number]) {
+    shownRef.current = { latitude: lngLat[1], longitude: lngLat[0] };
     props.onCoordinateChange?.({ latitude: lngLat[1], longitude: lngLat[0] });
   }
 

@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MapView, { Marker, Polyline, type MapPressEvent, type Region } from "react-native-maps";
-import { boundsForCoordinates, followDelta, regionForCoordinates } from "./location-map.camera";
+import { boundsForCoordinates, followDelta, regionForCoordinates, sameSpot, pinFocusDelta } from "./location-map.camera";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import i18n from "../i18n";
 import { LandmarkFlag } from "./landmark-flag";
@@ -112,6 +112,17 @@ export function LocationMap(props: LocationMapProps) {
     // Re-framing is keyed on `camera.key`, not on the coordinates array identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitKey]);
+  // A coordinate that arrives from outside (current location, saved address, passive fix) moves the
+  // pin; without this the camera stayed put and the pin could land off-screen. One the map itself
+  // emitted (a tap or drag) is already in view and is not re-centred under the customer's finger.
+  const shownRef = useRef<MapCoordinate>(props.coordinate);
+  useEffect(() => {
+    if (camera || sameSpot(shownRef.current, props.coordinate)) return;
+    shownRef.current = props.coordinate;
+    const span = Math.min(spanRef.current.latitudeDelta, pinFocusDelta);
+    mapRef.current?.animateToRegion({ ...props.coordinate, latitudeDelta: span, longitudeDelta: span }, 600);
+  }, [props.coordinate.latitude, props.coordinate.longitude]);
+
   // Start from the initial region's zoom so landmarks are correct on first paint,
   // then track it as the user pans/zooms. Only landmark markers are gated on this;
   // the draggable delivery pin always renders.
@@ -119,10 +130,12 @@ export function LocationMap(props: LocationMapProps) {
   const showLandmarks = zoom >= landmarkVisibilityMinZoom;
 
   function select(event: MapPressEvent) {
+    shownRef.current = event.nativeEvent.coordinate;
     props.onCoordinateChange?.(event.nativeEvent.coordinate);
   }
 
   function drag(coordinate: MapCoordinate) {
+    shownRef.current = coordinate;
     props.onCoordinateChange?.(coordinate);
   }
 
