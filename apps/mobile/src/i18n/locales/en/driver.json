@@ -48,6 +48,26 @@
       "failed": "Failed",
       "noCash": "No cash taken",
       "truncated": "Showing the latest {{count}} orders. The totals above include all of them."
+    },
+    "views": {
+      "CURRENT": "Current",
+      "HISTORY": "History"
+    },
+    "currentTitle": "Since your last handover",
+    "history": {
+      "handoversTitle": "Past handovers",
+      "lookBackTitle": "Look back over a period",
+      "none": "No handover recorded yet. Each period appears here once it is handed over.",
+      "truncated": "Only the most recent handovers are shown; the full record is kept by JOVO.",
+      "range": "{{from}} to {{to}}",
+      "rangeFirst": "Up to {{to}}",
+      "settled": "Cash handover · {{count}} orders",
+      "settledBadge": "Settled",
+      "handedOver": "Handed over",
+      "earned": "You earned",
+      "deliveries": "Deliveries",
+      "short": "Short by {{amount}}: {{counted}} counted of {{expected}}",
+      "over": "Over by {{amount}}: {{counted}} counted of {{expected}}"
     }
   },
   "home": {

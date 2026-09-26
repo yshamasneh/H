@@ -42,7 +42,7 @@ import {
   deliveryStatusTransitions,
   orderStatusesAllowingDeliveryProgress
 } from "./delivery.rules";
-import { buildCashLines, resolvePeriodStart, type OrderFact } from "./driver-cash-summary";
+import { buildCashLines, buildHandoverPeriods, resolvePeriodStart, type OrderFact } from "./driver-cash-summary";
 import {
   defaultPresenceDurations,
   isAppOpen,
@@ -61,6 +61,7 @@ import type {
   DriverCashPeriod,
   AdminDriverPresence,
   DriverCashSummaryView,
+  DriverHandoverHistoryView,
   DriverLocationReportView,
   DriverProfileView,
   DriverStatsView,
@@ -74,6 +75,8 @@ const deliveryInclude = { order: { include: { restaurant: true, customer: { sele
 
 /** Orders listed under a cash summary. Totals are exact regardless; only the list is capped. */
 const cashSummaryLineLimit = 100;
+/** Settled periods returned by the driver's History; older ones stay in the ledger and admin views. */
+const handoverHistoryLimit = 50;
 
 @Injectable()
 export class DriversService {
@@ -424,6 +427,69 @@ export class DriversService {
       },
       lines,
       linesTruncated: custodyRows.length > cashSummaryLineLimit || earningRows.length > cashSummaryLineLimit
+    };
+  }
+
+  /**
+   * The driver's History: each settled period between consecutive cash handovers, newest first.
+   *
+   * The main cash screen shows only the current period (since the last handover), so a settled
+   * period drops off it — this is where it can still be seen. Everything is read from the ledger as
+   * it stands; nothing here writes, and a handover itself never alters or deletes the rows it
+   * settles. The admin accounting views read the same tables independently and are unaffected.
+   */
+  async getOwnHandoverHistory(driverUserId: string): Promise<DriverHandoverHistoryView> {
+    await this.requireOwnProfile(driverUserId);
+    // One extra row: it is not shown, it only supplies the start of the oldest period shown.
+    const rows = await this.prisma.cashSettlement.findMany({
+      where: { driverUserId },
+      orderBy: { settledAt: "desc" },
+      take: handoverHistoryLimit + 1,
+      select: {
+        id: true,
+        settledAt: true,
+        expectedAmountMinor: true,
+        countedAmountMinor: true,
+        discrepancyMinor: true,
+        allocations: { select: { amountMinor: true, custody: { select: { orderId: true } } } }
+      }
+    });
+    const shown = rows.slice(0, handoverHistoryLimit);
+    if (shown.length === 0) return { periods: [], truncated: false };
+    const olderBoundary = rows.length > handoverHistoryLimit ? rows[handoverHistoryLimit].settledAt : null;
+    const windowEnd = shown[0].settledAt;
+    const windowStart = olderBoundary ?? undefined;
+
+    const [earnings, delivered] = await Promise.all([
+      this.prisma.partnerEarning.findMany({
+        where: { driverUserId, occurredAt: { ...(windowStart ? { gte: windowStart } : {}), lt: windowEnd } },
+        select: { amountMinor: true, occurredAt: true }
+      }),
+      this.prisma.delivery.findMany({
+        where: {
+          driverId: driverUserId,
+          status: DeliveryStatus.DELIVERED,
+          deliveredAt: { ...(windowStart ? { gte: windowStart } : {}), lt: windowEnd }
+        },
+        select: { deliveredAt: true }
+      })
+    ]);
+
+    return {
+      periods: buildHandoverPeriods(
+        shown.map((row) => ({
+          id: row.id,
+          settledAt: row.settledAt,
+          expectedAmountMinor: row.expectedAmountMinor,
+          countedAmountMinor: row.countedAmountMinor,
+          discrepancyMinor: row.discrepancyMinor,
+          allocations: row.allocations.map((allocation) => ({ amountMinor: allocation.amountMinor, orderId: allocation.custody.orderId }))
+        })),
+        olderBoundary,
+        earnings,
+        delivered.map((row) => row.deliveredAt).filter((at): at is Date => at !== null)
+      ),
+      truncated: rows.length > handoverHistoryLimit
     };
   }
 

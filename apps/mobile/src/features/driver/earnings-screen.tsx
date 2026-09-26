@@ -2,7 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getDriverCashSummary, type DriverCashLine, type DriverCashPeriod, type DriverCashSummary } from "../../core/api";
+import {
+  getDriverCashHandovers,
+  getDriverCashSummary,
+  type DriverCashLine,
+  type DriverCashPeriod,
+  type DriverCashSummary,
+  type DriverHandoverHistory,
+  type DriverHandoverPeriod
+} from "../../core/api";
 import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
@@ -10,7 +18,9 @@ import { Icon, backIconName } from "../../theme/icon";
 import { colors, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 
-const periods: DriverCashPeriod[] = ["SHIFT", "TODAY", "WEEK", "MONTH", "ALL"];
+/** Calendar periods for looking back; they live under History, never on the main view. */
+const historyPeriods: DriverCashPeriod[] = ["TODAY", "WEEK", "MONTH", "ALL"];
+type CashView = "CURRENT" | "HISTORY";
 
 /**
  * The driver's money, as facts that must never be confused.
@@ -21,12 +31,23 @@ const periods: DriverCashPeriod[] = ["SHIFT", "TODAY", "WEEK", "MONTH", "ALL"];
  * number. Underneath, the orders that make it up, so the number can be checked against the cash in
  * hand. Below that, for the chosen period: cash collected, and the driver's earnings.
  *
- * Everything comes from the accounting ledger via /driver/me/cash-summary; the screen adds nothing up.
+ * Two views. CURRENT (the default) is only the period since the last cash handover: once an admin
+ * records a handover, what it settled drops off this view and everything starts again from zero.
+ * HISTORY is where a settled period can still be seen — each span between handovers, and calendar
+ * periods for looking further back. A handover deletes nothing; it only marks the orders settled, so
+ * history is always complete.
+ *
+ * Everything comes from the accounting ledger via /driver/me/cash-summary and
+ * /driver/me/cash-handovers; the screen adds nothing up.
  */
 export function DriverEarningsScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation(["driver", "common"]);
-  const [period, setPeriod] = useState<DriverCashPeriod>("SHIFT");
+  const [view, setView] = useState<CashView>("CURRENT");
+  const [historyPeriod, setHistoryPeriod] = useState<DriverCashPeriod>("MONTH");
+  // The main view is always "since the last handover"; the chips only choose a period under History.
+  const period: DriverCashPeriod = view === "CURRENT" ? "SHIFT" : historyPeriod;
   const [summary, setSummary] = useState<DriverCashSummary | null>(null);
+  const [handovers, setHandovers] = useState<DriverHandoverHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -37,7 +58,12 @@ export function DriverEarningsScreen({ onBack }: { onBack: () => void }) {
     try {
       const token = await getAccessToken();
       if (!token) throw new Error(i18n.t("common:sessionExpired"));
-      setSummary(await getDriverCashSummary(token, next));
+      const [nextSummary, nextHandovers] = await Promise.all([
+        getDriverCashSummary(token, next),
+        next === "SHIFT" ? Promise.resolve(null) : getDriverCashHandovers(token)
+      ]);
+      setSummary(nextSummary);
+      if (nextHandovers) setHandovers(nextHandovers);
     } catch (requestError) {
       setError(readError(requestError));
     } finally {
@@ -63,6 +89,23 @@ export function DriverEarningsScreen({ onBack }: { onBack: () => void }) {
         </View>
         <View style={styles.headerSpacer} />
       </View>
+      <View accessibilityRole="tablist" style={styles.viewTabs}>
+        {(["CURRENT", "HISTORY"] as const).map((option) => (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: view === option }}
+            key={option}
+            onPress={() => {
+              if (option === view) return;
+              setSummary(null);
+              setView(option);
+            }}
+            style={[styles.viewTab, view === option && styles.viewTabOn]}
+          >
+            <Text style={[styles.viewTabText, view === option && styles.viewTabTextOn]}>{t(`earnings.views.${option}`)}</Text>
+          </Pressable>
+        ))}
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -86,23 +129,32 @@ export function DriverEarningsScreen({ onBack }: { onBack: () => void }) {
               <Text style={styles.retryText}>{t("common:retry")}</Text>
             </Pressable>
           </View>
+        ) : summary && view === "CURRENT" ? (
+          <>
+            {/* The standing balance: what to hand over now. Zero right after a full handover. */}
+            <HandOverCard summary={summary} />
+            <Text style={styles.sectionTitle}>{t("earnings.currentTitle")}</Text>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            <PeriodActivity summary={summary} />
+          </>
         ) : summary ? (
           <>
-            {/* 3 — the standing balance. Not affected by the period below. */}
-            <HandOverCard summary={summary} />
+            <Text style={styles.sectionTitle}>{t("earnings.history.handoversTitle")}</Text>
+            <HandoverList history={handovers} />
 
+            <Text style={styles.sectionTitle}>{t("earnings.history.lookBackTitle")}</Text>
             <ScrollView
               accessibilityLabel={t("earnings.periodsLabel")}
               contentContainerStyle={styles.periodRow}
               horizontal
               showsHorizontalScrollIndicator={false}
             >
-              {periods.map((option) => (
+              {historyPeriods.map((option) => (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={{ selected: option === period }}
                   key={option}
-                  onPress={() => setPeriod(option)}
+                  onPress={() => setHistoryPeriod(option)}
                   style={[styles.periodChip, option === period && styles.periodChipOn]}
                 >
                   <Text style={[styles.periodText, option === period && styles.periodTextOn]}>{t(`earnings.periods.${option}`)}</Text>
@@ -204,6 +256,61 @@ function PeriodActivity({ summary }: { summary: DriverCashSummary }) {
   );
 }
 
+/** Each settled period, newest first: when it ran, what was handed over and counted, what was earned. */
+function HandoverList({ history }: { history: DriverHandoverHistory | null }) {
+  const { t } = useTranslation(["driver"]);
+  if (!history) return <ActivityIndicator color={colors.primary} />;
+  if (history.periods.length === 0) {
+    return (
+      <View style={styles.card}>
+        <Text style={styles.emptyText}>{t("earnings.history.none")}</Text>
+      </View>
+    );
+  }
+  return (
+    <>
+      {history.periods.map((period) => (
+        <HandoverCard key={period.settlementId} period={period} />
+      ))}
+      {history.truncated ? <Text style={styles.metaLine}>{t("earnings.history.truncated")}</Text> : null}
+    </>
+  );
+}
+
+function HandoverCard({ period }: { period: DriverHandoverPeriod }) {
+  const { t } = useTranslation(["driver"]);
+  const range = period.periodStart
+    ? t("earnings.history.range", { from: formatDate(period.periodStart), to: formatDate(period.settledAt) })
+    : t("earnings.history.rangeFirst", { to: formatDate(period.settledAt) });
+  return (
+    <View accessibilityLabel={range} style={styles.lineCard}>
+      <View style={styles.lineHeader}>
+        <View style={styles.lineTitleBlock}>
+          <Text style={styles.lineTitle}>{t("earnings.history.settled", { count: period.settledOrderCount })}</Text>
+          <Text style={styles.lineMeta}>{range}</Text>
+        </View>
+        <View style={[styles.outcomeBadge, styles.outcomeDelivered]}>
+          <Text style={[styles.outcomeText, styles.outcomeTextDelivered]}>{t("earnings.history.settledBadge")}</Text>
+        </View>
+      </View>
+      <View style={styles.lineFigures}>
+        <Figure label={t("earnings.history.handedOver")} value={formatMoney(period.cashHandedOverMinor)} />
+        <Figure label={t("earnings.history.earned")} value={formatMoney(period.earningsMinor)} />
+        <Figure label={t("earnings.history.deliveries")} value={String(period.deliveredCount)} />
+      </View>
+      {period.discrepancyMinor !== 0 ? (
+        <Text style={styles.discrepancy}>
+          {t(period.discrepancyMinor < 0 ? "earnings.history.short" : "earnings.history.over", {
+            amount: formatMoney(Math.abs(period.discrepancyMinor)),
+            counted: formatMoney(period.countedAmountMinor),
+            expected: formatMoney(period.expectedAmountMinor)
+          })}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function OrderLine({ line }: { line: DriverCashLine }) {
   const { t } = useTranslation(["driver"]);
   const failed = line.outcome === "DELIVERY_FAILED";
@@ -252,6 +359,12 @@ function formatDate(iso: string): string {
 
 const styles = StyleSheet.create({
   screen: { backgroundColor: colors.background, flex: 1 },
+  viewTabs: { backgroundColor: colors.surfaceSunk, borderRadius: radius.md, flexDirection: "row", gap: spacing[1], margin: spacing[4], marginBottom: 0, padding: spacing[1] },
+  viewTab: { alignItems: "center", borderRadius: radius.sm, flex: 1, justifyContent: "center", minHeight: 44 },
+  viewTabOn: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+  viewTabText: { ...text("bodySm", "bold"), color: colors.textMuted },
+  viewTabTextOn: { color: colors.text },
+  discrepancy: { ...text("caption", "bold"), color: colors.warning, marginTop: spacing[2] },
   header: {
     alignItems: "center",
     borderBottomColor: colors.border,

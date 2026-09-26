@@ -52,6 +52,26 @@
       "failed": "فاشلة",
       "noCash": "لم يُؤخذ نقد",
       "truncated": "تُعرض آخر {{count}} طلبية. المجاميع أعلاه تشمل جميعها."
+    },
+    "views": {
+      "CURRENT": "الحالي",
+      "HISTORY": "السجل"
+    },
+    "currentTitle": "منذ آخر تسليم",
+    "history": {
+      "handoversTitle": "التسليمات السابقة",
+      "lookBackTitle": "استعراض فترة سابقة",
+      "none": "لم يُسجَّل أي تسليم بعد. ستظهر هنا كل فترة بعد تسليمها.",
+      "truncated": "تُعرض أحدث التسليمات فقط؛ السجل الكامل محفوظ لدى الإدارة.",
+      "range": "من {{from}} إلى {{to}}",
+      "rangeFirst": "حتى {{to}}",
+      "settled": "تسليم نقدي · {{count}} طلب",
+      "settledBadge": "تمّت التسوية",
+      "handedOver": "سُلِّم",
+      "earned": "أرباحك",
+      "deliveries": "التوصيلات",
+      "short": "نقص {{amount}}: عُدّ {{counted}} من أصل {{expected}}",
+      "over": "زيادة {{amount}}: عُدّ {{counted}} من أصل {{expected}}"
     }
   },
   "home": {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildCashLines, resolvePeriodStart, type OrderFact } from "./driver-cash-summary";
+import { buildHandoverPeriods } from "./driver-cash-summary";
 
 // Wednesday 2026-09-16, mid-afternoon on the server's local clock.
 const now = new Date(2026, 8, 16, 15, 30);
@@ -81,4 +82,62 @@ test("an earning that is not tied to an order has no line, and lines are newest 
     new Map()
   );
   assert.deepEqual(lines.map((line) => line.orderId), ["late", "early"]);
+});
+
+// --- the driver's History: settled periods between handovers -------------------------------------
+
+const at = (iso: string) => new Date(`2026-09-26T${iso}:00.000Z`);
+const handover = (id: string, time: string, orderIds: string[], amount = 1000) => ({
+  id,
+  settledAt: at(time),
+  expectedAmountMinor: amount * orderIds.length,
+  countedAmountMinor: amount * orderIds.length,
+  discrepancyMinor: 0,
+  allocations: orderIds.map((orderId) => ({ amountMinor: amount, orderId }))
+});
+
+test("each settled period runs from the previous handover to this one, newest first", () => {
+  const periods = buildHandoverPeriods(
+    [handover("h2", "16:00", ["o3"]), handover("h1", "12:00", ["o1", "o2"])],
+    null,
+    [
+      { amountMinor: 300, occurredAt: at("09:00") },
+      { amountMinor: 300, occurredAt: at("11:59") },
+      { amountMinor: 500, occurredAt: at("12:00") }, // exactly at h1: belongs to the NEXT period
+      { amountMinor: 700, occurredAt: at("17:00") } // after the newest handover: current period, not history
+    ],
+    [at("09:00"), at("11:59"), at("12:00"), at("17:00")]
+  );
+
+  assert.deepEqual(
+    periods.map((period) => [period.settlementId, period.periodStart?.toISOString() ?? null, period.earningsMinor, period.deliveredCount]),
+    [
+      ["h2", at("12:00").toISOString(), 500, 1],
+      ["h1", null, 600, 2]
+    ]
+  );
+  assert.equal(periods[0].cashHandedOverMinor, 1000);
+  assert.equal(periods[1].cashHandedOverMinor, 2000);
+  assert.equal(periods[1].settledOrderCount, 2);
+});
+
+test("a truncated history still gives the oldest period shown its real start", () => {
+  const [period] = buildHandoverPeriods([handover("h9", "16:00", ["o9"])], at("10:00"), [
+    { amountMinor: 100, occurredAt: at("09:00") },
+    { amountMinor: 200, occurredAt: at("11:00") }
+  ], []);
+  assert.equal(period.periodStart?.toISOString(), at("10:00").toISOString());
+  assert.equal(period.earningsMinor, 200);
+});
+
+test("a shortfall is reported as recorded, not smoothed over", () => {
+  const [period] = buildHandoverPeriods(
+    [{ ...handover("h1", "12:00", ["o1"], 3200), countedAmountMinor: 3000, discrepancyMinor: -200 }],
+    null,
+    [],
+    []
+  );
+  assert.equal(period.expectedAmountMinor, 3200);
+  assert.equal(period.countedAmountMinor, 3000);
+  assert.equal(period.discrepancyMinor, -200);
 });

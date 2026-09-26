@@ -4,8 +4,10 @@ import { DriverEarningsScreen } from "./earnings-screen";
 import type { DriverCashSummary } from "../../core/api";
 
 const mockGetSummary = jest.fn();
+const mockGetHandovers = jest.fn();
 jest.mock("../../core/api", () => ({
-  getDriverCashSummary: (...args: unknown[]) => mockGetSummary(...args)
+  getDriverCashSummary: (...args: unknown[]) => mockGetSummary(...args),
+  getDriverCashHandovers: (...args: unknown[]) => mockGetHandovers(...args)
 }));
 jest.mock("../../core/session", () => ({ getAccessToken: jest.fn().mockResolvedValue("token") }));
 
@@ -70,6 +72,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   mockGetSummary.mockReset().mockResolvedValue(summary);
+  mockGetHandovers.mockReset().mockResolvedValue({ truncated: false, periods: [] });
 });
 
 async function renderScreen() {
@@ -115,24 +118,15 @@ test("cash collected and earnings stay in their own separate, labelled cards for
   expect(screen.getByText(/Still to be paid to you: 21\.00 ₪/)).toBeTruthy();
 });
 
-test("the amount to hand over does not change when another period is chosen", async () => {
+test("the main view shows only the current period: no calendar chips to bring a settled period back", async () => {
   await renderScreen();
-  mockGetSummary.mockResolvedValue({
-    ...summary,
-    period: "TODAY",
-    cashCollectedMinor: 3200,
-    earningsMinor: 700,
-    // The period only changes what was collected in it; the standing balance is the same.
-    balance: { ...summary.balance, cashOwedFromBeforePeriodMinor: 3200 }
-  });
 
-  await act(async () => {
-    fireEvent.press(screen.getByText("Today"));
-  });
-
-  expect(mockGetSummary).toHaveBeenLastCalledWith("token", "TODAY");
-  expect(screen.getByLabelText("Owed to the platform")).toHaveTextContent(/64\.00 ₪/);
-  expect(screen.getByLabelText("Total cash collected")).toHaveTextContent(/32\.00 ₪/);
+  expect(mockGetSummary).toHaveBeenCalledWith("token", "SHIFT");
+  expect(screen.getByText("Since your last handover")).toBeTruthy();
+  for (const chip of ["Today", "This week", "This month", "All time"]) {
+    expect(screen.queryByText(chip)).toBeNull();
+  }
+  expect(mockGetHandovers).not.toHaveBeenCalled();
 });
 
 test("a driver holding no cash is told so, with nothing to hand over", async () => {
@@ -156,13 +150,91 @@ test("lists the period's orders below, a failed delivery earning without cash", 
   expect(screen.getByText("No cash taken")).toBeTruthy();
 });
 
-test("opens on 'since last handover' and reloads for another period when one is chosen", async () => {
+test("opens on 'since last handover'; History offers the calendar periods and reloads for each", async () => {
   await renderScreen();
   expect(mockGetSummary).toHaveBeenCalledWith("token", "SHIFT");
 
   await act(async () => {
+    fireEvent.press(screen.getByText("History"));
+  });
+  expect(mockGetSummary).toHaveBeenLastCalledWith("token", "MONTH");
+
+  await act(async () => {
     fireEvent.press(screen.getByText("Today"));
   });
-
   expect(mockGetSummary).toHaveBeenLastCalledWith("token", "TODAY");
+});
+
+// What the API returns right after an admin records a full handover: the current period starts at
+// the handover, so nothing is held, owed or earned in it yet. The settled figures are history.
+const afterHandover: DriverCashSummary = {
+  ...summary,
+  lastHandoverAt: "2026-09-20T12:00:00.000Z",
+  from: "2026-09-20T12:00:00.000Z",
+  cashCollectedMinor: 0,
+  cashHandedOverMinor: 0,
+  earningsMinor: 0,
+  deliveredCount: 0,
+  failedCount: 0,
+  lines: [],
+  balance: {
+    ...summary.balance,
+    cashOwedToPlatformMinor: 0,
+    unsettledOrderCount: 0,
+    oldestUnsettledAt: null,
+    openOrders: []
+  }
+};
+
+test("after a handover the main view starts fresh: nothing held, nothing owed, nothing earned yet", async () => {
+  mockGetSummary.mockResolvedValue(afterHandover);
+  await renderScreen();
+
+  expect(screen.getByLabelText("Owed to the platform")).toHaveTextContent(/0\.00 ₪/);
+  expect(screen.getByLabelText("Total cash collected")).toHaveTextContent(/0\.00 ₪/);
+  expect(screen.getByLabelText("Your earnings")).toHaveTextContent(/0\.00 ₪/);
+  expect(screen.getByText("No deliveries in this period.")).toBeTruthy();
+  expect(screen.queryByText("JOVO MARKET")).toBeNull();
+});
+
+test("the settled period is still there under History, with what was handed over and earned", async () => {
+  mockGetSummary.mockResolvedValue(afterHandover);
+  mockGetHandovers.mockResolvedValue({
+    truncated: false,
+    periods: [
+      {
+        settlementId: "settle-1",
+        periodStart: null,
+        settledAt: "2026-09-20T12:00:00.000Z",
+        cashHandedOverMinor: 9600,
+        expectedAmountMinor: 9600,
+        countedAmountMinor: 9400,
+        discrepancyMinor: -200,
+        settledOrderCount: 3,
+        earningsMinor: 2100,
+        deliveredCount: 3
+      }
+    ]
+  });
+  await renderScreen();
+
+  await act(async () => {
+    fireEvent.press(screen.getByText("History"));
+  });
+
+  expect(mockGetHandovers).toHaveBeenCalledWith("token");
+  expect(screen.getByText("Past handovers")).toBeTruthy();
+  expect(screen.getByText("Cash handover · 3 orders")).toBeTruthy();
+  expect(screen.getByText("96.00 ₪")).toBeTruthy();
+  expect(screen.getByText("21.00 ₪")).toBeTruthy();
+  expect(screen.getByText("Short by 2.00 ₪: 94.00 ₪ counted of 96.00 ₪")).toBeTruthy();
+});
+
+test("History says so plainly when nothing has been handed over yet", async () => {
+  mockGetHandovers.mockResolvedValue({ truncated: false, periods: [] });
+  await renderScreen();
+  await act(async () => {
+    fireEvent.press(screen.getByText("History"));
+  });
+  expect(screen.getByText(/No handover recorded yet\. Each period appears here/)).toBeTruthy();
 });

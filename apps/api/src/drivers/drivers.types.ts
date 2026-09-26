@@ -170,6 +170,37 @@ export type DriverCashSummaryView = {
   linesTruncated: boolean;
 };
 
+/**
+ * One settled period in the driver's history: everything between one cash handover and the next.
+ *
+ * Read-only and built from the ledger as it stands. A handover never alters or removes the rows it
+ * settles; it only marks them settled, which is why a past period can always be shown again.
+ */
+export type DriverHandoverPeriodView = {
+  settlementId: string;
+  /** The previous handover, or null for the driver's first period. */
+  periodStart: Date | null;
+  /** When this handover was recorded; the period's end. */
+  settledAt: Date;
+  /** Cash the handover settled, per the allocations it wrote. */
+  cashHandedOverMinor: number;
+  /** What the receiver expected and counted, and the difference (negative is a shortfall). */
+  expectedAmountMinor: number;
+  countedAmountMinor: number;
+  discrepancyMinor: number;
+  /** Orders whose cash this handover settled (fully or partly). */
+  settledOrderCount: number;
+  /** The driver's delivery-fee share earned within the period. */
+  earningsMinor: number;
+  deliveredCount: number;
+};
+
+export type DriverHandoverHistoryView = {
+  periods: DriverHandoverPeriodView[];
+  /** More handovers exist than were returned. */
+  truncated: boolean;
+};
+
 export type DeliveryOrderSummary = {
   id: string;
   deliveryLabel: string;

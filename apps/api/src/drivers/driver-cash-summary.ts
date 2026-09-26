@@ -1,5 +1,5 @@
 import type { OrderFinancialOutcome } from "../generated/prisma/enums";
-import type { DriverCashPeriod } from "./drivers.types";
+import type { DriverCashPeriod, DriverHandoverPeriodView } from "./drivers.types";
 
 /**
  * Period boundaries for the driver's cash screen.
@@ -117,4 +117,46 @@ export function buildCashLines(
     line(row.orderId, row.occurredAt).earningMinor += row.amountMinor;
   }
   return [...lines.values()].sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime());
+}
+
+export type HandoverFact = {
+  id: string;
+  settledAt: Date;
+  expectedAmountMinor: number;
+  countedAmountMinor: number;
+  discrepancyMinor: number;
+  allocations: { amountMinor: number; orderId: string }[];
+};
+
+/**
+ * The driver's past settled periods, newest first. Period N runs from handover N-1 (inclusive) to
+ * handover N (exclusive) — the same boundary the "since last handover" view uses — so every order and
+ * every earning belongs to exactly one period, and the current period is simply the one after the
+ * newest handover.
+ *
+ * `handovers` must be newest first. `olderBoundary` is the handover just before the oldest one
+ * passed in (when the list was truncated), so the oldest period still gets its real start.
+ */
+export function buildHandoverPeriods(
+  handovers: HandoverFact[],
+  olderBoundary: Date | null,
+  earnings: { amountMinor: number; occurredAt: Date }[],
+  deliveredAt: Date[]
+): DriverHandoverPeriodView[] {
+  return handovers.map((handover, index) => {
+    const periodStart = index + 1 < handovers.length ? handovers[index + 1].settledAt : olderBoundary;
+    const inPeriod = (at: Date) => (periodStart === null || at >= periodStart) && at < handover.settledAt;
+    return {
+      settlementId: handover.id,
+      periodStart,
+      settledAt: handover.settledAt,
+      cashHandedOverMinor: handover.allocations.reduce((sum, allocation) => sum + allocation.amountMinor, 0),
+      expectedAmountMinor: handover.expectedAmountMinor,
+      countedAmountMinor: handover.countedAmountMinor,
+      discrepancyMinor: handover.discrepancyMinor,
+      settledOrderCount: new Set(handover.allocations.map((allocation) => allocation.orderId)).size,
+      earningsMinor: earnings.filter((earning) => inPeriod(earning.occurredAt)).reduce((sum, earning) => sum + earning.amountMinor, 0),
+      deliveredCount: deliveredAt.filter(inPeriod).length
+    };
+  });
 }

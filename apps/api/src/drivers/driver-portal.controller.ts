@@ -65,6 +65,15 @@ export class DriverPortalController {
     return this.drivers.getOwnCashSummary(request.user.id, query.period ?? "SHIFT");
   }
 
+  @Get("me/cash-handovers")
+  @ApiOperation({
+    summary:
+      "The driver's settled periods, newest first: each span between cash handovers with what was handed over, counted and earned. Read-only history; the main cash screen shows only the current period."
+  })
+  getHandoverHistory(@Req() request: AuthenticatedRequest) {
+    return this.drivers.getOwnHandoverHistory(request.user.id);
+  }
+
   @Get("me/deliveries/available")
   @ApiOperation({ summary: "List unclaimed deliveries any online driver may accept" })
   listAvailable() {

@@ -729,6 +729,26 @@ export function getDriverCashSummary(accessToken: string, period: DriverCashPeri
   return request(`/api/v1/driver/me/cash-summary?period=${period}`, { accessToken });
 }
 
+/** One settled period: from the previous cash handover to this one. Read-only history. */
+export type DriverHandoverPeriod = {
+  settlementId: string;
+  periodStart: string | null;
+  settledAt: string;
+  cashHandedOverMinor: number;
+  expectedAmountMinor: number;
+  countedAmountMinor: number;
+  discrepancyMinor: number;
+  settledOrderCount: number;
+  earningsMinor: number;
+  deliveredCount: number;
+};
+
+export type DriverHandoverHistory = { periods: DriverHandoverPeriod[]; truncated: boolean };
+
+export function getDriverCashHandovers(accessToken: string): Promise<DriverHandoverHistory> {
+  return request("/api/v1/driver/me/cash-handovers", { accessToken });
+}
+
 export type DriverPresenceState = "FOREGROUND" | "BACKGROUND" | "CLOSED";
 
 /** The app tells the server it is open, has gone to the background, or is closed. Alerts need it open. */
