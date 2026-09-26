@@ -12,6 +12,7 @@ import { hashPassword } from "../auth/crypto.util";
 import { UserRole } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { PushSenderService } from "../realtime/push-sender.service";
+import { reactivateOffers, suspendActivePlatformOffers } from "./ambient-offers.util";
 import { withFinancialTriggersDisabled } from "./financial-triggers.util";
 
 /**
@@ -77,12 +78,19 @@ test(
       throw new Error("This E2E requires a database whose name contains 'test'.");
     }
 
+    // This suite's worked examples (e.g. "a 23.40 order is collected as 24.00") are hand-computed
+    // on paper and so cannot tolerate a real, currently-active platform-wide promotion silently
+    // discounting the fresh orders it creates — see ambient-offers.util.ts for why this is a
+    // confirmed real cause of failures here (including cascading failures in later subtests that
+    // depend on an order id this worked example never reached), not a defensive guess.
+    const suspendedOfferIds = await suspendActivePlatformOffers(prisma);
     context.after(async () => {
       globalThis.fetch = realFetch;
       for (const socket of sockets) socket.disconnect();
       try {
         await cleanup(prisma);
       } finally {
+        await reactivateOffers(prisma, suspendedOfferIds);
         await app.close();
       }
     });

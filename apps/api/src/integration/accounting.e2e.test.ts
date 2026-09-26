@@ -9,6 +9,7 @@ import { AppModule } from "../app.module";
 import { hashPassword } from "../auth/crypto.util";
 import { UserRole } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { reactivateOffers, suspendActivePlatformOffers } from "./ambient-offers.util";
 import { withFinancialTriggersDisabled } from "./financial-triggers.util";
 
 /**
@@ -75,10 +76,16 @@ test(
       throw error;
     }
 
+    // This suite's worked examples are hand-computed on paper (see minimumDeliveryFeeMinor's own
+    // comment) and so cannot tolerate a real, currently-active platform-wide promotion silently
+    // discounting the fresh orders it creates — see ambient-offers.util.ts for why this is a
+    // confirmed real cause of failures here, not a defensive guess.
+    const suspendedOfferIds = await suspendActivePlatformOffers(prisma);
     context.after(async () => {
       try {
         await cleanup(prisma);
       } finally {
+        await reactivateOffers(prisma, suspendedOfferIds);
         await app.close();
       }
     });
