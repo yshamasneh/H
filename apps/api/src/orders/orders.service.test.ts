@@ -1073,7 +1073,7 @@ test("quoting an order for a store with no configured location is rejected (TC-0
   );
 });
 
-test("a status change emits a realtime event to the order and to admins (TC-088)", async () => {
+test("a status change emits a realtime event to the order, to admins and to the business (TC-088)", async () => {
   const { prisma, realtime, service } = createService();
   const restaurant = prisma.seedRestaurant();
   const item = prisma.seedMenuItem(restaurant.id);
@@ -1085,6 +1085,30 @@ test("a status change emits a realtime event to the order and to admins (TC-088)
   const statusEvents = realtime.emitted.filter((event) => event.event === "order.status.changed");
   assert.ok(statusEvents.length >= 1, "order.status.changed is emitted");
   assert.ok(statusEvents.some((event) => event.room === "admins"), "admins are notified");
+  // Every other staff device of the business must learn about the accept at once, so its
+  // new-order alarm stops without waiting for a poll.
+  assert.ok(
+    statusEvents.some((event) => event.room === `restaurant:${restaurant.id}`),
+    "the business's own room is notified"
+  );
+});
+
+test("a customer cancellation reaches the business room too", async () => {
+  const { prisma, realtime, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const item = prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  const order = await service.createOrder(customerId, baseInput(restaurant.id, item.id) as never);
+  realtime.emitted.length = 0;
+
+  await service.cancelForCustomer(customerId, order.id);
+
+  assert.ok(
+    realtime.emitted.some(
+      (event) => event.event === "order.status.changed" && event.room === `restaurant:${restaurant.id}`
+    ),
+    "a cancelled NEW order silences the store's alarm"
+  );
 });
 
 // --- gap closures: TC-091/095/099/100/103/106 -------------------------------------

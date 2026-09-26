@@ -266,6 +266,18 @@ export class OrdersService {
   }
 
   /**
+   * Every status change reaches three audiences: whoever is watching the order, the admins, and the
+   * business's own room. The last one is what lets a second staff device see an accept made on the
+   * first straight away (and stop ringing), instead of waiting for its next safety poll.
+   */
+  private broadcastStatusChange(restaurantId: string, orderId: string, status: OrderStatus): void {
+    const payload = { orderId, status };
+    this.realtime.emitToOrder(orderId, "order.status.changed", payload);
+    this.realtime.emitToAdmins("order.status.changed", payload);
+    this.realtime.emitToRestaurant(restaurantId, "order.status.changed", payload);
+  }
+
+  /**
    * The operational queue for a business, grouped the way the floor thinks about it.
    *
    * One request rather than three so the 30-second safety poll stays cheap, and presented oldest
@@ -772,8 +784,7 @@ export class OrdersService {
     });
     emitter.flush();
 
-    this.realtime.emitToOrder(orderId, "order.status.changed", { orderId, status: targetStatus });
-    this.realtime.emitToAdmins("order.status.changed", { orderId, status: targetStatus });
+    this.broadcastStatusChange(updated!.restaurantId, orderId, targetStatus);
 
     return toOrderDetailView(updated!, withActorNames);
   }
@@ -820,8 +831,7 @@ export class OrdersService {
     });
     emitter.flush();
 
-    this.realtime.emitToOrder(orderId, "order.status.changed", { orderId, status: OrderStatus.CANCELLED });
-    this.realtime.emitToAdmins("order.status.changed", { orderId, status: OrderStatus.CANCELLED });
+    this.broadcastStatusChange(updated!.restaurantId, orderId, OrderStatus.CANCELLED);
 
     return toOrderDetailView(updated!);
   }
@@ -897,8 +907,7 @@ export class OrdersService {
     });
     emitter.flush();
 
-    this.realtime.emitToOrder(orderId, "order.status.changed", { orderId, status: OrderStatus.CANCELLED });
-    this.realtime.emitToAdmins("order.status.changed", { orderId, status: OrderStatus.CANCELLED });
+    this.broadcastStatusChange(updated!.restaurantId, orderId, OrderStatus.CANCELLED);
 
     return toOrderDetailView(updated!, withActorNames);
   }

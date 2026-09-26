@@ -682,6 +682,7 @@ export class DriversService {
       if (finalOrderStatus) {
         emitter.emitToOrder(order.id, "order.status.changed", { orderId: order.id, status: finalOrderStatus });
         emitter.emitToAdmins("order.status.changed", { orderId: order.id, status: finalOrderStatus });
+        emitter.emitToRestaurant(order.restaurantId, "order.status.changed", { orderId: order.id, status: finalOrderStatus });
       }
 
       return tx.delivery.findUnique({ where: { id: deliveryId }, include: deliveryInclude });
