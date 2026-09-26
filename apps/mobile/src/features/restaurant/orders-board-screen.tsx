@@ -290,7 +290,8 @@ const styles = StyleSheet.create({
   back: { justifyContent: "center", minHeight: 44 },
   backText: { ...text("bodySm", "bold"), color: colors.textMuted },
   title: { ...text("h2", "bold"), color: colors.text, flex: 1 },
-  tabsBar: { backgroundColor: colors.surface, flexGrow: 0 },
+  // flexShrink 0: in a column with a flex:1 list below, a horizontal ScrollView is otherwise squashed.
+  tabsBar: { backgroundColor: colors.surface, flexGrow: 0, flexShrink: 0 },
   tabs: { gap: spacing[2], padding: spacing[3] },
   tab: {
     alignItems: "center",

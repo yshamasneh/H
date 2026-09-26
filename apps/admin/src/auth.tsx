@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { disconnectSocket } from "./socket";
 import {
   ApiError,
   clearSession,
@@ -98,6 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Local sign-out still clears credentials if the API is unreachable.
     }
     clearSession();
+    // Otherwise the next account signed in on this tab would inherit this one's socket rooms.
+    disconnectSocket();
     setUser(null);
     setAccess(null);
   }

@@ -20,7 +20,28 @@ export function getSocket(): Socket | null {
   if (socket) {
     socket.disconnect();
   }
-  socket = io(apiBaseUrl, { auth: { token }, transports: ["websocket", "polling"] });
+  // `auth` is a function so every connection attempt, including socket.io's own automatic
+  // reconnects, presents the CURRENT access token. With a fixed token, a reconnect after an API
+  // restart or a network blip presented one that had since been rotated, the server refused it, and
+  // the page carried on listening to a dead socket — live updates quietly fell back to the poll.
+  const created = io(apiBaseUrl, {
+    auth: (callback) => callback({ token: getAccessToken() ?? "" }),
+    transports: ["websocket", "polling"]
+  });
+  // A refusal from the server ("io server disconnect") is never retried by socket.io itself. Retry
+  // with backoff while still signed in; any REST call in between (the 30 s poll) refreshes the token.
+  let retryMs = 2_000;
+  created.on("connect", () => {
+    retryMs = 2_000;
+  });
+  created.on("disconnect", (reason) => {
+    if (reason !== "io server disconnect") return;
+    window.setTimeout(() => {
+      if (socket === created && getAccessToken()) created.connect();
+    }, retryMs);
+    retryMs = Math.min(retryMs * 2, 30_000);
+  });
+  socket = created;
   return socket;
 }
 

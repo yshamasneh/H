@@ -57,7 +57,8 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings, initialEdit
   const [profile, setProfile] = useState<RestaurantOwnerProfile | null>(null);
   const [categories, setCategories] = useState<MenuCategoryOwner[]>([]);
   const [items, setItems] = useState<MenuItemOwner[]>([]);
-  const [section, setSection] = useState<Section>(initialEditItemId ? "items" : "profile");
+  // Products first: checking and hiding stock is what this screen is opened for most often.
+  const [section, setSection] = useState<Section>("items");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

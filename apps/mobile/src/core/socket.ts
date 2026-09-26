@@ -5,7 +5,6 @@ import { getAccessToken } from "./session";
 import { attachOrderSubscription } from "./order-subscription";
 
 let socket: Socket | null = null;
-let socketToken: string | null = null;
 
 /**
  * REST stays the source of truth (see docs/architecture.md). A socket event only ever means
@@ -14,21 +13,44 @@ let socketToken: string | null = null;
 async function connect(): Promise<Socket | null> {
   const token = await getAccessToken();
   if (!token) return null;
-  // Reuse a socket that is connected OR still connecting for the same token. Checking `connected`
-  // alone made the second hook mounting in the same tick (e.g. the store's alert host and the screen
-  // under it) tear down the socket the first had just created, orphaning its listeners — the same
-  // bug the admin console fixed in its own getSocket().
-  if (socket && socketToken === token && (socket.connected || socket.active)) return socket;
+  // Reuse a socket that is connected OR still connecting. Checking `connected` alone made the second
+  // hook mounting in the same tick (e.g. the store's alert host and the screen under it) tear down
+  // the socket the first had just created, orphaning its listeners — the same bug the admin console
+  // fixed in its own getSocket(). A rotated access token is not a reason to replace it either: the
+  // `auth` callback below already hands every (re)connection the current token. Sign-out calls
+  // disconnectSocket().
+  if (socket && (socket.connected || socket.active)) return socket;
   if (socket) socket.disconnect();
-  socketToken = token;
-  socket = io(apiBaseUrl, { auth: { token }, transports: ["websocket"] });
+  // `auth` is a function so socket.io's own automatic reconnects (after an API restart or a network
+  // drop) present the current token rather than the one captured here, which may have rotated.
+  const created = io(apiBaseUrl, {
+    auth: (callback) => {
+      void getAccessToken().then((current) => callback({ token: current ?? "" }), () => callback({ token: "" }));
+    },
+    transports: ["websocket"]
+  });
+  // A refusal from the server is never retried by socket.io itself; retry with backoff while
+  // signed in (the live queue's REST poll refreshes the token in the meantime).
+  let retryMs = 2_000;
+  created.on("connect", () => {
+    retryMs = 2_000;
+  });
+  created.on("disconnect", (reason) => {
+    if (reason !== "io server disconnect") return;
+    setTimeout(() => {
+      void getAccessToken().then((current) => {
+        if (socket === created && current) created.connect();
+      });
+    }, retryMs);
+    retryMs = Math.min(retryMs * 2, 30_000);
+  });
+  socket = created;
   return socket;
 }
 
 export function disconnectSocket(): void {
   socket?.disconnect();
   socket = null;
-  socketToken = null;
 }
 
 export function useRealtimeEvent(event: string, handler: (payload: unknown) => void): void {

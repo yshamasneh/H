@@ -63,7 +63,8 @@ function webEngine(): Engine {
         audio.currentTime = 0;
         await audio.play();
         return true;
-      } catch {
+      } catch (error) {
+        console.warn("[order-alert-sound] web play refused", error);
         return false;
       }
     },
@@ -121,6 +122,6 @@ export function useOrderAlertSound(active: boolean, repeatMs: number): { state: 
     void kvStore.setItem(mutedKey, "true");
   }
 
-  const state: OrderSoundState = muted !== false ? "off" : !unlocked ? "off" : blocked ? "blocked" : "on";
+  const state: OrderSoundState = muted !== false ? "off" : blocked ? "blocked" : !unlocked ? "off" : "on";
   return { state, arm, mute };
 }
