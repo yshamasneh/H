@@ -257,6 +257,18 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   // What the address box is doing: looking the pin up, filled from it, or unable to read it.
   const [addressStatus, setAddressStatus] = useState<"idle" | "resolving" | "filled" | "notFound">("idle");
   const [outOfRange, setOutOfRange] = useState(false);
+  // Which location this order is actually going to: a saved address, the device's current position,
+  // or a pin the customer placed. Shown on screen so it is never ambiguous, and used to make sure a
+  // stale saved label or address can never travel with coordinates that came from somewhere else.
+  const [activeSource, setActiveSource] = useState<"none" | "saved" | "current" | "pin">("none");
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  // Where the text in the address box came from, so it can be dropped the moment the location changes
+  // (typed text is the customer's own and is kept; saved or looked-up text describes the OLD spot).
+  const addressSourceRef = useRef<"empty" | "saved" | "geocoded" | "typed">("empty");
+  const labelEditedRef = useRef(false);
+  // Bumped by every explicit choice of location. A slow GPS fix that returns after the customer has
+  // since tapped the map or picked a saved address is discarded instead of overriding their choice.
+  const locationChoiceRef = useRef(0);
   // Bumped when the customer types, and when the pin moves, so a slow geocode never overwrites
   // an address they have since typed or a pin they have since moved again.
   const addressEditRef = useRef(0);
@@ -337,14 +349,45 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
   }
 
   function selectSavedAddress(address: SavedAddress) {
+    locationChoiceRef.current += 1;
     geocodeGenerationRef.current += 1;
     setAddressStatus("idle");
+    labelEditedRef.current = false;
+    addressSourceRef.current = "saved";
+    setActiveSource("saved");
+    setActiveSavedId(address.id);
     setDeliveryLabel(address.label);
     setDeliveryAddressLine(address.addressLine);
     const nextCoordinates = { latitude: address.latitude, longitude: address.longitude };
     setCoordinates(nextCoordinates);
     markPinSet();
-    scheduleQuote(address.addressLine, nextCoordinates, address.label);
+    // Straight away: the fee for a saved address is known the moment it is chosen.
+    scheduleQuote(address.addressLine, nextCoordinates, address.label, 0);
+  }
+
+  /**
+   * The location changed to a new spot that did not come from a saved address (a placed pin or the
+   * device's position). Anything that still describes the previous spot is dropped so it cannot be
+   * ordered against the new coordinates: the saved label, and address text that was saved or looked
+   * up for the old pin. Text the customer typed themselves is theirs and stays.
+   */
+  function moveToNewLocation(source: "current" | "pin", nextCoordinates: CurrentCoordinates) {
+    setActiveSource(source);
+    setCoordinates(nextCoordinates);
+    markPinSet();
+    const wasSaved = activeSavedId !== null;
+    setActiveSavedId(null);
+    if (!labelEditedRef.current) {
+      setDeliveryLabel(t(source === "current" ? "checkout.currentLocationLabel" : "checkout.pinLabel"));
+    } else if (wasSaved) {
+      labelEditedRef.current = false;
+      setDeliveryLabel(t(source === "current" ? "checkout.currentLocationLabel" : "checkout.pinLabel"));
+    }
+    const staleAddress = addressSourceRef.current === "saved" || addressSourceRef.current === "geocoded";
+    if (staleAddress) {
+      addressSourceRef.current = "empty";
+      setDeliveryAddressLine("");
+    }
   }
 
   // The quote does not depend on the address text, only the pin — so while the address is still
@@ -392,7 +435,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     }
   }
 
-  function scheduleQuote(address: string, point: CurrentCoordinates, label: string) {
+  function scheduleQuote(address: string, point: CurrentCoordinates, label: string, delayMs = 400) {
     quoteGenerationRef.current += 1;
     if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
     setLocating(false);
@@ -403,29 +446,38 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
     const input = orderInput(quoteAddress(address), point, label);
     if (!input) return;
     const generation = quoteGenerationRef.current;
-    quoteTimerRef.current = setTimeout(() => { void requestQuote(input, generation); }, 400);
+    // Typing waits a moment so every keystroke is not a request; choosing a location does not wait.
+    if (delayMs === 0) {
+      void requestQuote(input, generation);
+      return;
+    }
+    quoteTimerRef.current = setTimeout(() => { void requestQuote(input, generation); }, delayMs);
   }
 
   async function chooseCurrentLocation() {
+    const choice = ++locationChoiceRef.current;
     setLocating(true);
     setError(null);
     setOutOfRange(false);
+    setAddressStatus("resolving");
     try {
       const nextCoordinates = await getCurrentCoordinates();
-      setCoordinates(nextCoordinates);
-      markPinSet();
-      // Quote straight away against the pin so the customer isn't waiting on the address lookup.
+      // The customer picked something else while the GPS was working: their later choice wins.
+      if (choice !== locationChoiceRef.current) return;
+      moveToNewLocation("current", nextCoordinates);
       const editVersion = addressEditRef.current;
       const generation = ++geocodeGenerationRef.current;
-      const input = orderInput(quoteAddress(deliveryAddressLine), nextCoordinates, deliveryLabel);
+      // Quote against the pin at once so the fee does not wait on the address lookup.
+      const input = orderInput(quoteAddress(addressSourceRef.current === "typed" ? deliveryAddressLine : ""), nextCoordinates, labelFor("current"));
       if (!input) throw new Error(t("checkout.emptyCartError"));
       if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
       quoteGenerationRef.current += 1;
+      setQuote(null);
       const quoteRun = requestQuote(input, quoteGenerationRef.current);
-      setAddressStatus("resolving");
       const address = await reverseGeocode(nextCoordinates).catch(() => null);
       if (generation === geocodeGenerationRef.current) {
         if (address && editVersion === addressEditRef.current) {
+          addressSourceRef.current = "geocoded";
           setDeliveryAddressLine(address);
           setAddressStatus("filled");
         } else {
@@ -434,26 +486,35 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
       }
       await quoteRun;
     } catch (requestError) {
+      if (choice !== locationChoiceRef.current) return;
+      setAddressStatus("idle");
       setQuote(null);
       if (isStoreClosedError(requestError)) store.setStatus("closed");
       setError(readError(requestError));
     } finally {
-      setLocating(false);
+      if (choice === locationChoiceRef.current) setLocating(false);
     }
   }
 
+  // The label the order will carry for a location, evaluated now (state has not re-rendered yet).
+  function labelFor(source: "current" | "pin"): string {
+    if (labelEditedRef.current) return deliveryLabel;
+    return t(source === "current" ? "checkout.currentLocationLabel" : "checkout.pinLabel");
+  }
+
   async function chooseMapLocation(nextCoordinates: MapCoordinate) {
-    setCoordinates(nextCoordinates);
-    markPinSet();
-    scheduleQuote(deliveryAddressLine, nextCoordinates, deliveryLabel);
-    // The address box follows the pin: show that it is being looked up, then fill it in. A newer
-    // pin move or a keystroke in the box cancels an older lookup's result.
+    locationChoiceRef.current += 1;
+    moveToNewLocation("pin", nextCoordinates);
+    // The fee for the new pin starts immediately; the address lookup runs beside it.
+    const keptAddress = addressSourceRef.current === "typed" ? deliveryAddressLine : "";
+    scheduleQuote(keptAddress, nextCoordinates, labelFor("pin"), 0);
     const generation = ++geocodeGenerationRef.current;
     const editVersion = addressEditRef.current;
     setAddressStatus("resolving");
     const address = await reverseGeocode(nextCoordinates).catch(() => null);
     if (generation !== geocodeGenerationRef.current) return;
     if (address && editVersion === addressEditRef.current) {
+      addressSourceRef.current = "geocoded";
       setDeliveryAddressLine(address);
       setAddressStatus("filled");
     } else {
@@ -613,8 +674,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         {savedAddresses.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.savedAddressList}>
             {savedAddresses.map((address) => (
-              <Pressable key={address.id} onPress={() => selectSavedAddress(address)} style={styles.savedAddressChip}>
-                <Text style={styles.savedAddressChipText}>{address.label}{address.isDefault ? " ★" : ""}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: activeSavedId === address.id }}
+                key={address.id}
+                onPress={() => selectSavedAddress(address)}
+                style={[styles.savedAddressChip, activeSavedId === address.id && styles.savedAddressChipActive]}
+              >
+                <Text style={[styles.savedAddressChipText, activeSavedId === address.id && styles.savedAddressChipTextActive]}>{address.label}{address.isDefault ? " ★" : ""}</Text>
               </Pressable>
             ))}
           </ScrollView>
@@ -622,6 +689,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         <Text style={styles.label}>{t("checkout.labelField")}</Text>
         <TextInput
           onChangeText={(value) => {
+            labelEditedRef.current = true;
             setDeliveryLabel(value);
             scheduleQuote(deliveryAddressLine, coordinates, value);
           }}
@@ -635,6 +703,7 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           multiline
           onChangeText={(value) => {
             addressEditRef.current += 1;
+            addressSourceRef.current = value.trim() ? "typed" : "empty";
             setAddressStatus("idle");
             setDeliveryAddressLine(value);
             scheduleQuote(value, coordinates, deliveryLabel);
@@ -652,8 +721,32 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
         ) : null}
         {addressStatus === "filled" ? <Text style={styles.locationNote}>{t("checkout.addressFromPin")}</Text> : null}
         {addressStatus === "notFound" ? <Text style={styles.locationNote}>{t("checkout.addressNotFound")}</Text> : null}
+        {activeSource !== "none" ? (
+          <Text accessibilityLiveRegion="polite" style={styles.activeLocation}>
+            {activeSource === "saved"
+              ? t("checkout.activeSaved", { label: deliveryLabel })
+              : t(activeSource === "current" ? "checkout.activeCurrent" : "checkout.activePin")}
+          </Text>
+        ) : null}
         <Text style={styles.locationNote}>{t(pinSet ? "checkout.locationNoteMove" : "checkout.pinNotSetNote")}</Text>
         <LocationMap coordinate={coordinates} markers={landmarkMarkers} onCoordinateChange={(value) => void chooseMapLocation(value)} />
+        {pinSet && !outOfRange ? (
+          <View accessibilityLiveRegion="polite" style={styles.feeBanner}>
+            {quote ? (
+              <>
+                <Text style={styles.feeBannerLabel}>{t("checkout.deliveryFeeHere")}</Text>
+                <Text style={styles.feeBannerValue}>
+                  {formatPrice(quote.deliveryFeeMinor)} · {t("checkout.distanceKm", { km: (quote.deliveryDistanceMeters / 1000).toFixed(1) })}
+                </Text>
+              </>
+            ) : locating ? (
+              <>
+                <ActivityIndicator color={customerTheme.colors.primary} size="small" />
+                <Text style={styles.feeBannerLabel}>{t("checkout.calculatingFee")}</Text>
+              </>
+            ) : null}
+          </View>
+        ) : null}
         {outOfRange ? (
           <View accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.rangeBanner}>
             <Text style={styles.rangeBannerTitle}>{t("checkout.outOfRangeTitle")}</Text>
@@ -1463,6 +1556,12 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   },
   savedAddressList: { marginBottom: spacing[2] },
   savedAddressChip: { backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.pill, marginEnd: spacing[2], paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
+  savedAddressChipActive: { backgroundColor: customerTheme.colors.primary },
+  savedAddressChipTextActive: { color: colors.textInverse },
+  activeLocation: { ...text("label", "bold"), color: customerTheme.colors.primaryDark, marginBottom: spacing[1], marginTop: spacing[2] },
+  feeBanner: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.md, flexDirection: "row", gap: spacing[2], marginBottom: spacing[2], minHeight: 44, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
+  feeBannerLabel: { ...text("label"), color: customerTheme.colors.text },
+  feeBannerValue: { ...text("bodySm", "bold"), color: customerTheme.colors.primaryDark },
   savedAddressChipText: { ...text("label", "bold"), color: customerTheme.colors.primaryDark },
   multilineInput: { minHeight: 86, textAlignVertical: "top" },
   paymentOption: {

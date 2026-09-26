@@ -70,6 +70,9 @@ export function AccountScreen(props: {
   // A newer pin move or a keystroke in the address box cancels an older lookup's result.
   const geocodeGenerationRef = useRef(0);
   const addressEditRef = useRef(0);
+  // True while the address box holds text that was looked up for the CURRENT pin. Moving the pin makes
+  // that text describe the wrong place, so it is cleared then (text the customer typed is kept).
+  const addressFromPinRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -158,12 +161,17 @@ export function AccountScreen(props: {
     setPinSet(true);
     const generation = ++geocodeGenerationRef.current;
     const editVersion = addressEditRef.current;
+    if (addressFromPinRef.current) {
+      addressFromPinRef.current = false;
+      setAddressLine("");
+    }
     setAddressStatus("resolving");
     // The customer can still type the address while keeping the selected pin, so a failed or empty
     // lookup only changes the hint, never blocks anything.
     const resolved = await reverseGeocode(value).catch(() => null);
     if (generation !== geocodeGenerationRef.current) return;
     if (resolved && editVersion === addressEditRef.current) {
+      addressFromPinRef.current = true;
       setAddressLine(resolved);
       setAddressStatus("filled");
     } else {
@@ -304,6 +312,7 @@ export function AccountScreen(props: {
                 multiline
                 onChangeText={(value) => {
                   addressEditRef.current += 1;
+                  addressFromPinRef.current = false;
                   setAddressStatus("idle");
                   setAddressLine(value);
                 }}

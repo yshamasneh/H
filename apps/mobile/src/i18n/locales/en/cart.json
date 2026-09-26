@@ -67,7 +67,15 @@
     "pinNotSetNote": "The pin is on a default spot. Move it to your entrance or use your current location.",
     "outOfRangeTitle": "Outside the delivery area",
     "outOfRangeBody": "This store doesn't deliver to the pin's location. Move the pin closer, or pick another address.",
-    "checkingArea": "Checking delivery to this spot..."
+    "checkingArea": "Checking delivery to this spot...",
+    "currentLocationLabel": "Current location",
+    "pinLabel": "Pin on the map",
+    "activeSaved": "Delivering to your saved address: {{label}}",
+    "activeCurrent": "Delivering to your current location",
+    "activePin": "Delivering to the pin you placed",
+    "deliveryFeeHere": "Delivery fee to this spot",
+    "distanceKm": "{{km}} km",
+    "calculatingFee": "Calculating the delivery fee..."
   },
   "confirmation": {
     "title": "Order Placed",

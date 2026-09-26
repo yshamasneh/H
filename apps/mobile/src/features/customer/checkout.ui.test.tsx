@@ -5,6 +5,7 @@ import { CheckoutScreen } from "./cart-screens";
 import type { Cart } from "./cart";
 import { createOrder, getOrderQuote, getSupermarketStatus, listMyAddresses } from "../../core/api";
 import { getAccessToken } from "../../core/session";
+import { getCurrentCoordinates, reverseGeocode } from "../../core/location";
 import { ApiError } from "../../core/api-error";
 
 // Mock the whole network + native surface CheckoutScreen touches. We only exercise the
@@ -136,7 +137,7 @@ test("store closing after quote prevents order creation and retains the basket",
 });
 
 test("quote reports a closed store separately from a connection failure", async () => {
-  (getOrderQuote as jest.Mock).mockRejectedValueOnce(new ApiError(409, "RESTAURANT_CLOSED", "Store closed"));
+  (getOrderQuote as jest.Mock).mockRejectedValue(new ApiError(409, "RESTAURANT_CLOSED", "Store closed"));
   render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
   await driveToQuote();
   await screen.findByText(i18n.t("cart:checkout.storeClosed"));
@@ -152,21 +153,116 @@ test("editing the delivery address invalidates and refreshes an existing quote",
   expect((getOrderQuote as jest.Mock).mock.calls[1][1].deliveryAddressLine).toBe("456 New Street, Ramallah");
 });
 
-test("choosing another saved location requests a quote with its coordinates", async () => {
-  (listMyAddresses as jest.Mock).mockResolvedValue([
-    { id: "a1", label: "Home", addressLine: "123 Home Street", latitude: 31.9, longitude: 35.2, isDefault: true },
-    { id: "a2", label: "Work", addressLine: "456 Work Street", latitude: 32.0, longitude: 35.3, isDefault: false }
-  ]);
+const homeAndWork = [
+  { id: "a1", label: "Home", addressLine: "123 Home Street", latitude: 31.9, longitude: 35.2, isDefault: true },
+  { id: "a2", label: "Work", addressLine: "456 Work Street", latitude: 32.0, longitude: 35.3, isDefault: false }
+];
+
+test("a saved address is quoted the moment it is chosen, with no button press and no wait", async () => {
+  (listMyAddresses as jest.Mock).mockResolvedValue(homeAndWork);
   render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
   await screen.findByText("Work");
-  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.calculateDeliveryPrice"))); });
+  // The default address is selected on open and its fee is calculated straight away.
   await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(1));
-  fireEvent.press(screen.getByText("Work"));
-  await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(2), { timeout: 2000 });
-  const revisedInput = (getOrderQuote as jest.Mock).mock.calls[1][1];
+  expect((getOrderQuote as jest.Mock).mock.calls[0][1].deliveryLatitude).toBe(31.9);
+  await screen.findByText(i18n.t("cart:checkout.deliveryFeeHere"));
+
+  (getOrderQuote as jest.Mock).mockClear();
+  await act(async () => { fireEvent.press(screen.getByText("Work")); });
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(1), { timeout: 300 });
+  const revisedInput = (getOrderQuote as jest.Mock).mock.calls[0][1];
   expect(revisedInput.deliveryAddressLine).toBe("456 Work Street");
   expect(revisedInput.deliveryLatitude).toBe(32.0);
   expect(revisedInput.deliveryLongitude).toBe(35.3);
+  expect(screen.getByText(i18n.t("cart:checkout.activeSaved", { label: "Work" }))).toBeTruthy();
+});
+
+test("placing a pin shows the delivery fee and distance under the map straight away", async () => {
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await act(async () => { fireEvent.press(screen.getByTestId("map-pin")); });
+  await screen.findByText(i18n.t("cart:checkout.deliveryFeeHere"));
+  expect(screen.getByText("10.00 ILS · 1.0 km")).toBeTruthy();
+  expect(screen.getByText(i18n.t("cart:checkout.activePin"))).toBeTruthy();
+});
+
+test("'use my current location' overrides a saved address: coordinates, label, address and fee all come from where the customer actually is", async () => {
+  (listMyAddresses as jest.Mock).mockResolvedValue(homeAndWork);
+  (getCurrentCoordinates as jest.Mock).mockResolvedValueOnce({ latitude: 31.95, longitude: 35.25 });
+  (reverseGeocode as jest.Mock).mockResolvedValueOnce("Al-Irsal Street, Ramallah");
+  (createOrder as jest.Mock).mockReturnValue(new Promise(() => {}));
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await screen.findByText("Work");
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(1)); // Home, from the saved default
+  (getOrderQuote as jest.Mock).mockClear();
+
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.useCurrentLocation"))); });
+
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalled());
+  const quoted = (getOrderQuote as jest.Mock).mock.calls[0][1];
+  expect(quoted.deliveryLatitude).toBe(31.95);
+  expect(quoted.deliveryLongitude).toBe(35.25);
+  expect(quoted.deliveryLabel).toBe(i18n.t("cart:checkout.currentLocationLabel"));
+  await waitFor(() => expect(screen.getByDisplayValue("Al-Irsal Street, Ramallah")).toBeTruthy());
+  expect(screen.queryByDisplayValue("123 Home Street")).toBeNull();
+  expect(screen.getByText(i18n.t("cart:checkout.activeCurrent"))).toBeTruthy();
+
+  await act(async () => { fireEvent.press(await screen.findByText(i18n.t("cart:checkout.placeOrder"))); });
+  await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(1));
+  const placed = (createOrder as jest.Mock).mock.calls[0][1];
+  expect(placed).toMatchObject({
+    deliveryLatitude: 31.95,
+    deliveryLongitude: 35.25,
+    deliveryLabel: i18n.t("cart:checkout.currentLocationLabel"),
+    deliveryAddressLine: "Al-Irsal Street, Ramallah"
+  });
+});
+
+test("if no address can be read for the current location, the saved address text is NOT carried over to the new coordinates", async () => {
+  (listMyAddresses as jest.Mock).mockResolvedValue(homeAndWork);
+  (getCurrentCoordinates as jest.Mock).mockResolvedValueOnce({ latitude: 31.95, longitude: 35.25 });
+  (reverseGeocode as jest.Mock).mockResolvedValueOnce(null);
+  (createOrder as jest.Mock).mockResolvedValue({ id: "order-1" });
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await screen.findByText("Work");
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalledTimes(1));
+
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.useCurrentLocation"))); });
+
+  await screen.findByText(i18n.t("cart:checkout.addressNotFound"));
+  expect(screen.queryByDisplayValue("123 Home Street")).toBeNull();
+  // Ordering is refused until the customer supplies an address for where they actually are.
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.placeOrder"))); });
+  expect(createOrder).not.toHaveBeenCalled();
+  expect(screen.getByText(i18n.t("cart:checkout.addressRequiredError"))).toBeTruthy();
+});
+
+test("moving the pin away from a saved address drops its label and its address text, and deselects it", async () => {
+  (listMyAddresses as jest.Mock).mockResolvedValue(homeAndWork);
+  (reverseGeocode as jest.Mock).mockResolvedValueOnce(null);
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+  await screen.findByText("Work");
+  await waitFor(() => expect(screen.getByDisplayValue("123 Home Street")).toBeTruthy());
+  expect(screen.getByText(i18n.t("cart:checkout.activeSaved", { label: "Home" }))).toBeTruthy();
+
+  await act(async () => { fireEvent.press(screen.getByTestId("map-pin")); });
+
+  expect(screen.queryByDisplayValue("123 Home Street")).toBeNull();
+  expect(screen.getByDisplayValue(i18n.t("cart:checkout.pinLabel"))).toBeTruthy();
+  expect(screen.getByText(i18n.t("cart:checkout.activePin"))).toBeTruthy();
+});
+
+test("a slow GPS fix that arrives after the customer chose something else does not override their choice", async () => {
+  let resolveGps!: (value: { latitude: number; longitude: number }) => void;
+  (getCurrentCoordinates as jest.Mock).mockReturnValueOnce(new Promise((resolve) => { resolveGps = resolve; }));
+  render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
+
+  await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.useCurrentLocation"))); });
+  await act(async () => { fireEvent.press(screen.getByTestId("map-pin")); }); // the customer taps the map while GPS is working
+  (getOrderQuote as jest.Mock).mockClear();
+  await act(async () => { resolveGps({ latitude: 30, longitude: 34 }); });
+
+  expect(getOrderQuote).not.toHaveBeenCalled();
+  expect(screen.getByText(i18n.t("cart:checkout.activePin"))).toBeTruthy();
 });
 
 test("a changed server price requires a second explicit confirmation using the new quote", async () => {
@@ -199,6 +295,9 @@ async function placePin() {
   await act(async () => {
     fireEvent.press(screen.getByTestId("map-pin"));
   });
+  // Placing a pin now quotes at once (the fee shows straight away); the tests below count only their own quotes.
+  await waitFor(() => expect(getOrderQuote).toHaveBeenCalled());
+  (getOrderQuote as jest.Mock).mockClear();
 }
 
 async function driveToQuote() {
@@ -267,7 +366,7 @@ test("an order can't be quoted or placed while the pin is still on its default s
 
 test("placing the pin fills the address from it and quotes straight away", async () => {
   render(<CheckoutScreen cart={cart} onBack={() => {}} onPlaced={() => {}} substitutionEnabled />);
-  await placePin();
+  await act(async () => { fireEvent.press(screen.getByTestId("map-pin")); });
   // reverseGeocode is mocked to "Somewhere"
   await waitFor(() => expect(screen.getByDisplayValue("Somewhere")).toBeTruthy());
   await screen.findByText(i18n.t("cart:checkout.addressFromPin"));
