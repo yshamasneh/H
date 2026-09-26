@@ -56,6 +56,7 @@ const orderInclude = {
     }
   },
   restaurant: true,
+  customer: { select: { fullName: true, phone: true } },
   acceptedBy: { select: { id: true, fullName: true } },
   statusHistory: { orderBy: { createdAt: "asc" as const } },
   delivery: true
@@ -68,7 +69,10 @@ const packingStatuses: OrderStatus[] = [OrderStatus.ACCEPTED, OrderStatus.PREPAR
 const clearedPicked = { isPicked: false, pickedAt: null } as const;
 
 /** Business and admin callers see who accepted an order; customers deliberately do not. */
-const withActorNames = { includeActorNames: true } as const;
+// Business and admin views only. Every call that passes this is a business-member or administrator
+// endpoint; customer endpoints call toOrderDetailView with no options, so the customer contact and the
+// actor names are simply never built for them.
+const withActorNames = { includeActorNames: true, includeCustomerContact: true } as const;
 
 /** How many orders each live-queue bucket returns. See listLiveForBusiness for why the newest win. */
 const liveQueueLimit = 100;
@@ -1233,7 +1237,7 @@ function lineAmount(unitAmountMinor: number, actualQuantityMilli: number): numbe
 
 function toOrderDetailView(
   order: OrderWithRelations,
-  options: { includeActorNames?: boolean } = {}
+  options: { includeActorNames?: boolean; includeCustomerContact?: boolean } = {}
 ): OrderDetailView {
   return {
     id: order.id,
@@ -1241,6 +1245,9 @@ function toOrderDetailView(
     acceptedByUserId: order.acceptedByUserId,
     acceptedAt: order.acceptedAt,
     ...(options.includeActorNames ? { acceptedByFullName: order.acceptedBy?.fullName ?? null } : {}),
+    ...(options.includeCustomerContact && order.customer
+      ? { customerName: order.customer.fullName, customerPhone: order.customer.phone }
+      : {}),
     paymentMethod: order.paymentMethod,
     restaurant: { id: order.restaurant.id, name: order.restaurant.name },
     deliveryLabel: order.deliveryLabel,

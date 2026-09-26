@@ -12,6 +12,7 @@ import {
   type MenuItemOwner
 } from "../../api.business";
 import { useAuth } from "../../auth";
+import { telHref } from "../../tel";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import { FallbackImage } from "../../components/FallbackImage";
 import { ReasonModal } from "../../components/ReasonModal";
@@ -225,6 +226,16 @@ export function BusinessOrderPage() {
 
           <div className="card">
             <h2 className="card-title">{t("businessOrder.customer")}</h2>
+            {telHref(order.customerPhone) ? (
+              <div className="kv-row">
+                <span className="kv-label">{order.customerName ?? t("common.customerPhone")}</span>
+                <span className="kv-value">
+                  <a className="btn btn-primary btn-sm" href={telHref(order.customerPhone)!}>
+                    {t("common.callCustomer")} · <bdi dir="ltr">{order.customerPhone}</bdi>
+                  </a>
+                </span>
+              </div>
+            ) : null}
             <div className="kv-row">
               <span className="kv-label">{t("businessOrder.deliveryAddress")}</span>
               <span className="kv-value">

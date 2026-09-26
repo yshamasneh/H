@@ -393,7 +393,8 @@ export class FakeDriversPrisma {
   private hydrateDelivery(delivery: DeliveryRecord) {
     const order = this.orders.find((candidate) => candidate.id === delivery.orderId)!;
     const restaurant = this.restaurants.find((candidate) => candidate.id === order.restaurantId)!;
-    return { ...delivery, order: { ...order, restaurant } };
+    const customer = this.users.find((candidate) => candidate.id === order.customerId) ?? null;
+    return { ...delivery, order: { ...order, restaurant, customer } };
   }
 
   async $transaction<T>(operation: (transaction: this) => Promise<T>): Promise<T> {

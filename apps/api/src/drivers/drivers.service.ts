@@ -67,10 +67,10 @@ import type {
   Page
 } from "./drivers.types";
 
-type DeliveryWithRelations = Delivery & { order: Order & { restaurant: Restaurant } };
+type DeliveryWithRelations = Delivery & { order: Order & { restaurant: Restaurant; customer?: Pick<User, "phone"> | null } };
 type DriverWithUser = DriverProfile & { user: User };
 
-const deliveryInclude = { order: { include: { restaurant: true } } } as const;
+const deliveryInclude = { order: { include: { restaurant: true, customer: { select: { phone: true } } } } } as const;
 
 /** Orders listed under a cash summary. Totals are exact regardless; only the list is capped. */
 const cashSummaryLineLimit = 100;
@@ -987,7 +987,8 @@ function toDeliveryView(delivery: DeliveryWithRelations): DeliveryView {
       ...cashDue(delivery.order.totalMinor),
       paymentMethod: delivery.order.paymentMethod,
       latitude: delivery.order.deliveryLatitude,
-      longitude: delivery.order.deliveryLongitude
+      longitude: delivery.order.deliveryLongitude,
+      ...(driverMayCallCustomer(delivery) ? { customerPhone: delivery.order.customer!.phone } : {})
     },
     restaurant: {
       id: delivery.order.restaurant.id,
@@ -1006,6 +1007,16 @@ function toDeliveryView(delivery: DeliveryWithRelations): DeliveryView {
     failureNote: delivery.failureNote,
     createdAt: delivery.createdAt
   };
+}
+
+/**
+ * A driver may hold the customer's number only while the job is theirs and still open: assigned to
+ * a driver, and ASSIGNED / PICKED_UP / ON_THE_WAY. Enforced here, in the one function every driver
+ * delivery response is built by, so the field is never in the payload otherwise (not merely hidden
+ * by the app).
+ */
+function driverMayCallCustomer(delivery: DeliveryWithRelations): boolean {
+  return delivery.driverId !== null && activeDeliveryStatuses.includes(delivery.status) && Boolean(delivery.order.customer?.phone);
 }
 
 function deliveryNotFound(): ApiException {

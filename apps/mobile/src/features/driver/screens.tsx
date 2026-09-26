@@ -45,6 +45,7 @@ import { useBackgroundLocation } from "./use-background-location";
 import { areDeliveryAlertsEnabled, deliveryAlertsSupported, enableDeliveryAlerts } from "./delivery-alerts";
 import { cashDueMinorOf, cashRoundingMinorOf } from "../../core/cash";
 import { activeDeliveryStatuses, canReportFailure, driverFailureReasons, nextDriverActionByStatus } from "./delivery.rules";
+import { CallCustomerButton } from "../../components/call-customer-button";
 import { useDriverLocationTracking } from "./location-tracking";
 import { deliveryPins as buildDeliveryPins } from "./navigation-target";
 
@@ -529,6 +530,8 @@ export function DeliveryDetailScreen(props: DeliveryDetailScreenProps) {
             <Text style={styles.addressText}>
               {t("detail.deliverAddressLine", { label: delivery.order.deliveryLabel, address: delivery.order.deliveryAddressLine })}
             </Text>
+            {/* Present only while this delivery is active for the driver; the API omits it otherwise. */}
+            <CallCustomerButton phone={delivery.order.customerPhone} />
             <Text style={styles.label}>{t("detail.collectLabel")}</Text>
             <Text style={styles.collectAmount}>{formatPrice(cashDueMinorOf(delivery.order))}</Text>
             <Text style={styles.addressText}>

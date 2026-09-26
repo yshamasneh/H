@@ -72,6 +72,14 @@ export type DeliveryStatusSummary = {
 
 export type OrderDetailView = {
   id: string;
+  /**
+   * The customer's real registered name and phone number, for whoever prepares or administers the
+   * order (a business member, an administrator). Present ONLY in those views: the key is absent
+   * from a customer's own view and from any driver view (a driver gets a phone only through the
+   * delivery view, and only while the delivery is active for them).
+   */
+  customerName?: string;
+  customerPhone?: string;
   status: OrderStatus;
   paymentMethod: OrderPaymentMethod;
   restaurant: OrderRestaurantSummary;

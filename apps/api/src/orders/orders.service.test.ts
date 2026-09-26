@@ -1893,3 +1893,56 @@ test("a fulfillment decision resets that line's tick, because what has to be pac
   await context.service.decideFulfillmentAdjustment(customerId, order.id, proposed.items[0].fulfillmentAdjustment!.id, "APPROVED");
   assert.equal(stored.isPicked, false, "the customer's decision clears the tick");
 });
+
+// --- customer phone visibility: business and admin see it, the customer's own view never carries it ---
+
+async function orderWithKnownCustomer() {
+  const context = createService();
+  const restaurant = context.prisma.seedRestaurant();
+  const menuItem = context.prisma.seedMenuItem(restaurant.id);
+  const customerId = randomUUID();
+  context.prisma.seedCustomer(customerId, { fullName: "Sara Customer", phone: "+970591112233" });
+  const order = await context.service.createOrder(customerId, baseInput(restaurant.id, menuItem.id) as never);
+  return { ...context, restaurant, customerId, order };
+}
+
+test("the business sees the customer's real phone number on the order, in the list, and in the live queue", async () => {
+  const { service, restaurant, order } = await orderWithKnownCustomer();
+
+  const one = await service.getForRestaurantOwner(restaurant.ownerUserId, order.id);
+  assert.equal(one.customerPhone, "+970591112233");
+  assert.equal(one.customerName, "Sara Customer");
+
+  const list = await service.listForRestaurantOwner(restaurant.ownerUserId, 1, 20);
+  assert.equal(list.items[0].customerPhone, "+970591112233");
+
+  const live = await service.listLiveForBusiness(restaurant.ownerUserId);
+  assert.equal(live.new[0].customerPhone, "+970591112233");
+});
+
+test("the business keeps seeing the number on historical orders, whatever their status", async () => {
+  const { service, restaurant, order } = await orderWithKnownCustomer();
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "REJECTED", "Closed early");
+  const rejected = await service.getForRestaurantOwner(restaurant.ownerUserId, order.id);
+  assert.equal(rejected.status, "REJECTED");
+  assert.equal(rejected.customerPhone, "+970591112233");
+});
+
+test("an administrator sees the customer's real phone number", async () => {
+  const { service, order } = await orderWithKnownCustomer();
+  const view = await service.adminGetOrder(order.id);
+  assert.equal(view.customerPhone, "+970591112233");
+  const list = await service.adminListOrders({} as never, 1, 20);
+  assert.equal(list.items[0].customerPhone, "+970591112233");
+});
+
+test("the customer's own responses never carry the phone or name keys at all", async () => {
+  const { service, customerId, order } = await orderWithKnownCustomer();
+  const placed = order as unknown as Record<string, unknown>;
+  const read = (await service.getForCustomer(customerId, order.id)) as unknown as Record<string, unknown>;
+  const listed = (await service.listForCustomer(customerId, 1, 20)).items[0] as unknown as Record<string, unknown>;
+  for (const view of [placed, read, listed]) {
+    assert.equal("customerPhone" in view, false);
+    assert.equal("customerName" in view, false);
+  }
+});

@@ -183,6 +183,13 @@ export type DeliveryOrderSummary = {
   // orders placed before delivery coordinates were recorded may lack them.
   latitude: number | null;
   longitude: number | null;
+  /**
+   * The customer's real phone number so the driver can call at the door. Present ONLY while the
+   * delivery is active for this driver (ASSIGNED, PICKED_UP or ON_THE_WAY). The key is absent, not
+   * null, before assignment (the available list) and once the delivery is delivered, failed or
+   * cancelled, so a driver cannot keep a customer's number after the job ends.
+   */
+  customerPhone?: string;
 };
 
 export type DeliveryRestaurantSummary = {

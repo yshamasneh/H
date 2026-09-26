@@ -196,6 +196,7 @@ export class FakeOrdersPrisma {
   readonly inventoryMovements: any[] = [];
   readonly businessMembers: { businessId: string; userId: string; isActive: boolean }[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
+  private readonly customers = new Map<string, { fullName: string; phone: string }>();
 
   readonly restaurant = {} as any;
   /** The accounting tables, so order creation really does stamp the rates it was taken under. */
@@ -632,7 +633,13 @@ export class FakeOrdersPrisma {
       }));
     const statusHistory = this.orderStatusHistories.filter((entry) => entry.orderId === order.id);
     const delivery = this.deliveries.find((candidate) => candidate.orderId === order.id) ?? null;
-    return { ...order, items, restaurant, statusHistory, delivery };
+    const customer = this.customers.get(order.customerId) ?? null;
+    return { ...order, items, restaurant, statusHistory, delivery, customer };
+  }
+
+  /** Registers the customer account behind an order, so views that show the customer's contact have one to show. */
+  seedCustomer(customerId: string, customer: { fullName: string; phone: string }): void {
+    this.customers.set(customerId, customer);
   }
 
   async $transaction<T>(operation: (transaction: this) => Promise<T>): Promise<T> {

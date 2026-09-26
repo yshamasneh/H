@@ -31,6 +31,7 @@ import {
 } from "../../core/api";
 import { readError } from "../../core/errors";
 import i18n from "../../i18n";
+import { CallCustomerButton } from "../../components/call-customer-button";
 import { RemoteImage } from "../../components/remote-image";
 import { Icon } from "../../theme/icon";
 import { getAccessToken } from "../../core/session";
@@ -316,6 +317,13 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
               <Text style={styles.summaryRowValueBold}>{formatPrice(order.totalMinor)}</Text>
             </View>
             <View style={styles.summaryDivider} />
+            {order.customerPhone ? (
+              <>
+                <Text style={styles.label}>{t("common:customerLabel")}</Text>
+                {order.customerName ? <Text style={styles.addressText}>{order.customerName}</Text> : null}
+                <CallCustomerButton phone={order.customerPhone} />
+              </>
+            ) : null}
             <Text style={styles.label}>{t("orders.deliveryAddressLabel")}</Text>
             <Text style={styles.addressText}>
               {t("orders.addressLine", { label: order.deliveryLabel, address: order.deliveryAddressLine })}

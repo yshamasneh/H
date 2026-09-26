@@ -626,3 +626,87 @@ test("a failed delivery tells the customer, the business (with a readable reason
   assert.ok(!forAdmins[0].body.includes("CUSTOMER_UNREACHABLE"));
   assert.equal(added.length, forCustomer.length + forBusiness.length + forAdmins.length, "nothing else is sent");
 });
+
+// --- customer phone visibility for drivers: only while the delivery is active for them ---------------
+
+function setupCallableDelivery() {
+  const context = createService();
+  const restaurant = context.prisma.seedRestaurant();
+  const now = new Date();
+  const customer = {
+    id: randomUUID(), fullName: "Sara Customer", phone: "+970591112233", passwordHash: "x",
+    role: "CUSTOMER", phoneVerifiedAt: now, isActive: true, createdAt: now, updatedAt: now
+  };
+  context.prisma.users.push(customer as never);
+  const order = context.prisma.seedOrder(restaurant.id, { customerId: customer.id });
+  const delivery = context.prisma.seedDelivery(order.id);
+  const driver = context.prisma.seedDriver({ isOnline: true });
+  return { ...context, order, delivery, driver, customer };
+}
+
+const hasPhoneKey = (view: { order: object }) => "customerPhone" in view.order;
+
+test("a driver browsing available deliveries gets no customer phone field at all", async () => {
+  const { service } = setupCallableDelivery();
+  const available = await service.listAvailableDeliveries();
+  assert.equal(available.length, 1);
+  assert.equal(hasPhoneKey(available[0]), false);
+  assert.ok(!JSON.stringify(available).includes("591112233"), "the number must not appear anywhere in the payload");
+});
+
+test("accepting a delivery starts the driver's access to the number, and it stays through pickup and the way", async () => {
+  const { service, delivery, driver } = setupCallableDelivery();
+
+  const accepted = await service.acceptDelivery(driver.userId, delivery.id);
+  assert.equal(accepted.order.customerPhone, "+970591112233");
+
+  const pickedUp = await service.updateDeliveryStatus(driver.userId, delivery.id, "PICKED_UP");
+  assert.equal(pickedUp.order.customerPhone, "+970591112233");
+  const onTheWay = await service.updateDeliveryStatus(driver.userId, delivery.id, "ON_THE_WAY");
+  assert.equal(onTheWay.order.customerPhone, "+970591112233");
+
+  const own = await service.listOwnDeliveries(driver.userId, 1, 20);
+  assert.equal(own.items[0].order.customerPhone, "+970591112233");
+});
+
+test("once the delivery is delivered the driver's responses lose the number again, including the history list", async () => {
+  const { service, delivery, driver } = setupCallableDelivery();
+  await service.acceptDelivery(driver.userId, delivery.id);
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "PICKED_UP");
+  await service.updateDeliveryStatus(driver.userId, delivery.id, "ON_THE_WAY");
+
+  const delivered = await service.updateDeliveryStatus(driver.userId, delivery.id, "DELIVERED");
+  assert.equal(delivered.status, "DELIVERED");
+  assert.equal(hasPhoneKey(delivered), false, "the delivered response itself carries no phone");
+
+  const own = await service.listOwnDeliveries(driver.userId, 1, 20);
+  assert.equal(own.items[0].status, "DELIVERED");
+  assert.equal(hasPhoneKey(own.items[0]), false);
+  assert.ok(!JSON.stringify(own).includes("591112233"));
+});
+
+test("a failed delivery also ends the driver's access to the number", async () => {
+  const { service, delivery, driver } = setupCallableDelivery();
+  await service.acceptDelivery(driver.userId, delivery.id);
+  const failed = await service.updateDeliveryStatus(driver.userId, delivery.id, "FAILED", { failureReason: "CUSTOMER_UNREACHABLE" });
+  assert.equal(failed.status, "FAILED");
+  assert.equal(hasPhoneKey(failed), false);
+});
+
+test("a delivery that is back to pending (no driver holds it) never exposes the number, even to a driver who once held it", async () => {
+  const { service, prisma, delivery, driver } = setupCallableDelivery();
+  await service.acceptDelivery(driver.userId, delivery.id);
+  prisma.deliveries[0].status = "PENDING_ASSIGNMENT" as never;
+  prisma.deliveries[0].driverId = null;
+  const available = await service.listAvailableDeliveries();
+  assert.equal(hasPhoneKey(available[0]), false);
+});
+
+test("another driver cannot read a delivery that is not theirs, so cannot get its number", async () => {
+  const { service, delivery, driver, prisma } = setupCallableDelivery();
+  await service.acceptDelivery(driver.userId, delivery.id);
+  const other = prisma.seedDriver({ isOnline: true });
+  const theirs = await service.listOwnDeliveries(other.userId, 1, 20);
+  assert.equal(theirs.items.length, 0);
+  await assert.rejects(service.updateDeliveryStatus(other.userId, delivery.id, "PICKED_UP"));
+});

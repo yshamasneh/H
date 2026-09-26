@@ -294,6 +294,9 @@ export type DeliveryStatusSummary = {
 
 export type OrderDetail = {
   id: string;
+  /** The customer's real name and phone. Only in business-member and administrator responses. */
+  customerName?: string;
+  customerPhone?: string;
   status: OrderStatusValue;
   paymentMethod: OrderPaymentMethod;
   restaurant: OrderRestaurantSummary;
@@ -342,6 +345,8 @@ export type DeliveryOrderSummary = {
   deliveryLabel: string;
   deliveryAddressLine: string;
   totalMinor: number;
+  /** Real customer phone: present only while the delivery is active for this driver (ASSIGNED/PICKED_UP/ON_THE_WAY). */
+  customerPhone?: string;
   /** What the driver collects at the door: totalMinor rounded UP to a whole shekel. */
   cashDueMinor?: number;
   cashRoundingMinor?: number;

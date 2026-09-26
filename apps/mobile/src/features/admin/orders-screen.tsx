@@ -9,6 +9,7 @@ import {
   type OrderDetail,
   type OrderStatusValue
 } from "../../core/api";
+import { CallCustomerButton } from "../../components/call-customer-button";
 import { RemoteImage } from "../../components/remote-image";
 import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
@@ -154,6 +155,12 @@ export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => v
             <KeyValue label={t("orderDetail.totalLabel")} value={formatMoney(order.totalMinor)} />
             <KeyValue label={t("orderDetail.paymentLabel")} value={order.paymentMethod} />
             <KeyValue label={t("orderDetail.addressLabel")} value={order.deliveryAddressLine} />
+            {order.customerPhone ? (
+              <>
+                <KeyValue label={t("common:customerLabel")} value={order.customerName ?? order.customerPhone} />
+                <CallCustomerButton phone={order.customerPhone} />
+              </>
+            ) : null}
           </Card>
 
           <Card>

@@ -102,5 +102,7 @@
   "saleBadge": "Save {{percent}}%",
   "locationPermissionRequired": "Allow location access to use your current location. You can also move the pin on the map.",
   "locationPermissionRequiredDelivery": "Location permission is required while you are handling an active delivery.",
-  "locationUnavailable": "We couldn't get your location. Move the pin on the map or type your address."
+  "locationUnavailable": "We couldn't get your location. Move the pin on the map or type your address.",
+  "callCustomer": "Call customer",
+  "customerLabel": "Customer"
 }

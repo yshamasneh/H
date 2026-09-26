@@ -102,5 +102,7 @@
   "saleBadge": "وفّر {{percent}}%",
   "locationPermissionRequired": "اسمح بالوصول إلى الموقع لاستخدام موقعك الحالي، أو حرّك الدبوس على الخريطة.",
   "locationPermissionRequiredDelivery": "إذن الموقع مطلوب أثناء تنفيذ توصيلة نشطة.",
-  "locationUnavailable": "تعذّر تحديد موقعك. حرّك الدبوس على الخريطة أو اكتب عنوانك."
+  "locationUnavailable": "تعذّر تحديد موقعك. حرّك الدبوس على الخريطة أو اكتب عنوانك.",
+  "callCustomer": "اتصال بالزبون",
+  "customerLabel": "الزبون"
 }

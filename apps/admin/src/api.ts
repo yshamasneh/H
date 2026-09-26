@@ -87,6 +87,9 @@ export type OrderStatusHistoryEntry = {
 
 export type OrderDetail = {
   id: string;
+  /** The customer's real name and phone; only in business-member and administrator responses. */
+  customerName?: string;
+  customerPhone?: string;
   status: OrderStatus;
   paymentMethod: string;
   restaurant: { id: string; name: string };

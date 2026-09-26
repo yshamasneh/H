@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { cancelAdminOrder, getAdminOrder, readApiError, type OrderDetail } from "../api";
 import { FallbackImage } from "../components/FallbackImage";
+import { telHref } from "../tel";
 import { OrderFinancialCard } from "../components/OrderFinancialCard";
 import { OrderTrackingCard } from "../components/OrderTrackingCard";
 import { ReasonModal } from "../components/ReasonModal";
@@ -82,6 +83,16 @@ export function OrderDetailPage() {
               <span className="kv-label">{t("orderDetail.total")}</span>
               <span className="kv-value">{formatPrice(order.totalMinor)}</span>
             </div>
+            {telHref(order.customerPhone) ? (
+              <div className="kv-row">
+                <span className="kv-label">{order.customerName ?? t("common.customerPhone")}</span>
+                <span className="kv-value">
+                  <a className="btn btn-primary btn-sm" href={telHref(order.customerPhone)!}>
+                    {t("common.callCustomer")} · <bdi dir="ltr">{order.customerPhone}</bdi>
+                  </a>
+                </span>
+              </div>
+            ) : null}
             <div className="kv-row">
               <span className="kv-label">{t("orderDetail.deliveryAddress")}</span>
               <span className="kv-value">
