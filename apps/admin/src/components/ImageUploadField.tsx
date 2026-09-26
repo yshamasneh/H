@@ -9,6 +9,9 @@ export function ImageUploadField(props: {
   disabled?: boolean;
   progress?: number | null;
   onChange: (file: File | null) => void;
+  /** Overrides for a non-product image target; default text reads "product" throughout. */
+  previewAlt?: string;
+  removeConfirmMessage?: string;
 }) {
   const { t } = useTranslation();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -28,7 +31,11 @@ export function ImageUploadField(props: {
   const disabled = props.disabled || props.progress !== null && props.progress !== undefined;
   return (
     <div className="image-upload-field">
-      <FallbackImage alt={t("catalogue.imagePreviewAlt")} className="image-upload-preview" src={displayedUrl ?? undefined} />
+      <FallbackImage
+        alt={props.previewAlt ?? t("catalogue.imagePreviewAlt")}
+        className="image-upload-preview"
+        src={displayedUrl ?? undefined}
+      />
       <div className="filters-row" style={{ margin: 0 }}>
         <label className={`btn btn-outline btn-sm${disabled ? " disabled" : ""}`}>
           {displayedUrl ? t("catalogue.changeImage") : t("catalogue.addImage")}
@@ -56,7 +63,7 @@ export function ImageUploadField(props: {
             className="btn btn-danger btn-sm"
             disabled={disabled}
             onClick={() => {
-              if (window.confirm(t("catalogue.removeImageConfirm"))) props.onChange(null);
+              if (window.confirm(props.removeConfirmMessage ?? t("catalogue.removeImageConfirm"))) props.onChange(null);
             }}
             type="button"
           >

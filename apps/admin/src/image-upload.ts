@@ -66,6 +66,38 @@ export async function saveProductWithImage<T>(input: {
   return result;
 }
 
+/** Keep the old image until the offer write succeeds; list refresh is deliberately separate.
+ *  Unlike a product, an offer has no manual URL field and its restaurant is optional (a
+ *  platform-wide offer uploads under the OFFER purpose with no restaurantId). */
+export async function saveOfferWithImage<T>(input: {
+  selection: File | null | undefined;
+  previousUrl: string | null;
+  restaurantId?: string;
+  save: (imageUrl: string | undefined) => Promise<T>;
+  onProgress?: (percent: number) => void;
+  upload?: typeof uploadImage;
+  remove?: typeof removeUploadedImage;
+}): Promise<T> {
+  const upload = input.upload ?? uploadImage;
+  const remove = input.remove ?? removeUploadedImage;
+  let uploadedUrl: string | null = null;
+  if (input.selection instanceof File) {
+    uploadedUrl = await upload({ file: input.selection, purpose: "OFFER", restaurantId: input.restaurantId, onProgress: input.onProgress });
+  }
+  const nextUrl = input.selection === null ? "" : uploadedUrl ?? undefined;
+  let result: T;
+  try {
+    result = await input.save(nextUrl);
+  } catch (error) {
+    if (uploadedUrl) await remove({ purpose: "OFFER", restaurantId: input.restaurantId, imageUrl: uploadedUrl });
+    throw error;
+  }
+  if (input.previousUrl && nextUrl !== undefined && input.previousUrl !== nextUrl) {
+    await remove({ purpose: "OFFER", restaurantId: input.restaurantId, imageUrl: input.previousUrl });
+  }
+  return result;
+}
+
 export function isSafeExternalImageUrl(value: string): boolean {
   try {
     if (/\s/.test(value.trim())) return false;

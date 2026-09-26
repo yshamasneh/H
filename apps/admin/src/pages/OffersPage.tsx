@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ApiError, fetchAllPages, listAdminRestaurants, readApiError, type RestaurantProfile } from "../api";
+import { fetchAllPages, listAdminRestaurants, readApiError, type RestaurantProfile } from "../api";
 import { listStoreItems, type MenuItemOwner } from "../api.business";
 import { createOffer, listOffers, updateOffer } from "../api.offers";
 import { Field } from "../components/Field";
+import { FallbackImage } from "../components/FallbackImage";
+import { ImageUploadField } from "../components/ImageUploadField";
 import { Money } from "../components/Money";
+import { saveOfferWithImage } from "../image-upload";
 import {
   buildOffer,
   emptyOfferDraft,
@@ -20,10 +23,8 @@ import {
 /**
  * Platform promotions: create, edit, pause.
  *
- * The API existed with no screen at all, so the only way to run a promotion was a hand-written
- * request. Nothing here touches an offer's picture — image handling is its own piece of work — but
- * an edit hands the existing image back untouched (see `offer-form.ts`), because the update
- * endpoint replaces the whole offer and would otherwise drop it.
+ * An edit hands the existing image back untouched when it isn't replaced (see `offer-form.ts`),
+ * because the update endpoint replaces the whole offer and would otherwise drop it.
  */
 
 type Status = "ACTIVE" | "PAUSED" | "SCHEDULED" | "EXPIRED";
@@ -118,6 +119,7 @@ export function OffersPage() {
 
       {editing ? (
         <OfferForm
+          key={editing.offer?.id ?? "new"}
           offer={editing.offer}
           onCancel={() => setEditing(null)}
           onSaved={async (message) => {
@@ -155,6 +157,7 @@ export function OffersPage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>{t("offers.tableImage")}</th>
                   <th>{t("offers.offerTitle")}</th>
                   <th>{t("offers.type")}</th>
                   <th>{t("offers.discount")}</th>
@@ -169,6 +172,9 @@ export function OffersPage() {
                   const status = offerStatus(offer);
                   return (
                     <tr key={offer.id}>
+                      <td>
+                        <FallbackImage alt="" className="catalogue-thumbnail" src={offer.imageUrl ?? undefined} />
+                      </td>
                       <td>
                         {offer.title}
                         <br />
@@ -260,6 +266,9 @@ function OfferForm({
   const [error, setError] = useState<{ key: string; field?: keyof OfferDraft } | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // undefined = untouched (keep whatever image the offer already has), null = removed, File = replaced.
+  const [selectedImage, setSelectedImage] = useState<File | null | undefined>(undefined);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const patch = (change: Partial<OfferDraft>) => setDraft((previous) => ({ ...previous, ...change }));
   const fieldError = (field: keyof OfferDraft) => (error?.field === field ? t(`offers.errors.${error.key}`) : null);
@@ -287,14 +296,24 @@ function OfferForm({
     setError(null);
     setApiError(null);
     setBusy(true);
+    setUploadProgress(selectedImage instanceof File ? 0 : null);
     try {
-      if (offer) await updateOffer(offer.id, result.body);
-      else await createOffer(result.body);
+      await saveOfferWithImage({
+        onProgress: setUploadProgress,
+        previousUrl: offer?.imageUrl ?? null,
+        restaurantId: draft.restaurantId || undefined,
+        selection: selectedImage,
+        save: async (imageUrl) => {
+          const body = { ...result.body, ...(imageUrl !== undefined ? { imageUrl } : {}) };
+          return offer ? await updateOffer(offer.id, body) : await createOffer(body);
+        }
+      });
       await onSaved(t(offer ? "offers.updated" : "offers.created"));
     } catch (requestError) {
       setApiError(readApiError(requestError, t("common.genericActionError")));
     } finally {
       setBusy(false);
+      setUploadProgress(null);
     }
   };
 
@@ -302,6 +321,8 @@ function OfferForm({
     <div className="card">
       <h2 className="card-title">{offer ? t("offers.edit") : t("offers.new")}</h2>
       {apiError ? <div className="error-banner">{apiError}</div> : null}
+
+      <h3 className="form-section-title">{t("offers.sectionBasicInfo")}</h3>
       <div className="form-grid">
         <Field label={t("offers.type")}>
           <select
@@ -353,6 +374,21 @@ function OfferForm({
             value={draft.description}
           />
         </Field>
+      </div>
+
+      <h3 className="form-section-title">{t("offers.sectionImage")}</h3>
+      <ImageUploadField
+        currentUrl={offer?.imageUrl}
+        disabled={busy}
+        onChange={setSelectedImage}
+        previewAlt={t("offers.imagePreviewAlt")}
+        progress={uploadProgress}
+        removeConfirmMessage={t("offers.removeImageConfirm")}
+        selection={selectedImage}
+      />
+
+      <h3 className="form-section-title">{t("offers.sectionDiscount")}</h3>
+      <div className="form-grid">
         {offerUsesPercent(draft.type) ? (
           <Field error={fieldError("discountPercent")} label={t("offers.discountPercent")}>
             <input
@@ -384,6 +420,10 @@ function OfferForm({
             />
           </Field>
         ) : null}
+      </div>
+
+      <h3 className="form-section-title">{t("offers.sectionSchedule")}</h3>
+      <div className="form-grid">
         <Field error={fieldError("startsAt")} hint={offer ? undefined : t("offers.startsAtHint")} label={t("offers.startsAt")}>
           <input
             className="text-input"
@@ -401,6 +441,8 @@ function OfferForm({
           />
         </Field>
       </div>
+
+      <h3 className="form-section-title">{t("offers.sectionStatus")}</h3>
       <label className="checkbox-row">
         <input checked={draft.isActive} onChange={(event) => patch({ isActive: event.target.checked })} type="checkbox" />
         {t("offers.active")}

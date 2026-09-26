@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolveImageSource } from "./image-source";
-import { isSafeExternalImageUrl, maxImageBytes, putBlob, saveProductWithImage, uploadImage, validateImageFile } from "./image-upload";
+import { isSafeExternalImageUrl, maxImageBytes, putBlob, saveOfferWithImage, saveProductWithImage, uploadImage, validateImageFile } from "./image-upload";
 
 test("file validation accepts only JPEG, PNG, and WebP within five megabytes", () => {
   assert.equal(validateImageFile({ type: "image/jpeg", size: 100 }), null);
@@ -99,6 +99,77 @@ test("replacing a product image deletes the old image only after the product sav
   events.length = 0;
   await assert.rejects(() => saveProductWithImage({ ...base, save: async () => { events.push("save failed"); throw new Error("save failed"); } }), /save failed/);
   assert.deepEqual(events, ["upload", "save failed", "delete:https://images.example/new.jpg"]);
+});
+
+test("replacing an offer's image deletes the old image only after the offer save, and uploads under OFFER", async () => {
+  const events: string[] = [];
+  const file = new File(["image"], "photo.jpg", { type: "image/jpeg" });
+  const base = {
+    selection: file,
+    previousUrl: "https://images.example/old.jpg",
+    restaurantId: "store",
+    upload: async (input: { purpose: string; restaurantId?: string }) => {
+      events.push(`upload:${input.purpose}:${input.restaurantId}`);
+      return "https://images.example/new.jpg";
+    },
+    remove: async ({ imageUrl }: { imageUrl: string }) => { events.push(`delete:${imageUrl}`); }
+  };
+  await saveOfferWithImage({ ...base, save: async (imageUrl) => { events.push(`save:${imageUrl}`); return true; } });
+  assert.deepEqual(events, [
+    "upload:OFFER:store",
+    "save:https://images.example/new.jpg",
+    "delete:https://images.example/old.jpg"
+  ]);
+
+  events.length = 0;
+  await assert.rejects(
+    () => saveOfferWithImage({ ...base, save: async () => { events.push("save failed"); throw new Error("save failed"); } }),
+    /save failed/
+  );
+  assert.deepEqual(events, ["upload:OFFER:store", "save failed", "delete:https://images.example/new.jpg"]);
+});
+
+test("a platform-wide offer (no restaurant) uploads under OFFER with no restaurantId", async () => {
+  const events: string[] = [];
+  const file = new File(["image"], "photo.jpg", { type: "image/jpeg" });
+  await saveOfferWithImage({
+    selection: file,
+    previousUrl: null,
+    restaurantId: undefined,
+    upload: async (input) => {
+      events.push(`upload:${input.purpose}:${input.restaurantId}`);
+      return "https://images.example/new.jpg";
+    },
+    remove: async () => { events.push("delete"); },
+    save: async (imageUrl) => { events.push(`save:${imageUrl}`); return true; }
+  });
+  assert.deepEqual(events, ["upload:OFFER:undefined", "save:https://images.example/new.jpg"]);
+});
+
+test("removing an offer's image sends an empty imageUrl and deletes the old one, without ever uploading", async () => {
+  const events: string[] = [];
+  await saveOfferWithImage({
+    selection: null,
+    previousUrl: "https://images.example/old.jpg",
+    restaurantId: "store",
+    upload: async () => { events.push("upload"); return "unexpected"; },
+    remove: async ({ imageUrl }) => { events.push(`delete:${imageUrl}`); },
+    save: async (imageUrl) => { events.push(`save:${imageUrl}`); return true; }
+  });
+  assert.deepEqual(events, ["save:", "delete:https://images.example/old.jpg"]);
+});
+
+test("leaving an offer's image untouched neither uploads, saves an imageUrl, nor deletes anything", async () => {
+  const events: string[] = [];
+  await saveOfferWithImage({
+    selection: undefined,
+    previousUrl: "https://images.example/old.jpg",
+    restaurantId: "store",
+    upload: async () => { events.push("upload"); return "unexpected"; },
+    remove: async ({ imageUrl }) => { events.push(`delete:${imageUrl}`); },
+    save: async (imageUrl) => { events.push(`save:${imageUrl}`); return true; }
+  });
+  assert.deepEqual(events, ["save:undefined"]);
 });
 
 test("external image URL requires plain HTTPS without signed query credentials", () => {
