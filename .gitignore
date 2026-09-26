@@ -15,6 +15,7 @@ coverage/
 logs/
 backups/
 secrets/
+.vercel
 apps/api/src/generated/
 __pycache__/
 *.pyc

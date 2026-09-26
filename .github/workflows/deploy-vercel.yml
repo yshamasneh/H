@@ -54,9 +54,7 @@ jobs:
     timeout-minutes: 15
     environment:
       name: vercel-admin
-      # url intentionally omitted: the old adminpage-pink.vercel.app project is
-      # being retired. Add `url: <the new project's URL>` here once the new
-      # Vercel project exists.
+      url: https://jovo-admin.vercel.app
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -92,9 +90,11 @@ jobs:
     timeout-minutes: 15
     environment:
       name: vercel-mobile-web
-      # url intentionally omitted: the old jovo-market-web.vercel.app project is
-      # being retired. Add `url: <the new project's URL>` here once the new
-      # Vercel project exists.
+      # Project is named jovo-market-web, but jovo-market-web.vercel.app is still
+      # held by Khaldoun's old (different-account) project of the same name, so
+      # Vercel fell back to this project's original working alias. Update this
+      # once that name is freed up and re-aliased (see report).
+      url: https://h-admin-gray.vercel.app
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
