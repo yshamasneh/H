@@ -8,12 +8,13 @@ on:
         required: true
         default: "https://jovo-admin.vercel.app,https://h-admin-gray.vercel.app"
   # Temporary: workflow_dispatch only fires for workflows registered on the
-  # default branch, which this repo's is not. This push trigger targets a
-  # throwaway branch so the one-off run can fire without touching the
-  # default branch; remove this block once run.
+  # default branch, which this repo's is not, and Azure's federated identity
+  # credential for this service principal is scoped to this exact branch (a
+  # push from any other branch/ref is rejected by Azure AD). This push
+  # trigger lets the one-off run fire from here; remove this block once run.
   push:
     branches:
-      - ops/update-trial-cors
+      - agent/phase-15-and-jovo-brand
 
 permissions:
   contents: read
