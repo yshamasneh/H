@@ -1,9 +1,10 @@
-name: Deploy Vercel previews
+name: Deploy Vercel
 
 on:
   push:
     branches:
       - agent/phase-15-and-jovo-brand
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -53,7 +54,9 @@ jobs:
     timeout-minutes: 15
     environment:
       name: vercel-admin
-      url: https://adminpage-pink.vercel.app
+      # url intentionally omitted: the old adminpage-pink.vercel.app project is
+      # being retired. Add `url: <the new project's URL>` here once the new
+      # Vercel project exists.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -89,7 +92,9 @@ jobs:
     timeout-minutes: 15
     environment:
       name: vercel-mobile-web
-      url: https://jovo-market-web.vercel.app
+      # url intentionally omitted: the old jovo-market-web.vercel.app project is
+      # being retired. Add `url: <the new project's URL>` here once the new
+      # Vercel project exists.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

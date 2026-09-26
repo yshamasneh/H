@@ -4,9 +4,7 @@
       "corsRules": [
         {
           "allowedOrigins": [
-            "http://localhost:5173",
-            "https://jovo-market-web.vercel.app",
-            "https://adminpage-pink.vercel.app"
+            "http://localhost:5173"
           ],
           "allowedMethods": ["PUT", "OPTIONS"],
           "allowedHeaders": ["content-type", "x-ms-blob-type"],
