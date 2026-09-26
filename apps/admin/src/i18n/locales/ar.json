@@ -91,6 +91,7 @@
       "operatingCosts": "المصاريف التشغيلية",
       "settings": "الإعدادات",
       "offers": "العروض",
+      "notifications": "الإشعارات",
       "businessSettings": "بيانات المتجر",
       "reports": "المبيعات"
     },
@@ -944,6 +945,22 @@
     },
     "filterAllOffers": "كل العروض",
     "filterGlobal": "عروض المنصة العامة (بلا متجر)"
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "broadcastTitle": "إرسال إشعار جماعي",
+    "broadcastDescription": "أرسل رسالة لمرة واحدة إلى كل حساب نشط من دور واحد. تظهر في قائمة إشعاراتهم، وكإشعار فوري إن سمح جهازهم بذلك.",
+    "audience": "الإرسال إلى",
+    "audiences": {
+      "CUSTOMER": "كل العملاء",
+      "DRIVER": "كل السائقين",
+      "RESTAURANT": "كل المتاجر"
+    },
+    "messageTitle": "العنوان",
+    "messageBody": "الرسالة",
+    "messageRequired": "اكتب عنواناً ورسالة (حرفان على الأقل لكل منهما).",
+    "send": "إرسال",
+    "sentNotice": "تم الإرسال إلى {{count}} مستلم."
   },
   "businessSettings": {
     "title": "بيانات المتجر",

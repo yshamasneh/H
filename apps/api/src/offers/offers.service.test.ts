@@ -95,6 +95,7 @@ function offer(overrides: Partial<Offer>): Offer {
     endsAt: null,
     isActive: true,
     isFeatured: false,
+    activationNotifiedAt: null,
     createdAt: now,
     updatedAt: now,
     ...overrides

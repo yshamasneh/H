@@ -212,6 +212,15 @@ export function deliveryFailedForAdmin(orderRef: string, reason: DeliveryFailure
   };
 }
 
+// --- offers ---------------------------------------------------------------------------------
+
+export function offerActive(offerTitle: string): Copy {
+  return {
+    title: both("عرض جديد", "New offer"),
+    body: both(`${offerTitle} — متاح الآن.`, `${offerTitle} is available now.`)
+  };
+}
+
 // --- accounts -------------------------------------------------------------------------------
 
 export function driverAccountStatus(status: DriverApprovalStatus, reason: string | null | undefined): Copy {

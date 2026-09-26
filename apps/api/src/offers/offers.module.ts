@@ -4,12 +4,13 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UploadsModule } from "../uploads/uploads.module";
 import { AdminOffersController } from "./admin-offers.controller";
+import { OfferActivationNotifierService } from "./offer-activation.service";
 import { OffersService } from "./offers.service";
 
 @Module({
   imports: [JwtModule.register({}), UploadsModule],
   controllers: [AdminOffersController],
-  providers: [OffersService, JwtAuthGuard, RolesGuard],
+  providers: [OffersService, OfferActivationNotifierService, JwtAuthGuard, RolesGuard],
   exports: [OffersService]
 })
 export class OffersModule {}

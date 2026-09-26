@@ -1,14 +1,41 @@
 import { Injectable } from "@nestjs/common";
 import { ApiException } from "../common/api.exception";
-import type { Notification } from "../generated/prisma/client";
+import { NotificationType, UserRole, type Notification } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeGateway } from "../realtime/realtime.gateway";
+import type { BroadcastAudience } from "./notifications.dto";
+import { broadcastNotification } from "./notification.util";
 import type { NotificationView, Page } from "./notifications.types";
 
 type NotificationsPage = Page<NotificationView> & { unreadCount: number };
 
+const broadcastAudienceRoles: Record<BroadcastAudience, UserRole> = {
+  CUSTOMER: UserRole.CUSTOMER,
+  DRIVER: UserRole.DRIVER,
+  RESTAURANT: UserRole.RESTAURANT
+};
+
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeGateway
+  ) {}
+
+  /** The admin manual broadcast tool: a free-text message an operator chose to send right now. */
+  async broadcast(audience: BroadcastAudience, title: string, body: string): Promise<{ recipients: number }> {
+    const recipients = await this.prisma.user.findMany({
+      where: { role: broadcastAudienceRoles[audience], isActive: true },
+      select: { id: true }
+    });
+    const notified = await broadcastNotification(this.prisma, this.realtime, {
+      userIds: recipients.map((recipient) => recipient.id),
+      type: NotificationType.ANNOUNCEMENT,
+      title: title.trim(),
+      body: body.trim()
+    });
+    return { recipients: notified };
+  }
 
   async listForUser(userId: string, page: number, pageSize: number): Promise<NotificationsPage> {
     const where = { userId };

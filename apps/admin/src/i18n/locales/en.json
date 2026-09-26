@@ -91,6 +91,7 @@
       "operatingCosts": "Operating costs",
       "settings": "Settings",
       "offers": "Offers",
+      "notifications": "Notifications",
       "businessSettings": "Store profile",
       "reports": "Sales"
     },
@@ -944,6 +945,22 @@
     },
     "filterAllOffers": "All offers",
     "filterGlobal": "Platform-wide offers (no store)"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "broadcastTitle": "Send a broadcast",
+    "broadcastDescription": "Send a one-off message to every active account of one role. It appears in their notification list and, if their device allows it, as a push.",
+    "audience": "Send to",
+    "audiences": {
+      "CUSTOMER": "All customers",
+      "DRIVER": "All drivers",
+      "RESTAURANT": "All restaurants"
+    },
+    "messageTitle": "Title",
+    "messageBody": "Message",
+    "messageRequired": "Write a title and a message (at least 2 characters each).",
+    "send": "Send",
+    "sentNotice": "Sent to {{count}} recipients."
   },
   "businessSettings": {
     "title": "Store profile",

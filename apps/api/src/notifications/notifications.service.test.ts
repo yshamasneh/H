@@ -5,10 +5,16 @@ import { ApiException } from "../common/api.exception";
 import { NotificationsService } from "./notifications.service";
 import { FakeNotificationsPrisma } from "./testing/fake-prisma";
 
+function createFakeRealtime() {
+  const emitted: { userId: string; event: string; payload: unknown }[] = [];
+  return { emitted, emitToUser: (userId: string, event: string, payload: unknown) => emitted.push({ userId, event, payload }) };
+}
+
 function createService() {
   const prisma = new FakeNotificationsPrisma();
-  const service = new NotificationsService(prisma as never);
-  return { prisma, service };
+  const realtime = createFakeRealtime();
+  const service = new NotificationsService(prisma as never, realtime as never);
+  return { prisma, realtime, service };
 }
 
 test("a user only sees their own notifications, most recent first, with an unread count", async () => {
@@ -46,6 +52,32 @@ test("unread count decreases after marking a notification read", async () => {
   await service.markRead(userId, first.id);
   const page = await service.listForUser(userId, 1, 20);
   assert.equal(page.unreadCount, 1);
+});
+
+test("a broadcast reaches only active accounts of the chosen audience role", async () => {
+  const { prisma, realtime, service } = createService();
+  const customer = prisma.seedUser({ role: "CUSTOMER" });
+  prisma.seedUser({ role: "DRIVER" });
+  prisma.seedUser({ role: "CUSTOMER", isActive: false });
+
+  const result = await service.broadcast("CUSTOMER", "  Weekend deal  ", "  20% off everything  ");
+
+  assert.equal(result.recipients, 1);
+  assert.equal(prisma.notifications.length, 1);
+  assert.equal(prisma.notifications[0].userId, customer.id);
+  assert.equal(prisma.notifications[0].type, "ANNOUNCEMENT");
+  assert.equal(prisma.notifications[0].title, "Weekend deal");
+  assert.equal(prisma.notifications[0].body, "20% off everything");
+  assert.equal(realtime.emitted.length, 1);
+});
+
+test("a broadcast to an audience with no active accounts sends nothing", async () => {
+  const { prisma, service } = createService();
+  prisma.seedUser({ role: "CUSTOMER", isActive: false });
+
+  const result = await service.broadcast("CUSTOMER", "Title", "Body");
+  assert.equal(result.recipients, 0);
+  assert.equal(prisma.notifications.length, 0);
 });
 
 function hasCode(code: string): (error: unknown) => boolean {

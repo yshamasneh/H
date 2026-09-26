@@ -11,10 +11,19 @@ type NotificationRecord = {
   createdAt: Date;
 };
 
+type FakeUserRecord = { id: string; role: string; isActive: boolean };
+type FakePushTokenRecord = { id: string; userId: string; isActive: boolean };
+
 export class FakeNotificationsPrisma {
   readonly notifications: NotificationRecord[] = [];
+  readonly users: FakeUserRecord[] = [];
+  readonly pushTokens: FakePushTokenRecord[] = [];
+  readonly pushDeliveries: { notificationId: string; pushTokenId: string; deduplicationKey: string }[] = [];
 
   readonly notification = {} as any;
+  readonly user = {} as any;
+  readonly pushToken = {} as any;
+  readonly pushDelivery = {} as any;
 
   constructor() {
     this.notification.findMany = async ({ where, skip = 0, take, orderBy }: any) => {
@@ -38,6 +47,31 @@ export class FakeNotificationsPrisma {
       if (data.isRead !== undefined) notification.isRead = data.isRead;
       return notification;
     };
+    this.notification.createMany = async ({ data }: any) => {
+      this.notifications.push(...data.map((row: any) => ({ isRead: false, relatedEntityId: null, ...row })));
+      return { count: data.length };
+    };
+
+    this.user.findMany = async ({ where }: any) =>
+      this.users.filter((item) => item.role === where.role && item.isActive === where.isActive);
+
+    this.pushToken.findMany = async ({ where }: any) => {
+      const ids: string[] = where.userId.in;
+      return this.pushTokens.filter((token) => ids.includes(token.userId) && token.isActive === where.isActive);
+    };
+
+    this.pushDelivery.createMany = async ({ data }: any) => {
+      for (const row of data) {
+        if (!this.pushDeliveries.some((existing) => existing.deduplicationKey === row.deduplicationKey)) {
+          this.pushDeliveries.push(row);
+        }
+      }
+      return { count: data.length };
+    };
+  }
+
+  async $transaction(operations: Promise<unknown>[]): Promise<unknown[]> {
+    return Promise.all(operations);
   }
 
   seedNotification(userId: string, overrides: Partial<NotificationRecord> = {}): NotificationRecord {
@@ -54,5 +88,17 @@ export class FakeNotificationsPrisma {
     };
     this.notifications.push(notification);
     return notification;
+  }
+
+  seedUser(overrides: Partial<FakeUserRecord> = {}): FakeUserRecord {
+    const user: FakeUserRecord = { id: randomUUID(), role: "CUSTOMER", isActive: true, ...overrides };
+    this.users.push(user);
+    return user;
+  }
+
+  seedPushToken(userId: string, overrides: Partial<FakePushTokenRecord> = {}): FakePushTokenRecord {
+    const token: FakePushTokenRecord = { id: randomUUID(), userId, isActive: true, ...overrides };
+    this.pushTokens.push(token);
+    return token;
   }
 }

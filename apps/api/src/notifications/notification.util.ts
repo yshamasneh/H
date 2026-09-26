@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { UserRole, type NotificationType, type Prisma } from "../generated/prisma/client";
+import type { PrismaService } from "../prisma/prisma.service";
 import type { RealtimeEmitter } from "../realtime/deferred-emitter";
 
 export type CreateNotificationInput = {
@@ -151,4 +153,74 @@ export async function findAdminUserIds(tx: Prisma.TransactionClient): Promise<st
     select: { id: true }
   });
   return admins.map((admin) => admin.id);
+}
+
+export type BroadcastNotificationInput = {
+  userIds: string[];
+  type: NotificationType;
+  title: string;
+  body: string;
+  relatedEntityId?: string | null;
+};
+
+/**
+ * A fan-out to a potentially large audience (every customer, every driver) — an offer going live,
+ * or an admin's manual broadcast. `createNotificationsForUsers` is fine for a handful of admins or
+ * on-shift drivers, but its one-row-at-a-time loop against thousands of recipients reproduces the
+ * "notification-in-tx" bottleneck load testing already found and fixed for the order-placed
+ * notification (see load-tests/RESULTS.md): a long interactive transaction holding row locks while
+ * awaiting each insert in turn. This reads audience membership up front, writes both tables as two
+ * bulk `createMany` calls in one non-interactive (batched) transaction, and only emits the live
+ * socket update afterwards, once the write has actually committed.
+ */
+export async function broadcastNotification(
+  prisma: PrismaService,
+  gateway: Pick<RealtimeEmitter, "emitToUser">,
+  input: BroadcastNotificationInput
+): Promise<number> {
+  const recipients = [...new Set(input.userIds)];
+  if (recipients.length === 0) return 0;
+
+  const tokens = await prisma.pushToken.findMany({
+    where: { userId: { in: recipients }, isActive: true },
+    select: { id: true, userId: true }
+  });
+
+  const createdAt = new Date();
+  const notifications = recipients.map((userId) => ({
+    id: randomUUID(),
+    userId,
+    businessId: null,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    relatedEntityId: input.relatedEntityId ?? null,
+    createdAt
+  }));
+  const notificationIdByUser = new Map(notifications.map((notification) => [notification.userId, notification.id]));
+  const deliveries = tokens.map((token) => {
+    const notificationId = notificationIdByUser.get(token.userId);
+    return notificationId
+      ? { notificationId, pushTokenId: token.id, deduplicationKey: `${notificationId}:${token.id}` }
+      : null;
+  }).filter((delivery): delivery is NonNullable<typeof delivery> => delivery !== null);
+
+  await prisma.$transaction([
+    prisma.notification.createMany({ data: notifications }),
+    ...(deliveries.length > 0 ? [prisma.pushDelivery.createMany({ data: deliveries, skipDuplicates: true })] : [])
+  ]);
+
+  for (const notification of notifications) {
+    gateway.emitToUser(notification.userId, "notification.created", {
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      relatedEntityId: notification.relatedEntityId,
+      isRead: false,
+      createdAt: notification.createdAt
+    });
+  }
+
+  return recipients.length;
 }

@@ -770,7 +770,9 @@ export type NotificationType =
   | "DRIVER_APPROVED"
   | "DRIVER_REJECTED"
   | "DRIVER_SUSPENDED"
-  | "ADMIN_ALERT";
+  | "ADMIN_ALERT"
+  | "OFFER_ACTIVE"
+  | "ANNOUNCEMENT";
 
 export type NotificationView = {
   id: string;

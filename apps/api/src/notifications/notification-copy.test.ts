@@ -25,7 +25,8 @@ test("every fixed notification string is written in both Arabic and English", ()
     ["restaurant rejected", copy.restaurantReview(false, null)],
     ["restaurant rejected + reason", copy.restaurantReview(false, "docs")],
     ["restaurant suspended", copy.restaurantSuspension(true, null)],
-    ["restaurant reactivated", copy.restaurantSuspension(false, null)]
+    ["restaurant reactivated", copy.restaurantSuspension(false, null)],
+    ["offer active", copy.offerActive("50% off")]
   ];
   for (const status of ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "REJECTED", "DELIVERED", "CANCELLED", "PLACED"] as const) {
     cases.push([`order ${status}`, copy.orderStatusForCustomer(status, undefined)]);
