@@ -62,6 +62,8 @@ export type BusinessOrderItem = {
   lineTotalMinor: number;
   /** The product's picture now (display only); null when it has none. */
   imageUrl?: string | null;
+  /** In the bag, as ticked by whoever is packing. Shared by every device on the business. */
+  isPicked?: boolean;
   fulfillmentAdjustment: {
     id: string;
     replacementMenuItemId?: string | null;
@@ -104,6 +106,14 @@ export function updateBusinessOrderStatus(
   note?: string
 ): Promise<BusinessOrder> {
   return request(`/api/v1/restaurant/me/orders/${orderId}/status`, { method: "PATCH", body: { status, note } });
+}
+
+/** Sets whether one line of an order being packed is in the bag. A set, not a flip, so two devices converge. */
+export function setItemPicked(orderId: string, orderItemId: string, isPicked: boolean): Promise<BusinessOrder> {
+  return request(`/api/v1/restaurant/me/orders/${orderId}/items/${orderItemId}/picked`, {
+    method: "PUT",
+    body: { isPicked }
+  });
 }
 
 export function proposeFulfillment(

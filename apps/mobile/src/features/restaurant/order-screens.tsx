@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import {
   listRestaurantMenuItems,
   listRestaurantOrders,
   proposeOrderItemFulfillment,
+  setOrderItemPicked,
   updateOrderStatus,
   type MenuItemOwner,
   type OrderDetail,
@@ -29,7 +30,6 @@ import {
   type RestaurantOrderStatusAction
 } from "../../core/api";
 import { readError } from "../../core/errors";
-import { kvStore } from "../../core/kv-storage";
 import i18n from "../../i18n";
 import { RemoteImage } from "../../components/remote-image";
 import { Icon } from "../../theme/icon";
@@ -39,12 +39,10 @@ import { text } from "../../theme/typography";
 import { nextRestaurantActionsByStatus } from "./order.rules";
 import {
   isPackingStatus,
+  nextPickedValue,
   packLineState,
   packProgress,
-  packedStorageKey,
-  parsePicked,
-  serializePicked,
-  togglePicked,
+  type PackLine,
   type PackLineState
 } from "./pack-checklist";
 
@@ -143,30 +141,37 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
   const [actionError, setActionError] = useState<string | null>(null);
   const [actingOn, setActingOn] = useState<RestaurantOrderStatusAction | null>(null);
   const [proposingFor, setProposingFor] = useState<string | null>(null);
-  const lineIds = useMemo(() => (order?.items ?? []).map((item) => item.id), [order]);
-  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
-  // What has been put in the bag is remembered on this device, per order, so backing out of the
-  // screen or a live refresh does not lose the packer's place.
-  const lineIdsKey = lineIds.join(",");
-  useEffect(() => {
-    if (lineIds.length === 0) return;
-    let cancelled = false;
-    kvStore.getItem(packedStorageKey(props.orderId)).then(
-      (raw) => { if (!cancelled) setPicked(parsePicked(raw, lineIds)); },
-      () => undefined
-    );
-    return () => { cancelled = true; };
-    // Re-read only when the order or its set of lines changes, not on every refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.orderId, lineIdsKey]);
-
+  // Every line's ticked state lives on the server, so it is the same on every device. A tap is
+  // applied here at once (the checklist has to feel instant) and sent as an absolute value, so two
+  // devices tapping together converge; if the server refuses, the tap is undone and the error shown.
   function toggleLine(lineId: string) {
     if (!order) return;
-    const next = togglePicked(order.items, picked, lineId);
-    setPicked(next);
-    void kvStore.setItem(packedStorageKey(props.orderId), serializePicked(next)).catch(() => undefined);
+    const line = order.items.find((item) => item.id === lineId);
+    const next = line ? nextPickedValue(asPackLine(line)) : null;
+    if (line === undefined || next === null) return;
+    const previous = asPackLine(line).isPicked;
+    setActionError(null);
+    setOrder((current) => (current ? { ...current, items: current.items.map((item) => (item.id === lineId ? { ...item, isPicked: next } : item)) } : current));
+    void (async () => {
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) throw new Error(t("common:sessionExpired"));
+        await setOrderItemPicked(accessToken, props.orderId, lineId, next);
+      } catch (requestError) {
+        setOrder((current) => (current ? { ...current, items: current.items.map((item) => (item.id === lineId ? { ...item, isPicked: previous } : item)) } : current));
+        setActionError(readError(requestError));
+      }
+    })();
   }
+
+  // Another device (or the admin console) ticked something: apply it as it happens, without a refetch.
+  useRealtimeEvent("order.packing.changed", (payload) => {
+    const event = payload as { orderId?: string; orderItemId?: string; isPicked?: boolean } | null;
+    if (!event || event.orderId !== props.orderId || typeof event.orderItemId !== "string" || typeof event.isPicked !== "boolean") return;
+    const { orderItemId, isPicked } = event;
+    setOrder((current) => (current ? { ...current, items: current.items.map((item) => (item.id === orderItemId ? { ...item, isPicked } : item)) } : current));
+  });
 
   async function load() {
     setError(null);
@@ -204,10 +209,6 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
       }
       const updated = await updateOrderStatus(accessToken, props.orderId, action);
       setOrder(updated);
-      if (!isPackingStatus(updated.status) && updated.status !== "PLACED") {
-        // Packing is finished (or the order left the store's hands): the working state is done with.
-        void kvStore.removeItem(packedStorageKey(props.orderId)).catch(() => undefined);
-      }
     } catch (requestError) {
       setActionError(readError(requestError));
     } finally {
@@ -236,7 +237,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
   }
 
   const isPacking = order !== null && isPackingStatus(order.status);
-  const progress = packProgress(order?.items ?? [], picked);
+  const progress = packProgress((order?.items ?? []).map(asPackLine));
 
   // The escape hatch for an item that genuinely cannot be found at packing time: a substitution can
   // only be proposed before the order is accepted, so the packer must still be able to move on. It
@@ -295,7 +296,7 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
                     item={item}
                     onToggle={() => toggleLine(item.id)}
                     packable={isPacking}
-                    state={packLineState(item, picked)}
+                    state={packLineState(asPackLine(item))}
                   />
                 ) : (
                 <View style={styles.summaryRow}>
@@ -369,6 +370,11 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
       )}
     </SafeAreaView>
   );
+}
+
+/** The packing rules read a line as a plain shape; `isPicked` is absent on a server that predates it. */
+function asPackLine(item: OrderItemView): PackLine {
+  return { id: item.id, isPicked: item.isPicked === true, fulfillmentAdjustment: item.fulfillmentAdjustment };
 }
 
 function confirmPackedAnyway(title: string, body: string, confirmLabel: string): Promise<boolean> {

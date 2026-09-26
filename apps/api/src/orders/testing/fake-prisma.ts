@@ -55,6 +55,8 @@ type OrderItemRecord = {
   unitLabelSnapshot: string;
   allowSubstitution: boolean;
   isVariableWeightSnapshot: boolean;
+  isPicked: boolean;
+  pickedAt: Date | null;
 };
 
 type FulfillmentAdjustmentRecord = {
@@ -357,7 +359,9 @@ export class FakeOrdersPrisma {
           quantity: itemData.quantity,
           unitLabelSnapshot: itemData.unitLabelSnapshot ?? "item",
           allowSubstitution: itemData.allowSubstitution ?? false,
-          isVariableWeightSnapshot: itemData.isVariableWeightSnapshot ?? false
+          isVariableWeightSnapshot: itemData.isVariableWeightSnapshot ?? false,
+          isPicked: false,
+          pickedAt: null
         });
       }
 
@@ -447,6 +451,17 @@ export class FakeOrdersPrisma {
         menuItem: this.menuItems.find((candidate) => candidate.id === item.menuItemId),
         fulfillmentAdjustment: this.fulfillmentAdjustments.find((entry) => entry.orderItemId === item.id) ?? null
       };
+    };
+
+    this.orderItem.update = async ({ where, data }: any) => {
+      const item = this.orderItems.find((candidate) => candidate.id === where.id)!;
+      Object.assign(item, data);
+      return item;
+    };
+    this.orderItem.updateMany = async ({ where, data }: any) => {
+      const matched = this.orderItems.filter((item) => !where?.orderId || item.orderId === where.orderId);
+      matched.forEach((item) => Object.assign(item, data));
+      return { count: matched.length };
     };
 
     this.fulfillmentAdjustment.count = async ({ where }: any) =>

@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-
 import { Alert } from "react-native";
 import i18n from "../../i18n";
 import { RestaurantOrderDetailScreen } from "./order-screens";
-import { getRestaurantOrder, listRestaurantMenuItems, updateOrderStatus } from "../../core/api";
+import { getRestaurantOrder, listRestaurantMenuItems, setOrderItemPicked, updateOrderStatus } from "../../core/api";
+import { ApiError } from "../../core/api-error";
 import { getAccessToken } from "../../core/session";
 
 jest.mock("../../core/api", () => ({
@@ -10,18 +11,16 @@ jest.mock("../../core/api", () => ({
   listRestaurantMenuItems: jest.fn(),
   listRestaurantOrders: jest.fn(),
   proposeOrderItemFulfillment: jest.fn(),
-  updateOrderStatus: jest.fn()
+  setOrderItemPicked: jest.fn(),
+  updateOrderStatus: jest.fn(),
+  ApiError: jest.requireActual("../../core/api-error").ApiError
 }));
 jest.mock("../../core/session", () => ({ getAccessToken: jest.fn() }));
-jest.mock("../../core/socket", () => ({ useOrderRealtime: () => {}, useRealtimeEvent: () => {} }));
-// An in-mockMemory stand-in for the device's storage, shared across renders so persistence is testable.
-const mockMemory = new Map<string, string>();
-jest.mock("../../core/kv-storage", () => ({
-  kvStore: {
-    getItem: async (key: string) => mockMemory.get(key) ?? null,
-    setItem: async (key: string, value: string) => { mockMemory.set(key, value); },
-    removeItem: async (key: string) => { mockMemory.delete(key); }
-  }
+// The screen subscribes to live events; the test plays the part of the server pushing one.
+const mockHandlers = new Map<string, (payload: unknown) => void>();
+jest.mock("../../core/socket", () => ({
+  useOrderRealtime: () => {},
+  useRealtimeEvent: (event: string, handler: (payload: unknown) => void) => { mockHandlers.set(event, handler); }
 }));
 
 const line = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
@@ -35,6 +34,7 @@ const line = (id: string, name: string, extra: Record<string, unknown> = {}) => 
   allowSubstitution: true,
   isVariableWeightSnapshot: false,
   lineTotalMinor: 1000,
+  isPicked: false,
   fulfillmentAdjustment: null,
   ...extra
 });
@@ -72,6 +72,7 @@ const threeLines = () => [
   line("b", "Cow milk", { fulfillmentAdjustment: approvedReplacement }),
   line("c", "Bread")
 ];
+const withFirstTwoPicked = () => threeLines().map((entry, index) => (index < 2 ? { ...entry, isPicked: true } : entry));
 
 const readyLabel = () => i18n.t("restaurantOps:orders.markReadyForPickup");
 
@@ -89,9 +90,10 @@ afterAll(async () => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
-  mockMemory.clear();
+  mockHandlers.clear();
   (getAccessToken as jest.Mock).mockResolvedValue("token");
   (listRestaurantMenuItems as jest.Mock).mockResolvedValue([]);
+  (setOrderItemPicked as jest.Mock).mockResolvedValue({});
 });
 
 test("each item shows its product photo, and an approved replacement shows the replacement's", async () => {
@@ -128,32 +130,67 @@ test("an approved replacement reads as a replacement, not as a plain pick", asyn
   await open(order("PREPARING", threeLines()));
   expect(screen.getByText("Oat milk")).toBeTruthy();
   expect(screen.getByText(/Replaces: Cow milk/)).toBeTruthy();
-  const replacementBox = screen.getAllByRole("checkbox")[1];
-  await act(async () => { fireEvent.press(replacementBox); });
-  // Still identifiable as a replacement once ticked, and counted as packed.
+  await act(async () => { fireEvent.press(screen.getAllByRole("checkbox")[1]); });
   expect(screen.getByText(i18n.t("restaurantOps:orders.pack.replacementTag") + " ")).toBeTruthy();
   expect(screen.getByText("Packed 1 of 3")).toBeTruthy();
 });
 
-test("a line still waiting on the customer is flagged and cannot be ticked", async () => {
+test("a line still waiting on the customer is flagged, cannot be ticked, and sends nothing", async () => {
   const pending = { ...approvedReplacement, status: "PENDING" };
   (getRestaurantOrder as jest.Mock).mockResolvedValue(order("PLACED", [line("a", "Whole milk", { fulfillmentAdjustment: pending })]));
   render(<RestaurantOrderDetailScreen onBack={() => {}} orderId="order-1" />);
   await screen.findByText(i18n.t("restaurantOps:orders.pack.awaitingCustomer"));
   const row = screen.getByRole("checkbox");
   expect(row.props.accessibilityState.disabled).toBe(true);
-  expect(row.props.accessibilityState.checked).toBe(false);
+  await act(async () => { fireEvent.press(row); });
+  expect(setOrderItemPicked).not.toHaveBeenCalled();
 });
 
-test("ticked items are remembered when the screen is reopened", async () => {
+test("ticking sends the absolute value to the server for that line", async () => {
   await open(order("PREPARING", threeLines()));
   await act(async () => { fireEvent.press(screen.getAllByRole("checkbox")[0]); });
-  expect(mockMemory.size).toBe(1);
+  expect(setOrderItemPicked).toHaveBeenCalledWith("token", "order-1", "a", true);
+  await act(async () => { fireEvent.press(screen.getAllByRole("checkbox")[0]); });
+  expect(setOrderItemPicked).toHaveBeenLastCalledWith("token", "order-1", "a", false);
+});
 
-  screen.unmount();
+test("what the server already has ticked is what the screen shows, so a second device starts in the right place", async () => {
+  await open(order("PREPARING", withFirstTwoPicked()));
+  expect(screen.getByText("Packed 2 of 3")).toBeTruthy();
+  const boxes = screen.getAllByRole("checkbox");
+  expect(boxes.map((box) => box.props.accessibilityState.checked)).toEqual([true, true, false]);
+});
+
+test("a tick made on another device shows up live, with no refetch, and can complete the checklist", async () => {
+  (updateOrderStatus as jest.Mock).mockResolvedValue(order("READY_FOR_PICKUP", threeLines()));
+  await open(order("PREPARING", withFirstTwoPicked()));
+  expect(screen.getByText("Packed 2 of 3")).toBeTruthy();
+  const callsBefore = (getRestaurantOrder as jest.Mock).mock.calls.length;
+
+  await act(async () => { mockHandlers.get("order.packing.changed")!({ orderId: "order-1", orderItemId: "c", isPicked: true }); });
+
+  expect(screen.getByText(i18n.t("restaurantOps:orders.pack.allPacked"))).toBeTruthy();
+  expect((getRestaurantOrder as jest.Mock).mock.calls.length).toBe(callsBefore);
+  await act(async () => { fireEvent.press(screen.getByText(readyLabel())); });
+  await waitFor(() => expect(updateOrderStatus).toHaveBeenCalledWith("token", "order-1", "READY_FOR_PICKUP"));
+});
+
+test("a live event for another order, or a malformed one, is ignored", async () => {
   await open(order("PREPARING", threeLines()));
-  await waitFor(() => expect(screen.getByText("Packed 1 of 3")).toBeTruthy());
-  expect(screen.getAllByRole("checkbox")[0].props.accessibilityState.checked).toBe(true);
+  await act(async () => {
+    mockHandlers.get("order.packing.changed")!({ orderId: "someone-else", orderItemId: "a", isPicked: true });
+    mockHandlers.get("order.packing.changed")!({ orderId: "order-1", orderItemId: "a" });
+    mockHandlers.get("order.packing.changed")!(null);
+  });
+  expect(screen.getByText("Packed 0 of 3")).toBeTruthy();
+});
+
+test("if the server refuses a tick, it is undone", async () => {
+  (setOrderItemPicked as jest.Mock).mockRejectedValue(new ApiError(409, "ORDER_NOT_BEING_PACKED", "no"));
+  await open(order("PREPARING", threeLines()));
+  await act(async () => { fireEvent.press(screen.getAllByRole("checkbox")[0]); });
+  await waitFor(() => expect(screen.getByText("Packed 0 of 3")).toBeTruthy());
+  expect(screen.getAllByRole("checkbox")[0].props.accessibilityState.checked).toBe(false);
 });
 
 test("'Mark ready anyway' names what is unchecked and only proceeds when confirmed", async () => {
@@ -170,11 +207,9 @@ test("'Mark ready anyway' names what is unchecked and only proceeds when confirm
   expect(body).not.toContain("Whole milk");
   expect(updateOrderStatus).not.toHaveBeenCalled();
 
-  // Cancelling leaves the order where it was.
   await act(async () => { buttons![0].onPress!(); });
   expect(updateOrderStatus).not.toHaveBeenCalled();
 
-  // Confirming marks it ready.
   await act(async () => { fireEvent.press(screen.getByText(i18n.t("restaurantOps:orders.pack.readyAnyway"))); });
   await act(async () => { alertSpy.mock.calls[1][2]![1].onPress!(); });
   await waitFor(() => expect(updateOrderStatus).toHaveBeenCalledWith("token", "order-1", "READY_FOR_PICKUP"));

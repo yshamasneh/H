@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -7,7 +7,12 @@ import { Roles } from "../common/decorators/roles.decorator";
 import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { RolesGuard } from "../common/guards/roles.guard";
 import { UserRole } from "../generated/prisma/client";
-import { OrdersPaginationQueryDto, ProposeFulfillmentAdjustmentDto, UpdateOrderStatusDto } from "./orders.dto";
+import {
+  OrdersPaginationQueryDto,
+  ProposeFulfillmentAdjustmentDto,
+  SetOrderItemPickedDto,
+  UpdateOrderStatusDto
+} from "./orders.dto";
 import { OrdersService } from "./orders.service";
 
 @ApiTags("restaurant-portal")
@@ -47,6 +52,18 @@ export class RestaurantOrdersController {
     @Body() input: ProposeFulfillmentAdjustmentDto
   ) {
     return this.orders.proposeFulfillmentAdjustment(request.user.id, orderId, orderItemId, input);
+  }
+
+  @Put(":orderId/items/:orderItemId/picked")
+  @RequirePermission("MANAGE_ORDERS")
+  @ApiOperation({ summary: "Mark one line of an order being packed as in the bag (or not), shared by every device on the business" })
+  setItemPicked(
+    @Req() request: AuthenticatedRequest,
+    @Param("orderId", new ParseUUIDPipe()) orderId: string,
+    @Param("orderItemId", new ParseUUIDPipe()) orderItemId: string,
+    @Body() input: SetOrderItemPickedDto
+  ) {
+    return this.orders.setItemPicked(request.user.id, orderId, orderItemId, input.isPicked);
   }
 
   @Patch(":orderId/status")

@@ -117,6 +117,12 @@ export class UpdateOrderStatusDto {
   note?: string;
 }
 
+export class SetOrderItemPickedDto {
+  @ApiProperty({ example: true, description: "Whether this line is now in the bag. Idempotent: sets, never flips." })
+  @IsBoolean()
+  isPicked!: boolean;
+}
+
 export class ProposeFulfillmentAdjustmentDto {
   @ApiPropertyOptional({ description: "Replacement product from the same supermarket." })
   @IsOptional()

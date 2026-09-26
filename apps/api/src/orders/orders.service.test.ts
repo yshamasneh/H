@@ -1702,3 +1702,194 @@ test("cancelling an order nobody has accepted yet does not notify any driver", a
 
   assert.equal(prisma.notifications.filter((entry) => entry.type === "DELIVERY_STATUS_CHANGED").length, before);
 });
+
+// --- shared packing state (OrderItem.isPicked) ---------------------------------------------------
+
+async function orderBeingPacked(status: "ACCEPTED" | "PREPARING" = "PREPARING") {
+  const context = createService();
+  const restaurant = context.prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const first = context.prisma.seedMenuItem(restaurant.id, { name: "Milk", stockQuantity: 20 });
+  const second = context.prisma.seedMenuItem(restaurant.id, { name: "Bread", stockQuantity: 20 });
+  const customerId = randomUUID();
+  const order = await context.service.createOrder(customerId, baseInput(restaurant.id, first.id, {
+    items: [
+      { menuItemId: first.id, quantity: 1, allowSubstitution: true },
+      { menuItemId: second.id, quantity: 2, allowSubstitution: false }
+    ]
+  }) as never);
+  await context.service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+  if (status === "PREPARING") {
+    await context.service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "PREPARING", undefined);
+  }
+  return { ...context, restaurant, order, customerId, first, second };
+}
+
+test("a new order line starts unpicked", async () => {
+  const { service, restaurant, order } = await orderBeingPacked();
+  const view = await service.getForRestaurantOwner(restaurant.ownerUserId, order.id);
+  assert.deepEqual(view.items.map((item) => item.isPicked), [false, false]);
+});
+
+test("ticking a line records it, and the view every device reads shows it", async () => {
+  const { service, prisma, restaurant, order } = await orderBeingPacked();
+  const line = order.items[0];
+
+  const updated = await service.setItemPicked(restaurant.ownerUserId, order.id, line.id, true);
+
+  assert.equal(updated.items.find((item) => item.id === line.id)!.isPicked, true);
+  assert.equal(updated.items.find((item) => item.id !== line.id)!.isPicked, false);
+  assert.ok(prisma.orderItems.find((item) => item.id === line.id)!.pickedAt instanceof Date);
+  const reread = await service.getForRestaurantOwner(restaurant.ownerUserId, order.id);
+  assert.equal(reread.items.find((item) => item.id === line.id)!.isPicked, true);
+});
+
+test("picking is a set, not a flip: repeating it is harmless and a concurrent double-tap converges", async () => {
+  const { service, prisma, restaurant, order } = await orderBeingPacked();
+  const line = order.items[0];
+
+  await Promise.all([
+    service.setItemPicked(restaurant.ownerUserId, order.id, line.id, true),
+    service.setItemPicked(restaurant.ownerUserId, order.id, line.id, true)
+  ]);
+  assert.equal(prisma.orderItems.find((item) => item.id === line.id)!.isPicked, true);
+
+  const cleared = await service.setItemPicked(restaurant.ownerUserId, order.id, line.id, false);
+  assert.equal(cleared.items.find((item) => item.id === line.id)!.isPicked, false);
+  assert.equal(prisma.orderItems.find((item) => item.id === line.id)!.pickedAt, null);
+});
+
+test("an ACCEPTED order can already be packed", async () => {
+  const { service, restaurant, order } = await orderBeingPacked("ACCEPTED");
+  const updated = await service.setItemPicked(restaurant.ownerUserId, order.id, order.items[0].id, true);
+  assert.equal(updated.items[0].isPicked, true);
+});
+
+test("ticking tells every device on the business, and nobody else", async () => {
+  const { service, realtime, restaurant, order } = await orderBeingPacked();
+  realtime.emitted.length = 0;
+
+  await service.setItemPicked(restaurant.ownerUserId, order.id, order.items[0].id, true);
+
+  assert.deepEqual(realtime.emitted, [{
+    room: `restaurant:${restaurant.id}`,
+    event: "order.packing.changed",
+    payload: { orderId: order.id, orderItemId: order.items[0].id, isPicked: true }
+  }]);
+});
+
+test("nothing can be ticked before the order is accepted, or once it is ready or over", async () => {
+  const { service, restaurant, order } = await orderBeingPacked();
+  const line = order.items[0];
+  await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+  await assert.rejects(service.setItemPicked(restaurant.ownerUserId, order.id, line.id, true), hasCode("ORDER_NOT_BEING_PACKED"));
+
+  const placed = createService();
+  const shop = placed.prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const item = placed.prisma.seedMenuItem(shop.id);
+  const fresh = await placed.service.createOrder(randomUUID(), baseInput(shop.id, item.id) as never);
+  await assert.rejects(
+    placed.service.setItemPicked(shop.ownerUserId, fresh.id, fresh.items[0].id, true),
+    hasCode("ORDER_NOT_BEING_PACKED")
+  );
+});
+
+test("a line whose replacement the customer has not answered cannot be ticked", async () => {
+  const context = createService();
+  const restaurant = context.prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const original = context.prisma.seedMenuItem(restaurant.id, { name: "Original", stockQuantity: 10 });
+  const replacement = context.prisma.seedMenuItem(restaurant.id, { name: "Replacement", stockQuantity: 10 });
+  const order = await context.service.createOrder(randomUUID(), baseInput(restaurant.id, original.id, {
+    items: [{ menuItemId: original.id, quantity: 1, allowSubstitution: true }]
+  }) as never);
+  await context.service.proposeFulfillmentAdjustment(restaurant.ownerUserId, order.id, order.items[0].id, {
+    replacementMenuItemId: replacement.id
+  } as never);
+
+  // The order is still PLACED here, so the status guard fires first; force the state the guard is
+  // for (a pending proposal on an order that is somehow being packed) to prove the second guard.
+  context.prisma.orders.find((entry) => entry.id === order.id)!.status = "PREPARING" as never;
+  await assert.rejects(
+    context.service.setItemPicked(restaurant.ownerUserId, order.id, order.items[0].id, true),
+    hasCode("FULFILLMENT_REVIEW_PENDING")
+  );
+});
+
+test("approved and declined replacements can be ticked like any other line", async () => {
+  for (const decision of ["APPROVED", "REJECTED"] as const) {
+    const context = createService();
+    const restaurant = context.prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+    const original = context.prisma.seedMenuItem(restaurant.id, { name: "Original", stockQuantity: 10 });
+    const replacement = context.prisma.seedMenuItem(restaurant.id, { name: "Replacement", stockQuantity: 10 });
+    const customerId = randomUUID();
+    const order = await context.service.createOrder(customerId, baseInput(restaurant.id, original.id, {
+      items: [{ menuItemId: original.id, quantity: 1, allowSubstitution: true }]
+    }) as never);
+    const proposed = await context.service.proposeFulfillmentAdjustment(restaurant.ownerUserId, order.id, order.items[0].id, {
+      replacementMenuItemId: replacement.id
+    } as never);
+    await context.service.decideFulfillmentAdjustment(customerId, order.id, proposed.items[0].fulfillmentAdjustment!.id, decision);
+    await context.service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "ACCEPTED", undefined);
+
+    const updated = await context.service.setItemPicked(restaurant.ownerUserId, order.id, order.items[0].id, true);
+    assert.equal(updated.items[0].isPicked, true, decision);
+    assert.equal(updated.items[0].fulfillmentAdjustment?.status, decision);
+  }
+});
+
+test("another business cannot read or tick this order's lines, and an unknown line is not found", async () => {
+  const { service, prisma, order } = await orderBeingPacked();
+  const rival = prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  await assert.rejects(service.setItemPicked(rival.ownerUserId, order.id, order.items[0].id, true), hasCode("ORDER_NOT_FOUND"));
+
+  const { service: again, restaurant, order: mine } = await orderBeingPacked();
+  await assert.rejects(again.setItemPicked(restaurant.ownerUserId, mine.id, randomUUID(), true), hasCode("ORDER_NOT_FOUND"));
+  await assert.rejects(again.setItemPicked(restaurant.ownerUserId, randomUUID(), mine.items[0].id, true), hasCode("ORDER_NOT_FOUND"));
+});
+
+test("a customer who is not the business owner has no restaurant to tick anything for", async () => {
+  const { service, order, customerId } = await orderBeingPacked();
+  await assert.rejects(service.setItemPicked(customerId, order.id, order.items[0].id, true));
+});
+
+test("marking the order ready keeps the ticks as a record of what was packed", async () => {
+  const { service, restaurant, order } = await orderBeingPacked();
+  await service.setItemPicked(restaurant.ownerUserId, order.id, order.items[0].id, true);
+  await service.setItemPicked(restaurant.ownerUserId, order.id, order.items[1].id, true);
+
+  const ready = await service.updateStatusForRestaurantOwner(restaurant.ownerUserId, order.id, "READY_FOR_PICKUP", undefined);
+
+  assert.deepEqual(ready.items.map((item) => item.isPicked), [true, true]);
+});
+
+test("cancelling an order clears its ticks so no stale flags are left behind", async () => {
+  const { service, prisma, restaurant, order } = await orderBeingPacked();
+  await service.setItemPicked(restaurant.ownerUserId, order.id, order.items[0].id, true);
+
+  await service.adminCancelOrder(randomUUID(), order.id, "Customer changed their mind");
+
+  assert.deepEqual(prisma.orderItems.filter((item) => item.orderId === order.id).map((item) => [item.isPicked, item.pickedAt]), [[false, null], [false, null]]);
+});
+
+test("a fulfillment decision resets that line's tick, because what has to be packed just changed", async () => {
+  const context = createService();
+  const restaurant = context.prisma.seedRestaurant({ businessType: BusinessType.SUPERMARKET });
+  const original = context.prisma.seedMenuItem(restaurant.id, { name: "Original", stockQuantity: 10 });
+  const replacement = context.prisma.seedMenuItem(restaurant.id, { name: "Replacement", stockQuantity: 10 });
+  const customerId = randomUUID();
+  const order = await context.service.createOrder(customerId, baseInput(restaurant.id, original.id, {
+    items: [{ menuItemId: original.id, quantity: 1, allowSubstitution: true }]
+  }) as never);
+  // Stale tick left on the line (however it got there) before a proposal lands.
+  const stored = context.prisma.orderItems.find((item) => item.id === order.items[0].id)!;
+  stored.isPicked = true;
+  stored.pickedAt = new Date();
+
+  const proposed = await context.service.proposeFulfillmentAdjustment(restaurant.ownerUserId, order.id, order.items[0].id, {
+    replacementMenuItemId: replacement.id
+  } as never);
+  assert.equal(stored.isPicked, false, "a new proposal clears the tick");
+
+  stored.isPicked = true;
+  await context.service.decideFulfillmentAdjustment(customerId, order.id, proposed.items[0].fulfillmentAdjustment!.id, "APPROVED");
+  assert.equal(stored.isPicked, false, "the customer's decision clears the tick");
+});

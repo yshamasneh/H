@@ -61,6 +61,12 @@ const orderInclude = {
   delivery: true
 } as const;
 
+/** The statuses in which a business is physically packing an order. */
+const packingStatuses: OrderStatus[] = [OrderStatus.ACCEPTED, OrderStatus.PREPARING];
+
+/** What a line's packed flag resets to whenever what has to be packed changes or the order ends. */
+const clearedPicked = { isPicked: false, pickedAt: null } as const;
+
 /** Business and admin callers see who accepted an order; customers deliberately do not. */
 const withActorNames = { includeActorNames: true } as const;
 
@@ -314,6 +320,50 @@ export class OrdersService {
     return toOrderDetailView(order, withActorNames);
   }
 
+  /**
+   * Sets whether one line of an order is in the bag. The flag is shared by every device on the
+   * business, so this is a SET (idempotent), not a toggle: two staff tapping the same line at once
+   * converge on the same value instead of cancelling each other out.
+   *
+   * Only while the order is being packed (ACCEPTED or PREPARING), and never for a line whose
+   * replacement the customer has not answered — there is nothing decided to pack yet.
+   */
+  async setItemPicked(
+    ownerUserId: string,
+    orderId: string,
+    orderItemId: string,
+    isPicked: boolean
+  ): Promise<OrderDetailView> {
+    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    const emitter = new DeferredEmitter(this.realtime);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order || order.restaurantId !== restaurant.id) throw orderNotFound();
+      if (!packingStatuses.includes(order.status)) {
+        throw new ApiException(409, "ORDER_NOT_BEING_PACKED", "Items can only be ticked off while the order is being prepared.");
+      }
+      const item = await tx.orderItem.findUnique({
+        where: { id: orderItemId },
+        include: { fulfillmentAdjustment: true }
+      });
+      if (!item || item.orderId !== order.id) throw orderNotFound();
+      if (item.fulfillmentAdjustment?.status === FulfillmentAdjustmentStatus.PENDING) {
+        throw new ApiException(409, "FULFILLMENT_REVIEW_PENDING", "Wait for the customer to decide on this product before packing it.");
+      }
+      if (item.isPicked !== isPicked) {
+        await tx.orderItem.update({
+          where: { id: item.id },
+          data: { isPicked, pickedAt: isPicked ? new Date() : null }
+        });
+      }
+      // Business members only: customers and drivers have no use for the packer's working state.
+      emitter.emitToRestaurant(restaurant.id, "order.packing.changed", { orderId, orderItemId, isPicked });
+      return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
+    });
+    emitter.flush();
+    return toOrderDetailView(updated!, withActorNames);
+  }
+
   async proposeFulfillmentAdjustment(
     ownerUserId: string,
     orderId: string,
@@ -439,6 +489,8 @@ export class OrdersService {
         unitCostMinor,
         lineCostMinor: unitCostMinor === null ? null : lineAmount(unitCostMinor, actualQuantityMilli)
       };
+      // What has to be packed for this line is changing, so whatever was ticked no longer applies.
+      await tx.orderItem.update({ where: { id: orderItem.id }, data: clearedPicked });
       await tx.fulfillmentAdjustment.upsert({
         where: { orderItemId: orderItem.id },
         create: {
@@ -501,6 +553,8 @@ export class OrdersService {
       if (!adjustment || adjustment.orderItem.orderId !== order.id || adjustment.status !== FulfillmentAdjustmentStatus.PENDING) {
         throw new ApiException(404, "FULFILLMENT_ADJUSTMENT_NOT_FOUND", "This pending fulfillment adjustment does not exist.");
       }
+      // The decision changes what has to be packed for this line (replacement, or the original).
+      await tx.orderItem.update({ where: { id: adjustment.orderItemId }, data: clearedPicked });
 
       if (decision === "REJECTED") {
         if (adjustment.replacementMenuItemId) {
@@ -702,6 +756,7 @@ export class OrdersService {
       }
       if (targetStatus === OrderStatus.REJECTED) {
         await this.restoreTrackedInventory(tx, orderId);
+        await tx.orderItem.updateMany({ where: { orderId }, data: clearedPicked });
       }
       await createNotification(tx, emitter, {
         userId: existing.customerId,
@@ -786,6 +841,8 @@ export class OrdersService {
         throw new ApiException(409, "ORDER_NOT_CANCELLABLE", "This order can no longer be cancelled.");
       }
       await this.restoreTrackedInventory(tx, orderId);
+      // A cancelled order has nothing left to pack; do not leave ticks behind.
+      await tx.orderItem.updateMany({ where: { orderId }, data: clearedPicked });
       // Close the courier task in the same transaction. Leaving it open let a driver walk a
       // cancelled order through to DELIVERED, which resurrected the order.
       await tx.delivery.updateMany({
@@ -1235,6 +1292,7 @@ function toOrderDetailView(
         unitLabelSnapshot: item.unitLabelSnapshot,
         allowSubstitution: item.allowSubstitution,
         isVariableWeightSnapshot: item.isVariableWeightSnapshot,
+        isPicked: item.isPicked,
         lineTotalMinor: adjustment?.status === FulfillmentAdjustmentStatus.APPROVED
           ? adjustment.lineTotalMinor
           : item.priceMinorSnapshot * item.quantity,

@@ -686,6 +686,13 @@ model OrderItem {
   costPriceMinorSnapshot    Int?
   allowSubstitution         Boolean                @default(false)
   isVariableWeightSnapshot  Boolean                @default(false)
+  /// Whether whoever is packing the order has put this line in the bag. A working flag shared by
+  /// every device on the business (so two staff members packing one order see the same ticks); it
+  /// is never read by pricing or accounting. Only meaningful while the order is ACCEPTED or
+  /// PREPARING: cleared if the order is cancelled or rejected, and when the line's fulfillment
+  /// adjustment changes (what was ticked is no longer what has to be packed).
+  isPicked                  Boolean                @default(false)
+  pickedAt                  DateTime?
   order                     Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   menuItem                  MenuItem               @relation(fields: [menuItemId], references: [id])
   fulfillmentAdjustment     FulfillmentAdjustment?

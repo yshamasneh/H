@@ -248,6 +248,8 @@ export type OrderItemView = {
   unitLabelSnapshot: string;
   allowSubstitution: boolean;
   isVariableWeightSnapshot: boolean;
+  /** In the bag, as ticked by whoever is packing. Shared by every device on the business. */
+  isPicked?: boolean;
   fulfillmentAdjustment: FulfillmentAdjustmentView | null;
 };
 
@@ -940,6 +942,23 @@ export function proposeOrderItemFulfillment(
   return request(`/api/v1/restaurant/me/orders/${orderId}/items/${orderItemId}/fulfillment`, {
     method: "POST",
     body: input,
+    accessToken
+  });
+}
+
+/**
+ * Sets whether one line of an order being packed is in the bag. A set, not a flip: two devices
+ * tapping at once agree on the value instead of cancelling each other.
+ */
+export function setOrderItemPicked(
+  accessToken: string,
+  orderId: string,
+  orderItemId: string,
+  isPicked: boolean
+): Promise<OrderDetail> {
+  return request(`/api/v1/restaurant/me/orders/${orderId}/items/${orderItemId}/picked`, {
+    method: "PUT",
+    body: { isPicked },
     accessToken
   });
 }

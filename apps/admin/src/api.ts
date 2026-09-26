@@ -438,7 +438,7 @@ async function performTokenRefresh(): Promise<string | null> {
 
 const refreshAccessToken = createRefreshCoordinator(performTokenRefresh);
 
-export async function request<T>(path: string, options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {}): Promise<T> {
+export async function request<T>(path: string, options: { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown } = {}): Promise<T> {
   const accessToken = getAccessToken();
   const send = (token: string | undefined) =>
     fetch(`${apiBaseUrl}${path}`, {

@@ -22,6 +22,8 @@ export type OrderItemView = {
   unitLabelSnapshot: string;
   allowSubstitution: boolean;
   isVariableWeightSnapshot: boolean;
+  /** Put in the bag by whoever is packing (shared across the business's devices). Packing aid only. */
+  isPicked: boolean;
   lineTotalMinor: number;
   fulfillmentAdjustment: {
     id: string;

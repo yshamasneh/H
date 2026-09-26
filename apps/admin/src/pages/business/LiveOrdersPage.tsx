@@ -5,9 +5,9 @@ import { ApiError, readApiError } from "../../api";
 import { getLiveOrders, setBusinessOpenStatus, type BusinessOrder, type LiveOrderQueue } from "../../api.business";
 import { useNewOrderAlert } from "../../alert-sound";
 import { useAuth } from "../../auth";
-import { isPackingStatus, loadPicked, packProgress } from "../../packChecklist";
+import { isPackingStatus, packProgress, parsePackingEvent, withPicked } from "../../packChecklist";
 import { StatusBadge } from "../../components/StatusBadge";
-import { useLiveRefresh } from "../../socket";
+import { useLiveRefresh, useRealtimeEvent } from "../../socket";
 
 const currencyCode = "ILS";
 /** An order unhandled for longer than this is escalated visually and audibly. */
@@ -41,6 +41,15 @@ export function LiveOrdersPage() {
   }, []);
 
   useLiveRefresh(["order.created", "order.status.changed", "order.fulfillment.changed"], () => void load());
+
+  // Someone ticked an item on another device: update that ticket's "Packed n/m" as it happens.
+  useRealtimeEvent("order.packing.changed", (payload) => {
+    const event = parsePackingEvent(payload);
+    if (!event) return;
+    const apply = (orders: BusinessOrder[]) =>
+      orders.map((order) => (order.id === event.orderId ? { ...order, items: withPicked(order.items, event.orderItemId, event.isPicked) } : order));
+    setQueue((current) => (current ? { ...current, new: apply(current.new), inProgress: apply(current.inProgress), ready: apply(current.ready) } : current));
+  });
 
   const newOrders = queue?.new ?? [];
   const oldestNewAgeMs = newOrders.length > 0 ? Date.now() - new Date(newOrders[0].createdAt).getTime() : 0;
@@ -172,7 +181,7 @@ function QueueColumn({
 function PackedBadge({ order }: { order: BusinessOrder }) {
   const { t } = useTranslation();
   if (!isPackingStatus(order.status)) return null;
-  const progress = packProgress(order.items, loadPicked(order.id, order.items.map((item) => item.id)));
+  const progress = packProgress(order.items);
   return (
     <span className={`order-ticket-packed${progress.complete ? " is-done" : ""}`}>
       {t("liveOrders.packed", { packed: progress.packed, total: progress.total })}

@@ -100,6 +100,7 @@ test("acting on a business order requires MANAGE_ORDERS while viewing requires o
   assert.deepEqual(classPermissions(RestaurantOrdersController), ["VIEW_ORDERS"]);
   assert.deepEqual(methodPermissions(RestaurantOrdersController, "updateStatus"), ["MANAGE_ORDERS"]);
   assert.deepEqual(methodPermissions(RestaurantOrdersController, "proposeFulfillment"), ["MANAGE_ORDERS"]);
+  assert.deepEqual(methodPermissions(RestaurantOrdersController, "setItemPicked"), ["MANAGE_ORDERS"]);
 });
 
 test("reading the books and moving money are separate authorities", () => {

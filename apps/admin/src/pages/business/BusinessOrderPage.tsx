@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError, readApiError } from "../../api";
@@ -6,6 +6,7 @@ import {
   getBusinessOrder,
   listBusinessItems,
   proposeFulfillment,
+  setItemPicked,
   updateBusinessOrderStatus,
   type BusinessOrder,
   type MenuItemOwner
@@ -15,18 +16,17 @@ import { ConfirmModal } from "../../components/ConfirmModal";
 import { FallbackImage } from "../../components/FallbackImage";
 import { ReasonModal } from "../../components/ReasonModal";
 import {
-  clearPicked,
   isPackingStatus,
-  loadPicked,
+  nextPickedValue,
   packLineState,
   packProgress,
-  savePicked,
-  togglePicked,
+  parsePackingEvent,
   trimQuantity,
+  withPicked,
   type PackLineState
 } from "../../packChecklist";
 import { StatusBadge } from "../../components/StatusBadge";
-import { useLiveRefresh } from "../../socket";
+import { useLiveRefresh, useRealtimeEvent } from "../../socket";
 
 const currencyCode = "ILS";
 
@@ -49,7 +49,6 @@ export function BusinessOrderPage() {
   const [isWorking, setIsWorking] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [showReadyAnyway, setShowReadyAnyway] = useState(false);
-  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
 
   const isSupermarket = access?.business?.businessType === "SUPERMARKET";
 
@@ -71,30 +70,39 @@ export function BusinessOrderPage() {
 
   useLiveRefresh(["order.status.changed", "order.fulfillment.changed"], () => void load());
 
-  // What has been put in the bag is remembered in this browser, per order, so a refresh or a live
-  // update does not lose the packer's place.
-  const lineIdsKey = useMemo(() => (order?.items ?? []).map((item) => item.id).join(","), [order]);
-  useEffect(() => {
-    if (!lineIdsKey) return;
-    setPicked(loadPicked(orderId, lineIdsKey.split(",")));
-  }, [orderId, lineIdsKey]);
-
+  // Every line's ticked state lives on the server, so it is the same on every device. A tap is
+  // applied here at once (the checklist has to feel instant) and sent as an absolute value, so two
+  // devices tapping together converge; if the server refuses, the tap is undone and the error shown.
   function toggleLine(lineId: string) {
-    if (!order) return;
-    const next = togglePicked(order.items, picked, lineId);
-    setPicked(next);
-    savePicked(orderId, next);
+    const line = order?.items.find((item) => item.id === lineId);
+    if (!line) return;
+    const next = nextPickedValue(line);
+    if (next === null) return;
+    const previous = line.isPicked === true;
+    setOrder((current) => (current ? { ...current, items: withPicked(current.items, lineId, next) } : current));
+    void setItemPicked(orderId, lineId, next).then(
+      () => setError(null),
+      (requestError) => {
+        setOrder((current) => (current ? { ...current, items: withPicked(current.items, lineId, previous) } : current));
+        setError(readApiError(requestError, t("common.genericActionError")));
+      }
+    );
   }
+
+  // Another device (or the phone app) ticked something: apply it as it happens, without a refetch.
+  // The 30s poll and reconnect refresh above remain the safety net if an event is ever missed.
+  useRealtimeEvent("order.packing.changed", (payload) => {
+    const event = parsePackingEvent(payload);
+    if (!event || event.orderId !== orderId) return;
+    setOrder((current) => (current ? { ...current, items: withPicked(current.items, event.orderItemId, event.isPicked) } : current));
+  });
 
   async function advance(status: "ACCEPTED" | "PREPARING" | "READY_FOR_PICKUP" | "REJECTED", note?: string) {
     setIsWorking(true);
     setNotice(null);
     try {
-      const updated = await updateBusinessOrderStatus(orderId, status, note);
-      setOrder(updated);
+      setOrder(await updateBusinessOrderStatus(orderId, status, note));
       setError(null);
-      // Packing is finished (or the order left the store's hands): the working state is done with.
-      if (!isPackingStatus(updated.status) && updated.status !== "PLACED") clearPicked(orderId);
     } catch (requestError) {
       const apiError = requestError instanceof ApiError ? requestError : null;
       // Losing an acceptance race is normal, not a fault: re-fetch and say who won.
@@ -115,7 +123,7 @@ export function BusinessOrderPage() {
   const action = nextAction[order.status];
   const canAct = can("MANAGE_ORDERS");
   const isPacking = isPackingStatus(order.status);
-  const progress = packProgress(order.items, picked);
+  const progress = packProgress(order.items);
   // "Ready" is the one step that hands the order to a driver, so it waits until every item is
   // checked off. Nothing else about the flow is gated.
   const readyBlocked = action === "READY_FOR_PICKUP" && !progress.complete;
@@ -169,7 +177,7 @@ export function BusinessOrderPage() {
                     item={item}
                     onToggle={() => toggleLine(item.id)}
                     packable={isPacking && canAct}
-                    state={packLineState(item, picked)}
+                    state={packLineState(item)}
                   />
                 ) : (
                 <div className="kv-row">
