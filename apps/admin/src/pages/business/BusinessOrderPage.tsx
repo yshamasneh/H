@@ -172,22 +172,14 @@ export function BusinessOrderPage() {
             ) : null}
             {order.items.map((item) => (
               <div key={item.id}>
-                {isPacking || item.fulfillmentAdjustment?.status === "PENDING" ? (
-                  <PackRow
-                    item={item}
-                    onToggle={() => toggleLine(item.id)}
-                    packable={isPacking && canAct}
-                    state={packLineState(item)}
-                  />
-                ) : (
-                <div className="kv-row">
-                  <span className="kv-label">
-                    {t("businessOrder.lineItem", { quantity: item.quantity, name: item.nameSnapshot })}
-                    {item.allowSubstitution ? ` · ${t("businessOrder.substitutionAllowed")}` : ""}
-                  </span>
-                  <span className="kv-value">{formatPrice(item.lineTotalMinor)}</span>
-                </div>
-                )}
+                {/* Every status gets the photo row; only while packing does it carry a checkbox. */}
+                <PackRow
+                  item={item}
+                  onToggle={() => toggleLine(item.id)}
+                  packable={isPacking && canAct}
+                  packing={isPacking}
+                  state={packLineState(item)}
+                />
                 {item.fulfillmentAdjustment && !isPacking ? (
                   <div className="kv-row">
                     <span className="kv-label" style={{ paddingInlineStart: 14 }}>
@@ -341,11 +333,15 @@ function PackRow({
   item,
   state,
   packable,
+  packing,
   onToggle
 }: {
   item: BusinessOrder["items"][number];
   state: PackLineState;
+  /** Can this person tick it (permission + the order is being packed). */
   packable: boolean;
+  /** Is the order being packed at all: shows the checkbox and the "Pack N" wording. */
+  packing: boolean;
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
@@ -358,22 +354,22 @@ function PackRow({
   const shownImage = replacement ? replacement.replacementImageUrl : item.imageUrl;
   const quantity = adjustment?.status === "APPROVED" ? adjustment.actualQuantityMilli / 1_000 : item.quantity;
   const unit = replacement?.replacementUnitLabelSnapshot ?? item.unitLabelSnapshot;
-  const quantityText = t("businessOrder.pack.packQuantity", { quantity: trimQuantity(quantity), unit });
+  const quantityText = t(packing ? "businessOrder.pack.packQuantity" : "businessOrder.pack.plainQuantity", { quantity: trimQuantity(quantity), unit });
   const stateClass =
     state === "picked" ? " is-picked" : state === "pickedReplacement" ? " is-replacement" : awaiting ? " is-awaiting" : "";
   const glyph = state === "picked" ? "\u2713" : state === "pickedReplacement" ? "\u21C4" : awaiting ? "!" : "";
 
   return (
     <button
-      aria-checked={packed}
+      aria-checked={packing ? packed : undefined}
       aria-label={t("businessOrder.pack.itemLabel", { name: shownName, quantity: quantityText })}
-      className={`pack-row${stateClass}`}
+      className={`pack-row${stateClass}${packing ? "" : " is-readonly"}`}
       disabled={awaiting || !packable}
       onClick={onToggle}
-      role="checkbox"
+      role={packing ? "checkbox" : undefined}
       type="button"
     >
-      <span aria-hidden="true" className="pack-box">{glyph}</span>
+      {packing ? <span aria-hidden="true" className="pack-box">{glyph}</span> : null}
       <FallbackImage alt="" className="pack-image" src={shownImage ?? undefined} />
       <span className="pack-body">
         <span className="pack-name">{shownName}</span>

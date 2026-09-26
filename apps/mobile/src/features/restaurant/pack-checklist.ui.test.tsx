@@ -139,11 +139,21 @@ test("a line still waiting on the customer is flagged, cannot be ticked, and sen
   const pending = { ...approvedReplacement, status: "PENDING" };
   (getRestaurantOrder as jest.Mock).mockResolvedValue(order("PLACED", [line("a", "Whole milk", { fulfillmentAdjustment: pending })]));
   render(<RestaurantOrderDetailScreen onBack={() => {}} orderId="order-1" />);
-  await screen.findByText(i18n.t("restaurantOps:orders.pack.awaitingCustomer"));
-  const row = screen.getByRole("checkbox");
-  expect(row.props.accessibilityState.disabled).toBe(true);
-  await act(async () => { fireEvent.press(row); });
+  const note = await screen.findByText(i18n.t("restaurantOps:orders.pack.awaitingCustomer"));
+  // The order is not being packed yet, so there is no checkbox at all, and tapping does nothing.
+  expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+  await act(async () => { fireEvent.press(note); });
   expect(setOrderItemPicked).not.toHaveBeenCalled();
+});
+
+test.each(["PLACED", "READY_FOR_PICKUP", "DELIVERED"])("a %s order still shows every item's photo, without a checkbox", async (status) => {
+  (getRestaurantOrder as jest.Mock).mockResolvedValue(order(status, threeLines()));
+  render(<RestaurantOrderDetailScreen onBack={() => {}} orderId="order-1" />);
+  await screen.findByText("Whole milk");
+  const uris = screen.UNSAFE_getAllByType(require("react-native").Image).map((image: { props: { source: { uri?: string } } }) => image.props.source?.uri);
+  expect(uris).toEqual(expect.arrayContaining(["https://cdn.example/a.jpg", "https://cdn.example/oat.jpg", "https://cdn.example/c.jpg"]));
+  expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
+  expect(screen.queryByText(/^Pack /)).toBeNull();
 });
 
 test("ticking sends the absolute value to the server for that line", async () => {

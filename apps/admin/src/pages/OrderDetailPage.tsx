@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { cancelAdminOrder, getAdminOrder, readApiError, type OrderDetail } from "../api";
+import { FallbackImage } from "../components/FallbackImage";
 import { OrderFinancialCard } from "../components/OrderFinancialCard";
 import { OrderTrackingCard } from "../components/OrderTrackingCard";
 import { ReasonModal } from "../components/ReasonModal";
@@ -59,11 +60,14 @@ export function OrderDetailPage() {
           <div className="card">
             <h2 className="card-title">{t("orderDetail.items")}</h2>
             {order.items.map((item) => (
-              <div className="kv-row" key={item.id}>
-                <span className="kv-label">
-                  {t("orderDetail.lineItem", { quantity: item.quantity, name: item.nameSnapshot })}
-                </span>
-                <span className="kv-value">{formatPrice(item.lineTotalMinor)}</span>
+              <div className="order-line" key={item.id}>
+                <FallbackImage alt="" className="order-line-thumb" src={item.imageUrl ?? undefined} />
+                <div className="kv-row">
+                  <span className="kv-label">
+                    {t("orderDetail.lineItem", { quantity: item.quantity, name: item.nameSnapshot })}
+                  </span>
+                  <span className="kv-value">{formatPrice(item.lineTotalMinor)}</span>
+                </div>
               </div>
             ))}
             <div className="kv-row">

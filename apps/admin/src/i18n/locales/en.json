@@ -391,7 +391,8 @@
       "readyAnywayTitle": "Some items are not packed",
       "readyAnywayBody": "These items are not checked off: {{items}}. Mark the order ready anyway?",
       "readyAnywayConfirm": "Mark ready",
-      "itemLabel": "{{name}}, {{quantity}}"
+      "itemLabel": "{{name}}, {{quantity}}",
+      "plainQuantity": "{{quantity}} {{unit}}"
     }
   },
   "catalogue": {

@@ -9,6 +9,7 @@ import {
   type OrderDetail,
   type OrderStatusValue
 } from "../../core/api";
+import { RemoteImage } from "../../components/remote-image";
 import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
 import { cancellableAdminOrderStatuses } from "./admin.rules";
@@ -141,7 +142,12 @@ export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => v
               <StatusPill status={order.status} />
             </View>
             {order.items.map((item) => (
-              <KeyValue key={item.id} label={`${item.quantity} × ${item.nameSnapshot}`} value={formatMoney(item.lineTotalMinor)} />
+              <View key={item.id} style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+                <RemoteImage resizeMode="cover" style={{ borderRadius: 6, height: 40, width: 40 }} uri={item.imageUrl} />
+                <View style={{ flex: 1 }}>
+                  <KeyValue label={`${item.quantity} × ${item.nameSnapshot}`} value={formatMoney(item.lineTotalMinor)} />
+                </View>
+              </View>
             ))}
             <KeyValue label={t("orderDetail.subtotalLabel")} value={formatMoney(order.subtotalMinor)} />
             <KeyValue label={t("orderDetail.deliveryFeeLabel")} value={formatMoney(order.deliveryFeeMinor)} />

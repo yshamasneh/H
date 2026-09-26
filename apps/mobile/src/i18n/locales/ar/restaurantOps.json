@@ -216,7 +216,8 @@
       "readyAnywayTitle": "بعض المنتجات لم يتم تجهيزها",
       "readyAnywayBody": "هذه المنتجات لم يتم تأشيرها:\n{{items}}\n\nهل تريد تحديد الطلب كجاهز رغم ذلك؟",
       "readyAnywayConfirm": "تحديد كجاهز",
-      "itemLabel": "{{name}}، {{quantity}}"
+      "itemLabel": "{{name}}، {{quantity}}",
+      "plainQuantity": "{{quantity}} {{unit}}"
     }
   }
 }

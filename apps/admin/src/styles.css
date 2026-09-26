@@ -720,6 +720,11 @@ textarea.text-input { width: 100%; min-height: 80px; resize: vertical; font-fami
 .pack-row:hover:not(:disabled) { border-color: var(--border-strong); }
 .pack-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .pack-row:disabled { cursor: not-allowed; }
+/* An order that is not being packed: the same photo row, just not tickable. */
+.pack-row.is-readonly:disabled { cursor: default; }
+.order-line-thumb { flex: none; width: 40px; height: 40px; object-fit: cover; border-radius: var(--radius-sm); background: var(--neutral-subtle); margin-inline-end: var(--space-3); }
+.order-line { display: flex; align-items: center; }
+.order-line .kv-row { flex: 1; border-bottom: none; }
 .pack-row.is-picked { background: var(--success-subtle); border-color: var(--success); }
 .pack-row.is-replacement { background: var(--warning-subtle); border-color: var(--warning); }
 .pack-row.is-awaiting { background: var(--warning-subtle); border: 1px dashed var(--warning); }

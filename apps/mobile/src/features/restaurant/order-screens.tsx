@@ -291,22 +291,13 @@ export function RestaurantOrderDetailScreen(props: RestaurantOrderDetailScreenPr
             ) : null}
             {order.items.map((item) => (
               <View key={item.id} style={styles.orderItemBlock}>
-                {isPacking || item.fulfillmentAdjustment?.status === "PENDING" ? (
-                  <PackLineRow
-                    item={item}
-                    onToggle={() => toggleLine(item.id)}
-                    packable={isPacking}
-                    state={packLineState(asPackLine(item))}
-                  />
-                ) : (
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryRowLabel}>
-                    {t("orders.quantityUnitLine", { quantity: item.quantity, name: item.nameSnapshot, unit: item.unitLabelSnapshot })}
-                    {item.allowSubstitution ? t("orders.replacementAllowedSuffix") : ""}
-                  </Text>
-                  <Text style={styles.summaryRowValue}>{formatPrice(item.lineTotalMinor)}</Text>
-                </View>
-                )}
+                {/* Every status gets the photo row; only while packing does it carry a checkbox. */}
+                <PackLineRow
+                  item={item}
+                  onToggle={() => toggleLine(item.id)}
+                  packable={isPacking}
+                  state={packLineState(asPackLine(item))}
+                />
                 {item.fulfillmentAdjustment && !isPacking ? <FulfillmentSummary item={item} /> : null}
                 {order.status === "PLACED" && item.fulfillmentAdjustment?.status !== "APPROVED" &&
                 (item.allowSubstitution || item.isVariableWeightSnapshot) ? (
@@ -407,12 +398,16 @@ function PackLineRow(props: { item: OrderItemView; state: PackLineState; packabl
   const shownImage = replacement ? replacement.replacementImageUrl : item.imageUrl;
   const approvedQuantity = adjustment?.status === "APPROVED" ? adjustment.actualQuantityMilli / 1_000 : item.quantity;
   const shownUnit = replacement?.replacementUnitLabelSnapshot ?? item.unitLabelSnapshot;
-  const quantityText = t("orders.pack.packQuantity", { quantity: trimQuantity(approvedQuantity), unit: shownUnit });
+  // "Pack 2 items" only makes sense while packing; on a new, ready or finished order it is just the quantity.
+  const quantityText = t(props.packable ? "orders.pack.packQuantity" : "orders.pack.plainQuantity", {
+    quantity: trimQuantity(approvedQuantity),
+    unit: shownUnit
+  });
 
   return (
     <Pressable
       accessibilityLabel={t("orders.pack.itemLabel", { name: shownName, quantity: quantityText })}
-      accessibilityRole="checkbox"
+      accessibilityRole={props.packable ? "checkbox" : "text"}
       accessibilityState={{ checked: packed, disabled: awaiting || !props.packable }}
       disabled={awaiting || !props.packable}
       onPress={props.onToggle}

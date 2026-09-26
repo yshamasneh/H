@@ -92,7 +92,7 @@ export type OrderDetail = {
   restaurant: { id: string; name: string };
   deliveryLabel: string;
   deliveryAddressLine: string;
-  items: { id: string; nameSnapshot: string; quantity: number; lineTotalMinor: number }[];
+  items: { id: string; nameSnapshot: string; quantity: number; lineTotalMinor: number; imageUrl?: string | null }[];
   subtotalMinor: number;
   deliveryFeeMinor: number;
   discountMinor: number;
