@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { MenuItemOwner } from "./api.business";
-import { categoryCounts, emptyFilter, filterProducts, hiddenCount, normalizeSearch, onSaleCount, paginate } from "./catalogue-view";
+import { categoryCounts, emptyFilter, filterProducts, hiddenCount, matchesSearch, normalizeSearch, onSaleCount, paginate } from "./catalogue-view";
 
 const item = (over: Partial<MenuItemOwner>): MenuItemOwner => ({
   id: over.id ?? "i",
@@ -80,4 +80,18 @@ test("the on-sale filter shows only products with a sale running, and counts the
   assert.deepEqual(ids(filterProducts(withSales, { ...emptyFilter, onSaleOnly: true })), ["5", "6"]);
   assert.deepEqual(ids(filterProducts(withSales, { ...emptyFilter, onSaleOnly: true, visibility: "VISIBLE" })), ["5"]);
   assert.equal(onSaleCount(withSales), 2);
+});
+
+test("search matches every typed word in any order, and narrows on partial words as you type", () => {
+  const milk = { name: "حليب المراعي كامل الدسم 1 لتر", sku: null, barcode: "6281007", brand: "Almarai" };
+  assert.ok(matchesSearch(milk, "حليب 1"));
+  assert.ok(matchesSearch(milk, "مراعي حليب"), "word order does not matter");
+  assert.ok(matchesSearch(milk, "حل"), "a partial word already matches");
+  assert.ok(matchesSearch(milk, "almarai 628"), "words can match different fields");
+  assert.ok(!matchesSearch(milk, "حليب لبن"), "every word has to match");
+  assert.ok(matchesSearch(milk, "   "), "blank matches everything");
+});
+
+test("search folds the wasla alef like the API's trigram normalizer does", () => {
+  assert.equal(normalizeSearch("ٱلمراعي"), normalizeSearch("المراعي"));
 });

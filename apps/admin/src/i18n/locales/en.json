@@ -101,7 +101,8 @@
     "businessSubtitle": {
       "RESTAURANT": "Restaurant operations",
       "SUPERMARKET": "Supermarket operations"
-    }
+    },
+    "navigation": "Navigation"
   },
   "login": {
     "title": "JOVO Ops",
@@ -340,14 +341,35 @@
     "elapsed": "{{minutes}} min ago",
     "awaitingCustomer": "Awaiting customer",
     "acceptedBy": "Accepted by {{name}}",
-    "enableSound": "Enable sound",
+    "enableSound": "Sound off — tap to enable",
     "soundOn": "Sound on",
     "soundOffWarning": "Sound is off — press Enable sound so new orders are audible.",
     "soundBlocked": "The browser is blocking audio. Click anywhere on the page, then enable sound again.",
     "openStore": "Open store",
     "closeStore": "Close store",
     "storeClosed": "The store is closed and is not receiving new orders.",
-    "packed": "Packed {{packed}}/{{total}}"
+    "packed": "Packed {{packed}}/{{total}}",
+    "noAccess": "You do not have access to orders.",
+    "sectionsLabel": "Order stages",
+    "section": {
+      "PLACED": "New",
+      "ACCEPTED": "Accepted",
+      "PREPARING": "Preparing",
+      "READY_FOR_PICKUP": "Ready for pickup"
+    },
+    "accept": "Accept order",
+    "startPreparing": "Start preparing",
+    "openOrder": "Open order",
+    "later": "Later",
+    "othersWaiting": "+{{count}} more new orders waiting — view board",
+    "popupTitle": "New order",
+    "acceptedToast": "Order {{ref}} accepted",
+    "alreadyHandled": "Order {{ref}} was already handled on another device",
+    "preparingToast": "Started preparing {{ref}}",
+    "soundBlockedShort": "Sound blocked — tap to enable",
+    "soundOnHint": "You will hear an alert for every new order. Tap to mute.",
+    "elapsedHours": "{{count}} h ago",
+    "elapsedDays": "{{count}} d ago"
   },
   "businessOrder": {
     "title": "Order {{reference}}",
@@ -459,7 +481,7 @@
     "errorCostPriceInvalid": "Enter a valid cost price of 0 or more, or leave it blank.",
     "deleteConfirmTitle": "Delete product",
     "deleteConfirmDescription": "Delete \"{{name}}\" permanently? This only works for products that have never been ordered - anything with order history must be marked sold out instead.",
-    "searchPlaceholder": "Search by name, SKU, barcode or brand",
+    "searchPlaceholder": "Find a product — name, barcode or brand",
     "allCategories": "All categories",
     "visibilityAll": "All products",
     "visibilityVisible": "Visible to customers",
@@ -469,8 +491,8 @@
     "noMatches": "No products match the search or filters.",
     "statusVisible": "Visible",
     "statusHidden": "Hidden",
-    "hide": "Hide product",
-    "unhide": "Unhide product",
+    "hide": "Hide",
+    "unhide": "Show",
     "hideConfirmTitle": "Hide this product?",
     "hideConfirmBody": "Customers will no longer see or order \"{{name}}\". The product and its order history stay exactly as they are, and you can unhide it any time from the Hidden list.",
     "hideNote": "Hiding is how a product is removed: it disappears for customers but stays in the database with its order history.",
@@ -501,7 +523,16 @@
     "errorSaleInvalid": "Enter a valid sale price above zero (for example 9.90), or leave it empty.",
     "errorSaleNotBelow": "The sale price must be lower than the regular price.",
     "saleBelowCost": "Warning: the sale price is below the cost price, so every sale at this price is recorded as a loss.",
-    "onSaleOnly": "On sale only ({{count}})"
+    "onSaleOnly": "On sale only ({{count}})",
+    "clearSearch": "Clear search",
+    "stockSummary": "{{visible}} visible to customers · {{hidden}} hidden",
+    "stockInline": "Stock: {{count}}",
+    "statusHiddenLong": "Hidden from customers",
+    "hideNamed": "Hide {{name}}",
+    "unhideNamed": "Show {{name}}",
+    "hiddenNamed": "\"{{name}}\" is hidden from customers",
+    "unhiddenNamed": "\"{{name}}\" is visible to customers again",
+    "undo": "Undo"
   },
   "inventory": {
     "title": "Inventory and purchasing",

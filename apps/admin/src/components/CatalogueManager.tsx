@@ -1,18 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, readApiError } from "../api";
 import { type MenuCategoryOwner, type MenuItemOwner } from "../api.business";
-import { categoryCounts, emptyFilter, filterProducts, hiddenCount, onSaleCount, paginate, type ProductFilter, type Visibility } from "../catalogue-view";
+import { categoryCounts, emptyFilter, filterProducts, hiddenCount, onSaleCount, type ProductFilter } from "../catalogue-view";
 import { parseMoneyToMinor, parseWholeNumber, toMoneyInput } from "../money";
 import { isBelowCost, parseSaleInput, salePercentOff } from "../sale";
 import { ConfirmModal } from "./ConfirmModal";
 import { FallbackImage } from "./FallbackImage";
 import { ImageUploadField } from "./ImageUploadField";
-import { Pager } from "./Pager";
 import { isSafeExternalImageUrl, saveProductWithImage } from "../image-upload";
 
 const currencyCode = "ILS";
-const productsPageSize = 40;
 
 /**
  * The set of catalogue calls this editor needs, injected so the same UI drives two shells: the
@@ -88,10 +86,15 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   const [editingId, setEditingId] = useState<string | null>(null);
   // Removing a product means hiding it. There is deliberately no delete action in this screen: the
   // API refuses to delete a product that was ever ordered (order history must stay intact), and
-  // hiding is the normal, reversible way to take something off sale.
-  const [pendingHide, setPendingHide] = useState<MenuItemOwner | null>(null);
+  // hiding is the normal, reversible way to take something off sale. Because it is reversible and
+  // done over and over while walking the shelves, it is one tap with no confirmation, and the toast
+  // that confirms it carries an Undo.
+  const [togglingIds, setTogglingIds] = useState<ReadonlySet<string>>(new Set());
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState<{ text: string; undo: MenuItemOwner | null; at: number } | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const formRef = useRef<HTMLDivElement | null>(null);
   const [filter, setFilter] = useState<ProductFilter>(emptyFilter);
-  const [page, setPage] = useState(1);
   const [notice, setNotice] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string; sortOrder: string } | null>(null);
   const [pendingCategoryDelete, setPendingCategoryDelete] = useState<MenuCategoryOwner | null>(null);
@@ -152,6 +155,12 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       isVariableWeight: item.isVariableWeight
     });
     setSelectedImage(undefined);
+    openForm();
+  }
+
+  function openForm() {
+    setFormOpen(true);
+    window.requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   function cancelEdit() {
@@ -159,6 +168,43 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
     setDraft(emptyDraft);
     setSelectedImage(undefined);
     setError(null);
+    setFormOpen(false);
+  }
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 6_000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  /**
+   * Hide or show a product in one tap. The row changes at once (optimistically) so a person walking
+   * the shelves never waits on the network; if the server refuses, the row flips back and says why.
+   */
+  async function toggleVisibility(item: MenuItemOwner, fromUndo = false) {
+    if (togglingIds.has(item.id)) return;
+    const next = !item.isAvailable;
+    setTogglingIds((current) => new Set(current).add(item.id));
+    setRowErrors(({ [item.id]: _cleared, ...rest }) => rest);
+    setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, isAvailable: next } : entry)));
+    try {
+      const updated = await api.setItemAvailability(item.id, next);
+      setItems((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+      setToast({
+        text: t(next ? "catalogue.unhiddenNamed" : "catalogue.hiddenNamed", { name: item.name }),
+        undo: fromUndo ? null : updated,
+        at: Date.now()
+      });
+    } catch (requestError) {
+      setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, isAvailable: item.isAvailable } : entry)));
+      setRowErrors((current) => ({ ...current, [item.id]: readApiError(requestError, t("common.genericActionError")) }));
+    } finally {
+      setTogglingIds((current) => {
+        const nextIds = new Set(current);
+        nextIds.delete(item.id);
+        return nextIds;
+      });
+    }
   }
 
   function validateDraft(): string | null {
@@ -250,6 +296,7 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       setDraft(emptyDraft);
       setEditingId(null);
       setSelectedImage(undefined);
+      setFormOpen(false);
       setNotice(t("catalogue.saved"));
       await load();
     } catch (requestError) {
@@ -262,7 +309,6 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
 
   const counts = categoryCounts(items);
   const filtered = filterProducts(items, filter);
-  const pageItems = paginate(filtered, page, productsPageSize);
   const hiddenTotal = hiddenCount(items);
   const saleTotal = onSaleCount(items);
   const draftSale = parseSaleInput(draft.price, draft.salePrice);
@@ -272,12 +318,6 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
 
   function changeFilter(patch: Partial<ProductFilter>) {
     setFilter((previous) => ({ ...previous, ...patch }));
-    setPage(1);
-  }
-
-  async function moveItem(item: MenuItemOwner, categoryId: string) {
-    if (categoryId === item.categoryId) return;
-    if (await run(() => api.updateItem(item.id, { categoryId }))) setNotice(t("catalogue.moved"));
   }
 
   async function saveRename() {
@@ -305,140 +345,8 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
       {error ? <div className="error-banner">{error}</div> : null}
       {notice ? <div className="notice-banner">{notice}</div> : null}
 
-      <div className="card">
-        <h2 className="card-title">{t("catalogue.categories")}</h2>
-        {canManageMenu ? (
-          <div className="filters-row">
-            <input
-              className="text-input"
-              onChange={(event) => setCategoryName(event.target.value)}
-              placeholder={t("catalogue.newCategoryPlaceholder")}
-              value={categoryName}
-            />
-            <button
-              className="btn btn-primary btn-sm"
-              disabled={!categoryName.trim()}
-              onClick={() =>
-                void run(async () => {
-                  await api.createCategory({ name: categoryName.trim() });
-                  setCategoryName("");
-                })
-              }
-              type="button"
-            >
-              {t("catalogue.addCategory")}
-            </button>
-          </div>
-        ) : null}
-        {categories.length === 0 ? (
-          <div className="empty-state">{t("catalogue.noCategories")}</div>
-        ) : (
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{t("common.name")}</th>
-                  <th>{t("catalogue.productCount")}</th>
-                  <th>{t("catalogue.sortOrder")}</th>
-                  <th>{t("common.status")}</th>
-                  {canManageMenu ? <th>{t("common.actions")}</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {categories.map((category) => {
-                  const count = counts.get(category.id) ?? { total: 0, visible: 0, hidden: 0 };
-                  const editing = renaming?.id === category.id ? renaming : null;
-                  return (
-                    <tr key={category.id}>
-                      <td>
-                        {editing ? (
-                          <input
-                            className="text-input"
-                            maxLength={80}
-                            onChange={(event) => setRenaming({ ...editing, name: event.target.value })}
-                            value={editing.name}
-                          />
-                        ) : (
-                          category.name
-                        )}
-                      </td>
-                      <td>
-                        <strong className="num">{count.total}</strong>
-                        {count.hidden > 0 ? (
-                          <>
-                            <br />
-                            <small>{t("catalogue.countDetail", { visible: count.visible, hidden: count.hidden })}</small>
-                          </>
-                        ) : null}
-                      </td>
-                      <td className="num">
-                        {editing ? (
-                          <input
-                            className="text-input"
-                            dir="ltr"
-                            inputMode="numeric"
-                            onChange={(event) => setRenaming({ ...editing, sortOrder: event.target.value })}
-                            style={{ maxWidth: 90 }}
-                            value={editing.sortOrder}
-                          />
-                        ) : (
-                          category.sortOrder
-                        )}
-                      </td>
-                      <td>{category.isActive ? t("common.active") : t("common.inactive")}</td>
-                      {canManageMenu ? (
-                        <td>
-                          <div className="row-actions">
-                            {editing ? (
-                              <>
-                                <button className="btn btn-primary btn-sm" onClick={() => void saveRename()} type="button">
-                                  {t("catalogue.renameSave")}
-                                </button>
-                                <button className="btn btn-outline btn-sm" onClick={() => setRenaming(null)} type="button">
-                                  {t("common.cancel")}
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  className="btn btn-outline btn-sm"
-                                  onClick={() =>
-                                    setRenaming({ id: category.id, name: category.name, sortOrder: String(category.sortOrder) })
-                                  }
-                                  type="button"
-                                >
-                                  {t("catalogue.rename")}
-                                </button>
-                                <button
-                                  className="btn btn-outline btn-sm"
-                                  onClick={() => void run(() => api.updateCategory(category.id, { isActive: !category.isActive }))}
-                                  type="button"
-                                >
-                                  {category.isActive ? t("catalogue.deactivate") : t("catalogue.activate")}
-                                </button>
-                                <button
-                                  className="btn btn-outline btn-sm"
-                                  onClick={() => requestCategoryDelete(category)}
-                                  type="button"
-                                >
-                                  {t("catalogue.deleteCategory")}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {canManageProducts && categories.length > 0 ? (
-        <div className="card">
+      {canManageProducts && categories.length > 0 && (formOpen || editingId) ? (
+        <div className="card catalogue-form" ref={formRef}>
           <h2 className="card-title">{editingId ? t("catalogue.editProduct") : t("catalogue.addProduct")}</h2>
           <div className="filters-row">
             <input
@@ -610,26 +518,49 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
             <button className="btn btn-primary btn-sm" disabled={savingItem} onClick={() => void submitItem()} type="button">
               {editingId ? t("common.save") : t("catalogue.addProduct")}
             </button>
-            {editingId ? (
-              <button className="btn btn-outline btn-sm" onClick={cancelEdit} type="button">
-                {t("common.cancel")}
-              </button>
-            ) : null}
+            <button className="btn btn-outline btn-sm" onClick={cancelEdit} type="button">
+              {t("common.cancel")}
+            </button>
           </div>
           {!canManagePrices ? <div className="empty-state">{t("catalogue.priceLockedHint")}</div> : null}
         </div>
       ) : null}
 
       <div className="card">
-        <h2 className="card-title">{t("catalogue.products")}</h2>
-        <div className="filters-row">
-          <input
-            className="text-input"
-            onChange={(event) => changeFilter({ search: event.target.value })}
-            placeholder={t("catalogue.searchPlaceholder")}
-            style={{ minWidth: 260 }}
-            value={filter.search}
-          />
+        <div className="stock-header">
+          <div>
+            <h2 className="card-title" style={{ margin: 0 }}>{t("catalogue.products")}</h2>
+            <p className="field-hint" style={{ margin: 0 }}>
+              {t("catalogue.stockSummary", { visible: items.length - hiddenTotal, hidden: hiddenTotal })}
+            </p>
+          </div>
+          {canManageProducts && categories.length > 0 && !formOpen && !editingId ? (
+            <button className="btn btn-primary" onClick={openForm} type="button">
+              {t("catalogue.addProduct")}
+            </button>
+          ) : null}
+        </div>
+
+        {/* The search narrows the list with every character (no button, no delay) and stays pinned
+            while scrolling, so the next product is always one word away. */}
+        <div className="stock-search">
+          <div className="stock-search-field">
+            <input
+              aria-label={t("catalogue.searchPlaceholder")}
+              autoComplete="off"
+              className="text-input stock-search-input"
+              enterKeyHint="search"
+              onChange={(event) => changeFilter({ search: event.target.value })}
+              placeholder={t("catalogue.searchPlaceholder")}
+              type="search"
+              value={filter.search}
+            />
+            {filter.search ? (
+              <button aria-label={t("catalogue.clearSearch")} className="stock-search-clear" onClick={() => changeFilter({ search: "" })} type="button">
+                ×
+              </button>
+            ) : null}
+          </div>
           <select
             aria-label={t("catalogue.category")}
             className="select"
@@ -643,145 +574,211 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
               </option>
             ))}
           </select>
-          <select
-            aria-label={t("common.status")}
-            className="select"
-            onChange={(event) => changeFilter({ visibility: event.target.value as Visibility })}
-            value={filter.visibility}
-          >
-            <option value="ALL">{t("catalogue.visibilityAll")}</option>
-            <option value="VISIBLE">{t("catalogue.visibilityVisible")}</option>
-            <option value="HIDDEN">
-              {t("catalogue.visibilityHidden")} ({hiddenTotal})
-            </option>
-          </select>
+          <label className="checkbox-row" style={{ margin: 0 }}>
+            <input
+              checked={filter.onSaleOnly}
+              onChange={(event) => changeFilter({ onSaleOnly: event.target.checked })}
+              type="checkbox"
+            />
+            {t("catalogue.onSaleOnly", { count: saleTotal })}
+          </label>
         </div>
-        <label className="checkbox-row">
-          <input
-            checked={filter.onSaleOnly}
-            onChange={(event) => changeFilter({ onSaleOnly: event.target.checked })}
-            type="checkbox"
-          />
-          {t("catalogue.onSaleOnly", { count: saleTotal })}
-        </label>
-        <p className="field-hint">
-          {t("catalogue.showing", { shown: filtered.length, total: items.length })}
-          {hiddenTotal > 0 ? ` · ${t("catalogue.hiddenSummary", { count: hiddenTotal })}` : ""}
-        </p>
+        {filter.search || filter.categoryId || filter.onSaleOnly ? (
+          <p className="field-hint">{t("catalogue.showing", { shown: filtered.length, total: items.length })}</p>
+        ) : null}
+
         {items.length === 0 ? (
           <div className="empty-state">{t("catalogue.noProducts")}</div>
         ) : filtered.length === 0 ? (
           <div className="empty-state">{t("catalogue.noMatches")}</div>
         ) : (
+          <ul className="stock-list">
+            {filtered.map((item) => {
+              const toggling = togglingIds.has(item.id);
+              const rowError = rowErrors[item.id];
+              return (
+                <li className={`stock-row ${item.isAvailable ? "is-visible" : "is-hidden"}`} key={item.id}>
+                  <FallbackImage alt="" className="stock-image" loading="lazy" src={item.imageUrl ?? undefined} />
+                  <div className="stock-body">
+                    <span className="stock-name">{item.name}</span>
+                    <span className="stock-meta">
+                      <span>{categoryNameOf(item.categoryId)}</span>
+                      <span className="money">
+                        {item.salePriceMinor !== null ? (
+                          <>
+                            <s>{formatPrice(item.priceMinor)}</s> <strong>{formatPrice(item.salePriceMinor)}</strong>
+                          </>
+                        ) : (
+                          formatPrice(item.priceMinor)
+                        )}
+                      </span>
+                      {isSupermarket && item.stockQuantity !== null ? (
+                        <span>{t("catalogue.stockInline", { count: item.stockQuantity })}</span>
+                      ) : null}
+                    </span>
+                    <span className={`stock-state ${item.isAvailable ? "is-visible" : "is-hidden"}`}>
+                      {item.isAvailable ? t("catalogue.statusVisible") : t("catalogue.statusHiddenLong")}
+                    </span>
+                    {rowError ? <span className="stock-error" role="alert">{rowError}</span> : null}
+                  </div>
+                  <div className="stock-actions">
+                    {canHide ? (
+                      <button
+                        aria-label={t(item.isAvailable ? "catalogue.hideNamed" : "catalogue.unhideNamed", { name: item.name })}
+                        className={`btn btn-lg stock-toggle ${item.isAvailable ? "btn-outline" : "btn-success"}`}
+                        disabled={toggling}
+                        onClick={() => void toggleVisibility(item)}
+                        type="button"
+                      >
+                        {item.isAvailable ? t("catalogue.hide") : t("catalogue.unhide")}
+                      </button>
+                    ) : null}
+                    {canManageProducts ? (
+                      <button className="btn btn-ghost stock-edit" onClick={() => startEdit(item)} type="button">
+                        {t("common.edit")}
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <p className="field-hint">{t("catalogue.hideNote")}</p>
+      </div>
+
+      <div className="card">
+        <h2 className="card-title">{t("catalogue.categories")}</h2>
+        {canManageMenu ? (
+          <div className="filters-row">
+            <input
+              className="text-input"
+              onChange={(event) => setCategoryName(event.target.value)}
+              placeholder={t("catalogue.newCategoryPlaceholder")}
+              value={categoryName}
+            />
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!categoryName.trim()}
+              onClick={() =>
+                void run(async () => {
+                  await api.createCategory({ name: categoryName.trim() });
+                  setCategoryName("");
+                })
+              }
+              type="button"
+            >
+              {t("catalogue.addCategory")}
+            </button>
+          </div>
+        ) : null}
+        {categories.length === 0 ? (
+          <div className="empty-state">{t("catalogue.noCategories")}</div>
+        ) : (
           <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>{t("catalogue.image")}</th>
                   <th>{t("common.name")}</th>
-                  <th>{t("catalogue.category")}</th>
-                  <th>{t("catalogue.price")}</th>
-                  <th>{t("catalogue.cost")}</th>
-                  {isSupermarket ? <th>{t("catalogue.stock")}</th> : null}
+                  <th>{t("catalogue.productCount")}</th>
+                  <th>{t("catalogue.sortOrder")}</th>
                   <th>{t("common.status")}</th>
-                  <th>{t("common.actions")}</th>
+                  {canManageMenu ? <th>{t("common.actions")}</th> : null}
                 </tr>
               </thead>
               <tbody>
-                {pageItems.map((item) => (
-                  <tr key={item.id} style={item.isAvailable ? undefined : { opacity: 0.7 }}>
-                    <td><FallbackImage alt="" className="catalogue-thumbnail" src={item.imageUrl ?? undefined} /></td>
-                    <td>{item.name}</td>
-                    <td>
-                      {canManageProducts ? (
-                        <select
-                          aria-label={t("catalogue.moveTo")}
-                          className="select"
-                          onChange={(event) => void moveItem(item, event.target.value)}
-                          value={item.categoryId}
-                        >
-                          {categories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {category.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        categoryNameOf(item.categoryId)
-                      )}
-                    </td>
-                    <td className="money">
-                      {item.salePriceMinor !== null ? (
-                        <>
-                          <s style={{ opacity: 0.6 }}>{formatPrice(item.priceMinor)}</s>{" "}
-                          <strong>{formatPrice(item.salePriceMinor)}</strong>
-                          <br />
-                          <span className="badge badge-attention">
-                            {t("catalogue.saleBadge", { percent: salePercentOff(item.priceMinor, item.salePriceMinor) })}
-                          </span>
-                        </>
-                      ) : (
-                        formatPrice(item.priceMinor)
-                      )}
-                    </td>
-                    <td className="money">{item.costPriceMinor === null ? t("common.dash") : formatPrice(item.costPriceMinor)}</td>
-                    {isSupermarket ? <td className="num">{item.stockQuantity ?? t("common.dash")}</td> : null}
-                    <td>
-                      <span className={`badge ${item.isAvailable ? "badge-good" : "badge-neutral"}`}>
-                        {item.isAvailable ? t("catalogue.statusVisible") : t("catalogue.statusHidden")}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        {canManageProducts ? (
-                          <button className="btn btn-outline btn-sm" onClick={() => startEdit(item)} type="button">
-                            {t("common.edit")}
-                          </button>
+                {categories.map((category) => {
+                  const count = counts.get(category.id) ?? { total: 0, visible: 0, hidden: 0 };
+                  const editing = renaming?.id === category.id ? renaming : null;
+                  return (
+                    <tr key={category.id}>
+                      <td>
+                        {editing ? (
+                          <input
+                            className="text-input"
+                            maxLength={80}
+                            onChange={(event) => setRenaming({ ...editing, name: event.target.value })}
+                            value={editing.name}
+                          />
+                        ) : (
+                          category.name
+                        )}
+                      </td>
+                      <td>
+                        <strong className="num">{count.total}</strong>
+                        {count.hidden > 0 ? (
+                          <>
+                            <br />
+                            <small>{t("catalogue.countDetail", { visible: count.visible, hidden: count.hidden })}</small>
+                          </>
                         ) : null}
-                        {canHide ? (
-                          item.isAvailable ? (
-                            <button className="btn btn-outline btn-sm" onClick={() => setPendingHide(item)} type="button">
-                              {t("catalogue.hide")}
-                            </button>
-                          ) : (
-                            <button
-                              className="btn btn-primary btn-sm"
-                              onClick={async () => {
-                                if (await run(() => api.setItemAvailability(item.id, true))) setNotice(t("catalogue.unhidden"));
-                              }}
-                              type="button"
-                            >
-                              {t("catalogue.unhide")}
-                            </button>
-                          )
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="num">
+                        {editing ? (
+                          <input
+                            className="text-input"
+                            dir="ltr"
+                            inputMode="numeric"
+                            onChange={(event) => setRenaming({ ...editing, sortOrder: event.target.value })}
+                            style={{ maxWidth: 90 }}
+                            value={editing.sortOrder}
+                          />
+                        ) : (
+                          category.sortOrder
+                        )}
+                      </td>
+                      <td>{category.isActive ? t("common.active") : t("common.inactive")}</td>
+                      {canManageMenu ? (
+                        <td>
+                          <div className="row-actions">
+                            {editing ? (
+                              <>
+                                <button className="btn btn-primary btn-sm" onClick={() => void saveRename()} type="button">
+                                  {t("catalogue.renameSave")}
+                                </button>
+                                <button className="btn btn-outline btn-sm" onClick={() => setRenaming(null)} type="button">
+                                  {t("common.cancel")}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() =>
+                                    setRenaming({ id: category.id, name: category.name, sortOrder: String(category.sortOrder) })
+                                  }
+                                  type="button"
+                                >
+                                  {t("catalogue.rename")}
+                                </button>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() => void run(() => api.updateCategory(category.id, { isActive: !category.isActive }))}
+                                  type="button"
+                                >
+                                  {category.isActive ? t("catalogue.deactivate") : t("catalogue.activate")}
+                                </button>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  onClick={() => requestCategoryDelete(category)}
+                                  type="button"
+                                >
+                                  {t("catalogue.deleteCategory")}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-        <Pager onPage={setPage} page={page} pageSize={productsPageSize} total={filtered.length} />
-        <p className="field-hint">{t("catalogue.hideNote")}</p>
       </div>
 
-      {pendingHide ? (
-        <ConfirmModal
-          confirmLabel={t("catalogue.hide")}
-          description={t("catalogue.hideConfirmBody", { name: pendingHide.name })}
-          onCancel={() => setPendingHide(null)}
-          onConfirm={async () => {
-            await api.setItemAvailability(pendingHide.id, false);
-            setPendingHide(null);
-            setNotice(t("catalogue.hidden"));
-            await load();
-          }}
-          title={t("catalogue.hideConfirmTitle")}
-          tone="primary"
-        />
-      ) : null}
       {pendingCategoryDelete ? (
         <ConfirmModal
           confirmLabel={t("catalogue.deleteCategory")}
@@ -794,6 +791,24 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
           }}
           title={t("catalogue.deleteCategoryTitle")}
         />
+      ) : null}
+      {toast ? (
+        <div className="feedback-toast is-success" key={toast.at} role="status">
+          <span>{toast.text}</span>
+          {toast.undo ? (
+            <button
+              className="feedback-toast-action"
+              onClick={() => {
+                const target = toast.undo!;
+                setToast(null);
+                void toggleVisibility(target, true);
+              }}
+              type="button"
+            >
+              {t("catalogue.undo")}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

@@ -101,7 +101,8 @@
     "businessSubtitle": {
       "RESTAURANT": "إدارة المطعم",
       "SUPERMARKET": "إدارة السوبرماركت"
-    }
+    },
+    "navigation": "التنقل"
   },
   "login": {
     "title": "جوفو للعمليات",
@@ -340,14 +341,35 @@
     "elapsed": "منذ {{minutes}} دقيقة",
     "awaitingCustomer": "بانتظار العميل",
     "acceptedBy": "قبِلها {{name}}",
-    "enableSound": "تشغيل التنبيه الصوتي",
+    "enableSound": "الصوت متوقف — اضغط للتفعيل",
     "soundOn": "التنبيه الصوتي مُشغَّل",
     "soundOffWarning": "التنبيه الصوتي متوقف — اضغط «تشغيل التنبيه الصوتي» حتى تسمع الطلبات الجديدة.",
     "soundBlocked": "المتصفح يمنع تشغيل الصوت. اضغط على الصفحة ثم فعّل التنبيه من جديد.",
     "openStore": "فتح المتجر",
     "closeStore": "إغلاق المتجر",
     "storeClosed": "المتجر مغلق ولا يستقبل طلبات جديدة.",
-    "packed": "تم تجهيز {{packed}}/{{total}}"
+    "packed": "تم تجهيز {{packed}}/{{total}}",
+    "noAccess": "لا تملك صلاحية عرض الطلبات.",
+    "sectionsLabel": "مراحل الطلبات",
+    "section": {
+      "PLACED": "جديدة",
+      "ACCEPTED": "مقبولة",
+      "PREPARING": "قيد التجهيز",
+      "READY_FOR_PICKUP": "جاهزة للاستلام"
+    },
+    "accept": "قبول الطلب",
+    "startPreparing": "بدء التجهيز",
+    "openOrder": "فتح الطلب",
+    "later": "لاحقاً",
+    "othersWaiting": "+{{count}} طلبات جديدة أخرى بالانتظار — عرض اللوحة",
+    "popupTitle": "طلب جديد",
+    "acceptedToast": "تم قبول الطلب {{ref}}",
+    "alreadyHandled": "الطلب {{ref}} تمّت معالجته من جهاز آخر",
+    "preparingToast": "بدأ تجهيز الطلب {{ref}}",
+    "soundBlockedShort": "الصوت محجوب — اضغط للتفعيل",
+    "soundOnHint": "ستسمع تنبيهاً عند وصول أي طلب جديد. اضغط لإيقاف الصوت.",
+    "elapsedHours": "منذ {{count}} ساعة",
+    "elapsedDays": "منذ {{count}} يوم"
   },
   "businessOrder": {
     "title": "طلب {{reference}}",
@@ -459,7 +481,7 @@
     "errorCostPriceInvalid": "أدخل سعر تكلفة صحيحًا لا يقل عن 0، أو اتركه فارغًا.",
     "deleteConfirmTitle": "حذف المنتج",
     "deleteConfirmDescription": "هل تريد حذف \"{{name}}\" نهائيًا؟ يعمل هذا فقط للمنتجات التي لم تُطلب من قبل — أي منتج له سجل طلبات يجب تعليمه كغير متوفر بدلاً من ذلك.",
-    "searchPlaceholder": "ابحث بالاسم أو الرمز أو الباركود أو العلامة",
+    "searchPlaceholder": "ابحث عن منتج — الاسم أو الباركود أو العلامة",
     "allCategories": "كل الفئات",
     "visibilityAll": "الكل",
     "visibilityVisible": "الظاهرة للزبائن",
@@ -469,8 +491,8 @@
     "noMatches": "لا توجد منتجات مطابقة للبحث أو التصفية.",
     "statusVisible": "ظاهر",
     "statusHidden": "مخفي",
-    "hide": "إخفاء المنتج",
-    "unhide": "إظهار المنتج",
+    "hide": "إخفاء",
+    "unhide": "إظهار",
     "hideConfirmTitle": "إخفاء المنتج؟",
     "hideConfirmBody": "لن يرى الزبائن «{{name}}» ولن يستطيعوا طلبه. يبقى المنتج وسجل طلباته كما هما، ويمكنك إظهاره في أي وقت من قائمة «المخفية».",
     "hideNote": "الإخفاء هو طريقة إزالة المنتج: يختفي عن الزبائن ويبقى في قاعدة البيانات مع سجل طلباته.",
@@ -501,7 +523,16 @@
     "errorSaleInvalid": "أدخل سعر تخفيض صحيحاً أكبر من صفر (مثال: 9.90) أو اتركه فارغاً.",
     "errorSaleNotBelow": "سعر التخفيض يجب أن يكون أقل من السعر العادي.",
     "saleBelowCost": "تنبيه: سعر التخفيض أقل من سعر التكلفة، أي أن كل عملية بيع بهذا السعر ستُسجَّل بخسارة.",
-    "onSaleOnly": "التخفيضات فقط ({{count}})"
+    "onSaleOnly": "التخفيضات فقط ({{count}})",
+    "clearSearch": "مسح البحث",
+    "stockSummary": "{{visible}} ظاهر للزبائن · {{hidden}} مخفي",
+    "stockInline": "المخزون: {{count}}",
+    "statusHiddenLong": "مخفي عن الزبائن",
+    "hideNamed": "إخفاء {{name}}",
+    "unhideNamed": "إظهار {{name}}",
+    "hiddenNamed": "أُخفي «{{name}}» عن الزبائن",
+    "unhiddenNamed": "«{{name}}» ظاهر للزبائن من جديد",
+    "undo": "تراجع"
   },
   "inventory": {
     "title": "المخزون والتوريد",

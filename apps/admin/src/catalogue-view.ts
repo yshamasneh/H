@@ -26,31 +26,44 @@ const arabicDiacritics = /[ً-ٰٟـ]/g;
 /**
  * Lower-case, trim, and fold the Arabic variations a person will not type consistently: diacritics
  * and tatweel are dropped, and the alef forms, alef maqsura and ta marbuta are collapsed, so a
- * search for "ماء" finds "ماء" however the catalogue happened to spell it.
+ * search for "ماء" finds "ماء" however the catalogue happened to spell it. The folds are a superset
+ * of the API's trigram normalizer (apps/api/src/common/arabic-normalize.ts), so a product the
+ * customer app finds by a spelling is also found here by it.
  */
 export function normalizeSearch(value: string): string {
   return value
     .normalize("NFKC")
     .replace(arabicDiacritics, "")
-    .replace(/[آأإ]/g, "ا")
+    .replace(/[آأإٱ]/g, "ا")
     .replace(/ى/g, "ي")
     .replace(/ة/g, "ه")
     .toLocaleLowerCase()
     .trim();
 }
 
-function matchesSearch(item: MenuItemOwner, needle: string): boolean {
-  if (!needle) return true;
-  return [item.name, item.sku, item.barcode, item.brand]
+/**
+ * Every typed word has to appear somewhere in the product's name, SKU, barcode or brand, in any
+ * order and as any part of a word. So "حليب 1" finds "حليب المراعي 1 لتر", "مراعي حليب" finds it
+ * too, and the list narrows with each character typed — nobody has to finish a word.
+ */
+export function matchesSearch(item: Pick<MenuItemOwner, "name" | "sku" | "barcode" | "brand">, search: string): boolean {
+  const words = searchWords(search);
+  if (words.length === 0) return true;
+  const haystack = [item.name, item.sku, item.barcode, item.brand]
     .filter((field): field is string => Boolean(field))
-    .some((field) => normalizeSearch(field).includes(needle));
+    .map(normalizeSearch)
+    .join(" ");
+  return words.every((word) => haystack.includes(word));
+}
+
+function searchWords(search: string): string[] {
+  return normalizeSearch(search).split(/\s+/).filter(Boolean);
 }
 
 export function filterProducts(items: MenuItemOwner[], filter: ProductFilter): MenuItemOwner[] {
-  const needle = normalizeSearch(filter.search);
   return items.filter(
     (item) =>
-      matchesSearch(item, needle) &&
+      matchesSearch(item, filter.search) &&
       (!filter.categoryId || item.categoryId === filter.categoryId) &&
       (filter.visibility === "ALL" || (filter.visibility === "VISIBLE") === item.isAvailable) &&
       (!filter.onSaleOnly || item.salePriceMinor !== null)
