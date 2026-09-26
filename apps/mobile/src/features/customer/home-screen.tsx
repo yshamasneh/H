@@ -131,9 +131,7 @@ export function CustomerHomeScreen(props: {
   // A restaurant-scoped offer would send the customer into a vertical that is
   // not open yet, so only supermarket-scoped and platform-wide offers are
   // shown. Platform-wide offers apply to the market order anyway.
-  const visibleOffers = offers?.filter(
-    (offer) => !offer.restaurantId || offer.restaurantBusinessType === "SUPERMARKET"
-  );
+  const visibleOffers = offers?.filter(isOfferVisibleToCustomer);
   // The admin picks at most one offer to feature (see OffersService); nothing renders below when
   // none is active or visible, so the screen just keeps its normal appearance.
   const featuredOffer = visibleOffers?.find((offer) => offer.isFeatured);
@@ -412,6 +410,18 @@ function StorefrontProductCard(props: {
 
 function formatPrice(priceMinor: number): string {
   return `${(priceMinor / 100).toFixed(2)} ILS`;
+}
+
+// A restaurant-scoped offer would send the customer into a vertical that is not open yet, so only
+// supermarket-scoped and platform-wide offers are ever shown to a customer — shared with the
+// launch promo overlay so it picks the exact same offer the home screen would have shown.
+export function isOfferVisibleToCustomer(offer: RestaurantOffer): boolean {
+  return !offer.restaurantId || offer.restaurantBusinessType === "SUPERMARKET";
+}
+
+/** The one offer (if any) the admin has featured, filtered to what a customer may actually see. */
+export function selectFeaturedOffer(offers: RestaurantOffer[]): RestaurantOffer | null {
+  return offers.filter(isOfferVisibleToCustomer).find((offer) => offer.isFeatured) ?? null;
 }
 
 export function offerLabel(offer: RestaurantOffer, t: (key: string, options?: Record<string, unknown>) => string): string {

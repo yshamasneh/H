@@ -24,11 +24,13 @@ import {
   getMyOrder,
   getPlatformSettings,
   getRestaurantOrder,
+  listActiveRestaurantOffers,
   logout,
   registerMyPushToken,
   unregisterMyPushToken,
   type AuthResult,
   type MenuItemSummary,
+  type RestaurantOffer,
   type RestaurantSummary
 } from "./src/core/api";
 import { restoreSession } from "./src/core/session-restore";
@@ -134,7 +136,8 @@ import { AdminOrderDetailScreen, AdminOrdersScreen } from "./src/features/admin/
 import { AdminUsersScreen } from "./src/features/admin/users-screen";
 import { AdminAuditLogScreen } from "./src/features/admin/audit-log-screen";
 import { AdminOffersScreen } from "./src/features/admin/offers-screen";
-import { CustomerHomeScreen } from "./src/features/customer/home-screen";
+import { CustomerHomeScreen, selectFeaturedOffer } from "./src/features/customer/home-screen";
+import { LaunchPromoOverlay } from "./src/features/customer/launch-promo-overlay";
 import { AccountScreen } from "./src/features/customer/account-screen";
 import { SettingsScreen } from "./src/features/shared/settings-screen";
 import { RestaurantManagementScreen } from "./src/features/restaurant/management-screen";
@@ -203,6 +206,10 @@ function TasawaQApp() {
   const [screen, setScreen] = useState<AppScreen>(initialScreen);
   const [isBooting, setIsBooting] = useState(true);
   const [minSplashElapsed, setMinSplashElapsed] = useState(false);
+  // The one admin-featured offer, fetched once at boot for the launch promo overlay below —
+  // null both while unresolved and when there genuinely is none, so the overlay is simply never
+  // rendered rather than needing its own empty state.
+  const [launchPromoOffer, setLaunchPromoOffer] = useState<RestaurantOffer | null>(null);
   const [cart, setCart] = useState<Cart | null>(null);
   // Gate cart persistence until the stored cart has been read, so the first render's
   // empty state can't overwrite a saved cart before we've loaded it (M-3).
@@ -234,6 +241,21 @@ function TasawaQApp() {
   // the loading screen or first screen would flash in the system font.
   // fontError still releases the gate rather than hanging forever.
   const isSplashVisible = !minSplashElapsed || (!fontsReady && !fontError);
+
+  // Resolved once at boot, in parallel with the rest of session restore, so by the time the
+  // splash/loading gate lifts the answer ("show the overlay" or "skip straight to home") is
+  // already known — no extra loading flicker just for this. A non-customer role or a failed/
+  // empty fetch (e.g. the "offline" outcome below, where the server is unreachable by definition)
+  // both resolve to null, which simply never renders the overlay.
+  async function loadLaunchPromoOffer(user: AuthResult["user"]): Promise<void> {
+    if (user.role !== "CUSTOMER") return;
+    try {
+      const offers = await listActiveRestaurantOffers();
+      setLaunchPromoOffer(selectFeaturedOffer(offers));
+    } catch {
+      setLaunchPromoOffer(null);
+    }
+  }
 
   async function reconcilePushForAuthenticatedUser(user: AuthResult["user"]): Promise<void> {
     const accessToken = await getAccessToken();
@@ -295,6 +317,7 @@ function TasawaQApp() {
         if (!isMounted) return;
         if (outcome.status === "authenticated") {
           await reconcilePushForAuthenticatedUser(outcome.user).catch(() => undefined);
+          await loadLaunchPromoOffer(outcome.user);
           if (!isMounted) return;
           setScreen(homeForUser(outcome.user));
           const activeAccessToken = await getAccessToken();
@@ -305,6 +328,7 @@ function TasawaQApp() {
           // Couldn't reach the server, but the stored tokens are intact and we have a
           // cached identity: keep the user in their app. Each screen surfaces its own
           // "couldn't load — pull to refresh" state instead of a forced logout.
+          await loadLaunchPromoOffer(outcome.user);
           setScreen(homeForUser(outcome.user));
           const activeAccessToken = await getAccessToken();
           await notificationNavigator.setSession(
@@ -509,6 +533,13 @@ function TasawaQApp() {
         </View>
       </SafeAreaView>
     );
+  }
+
+  // The gap between the splash above and the customer home screen mounting below: a brief,
+  // full-screen call-out for the one offer the admin has featured, if any. Skipped entirely
+  // (straight to home) when there is none — see loadLaunchPromoOffer.
+  if (screen.name === "home" && screen.user.role === "CUSTOMER" && launchPromoOffer) {
+    return <LaunchPromoOverlay offer={launchPromoOffer} onDone={() => setLaunchPromoOffer(null)} />;
   }
 
   switch (screen.name) {
