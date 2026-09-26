@@ -1,0 +1,81 @@
+name: Update Trial CORS origins (one-off)
+
+on:
+  workflow_dispatch:
+    inputs:
+      add_origins:
+        description: "Comma-separated HTTPS origins to add to CORS_ORIGIN (existing origins are preserved, duplicates skipped)"
+        required: true
+        default: "https://jovo-admin.vercel.app,https://h-admin-gray.vercel.app"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  update-cors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AZURE_SUBSCRIPTION_ID: e3e66992-6146-4a39-a173-9a916c66bdcd
+      AZURE_TENANT_ID: bb4fc368-77bb-45aa-80a3-9a53558d8552
+      AZURE_CLIENT_ID: bc6ffa2a-6b3d-4e37-a47e-967e9317757c
+      RESOURCE_GROUP: jovo-trial
+      WEBAPP: jovo-market-api
+    steps:
+      - name: Sign in to Trial Azure subscription
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Add origins to CORS_ORIGIN (additive, deduped)
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(az webapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query "[?name=='CORS_ORIGIN'].value | [0]" --output tsv)
+          if [[ -z "$current" || "$current" == "None" ]]; then
+            echo "::error::CORS_ORIGIN is missing or empty on the Trial App Service; refusing to guess a base value."
+            exit 1
+          fi
+          echo "Current CORS_ORIGIN: $current"
+
+          declare -A seen
+          result=()
+          IFS=',' read -ra existing <<< "$current"
+          for o in "${existing[@]}"; do
+            o="$(echo "$o" | xargs)"
+            [[ -z "$o" ]] && continue
+            if [[ -z "${seen[$o]:-}" ]]; then
+              seen[$o]=1
+              result+=("$o")
+            fi
+          done
+          IFS=',' read -ra toadd <<< "${{ inputs.add_origins }}"
+          for o in "${toadd[@]}"; do
+            o="$(echo "$o" | xargs)"
+            [[ -z "$o" ]] && continue
+            if [[ -z "${seen[$o]:-}" ]]; then
+              seen[$o]=1
+              result+=("$o")
+            fi
+          done
+
+          new_value=$(IFS=','; echo "${result[*]}")
+          echo "New CORS_ORIGIN: $new_value"
+
+          if [[ "$new_value" == "$current" ]]; then
+            echo "No change needed; all requested origins are already present."
+            exit 0
+          fi
+
+          az webapp config appsettings set --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --settings CORS_ORIGIN="$new_value" --output none
+          echo "Applied. App Service restarts automatically on app-setting changes."
+
+      - name: Verify the setting was applied
+        shell: bash
+        run: |
+          set -euo pipefail
+          updated=$(az webapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query "[?name=='CORS_ORIGIN'].value | [0]" --output tsv)
+          echo "CORS_ORIGIN is now: $updated"
