@@ -7,6 +7,13 @@ on:
         description: "Comma-separated HTTPS origins to add to CORS_ORIGIN (existing origins are preserved, duplicates skipped)"
         required: true
         default: "https://jovo-admin.vercel.app,https://h-admin-gray.vercel.app"
+  # Temporary: workflow_dispatch only fires for workflows registered on the
+  # default branch, which this repo's is not. This push trigger targets a
+  # throwaway branch so the one-off run can fire without touching the
+  # default branch; remove this block once run.
+  push:
+    branches:
+      - ops/update-trial-cors
 
 permissions:
   contents: read
@@ -52,7 +59,7 @@ jobs:
               result+=("$o")
             fi
           done
-          IFS=',' read -ra toadd <<< "${{ inputs.add_origins }}"
+          IFS=',' read -ra toadd <<< "${{ inputs.add_origins || 'https://jovo-admin.vercel.app,https://h-admin-gray.vercel.app' }}"
           for o in "${toadd[@]}"; do
             o="$(echo "$o" | xargs)"
             [[ -z "$o" ]] && continue
