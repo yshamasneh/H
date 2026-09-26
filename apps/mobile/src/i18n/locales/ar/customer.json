@@ -1,5 +1,10 @@
 {
+  "seasonal": {
+    "ramadan": "رمضان كريم",
+    "newYear": "عام جديد سعيد"
+  },
   "home": {
+    "welcome": "أهلاً وسهلاً",
     "localRestaurants": "مطاعم محلية",
     "greeting": "أهلاً {{name}} 👋",
     "greetingSubtitle": "ما الذي تشتهيه اليوم؟",

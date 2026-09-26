@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JOVO customer theme previews</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px; background: #f4f1ed; color: #242424; font: 15px/1.6 system-ui, sans-serif; }
+  h1 { margin: 0; font-size: 28px; }
+  p { max-width: 850px; }
+  nav { display: flex; gap: 20px; flex-wrap: wrap; margin: 24px 0; }
+  label { display: grid; gap: 4px; font-weight: 600; }
+  select { padding: 10px; border: 1px solid #a79e96; border-radius: 8px; background: white; font: inherit; }
+  main { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: 24px; max-width: 1350px; }
+  article { min-width: 0; }
+  h2 { font-size: 20px; margin: 0 0 10px; }
+  figure { margin: 0 0 20px; padding: 12px; border: 1px solid #d4cdc5; border-radius: 12px; background: white; }
+  figcaption { margin-bottom: 8px; font-weight: 600; }
+  img { width: 100%; height: auto; display: block; border-radius: 8px; }
+  a { color: #7b3700; }
+  @media(max-width:850px) { main { grid-template-columns: 1fr; } }
+</style>
+<h1>JOVO customer themes</h1>
+<p>Actual app screenshots with fixed local test fixtures. The 320 px previews use long first names. All presets keep the same products, prices, and offers. Click a screenshot to open its original size.</p>
+<p><a href="../customer-seasonal-themes.md">Activation configuration and verification notes</a></p>
+<nav aria-label="Preview options">
+  <label>Language <select id="language"><option value="ar">Arabic · RTL</option><option value="en">English · LTR</option></select></label>
+  <label>Phone width <select id="width"><option value="390">390 px · standard</option><option value="320">320 px · narrow / long names</option></select></label>
+  <label>Screen <select id="screen">
+    <option value="home">Home</option><option value="header">Header</option><option value="home-scrolled">Home · scrolled</option>
+    <option value="catalog">Catalog</option><option value="product">Product</option><option value="cart">Cart</option>
+    <option value="checkout">Checkout · top</option><option value="checkout-bottom">Checkout · payment</option>
+    <option value="orders">Orders</option><option value="account">Account</option>
+  </select></label>
+</nav>
+<main id="previews"></main>
+<script>
+  const language = document.querySelector('#language');
+  const width = document.querySelector('#width');
+  const screen = document.querySelector('#screen');
+  function render() {
+    const root = document.querySelector('#previews');
+    root.replaceChildren();
+    for (const [preset, title] of [['normal', 'Normal'], ['ramadan', 'Ramadan'], ['newYear', 'New Year']]) {
+      const article = document.createElement('article');
+      const heading = document.createElement('h2');
+      heading.textContent = title;
+      article.append(heading);
+      for (const mode of ['light', 'dark']) {
+        const figure = document.createElement('figure');
+        const caption = document.createElement('figcaption');
+        caption.textContent = mode === 'light' ? 'Light' : 'Dark';
+        const link = document.createElement('a');
+        link.href = `${preset}-${mode}-${language.value}-${width.value}-${screen.value}.png`;
+        const image = document.createElement('img');
+        image.src = link.href;
+        image.alt = `${title}, ${mode}, ${language.value}, ${width.value} px, ${screen.value}`;
+        link.append(image);
+        figure.append(caption, link);
+        article.append(figure);
+      }
+      root.append(article);
+    }
+  }
+  for (const input of [language, width, screen]) input.addEventListener('change', render);
+  render();
+</script>
+</html>

@@ -1,0 +1,131 @@
+﻿sku,image_path,product_name,category
+JOVO-0001,product_images/product-0001.webp,البينار جبنة مغلية الربيع فاكيوم 500 غم,ألبان وأجبان
+JOVO-1835,product_images/product-1835.webp,البينار برو فيت مشروب لبن عالي البروتين بطعم البسفلورا,ألبان وأجبان
+JOVO-0203,product_images/product-0203.webp,بينار فرش اب 2 لتر,ألبان وأجبان
+JOVO-1549,product_images/product-1549.webp,حليب طازج · 2/عبوة,ألبان وأجبان
+JOVO-1563,product_images/product-1563.webp,الجبريني حليب طازج1ل,ألبان وأجبان
+JOVO-0793,product_images/product-0793.webp,ارويد حليب جوزهند 1ل,ألبان وأجبان
+JOVO-1260,product_images/product-1260.webp,كانديا جبنة مغلية 200غ,ألبان وأجبان
+JOVO-1262,product_images/product-1262.webp,بوك جبنة كريمة قابلة للدهن 500غم,ألبان وأجبان
+JOVO-3073,product_images/product-3073.webp,بوك قشطة 160غم,ألبان وأجبان
+JOVO-1926,product_images/product-1926.webp,امبورج زبدة غير مملحة 100غم,ألبان وأجبان
+JOVO-1686,product_images/product-1686.webp,افوكادو اسود مبكت 1كغم,خضار وفواكه طازجة
+JOVO-3025,product_images/product-3025.webp,اجاص مستورد مبكت 1كغم,خضار وفواكه طازجة
+JOVO-0115,product_images/product-0115.webp,بقدونس مبكت 1حبة,خضار وفواكه طازجة
+JOVO-1687,product_images/product-1687.webp,باذنجان رفيع محفور 500غم,خضار وفواكه طازجة
+JOVO-3026,product_images/product-3026.webp,برقوق احمر 500غم,خضار وفواكه طازجة
+JOVO-0116,product_images/product-0116.webp,جرجير مبكت 1حبة,خضار وفواكه طازجة
+JOVO-1688,product_images/product-1688.webp,باذنجان محاشي مبكت 1كغم,خضار وفواكه طازجة
+JOVO-3027,product_images/product-3027.webp,برقوق اسود مبكت 500غم,خضار وفواكه طازجة
+JOVO-0117,product_images/product-0117.webp,روزماري مبكت 1 حبة,خضار وفواكه طازجة
+JOVO-1689,product_images/product-1689.webp,بروكلي مبكت 1حبة,خضار وفواكه طازجة
+JOVO-1825,product_images/product-1825.webp,ريش خاروف 500غم,لحوم ودواجن وأسماك
+JOVO-1817,product_images/product-1817.webp,اجنحة دجاج 500غم,لحوم ودواجن وأسماك
+JOVO-0196,product_images/product-0196.webp,اسماك البايض فيليه باسا مجمد 1ك,لحوم ودواجن وأسماك
+JOVO-2184,product_images/product-2184.webp,تنوفا سنيتشل اصابع سمسم 700غ,لحوم ودواجن وأسماك
+JOVO-3311,product_images/product-3311.webp,الاسلامية بسطرما حبش مدخن 800غم,لحوم ودواجن وأسماك
+JOVO-3328,product_images/product-3328.webp,الاسلامية بسطرما 200غم,لحوم ودواجن وأسماك
+JOVO-0870,product_images/product-0870.webp,الاسلامية برجر دجاج 420غم,لحوم ودواجن وأسماك
+JOVO-4189,product_images/product-4189.webp,الاسلامية كبانوس 250 غم,لحوم ودواجن وأسماك
+JOVO-3243,product_images/product-3243.webp,بوندي شيف تونة حار140غم,لحوم ودواجن وأسماك
+JOVO-3236,product_images/product-3236.webp,سنيورة لانشون بقري 225غم,لحوم ودواجن وأسماك
+JOVO-1603,product_images/product-1603.webp,الاسلامية بازيلاء مع جزر 500 غم,المجمدات
+JOVO-1036,product_images/product-1036.webp,بليسيما بيتزا مفرزة مرغريتا مع زيتون 370غم,المجمدات
+JOVO-3828,product_images/product-3828.webp,سمرا اصابع موتزريلا ايطالية 600غم,المجمدات
+JOVO-1604,product_images/product-1604.webp,الاسلامية جزر 500 غم,المجمدات
+JOVO-1037,product_images/product-1037.webp,جولدن بطاطا زكزاك 1.5كغم,المجمدات
+JOVO-3829,product_images/product-3829.webp,سمرا كبة لحم بالجوز 600غ,المجمدات
+JOVO-1605,product_images/product-1605.webp,الاسلامية خضار مشكلة 500 غم,المجمدات
+JOVO-1038,product_images/product-1038.webp,جولدن بطاطا ستيك1.5كغم,المجمدات
+JOVO-3832,product_images/product-3832.webp,سنيورة سلامي بيتزا 300غم,المجمدات
+JOVO-1606,product_images/product-1606.webp,الاسلامية ذرة 500 غم,المجمدات
+JOVO-1583,product_images/product-1583.webp,الخضري خبز شعير 4 قطع,المخبوزات
+JOVO-1594,product_images/product-1594.webp,النور خبز مشرح أبيض 600 غم,المخبوزات
+JOVO-1587,product_images/product-1587.webp,تنور عادل خبز حمام 5ق,المخبوزات
+JOVO-1598,product_images/product-1598.webp,دولسيسول توست ابيض 820غم,المخبوزات
+JOVO-3289,product_images/product-3289.webp,الخضري قرشلة بالسمسم 850غم,المخبوزات
+JOVO-1584,product_images/product-1584.webp,جبل خبز طابون بدون سكر,المخبوزات
+JOVO-1596,product_images/product-1596.webp,تنور عادل خبز اسود,المخبوزات
+JOVO-1590,product_images/product-1590.webp,دولسيسول خبز بطاطا برجر340غم,المخبوزات
+JOVO-1599,product_images/product-1599.webp,دولسيسول توست اسود 820غم,المخبوزات
+JOVO-1585,product_images/product-1585.webp,جبل خبز كماج اسود بدون سكر 1 ربطة,المخبوزات
+JOVO-0097,product_images/product-0097.webp,الوليمة ارز بسمتي 1كغم,المواد التموينية
+JOVO-3857,product_images/product-3857.webp,ابو عيطة رقم 2 350غم,المواد التموينية
+JOVO-1057,product_images/product-1057.webp,سكر فضي 100 غم,المواد التموينية
+JOVO-1092,product_images/product-1092.webp,الارض دقة 350غم,المواد التموينية
+JOVO-2054,product_images/product-2054.webp,الزهراء باكنج باودر 5باكيت 10غم,المواد التموينية
+JOVO-3995,product_images/product-3995.webp,80اوسم فرنش فانيلا بودينغ,المواد التموينية
+JOVO-2105,product_images/product-2105.webp,البقره الحلوب سمنة 400غم,المواد التموينية
+JOVO-1952,product_images/product-1952.webp,صالح خلف زيت جوز الهند 350مل,المواد التموينية
+JOVO-1947,product_images/product-1947.webp,صالح خلف زيت زيتون 350مل,المواد التموينية
+JOVO-1723,product_images/product-1723.webp,ابراهيم صلصة بندورة580غم,المواد التموينية
+JOVO-3680,product_images/product-3680.webp,بفاريا برتقال علب 150مل,المشروبات
+JOVO-2668,product_images/product-2668.webp,الجنيدي عصير تفاح 200مل,المشروبات
+JOVO-3664,product_images/product-3664.webp,اكس ال 150مل,المشروبات
+JOVO-1568,product_images/product-1568.webp,الجبريني حليب بالشوكلاتة 1لتر,المشروبات
+JOVO-4136,product_images/product-4136.webp,اكوافينا مياه 1.5لتر,المشروبات
+JOVO-4133,product_images/product-4133.webp,جريكو مياه 200مل,المشروبات
+JOVO-3681,product_images/product-3681.webp,بفاريا تفاح 330مل,المشروبات
+JOVO-2669,product_images/product-2669.webp,الجنيدي عصير عنب 150مل,المشروبات
+JOVO-3665,product_images/product-3665.webp,اكس ال ريد كينج250مل,المشروبات
+JOVO-1569,product_images/product-1569.webp,الجبريني حليب بالشوكولاته 250غم,المشروبات
+JOVO-3082,product_images/product-3082.webp,ازحيمان قهوة 2/3 محروقة 250غم,القهوة والشاي
+JOVO-3143,product_images/product-3143.webp,تاسكو ايس كافيه180مل,القهوة والشاي
+JOVO-2121,product_images/product-2121.webp,Gاحمد شاي اخضر 100ق,القهوة والشاي
+JOVO-3287,product_images/product-3287.webp,كافيه ميت مبيض 400غم,القهوة والشاي
+JOVO-3083,product_images/product-3083.webp,ازحيمان قهوة 2/3شقرة 250غم,القهوة والشاي
+JOVO-3144,product_images/product-3144.webp,ريو قهوة مثلجه 180مل,القهوة والشاي
+JOVO-2124,product_images/product-2124.webp,احمد شاي اخضر حلل250غم,القهوة والشاي
+JOVO-3288,product_images/product-3288.webp,مييت كريمة قهوة لايت 450غم,القهوة والشاي
+JOVO-3085,product_images/product-3085.webp,ازحيمان قهوة سادة 250غم,القهوة والشاي
+JOVO-2125,product_images/product-2125.webp,احمد شاي اخضرتشكيلة 120غم,القهوة والشاي
+JOVO-2358,product_images/product-2358.webp,ازكا بمبا 20غم,السناكات والحلويات
+JOVO-2225,product_images/product-2225.webp,البقرة شوكولاتة,السناكات والحلويات
+JOVO-0902,product_images/product-0902.webp,إليت بفلا شوكولاتة 500غم,السناكات والحلويات
+JOVO-1452,product_images/product-1452.webp,اركو مارشميلو 4 الوان 100غم,السناكات والحلويات
+JOVO-4212,product_images/product-4212.webp,أوسم كوكيز شوكولاتة 220غم,السناكات والحلويات
+JOVO-3215,product_images/product-3215.webp,اوسم بريخونيم 140غم,السناكات والحلويات
+JOVO-1446,product_images/product-1446.webp,الجبريني بودينغ فانيلا 110غم,السناكات والحلويات
+JOVO-3021,product_images/product-3021.webp,بوبفلي ميكرويف فشار زبدة 240غم,السناكات والحلويات
+JOVO-1081,product_images/product-1081.webp,صالح خلف تمر 1كغم,السناكات والحلويات
+JOVO-1433,product_images/product-1433.webp,الهلال حلاوة بالفانيلا 700غم,السناكات والحلويات
+JOVO-2870,product_images/product-2870.webp,اريال غسيل ابيض 7 كيلو,تنظيف المنزل
+JOVO-3423,product_images/product-3423.webp,اجاكس ملمع زجاج 750مل,تنظيف المنزل
+JOVO-2767,product_images/product-2767.webp,اريكس سلكة 3*24 قطعة,تنظيف المنزل
+JOVO-3841,product_images/product-3841.webp,ايرويك تعبئة ليالي صيفية 250مل,تنظيف المنزل
+JOVO-4089,product_images/product-4089.webp,سيلباك ورق تواليت 32رول,تنظيف المنزل
+JOVO-2871,product_images/product-2871.webp,أريكس تونكيتا ملاقط 2 قطعة,تنظيف المنزل
+JOVO-3424,product_images/product-3424.webp,اجاكس منظف أرضيات أخضر 1.5 لتر,تنظيف المنزل
+JOVO-2768,product_images/product-2768.webp,اريكس سلكة جلي 1 قطعة,تنظيف المنزل
+JOVO-3842,product_images/product-3842.webp,إيرويك جهاز معطر رائحة القطن 288مل,تنظيف المنزل
+JOVO-2872,product_images/product-2872.webp,أريكس تونكيتا ملاقط خشبية 24 قطعة,تنظيف المنزل
+JOVO-0420,product_images/product-0420.webp,الترا بيوتي فرشاة شعر 1ق,العناية الشخصية
+JOVO-0301,product_images/product-0301.webp,اكوا فرشاة مساج للظهر 1ق,العناية الشخصية
+JOVO-0576,product_images/product-0576.webp,اورال بي 3 فرشاة اسنان انتعاش طبيعي 2ق,العناية الشخصية
+JOVO-0650,product_images/product-0650.webp,اريكس قطن ماكياج 2ق,العناية الشخصية
+JOVO-0256,product_images/product-0256.webp,الويز فوط نسائية عادي حماية ليلية فائقة 24ق,العناية الشخصية
+JOVO-3350,product_images/product-3350.webp,ادم مزيل عرق الاساسي للرجال 200مل,العناية الشخصية
+JOVO-0211,product_images/product-0211.webp,جيليت 2 شفرات 5ق,العناية الشخصية
+JOVO-0245,product_images/product-0245.webp,دوف سائل استحمام الجسم الخيار و الشاي 500مل,العناية الشخصية
+JOVO-0421,product_images/product-0421.webp,الفيف بلسم الارجنين المقاوم 550مل,العناية الشخصية
+JOVO-0302,product_images/product-0302.webp,اكوا مساج ليفة 1ق,العناية الشخصية
+JOVO-1361,product_images/product-1361.webp,بامبرز بيبي دراي دبل رقم 6 24ق,الأطفال
+JOVO-4139,product_images/product-4139.webp,1*هاجيز محارم مبللة54ق,الأطفال
+JOVO-1552,product_images/product-1552.webp,اس- 26 جولد رقم 1 400غم,الأطفال
+JOVO-2632,product_images/product-2632.webp,الزهراء ارز مطحون 350غم,الأطفال
+JOVO-1362,product_images/product-1362.webp,بامبرز بيبي دراي ميجا رقم+4 70ق,الأطفال
+JOVO-4141,product_images/product-4141.webp,بامبرز محارم مبللة 4*52ق,الأطفال
+JOVO-1553,product_images/product-1553.webp,اس-26 جولد #3 900غم,الأطفال
+JOVO-1363,product_images/product-1363.webp,بامبرز حفاضات بيبي ميجا رقم4 80ق,الأطفال
+JOVO-4145,product_images/product-4145.webp,ثيو شامبو أطفال3ل,الأطفال
+JOVO-1554,product_images/product-1554.webp,اس-26 جولد رقم 1 900غم,الأطفال
+JOVO-0719,product_images/product-0719.webp,أكياس نفايات 100*130 سم 10 قطعة,مستلزمات منزلية
+JOVO-0765,product_images/product-0765.webp,بلاتينيوم قصدير 7 متر,مستلزمات منزلية
+JOVO-3653,product_images/product-3653.webp,ابريز انثى,مستلزمات منزلية
+JOVO-0236,product_images/product-0236.webp,سانو كي 300 طارد حشرات 630مل,مستلزمات منزلية
+JOVO-0050,product_images/product-0050.webp,بيرنير مولع فحم 1ق,مستلزمات منزلية
+JOVO-0677,product_images/product-0677.webp,الوان مائية 6 حجم صغير,مستلزمات منزلية
+JOVO-0720,product_images/product-0720.webp,الزعيم قصدير 7.5متر,مستلزمات منزلية
+JOVO-0766,product_images/product-0766.webp,تيستي قصدير 45سم 850غم,مستلزمات منزلية
+JOVO-3654,product_images/product-3654.webp,ابريز ذكر,مستلزمات منزلية
+JOVO-0237,product_images/product-0237.webp,سانو كي 301 طارد حشرات 300مل,مستلزمات منزلية

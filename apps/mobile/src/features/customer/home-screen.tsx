@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -32,6 +31,8 @@ import { text } from "../../theme/typography";
 import { cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
 import { forgetMarketStore, resolveMarketStore, type MarketStore } from "./market";
 import { useCustomerTheme, type CustomerTheme } from "./theme";
+import { CustomerHomeHeader } from "./home-header";
+import { SeasonalAccent } from "./seasonal-accent";
 
 /* On the dark hero/offer panels below (customerTheme.colors.secondary, which
    resolves to the same near-black as surfaceInverse), text hierarchy uses
@@ -45,9 +46,6 @@ const onDark = {
   medium: "rgba(255, 255, 255, 0.72)",
   soft: "rgba(255, 255, 255, 0.55)"
 };
-
-const logo = require("../../../assets/logo/jovo-wordmark.png");
-const mascot = require("../../../assets/logo/jovo_mascot_final.png");
 
 const storefrontProductCount = 8;
 
@@ -79,7 +77,7 @@ export function CustomerHomeScreen(props: {
   onOpenNotifications: () => void;
 }) {
   const { t } = useTranslation(["customer", "common"]);
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   // undefined while resolving, null when no supermarket is reachable.
@@ -146,35 +144,19 @@ export function CustomerHomeScreen(props: {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
+      <StatusBar backgroundColor={customerTheme.colors.background} barStyle={isDark ? "light-content" : "dark-content"} />
       <ScrollView
         contentContainerStyle={[styles.content, showCartDock && styles.contentWithCart]}
         refreshControl={<RefreshControl onRefresh={() => void refresh()} refreshing={refreshing} tintColor={customerTheme.colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* The identity block leads the screen: the notifications row and the greeting +
-            wordmark/mascot are the very first thing a returning customer sees. */}
-        <View style={styles.topBar}>
-          <Pressable
-            accessibilityLabel={t("common:notifications")}
-            onPress={props.onOpenNotifications}
-            style={styles.iconButton}
-          >
-            <Icon color={customerTheme.colors.text} name="notifications" size="md" />
-            {unreadCount > 0 ? <View style={styles.notificationDot} /> : null}
-          </Pressable>
-        </View>
-
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingText}>
-            <Text style={styles.greeting}>{t("home.greeting", { name: firstName(props.user.fullName, t) })}</Text>
-            <Text style={styles.greetingSubtitle}>{t("home.greetingSubtitleMarket")}</Text>
+        <CustomerHomeHeader fullName={props.user.fullName} unreadCount={unreadCount} onOpenNotifications={props.onOpenNotifications} />
+        {customerTheme.preset !== "normal" ? (
+          <View style={styles.seasonalPromo}>
+            <SeasonalAccent theme={customerTheme} background={customerTheme.decoration.promo} color={customerTheme.decoration.onPromo} />
+            <Text style={styles.seasonalPromoText}>{t(`seasonal.${customerTheme.preset}`)}</Text>
           </View>
-          <View style={styles.brandLockup}>
-            <Image resizeMode="contain" source={mascot} style={styles.logoMascot} />
-            <Image resizeMode="contain" source={logo} style={styles.logo} />
-          </View>
-        </View>
+        ) : null}
 
         {/* The admin's one featured offer, when there is one: a single full-width call-out ahead
             of the regular offers row, which lists every active offer without this distinction. */}
@@ -428,10 +410,6 @@ function StorefrontProductCard(props: {
   );
 }
 
-function firstName(fullName: string, t: (key: string) => string): string {
-  return fullName.trim().split(/\s+/)[0] || t("home.defaultFirstName");
-}
-
 function formatPrice(priceMinor: number): string {
   return `${(priceMinor / 100).toFixed(2)} ILS`;
 }
@@ -452,16 +430,8 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
   contentWithCart: { paddingBottom: spacing[10] + spacing[8] },
-  topBar: { alignItems: "center", flexDirection: "row", justifyContent: "flex-end" },
-  brandLockup: { alignItems: "center", flexDirection: "row", gap: spacing[2] },
-  logoMascot: { height: 34, width: 33 },
-  iconButton: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 46, justifyContent: "center", position: "relative", width: 46, ...customerTheme.shadow },
-  notificationDot: { backgroundColor: customerTheme.colors.primary, borderColor: colors.surface, borderRadius: 6, borderWidth: 2, height: 10, position: "absolute", end: 7, top: 7, width: 10 },
-  greetingRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[6] },
-  greetingText: { flex: 1 },
-  greeting: { ...text("display", "bold"), color: customerTheme.colors.text },
-  greetingSubtitle: { ...text("body"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
-  logo: { height: 34, width: 110 },
+  seasonalPromo: { backgroundColor: customerTheme.decoration.promo, borderRadius: radius.md, flexDirection: "row", alignItems: "center", gap: spacing[2], padding: spacing[3], marginTop: spacing[3] },
+  seasonalPromoText: { ...text("bodySm", "bold"), color: customerTheme.decoration.onPromo, flex: 1 },
   notice: { ...text("bodySm"), backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.md, color: customerTheme.colors.success, marginTop: spacing[4], padding: spacing[3] },
   searchBar: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", marginTop: spacing[6], minHeight: 56, paddingHorizontal: spacing[4] },
   searchIconSlot: { marginEnd: spacing[3] },

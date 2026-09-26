@@ -1,5 +1,10 @@
 {
+  "seasonal": {
+    "ramadan": "Ramadan Kareem",
+    "newYear": "Happy New Year"
+  },
   "home": {
+    "welcome": "Welcome",
     "localRestaurants": "Local restaurants",
     "greeting": "Hey {{name}} 👋",
     "greetingSubtitle": "What are you craving today?",
