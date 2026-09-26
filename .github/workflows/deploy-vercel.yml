@@ -1,0 +1,119 @@
+name: Deploy Vercel previews
+
+on:
+  push:
+    branches:
+      - agent/phase-15-and-jovo-brand
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-vercel
+  cancel-in-progress: true
+
+jobs:
+  wait-for-release-gates:
+    name: Wait for Release gates to pass
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Poll for this commit's Release gates result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="${{ github.sha }}"
+          repo="${{ github.repository }}"
+          echo "Waiting for the 'Release gates' workflow to finish for $sha"
+          for attempt in $(seq 1 120); do
+            run_json=$(gh api "repos/$repo/actions/workflows/ci.yml/runs?head_sha=$sha&event=push&per_page=1" --jq '.workflow_runs[0] // empty')
+            if [[ -n "$run_json" ]]; then
+              status=$(jq -r '.status' <<<"$run_json")
+              if [[ "$status" == "completed" ]]; then
+                conclusion=$(jq -r '.conclusion' <<<"$run_json")
+                echo "Release gates concluded: $conclusion"
+                if [[ "$conclusion" == "success" ]]; then
+                  exit 0
+                fi
+                echo "::error::Release gates did not succeed ($conclusion); refusing to deploy to Vercel."
+                exit 1
+              fi
+            fi
+            sleep 15
+          done
+          echo "::error::Timed out waiting for Release gates to complete"
+          exit 1
+
+  deploy-vercel-admin:
+    name: Deploy admin console (Vercel)
+    needs: wait-for-release-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: vercel-admin
+      url: https://adminpage-pink.vercel.app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+      - name: Deploy prebuilt output
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+
+  deploy-vercel-mobile-web:
+    name: Deploy JOVO web export (Vercel)
+    needs: wait-for-release-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: vercel-mobile-web
+      url: https://jovo-market-web.vercel.app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_MOBILE_WEB }}
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_MOBILE_WEB }}
+      - name: Deploy prebuilt output
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_MOBILE_WEB }}
