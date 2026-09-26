@@ -18,6 +18,8 @@
   "OTP_ALREADY_USED": "This verification code has already been used.",
   "OTP_TOO_MANY_ATTEMPTS": "Too many incorrect attempts. Please request a new code.",
   "OTP_RESEND_COOLDOWN": "Please wait before requesting another code.",
+  "OTP_DAILY_LIMIT_REACHED": "Too many verification codes have been requested for this number today. Please try again tomorrow or contact support.",
+  "OTP_TEMPORARILY_UNAVAILABLE": "Verification codes are temporarily unavailable. Please try again later.",
   "OTP_DELIVERY_FAILED": "The verification code could not be sent. Please try again.",
   "SIGNUP_REQUEST_NOT_FOUND": "This sign-up request could not be found. Please start again.",
   "UNAUTHORIZED": "Please log in to continue.",

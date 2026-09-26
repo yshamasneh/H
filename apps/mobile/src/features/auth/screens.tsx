@@ -35,12 +35,11 @@ import {
   countryCodes,
   maskPhone,
   normalizePhoneNumber,
-  PhoneValidationError,
   type CountryCode
 } from "../../core/phone";
+import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
-import i18n from "../../i18n";
 import { colors, radius, spacing } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { strongPasswordPattern } from "./auth.rules";
@@ -633,13 +632,6 @@ function DeveloperApiLabel() {
       <Text style={styles.apiValue}>{apiBaseUrl}</Text>
     </View>
   );
-}
-
-function readError(error: unknown): string {
-  if (error instanceof ApiError || error instanceof PhoneValidationError || error instanceof Error) {
-    return error.message;
-  }
-  return i18n.t("auth:shared.requestFailed");
 }
 
 function readRetrySeconds(details: unknown): number | null {
