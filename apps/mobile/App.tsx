@@ -110,7 +110,9 @@ import {
 import { DeliveryDetailScreen, DriverHomeScreen } from "./src/features/driver/screens";
 import { DriverEarningsScreen } from "./src/features/driver/earnings-screen";
 import { NotificationInboxScreen } from "./src/features/shared/notification-screens";
-import { RestaurantOrderDetailScreen, RestaurantOrdersScreen } from "./src/features/restaurant/order-screens";
+import { RestaurantOrderDetailScreen } from "./src/features/restaurant/order-screens";
+import { RestaurantOrdersScreen } from "./src/features/restaurant/orders-board-screen";
+import { StoreLiveQueueProvider } from "./src/features/restaurant/store-live-queue";
 import { RestaurantListScreen, RestaurantMenuScreen } from "./src/features/customer/restaurant-screens";
 import { cartRepository, clearTokens, getAccessToken, getCachedUser, saveTokens } from "./src/core/session";
 import {
@@ -542,6 +544,21 @@ function TasawaQApp() {
     return <LaunchPromoOverlay offer={launchPromoOffer} onDone={() => setLaunchPromoOffer(null)} />;
   }
 
+  // A store account gets the live order queue above every screen: the new-order sound and popup
+  // follow the person wherever they are in the app.
+  const storeUser = "user" in screen && screen.user.role === "RESTAURANT" ? screen.user : null;
+  return (
+    <StoreLiveQueueProvider
+      onOpenBoard={() => storeUser && setScreen(goToRestaurantOrders(storeUser))}
+      onOpenOrder={(orderId) => storeUser && setScreen(goToRestaurantOrderDetail(storeUser, orderId))}
+      userId={storeUser?.id ?? null}
+      viewingOrderId={screen.name === "restaurant-order-detail" ? screen.orderId : null}
+    >
+      {renderScreen()}
+    </StoreLiveQueueProvider>
+  );
+
+  function renderScreen(): ReactNode {
   switch (screen.name) {
     case "login":
       return (
@@ -913,6 +930,7 @@ function TasawaQApp() {
       return <AdminAuditLogScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "notifications":
       return <NotificationInboxScreen onBack={() => setScreen(homeForUser(screen.user))} />;
+  }
   }
 }
 

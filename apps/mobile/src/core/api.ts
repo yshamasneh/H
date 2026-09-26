@@ -620,6 +620,19 @@ export function listRestaurantOrders(accessToken: string, page = 1, pageSize = 2
   return request(`/api/v1/restaurant/me/orders?page=${page}&pageSize=${pageSize}`, { accessToken });
 }
 
+/** The store's operational queue: NEW, in progress (ACCEPTED + PREPARING) and ready, oldest first. */
+export type LiveOrderQueue = {
+  business: { id: string; name: string; businessType: "RESTAURANT" | "SUPERMARKET"; isOpen: boolean };
+  new: OrderDetail[];
+  inProgress: OrderDetail[];
+  ready: OrderDetail[];
+  serverTime: string;
+};
+
+export function getRestaurantLiveOrders(accessToken: string): Promise<LiveOrderQueue> {
+  return request("/api/v1/restaurant/me/orders/live", { accessToken });
+}
+
 export function getRestaurantOrder(accessToken: string, orderId: string): Promise<OrderDetail> {
   return request(`/api/v1/restaurant/me/orders/${orderId}`, { accessToken });
 }

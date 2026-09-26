@@ -57,7 +57,11 @@ const registry = {
   shield: { outline: "shield-checkmark-outline" },
   card: { outline: "card-outline", filled: "card" },
   pin: { outline: "pin-outline", filled: "pin" },
-  contrast: { outline: "contrast-outline", filled: "contrast" }
+  contrast: { outline: "contrast-outline", filled: "contrast" },
+  volumeOn: { outline: "volume-high-outline", filled: "volume-high" },
+  volumeOff: { outline: "volume-mute-outline", filled: "volume-mute" },
+  eye: { outline: "eye-outline", filled: "eye" },
+  eyeOff: { outline: "eye-off-outline", filled: "eye-off" }
 } satisfies Record<string, { outline: GlyphName; filled?: GlyphName }>;
 
 export type IconName = keyof typeof registry;

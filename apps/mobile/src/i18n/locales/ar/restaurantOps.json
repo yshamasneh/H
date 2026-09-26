@@ -32,7 +32,8 @@
     "pauseButton": "إيقاف مؤقت",
     "resumeButton": "استئناف",
     "moreItems": "و{{count}} منتج آخر…",
-    "viewAllCatalog": "عرض الجميع"
+    "viewAllCatalog": "عرض الجميع",
+    "newOrdersWaiting": "طلبات جديدة بانتظار القبول — اضغط للعرض"
   },
   "management": {
     "restaurantWorkspaceTitle": "مساحة عمل المطعم",
@@ -126,7 +127,19 @@
     "errorNameRequired": "أدخل اسمًا قبل الحفظ.",
     "errorCategoryRequired": "اختر تصنيفًا أو قسمًا قبل الحفظ.",
     "errorPriceInvalid": "أدخل سعرًا صحيحًا لا يقل عن 0 (مثال: 12.50).",
-    "errorCostPriceInvalid": "أدخل سعر تكلفة صحيحًا لا يقل عن 0، أو اتركه فارغًا."
+    "errorCostPriceInvalid": "أدخل سعر تكلفة صحيحًا لا يقل عن 0، أو اتركه فارغًا.",
+    "stockSummary": "{{visible}} ظاهر · {{hidden}} مخفي",
+    "searchShowing": "{{shown}} نتيجة",
+    "noSearchMatches": "لا توجد منتجات مطابقة للبحث.",
+    "hiddenFromCustomers": "مخفي عن الزبائن",
+    "hideNamed": "إخفاء {{name}}",
+    "showNamed": "إظهار {{name}}",
+    "showButton": "إظهار",
+    "showMore": "عرض المزيد ({{count}})",
+    "searchPlaceholder": "ابحث عن منتج — الاسم أو الباركود",
+    "clearSearch": "مسح البحث",
+    "shownToast": "«{{name}}» ظاهر للزبائن من جديد",
+    "hiddenToast": "أُخفي «{{name}}» عن الزبائن"
   },
   "inventory": {
     "productsLabel": "المنتجات",
@@ -219,5 +232,37 @@
       "itemLabel": "{{name}}، {{quantity}}",
       "plainQuantity": "{{quantity}} {{unit}}"
     }
+  },
+  "live": {
+    "popupTitle": "طلب جديد",
+    "ageMinutes": "منذ {{count}} دقيقة",
+    "ageHours": "منذ {{count}} ساعة",
+    "ageDays": "منذ {{count}} يوم",
+    "itemCount": "{{count}} عنصر",
+    "accept": "قبول الطلب",
+    "working": "جارٍ التنفيذ…",
+    "openOrder": "فتح الطلب",
+    "later": "لاحقاً",
+    "othersWaiting": "+{{count}} طلبات جديدة أخرى — عرض اللوحة",
+    "enableSound": "الصوت متوقف — اضغط للتفعيل",
+    "soundOn": "الصوت مُشغَّل",
+    "soundOff": "الصوت متوقف",
+    "soundBlocked": "الصوت محجوب",
+    "soundOnHint": "ستسمع تنبيهاً عند وصول أي طلب جديد. اضغط لكتم الصوت.",
+    "acceptedToast": "تم قبول الطلب {{ref}}",
+    "alreadyHandled": "الطلب {{ref}} تمّت معالجته من جهاز آخر",
+    "preparingToast": "بدأ تجهيز الطلب {{ref}}",
+    "boardTitle": "الطلبات",
+    "section": {
+      "PLACED": "جديدة",
+      "ACCEPTED": "مقبولة",
+      "PREPARING": "قيد التجهيز",
+      "READY_FOR_PICKUP": "جاهزة للاستلام"
+    },
+    "history": "السجل",
+    "sectionEmpty": "لا توجد طلبات في هذه المرحلة.",
+    "packed": "تم تجهيز {{packed}}/{{total}}",
+    "awaitingCustomer": "بانتظار ردّ العميل",
+    "startPreparing": "بدء التجهيز"
   }
 }

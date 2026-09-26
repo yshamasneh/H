@@ -14,7 +14,11 @@ let socketToken: string | null = null;
 async function connect(): Promise<Socket | null> {
   const token = await getAccessToken();
   if (!token) return null;
-  if (socket && socket.connected && socketToken === token) return socket;
+  // Reuse a socket that is connected OR still connecting for the same token. Checking `connected`
+  // alone made the second hook mounting in the same tick (e.g. the store's alert host and the screen
+  // under it) tear down the socket the first had just created, orphaning its listeners — the same
+  // bug the admin console fixed in its own getSocket().
+  if (socket && socketToken === token && (socket.connected || socket.active)) return socket;
   if (socket) socket.disconnect();
   socketToken = token;
   socket = io(apiBaseUrl, { auth: { token }, transports: ["websocket"] });

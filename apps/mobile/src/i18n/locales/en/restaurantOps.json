@@ -32,7 +32,8 @@
     "pauseButton": "Pause",
     "resumeButton": "Resume",
     "moreItems": "and {{count}} more…",
-    "viewAllCatalog": "View all"
+    "viewAllCatalog": "View all",
+    "newOrdersWaiting": "new orders waiting to be accepted — tap to view"
   },
   "management": {
     "restaurantWorkspaceTitle": "Restaurant workspace",
@@ -126,7 +127,19 @@
     "errorNameRequired": "Enter a name before saving.",
     "errorCategoryRequired": "Choose a category or department before saving.",
     "errorPriceInvalid": "Enter a valid price of 0 or more (for example 12.50).",
-    "errorCostPriceInvalid": "Enter a valid cost price of 0 or more, or leave it blank."
+    "errorCostPriceInvalid": "Enter a valid cost price of 0 or more, or leave it blank.",
+    "stockSummary": "{{visible}} visible · {{hidden}} hidden",
+    "searchShowing": "{{shown}} results",
+    "noSearchMatches": "No products match your search.",
+    "hiddenFromCustomers": "Hidden from customers",
+    "hideNamed": "Hide {{name}}",
+    "showNamed": "Show {{name}}",
+    "showButton": "Show",
+    "showMore": "Show more ({{count}})",
+    "searchPlaceholder": "Find a product — name or barcode",
+    "clearSearch": "Clear search",
+    "shownToast": "\"{{name}}\" is visible to customers again",
+    "hiddenToast": "\"{{name}}\" is hidden from customers"
   },
   "inventory": {
     "productsLabel": "Products",
@@ -219,5 +232,37 @@
       "itemLabel": "{{name}}, {{quantity}}",
       "plainQuantity": "{{quantity}} {{unit}}"
     }
+  },
+  "live": {
+    "popupTitle": "New order",
+    "ageMinutes": "{{count}} min ago",
+    "ageHours": "{{count}} h ago",
+    "ageDays": "{{count}} d ago",
+    "itemCount": "{{count}} items",
+    "accept": "Accept order",
+    "working": "Working…",
+    "openOrder": "Open order",
+    "later": "Later",
+    "othersWaiting": "+{{count}} more new orders — view board",
+    "enableSound": "Sound off — tap to enable",
+    "soundOn": "Sound on",
+    "soundOff": "Sound off",
+    "soundBlocked": "Sound blocked",
+    "soundOnHint": "You will hear an alert for every new order. Tap to mute.",
+    "acceptedToast": "Order {{ref}} accepted",
+    "alreadyHandled": "Order {{ref}} was already handled on another device",
+    "preparingToast": "Started preparing {{ref}}",
+    "boardTitle": "Orders",
+    "section": {
+      "PLACED": "New",
+      "ACCEPTED": "Accepted",
+      "PREPARING": "Preparing",
+      "READY_FOR_PICKUP": "Ready for pickup"
+    },
+    "history": "History",
+    "sectionEmpty": "No orders at this stage.",
+    "packed": "Packed {{packed}}/{{total}}",
+    "awaitingCustomer": "Awaiting customer",
+    "startPreparing": "Start preparing"
   }
 }

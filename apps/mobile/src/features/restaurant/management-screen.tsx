@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -36,6 +36,12 @@ import { Icon } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { InventoryWorkspace } from "./inventory-screen";
+import { filterProducts } from "./product-search";
+import { RemoteImage } from "../../components/remote-image";
+import { useToast } from "../../components/toast";
+
+/** Rows rendered before "show more"; search narrows long before anyone scrolls this far. */
+const productPageSize = 150;
 
 type Section = "profile" | "categories" | "items" | "inventory";
 
@@ -56,6 +62,8 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings, initialEdit
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [productSearch, setProductSearch] = useState("");
 
   async function load() {
     setError(null);
@@ -130,7 +138,15 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings, initialEdit
       {loading ? (
         <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <>
+        {section === "items" ? (
+          <ProductSearchBar onChange={setProductSearch} value={productSearch} />
+        ) : null}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          ref={scrollRef}
+        >
           {error ? <Message tone="error" text={error} /> : null}
           {notice ? <Message tone="success" text={notice} /> : null}
           {section === "profile" && profile ? (
@@ -188,18 +204,27 @@ export function RestaurantManagementScreen({ onBack, onOpenSettings, initialEdit
                   });
                 }, editingId ? t("management.menuItemUpdatedNotice") : t("management.menuItemCreatedNotice"))
               }
-              onToggle={(item) =>
-                run(async (token) => {
-                  const updated = await setRestaurantMenuItemAvailability(token, item.id, !item.isAvailable);
-                  setItems((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
-                }, item.isAvailable ? t("management.itemUnavailableNotice") : t("management.itemAvailableNotice"))
-              }
+              search={productSearch}
+              onRequestScrollTop={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+              onSetAvailability={async (item, isAvailable) => {
+                setItems((current) => current.map((candidate) => (candidate.id === item.id ? { ...candidate, isAvailable } : candidate)));
+                try {
+                  const updated = await setRestaurantMenuItemAvailability(await requireToken(), item.id, isAvailable);
+                  setItems((current) => current.map((candidate) => (candidate.id === updated.id ? updated : candidate)));
+                } catch (error) {
+                  setItems((current) =>
+                    current.map((candidate) => (candidate.id === item.id ? { ...candidate, isAvailable: item.isAvailable } : candidate))
+                  );
+                  throw error;
+                }
+              }}
             />
           ) : null}
           {section === "inventory" && profile?.businessType === "SUPERMARKET" ? (
             <InventoryWorkspace />
           ) : null}
         </ScrollView>
+        </>
       )}
     </SafeAreaView>
   );
@@ -443,7 +468,11 @@ function ItemsSection(props: {
   busy: boolean;
   initialEditItemId?: string;
   onSave: (draft: ItemDraft, editingId: string | null) => Promise<boolean>;
-  onToggle: (item: MenuItemOwner) => void;
+  /** Optimistic: the parent flips the row at once and throws (after rolling back) if the API refuses. */
+  onSetAvailability: (item: MenuItemOwner, isAvailable: boolean) => Promise<void>;
+  onRequestScrollTop: () => void;
+  /** Lifted to the screen so the search bar can sit above the scrolling list and stay in view. */
+  search: string;
 }) {
   const { t } = useTranslation(["restaurantOps"]);
   const activeCategories = useMemo(() => props.categories.filter((category) => category.isActive), [props.categories]);
@@ -466,6 +495,13 @@ function ItemsSection(props: {
   const [barcode, setBarcode] = useState("");
   const [reorderLevel, setReorderLevel] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [shownCount, setShownCount] = useState(productPageSize);
+  const [togglingIds, setTogglingIds] = useState<ReadonlySet<string>>(new Set());
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const { showToast } = useToast();
+  const filtered = useMemo(() => filterProducts(props.items, props.search), [props.items, props.search]);
+  const hiddenTotal = useMemo(() => props.items.filter((item) => !item.isAvailable).length, [props.items]);
   const priceMinor = Math.round(Number(price.replace(",", ".")) * 100);
   const costPriceMinor = costPrice.trim() ? Math.round(Number(costPrice.replace(",", ".")) * 100) : undefined;
 
@@ -486,9 +522,32 @@ function ItemsSection(props: {
     setBarcode("");
     setReorderLevel("");
     setLocalError(null);
+    setFormOpen(false);
+  }
+
+  /** One tap, no confirmation: hiding is reversible and done over and over while walking the shelves. */
+  async function toggleAvailability(item: MenuItemOwner) {
+    if (togglingIds.has(item.id)) return;
+    const next = !item.isAvailable;
+    setTogglingIds((current) => new Set(current).add(item.id));
+    setRowErrors(({ [item.id]: _cleared, ...rest }) => rest);
+    try {
+      await props.onSetAvailability(item, next);
+      showToast(t(next ? "management.shownToast" : "management.hiddenToast", { name: item.name }));
+    } catch (error) {
+      setRowErrors((current) => ({ ...current, [item.id]: readError(error) }));
+    } finally {
+      setTogglingIds((current) => {
+        const remaining = new Set(current);
+        remaining.delete(item.id);
+        return remaining;
+      });
+    }
   }
 
   function edit(item: MenuItemOwner) {
+    setFormOpen(true);
+    props.onRequestScrollTop();
     setEditingId(item.id);
     setCategoryId(item.categoryId);
     setName(item.name);
@@ -594,6 +653,7 @@ function ItemsSection(props: {
 
   return (
     <>
+      {formOpen || editingId ? (
       <View style={styles.card}>
         <Text style={styles.cardTitle}>
           {editingId ? t("management.editItemPrefix") : t("management.newItemPrefix")}{" "}
@@ -656,33 +716,100 @@ function ItemsSection(props: {
           label={editingId ? t("management.saveChangesButton") : t("management.addItemButton")}
           onPress={() => void saveItem()}
         />
-        {editingId ? <ActionButton label={t("management.cancelEditingButton")} onPress={reset} secondary /> : null}
+        <ActionButton label={t("management.cancelEditingButton")} onPress={reset} secondary />
       </View>
+      ) : null}
+      {!formOpen && !editingId ? (
+        <Pressable accessibilityRole="button" onPress={() => setFormOpen(true)} style={({ pressed }) => [styles.addButton, pressed && styles.rowPressed]}>
+          <Icon color={colors.textInverse} name="add" size="sm" />
+          <Text style={styles.addButtonText}>{t("management.addItemButton")}</Text>
+        </Pressable>
+      ) : null}
+      <Text style={styles.stockSummary}>
+        {t("management.stockSummary", { visible: props.items.length - hiddenTotal, hidden: hiddenTotal })}
+        {props.search.trim() ? ` · ${t("management.searchShowing", { shown: filtered.length })}` : ""}
+      </Text>
       {props.items.length === 0 ? (
         <Empty text={props.businessType === "SUPERMARKET" ? t("management.noProductsYet") : t("management.noMenuItemsYet")} />
+      ) : filtered.length === 0 ? (
+        <Empty text={t("management.noSearchMatches")} />
       ) : null}
-      {props.items.map((item) => (
-        <View key={item.id} style={styles.listCard}>
-          <View style={styles.listCopy}>
-            <Text style={styles.listTitle}>{item.name}</Text>
-            <Text style={styles.listMeta}>
-              {formatPrice(item.priceMinor)} · {item.unitLabel} · {item.isAvailable ? t("management.availableLabel") : t("management.unavailableLabel")}
-              {item.costPriceMinor === null ? "" : t("management.costSuffix", { amount: formatPrice(item.costPriceMinor) })}
-              {item.stockQuantity === null ? "" : t("management.stockSuffix", { count: item.stockQuantity })}
-              {item.isFeatured ? t("management.featuredSuffix") : ""}
-            </Text>
+      {filtered.slice(0, shownCount).map((item) => {
+        const toggling = togglingIds.has(item.id);
+        const rowError = rowErrors[item.id];
+        return (
+          <View key={item.id} style={[styles.stockRow, item.isAvailable ? styles.stockRowVisible : styles.stockRowHidden]}>
+            <RemoteImage style={[styles.stockImage, !item.isAvailable && styles.stockImageHidden]} uri={item.imageUrl ?? null} />
+            <View style={styles.stockBody}>
+              <Text numberOfLines={2} style={[styles.stockName, !item.isAvailable && styles.stockNameHidden]}>{item.name}</Text>
+              <Text numberOfLines={1} style={styles.stockMeta}>
+                {formatPrice(item.priceMinor)}
+                {item.stockQuantity === null ? "" : t("management.stockSuffix", { count: item.stockQuantity })}
+              </Text>
+              <View style={[styles.stockChip, item.isAvailable ? styles.stockChipVisible : styles.stockChipHidden]}>
+                <Text style={[styles.stockChipText, !item.isAvailable && styles.stockChipTextHidden]}>
+                  {item.isAvailable ? t("management.availableLabel") : t("management.hiddenFromCustomers")}
+                </Text>
+              </View>
+              {rowError ? <Text style={styles.stockError}>{rowError}</Text> : null}
+              <Pressable accessibilityRole="button" hitSlop={6} onPress={() => edit(item)} style={styles.stockEdit}>
+                <Text style={styles.stockEditText}>{t("management.editButton")}</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityLabel={t(item.isAvailable ? "management.hideNamed" : "management.showNamed", { name: item.name })}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: toggling }}
+              disabled={toggling}
+              onPress={() => void toggleAvailability(item)}
+              style={({ pressed }) => [
+                styles.stockToggle,
+                item.isAvailable ? styles.stockToggleHide : styles.stockToggleShow,
+                (pressed || toggling) && styles.rowPressed
+              ]}
+            >
+              <Icon color={item.isAvailable ? colors.text : colors.textInverse} name={item.isAvailable ? "eyeOff" : "eye"} size="md" />
+              <Text style={[styles.stockToggleText, !item.isAvailable && { color: colors.textInverse }]}>
+                {item.isAvailable ? t("management.hideButton") : t("management.showButton")}
+              </Text>
+            </Pressable>
           </View>
-          <View style={styles.itemActions}>
-            <SmallButton disabled={props.busy} label={t("management.editButton")} onPress={() => edit(item)} />
-            <SmallButton
-              disabled={props.busy}
-              label={item.isAvailable ? t("management.pauseButton") : t("management.resumeButton")}
-              onPress={() => props.onToggle(item)}
-            />
-          </View>
-        </View>
-      ))}
+        );
+      })}
+      {filtered.length > shownCount ? (
+        <Pressable accessibilityRole="button" onPress={() => setShownCount((count) => count + productPageSize)} style={styles.moreButton}>
+          <Text style={styles.moreButtonText}>{t("management.showMore", { count: filtered.length - shownCount })}</Text>
+        </Pressable>
+      ) : null}
     </>
+  );
+}
+
+/**
+ * Pinned above the product list: narrows it on every character, no button and no delay. Large
+ * enough to hit while walking the aisle; the clear button restores the whole list in one tap.
+ */
+function ProductSearchBar(props: { value: string; onChange: (value: string) => void }) {
+  const { t } = useTranslation(["restaurantOps"]);
+  return (
+    <View style={styles.searchBar}>
+      <Icon color={colors.textMuted} name="search" size="md" />
+      <TextInput
+        accessibilityLabel={t("management.searchPlaceholder")}
+        autoCorrect={false}
+        onChangeText={props.onChange}
+        placeholder={t("management.searchPlaceholder")}
+        placeholderTextColor={colors.textMuted}
+        returnKeyType="search"
+        style={styles.searchInput}
+        value={props.value}
+      />
+      {props.value ? (
+        <Pressable accessibilityLabel={t("management.clearSearch")} accessibilityRole="button" hitSlop={8} onPress={() => props.onChange("")} style={styles.searchClear}>
+          <Icon color={colors.textMuted} name="closeCircle" size="md" />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -757,6 +884,65 @@ function formatPrice(minor: number): string {
 }
 
 const styles = StyleSheet.create({
+  searchBar: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[2]
+  },
+  searchInput: { ...text("body"), color: colors.text, flex: 1, minHeight: 48, textAlign: "auto" },
+  searchClear: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
+  addButton: {
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    flexDirection: "row",
+    gap: spacing[2],
+    justifyContent: "center",
+    marginBottom: spacing[3],
+    minHeight: 48
+  },
+  addButtonText: { ...text("bodySm", "bold"), color: colors.textInverse },
+  stockSummary: { ...text("caption", "semibold"), color: colors.textMuted, marginBottom: spacing[2] },
+  stockRow: {
+    alignItems: "center",
+    borderRadius: radius.lg,
+    borderStartWidth: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing[3],
+    marginBottom: spacing[2],
+    minHeight: 104,
+    padding: spacing[3]
+  },
+  stockRowVisible: { backgroundColor: colors.surface, borderColor: colors.border, borderStartColor: colors.success },
+  // Hidden reads as hidden from arm's length: red edge, grey card, faded photo, struck name, red chip.
+  stockRowHidden: { backgroundColor: colors.neutralSubtle, borderColor: colors.errorSubtle, borderStartColor: colors.error },
+  stockImage: { backgroundColor: colors.neutralSubtle, borderRadius: radius.md, height: 72, width: 72 },
+  stockImageHidden: { opacity: 0.35 },
+  stockBody: { alignItems: "flex-start", flex: 1, gap: 2 },
+  stockName: { ...text("body", "bold"), color: colors.text },
+  stockNameHidden: { color: colors.textMuted, textDecorationLine: "line-through" },
+  stockMeta: { ...text("caption"), color: colors.textMuted },
+  stockChip: { borderRadius: radius.pill, marginTop: spacing[1], paddingHorizontal: spacing[2], paddingVertical: 2 },
+  stockChipVisible: { backgroundColor: colors.successSubtle },
+  stockChipHidden: { backgroundColor: colors.error },
+  stockChipText: { ...text("label", "bold"), color: colors.success },
+  stockChipTextHidden: { color: colors.textInverse },
+  stockError: { ...text("caption", "bold"), color: colors.error },
+  stockEdit: { justifyContent: "center", minHeight: 32 },
+  stockEditText: { ...text("caption", "bold"), color: colors.primaryPressed },
+  stockToggle: { alignItems: "center", borderRadius: radius.md, gap: 2, justifyContent: "center", minHeight: 72, minWidth: 80, paddingHorizontal: spacing[2] },
+  stockToggleHide: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderWidth: 1.5 },
+  stockToggleShow: { backgroundColor: colors.success },
+  stockToggleText: { ...text("bodySm", "bold"), color: colors.text },
+  rowPressed: { opacity: 0.75 },
+  moreButton: { alignItems: "center", borderColor: colors.primary, borderRadius: radius.md, borderWidth: 1, justifyContent: "center", marginTop: spacing[2], minHeight: 48 },
+  moreButtonText: { ...text("bodySm", "bold"), color: colors.primary },
   screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   header: { alignItems: "center", flexDirection: "row", paddingHorizontal: spacing[4], paddingTop: spacing[3] },
   backButton: { backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing[4], paddingVertical: spacing[3] },

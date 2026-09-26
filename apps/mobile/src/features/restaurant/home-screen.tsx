@@ -24,6 +24,7 @@ import i18n from "../../i18n";
 import { Icon } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
+import { StoreSoundChip, useStoreLiveQueue } from "./store-live-queue";
 
 const activeOrderStatuses: OrderStatusValue[] = ["PLACED", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP"];
 const maxCategoriesOnHome = 3;
@@ -41,6 +42,7 @@ export function RestaurantHomeScreen(props: {
   onOpenSettings: () => void;
 }) {
   const { t } = useTranslation(["restaurantOps", "common"]);
+  const newOrderCount = useStoreLiveQueue()?.queue?.new.length ?? 0;
   const [profile, setProfile] = useState<RestaurantOwnerProfile | null>(null);
   const [orders, setOrders] = useState<OrderDetail[]>([]);
   const [offers, setOffers] = useState<RestaurantOffer[]>([]);
@@ -125,6 +127,7 @@ export function RestaurantHomeScreen(props: {
             </View>
           ) : null}
         </View>
+        <StoreSoundChip />
         <Pressable accessibilityLabel={t("common:notifications")} onPress={props.onOpenNotifications} style={styles.iconButton}>
           <Icon name="notifications" size="md" />
         </Pressable>
@@ -145,6 +148,13 @@ export function RestaurantHomeScreen(props: {
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
+
+          {newOrderCount > 0 ? (
+            <Pressable accessibilityRole="button" onPress={props.onManageOrders} style={({ pressed }) => [styles.newOrdersBanner, pressed && { opacity: 0.85 }]}>
+              <Text style={styles.newOrdersCount}>{newOrderCount}</Text>
+              <Text style={styles.newOrdersText}>{t("dashboard.newOrdersWaiting", { count: newOrderCount })}</Text>
+            </Pressable>
+          ) : null}
 
           <View style={styles.quickRow}>
             <QuickAction icon="orders" label={t("dashboard.quickOrders")} onPress={props.onManageOrders} />
@@ -315,6 +325,18 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", flex: 1, gap: spacing[4], justifyContent: "center", padding: spacing[5] },
   content: { alignSelf: "center", maxWidth: 720, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
   notice: { ...text("bodySm"), backgroundColor: colors.successSubtle, borderRadius: radius.md, color: colors.success, marginBottom: spacing[4], padding: spacing[3] },
+  newOrdersBanner: {
+    alignItems: "center",
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    flexDirection: "row",
+    gap: spacing[3],
+    marginBottom: spacing[4],
+    minHeight: 64,
+    paddingHorizontal: spacing[4]
+  },
+  newOrdersCount: { ...text("display", "heavy"), color: colors.textInverse },
+  newOrdersText: { ...text("body", "bold"), color: colors.textInverse, flex: 1 },
   quickRow: { flexDirection: "row", gap: spacing[3], marginBottom: spacing[5] },
   quickAction: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, gap: spacing[2], paddingVertical: spacing[4] },
   quickIcon: { alignItems: "center", backgroundColor: colors.primarySubtle, borderRadius: radius.md, height: 40, justifyContent: "center", width: 40 },
