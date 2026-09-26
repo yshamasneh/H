@@ -6,6 +6,7 @@ import { writeAuditLog } from "../common/audit-log.util";
 import { grantBusinessMembership } from "../common/authorization/business-membership.util";
 import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
+import { normalizeArabicText } from "../common/arabic-normalize";
 import { assertAllowedImageUrl } from "../common/image-url.util";
 import {
   BusinessType,
@@ -25,6 +26,15 @@ import { ManagedImageUrlService } from "../uploads/managed-image-url.service";
 import { isValidTimeOfDay, isWithinWeeklyHours, restaurantModerationTransitions } from "./restaurant.rules";
 import type { AdminCreateBusinessDto, AdminRestaurantsQueryDto, AdminStoreLocationDto, RestaurantRegisterDto, SupermarketCatalogQueryDto, UpdateRestaurantProfileDto } from "./restaurants.dto";
 import type { AdminMenuItemView, AdminRestaurantView, Page, RestaurantPeriodStats, RestaurantProfileView, RestaurantPublicView, RestaurantStatsView, SupermarketCatalogView, SupermarketProductView } from "./restaurants.types";
+
+/**
+ * Below this pg_trgm word_similarity score (0-1), a product name is considered unrelated to the
+ * search term rather than a fuzzy/typo match. Chosen empirically: high enough to reject unrelated
+ * short words, low enough to still surface a one- or two-letter typo in a short product name.
+ */
+const menuItemSearchSimilarityThreshold = 0.3;
+
+type MenuItemSimilarityMatch = { id: string; score: number };
 
 @Injectable()
 export class RestaurantsService {
@@ -421,6 +431,28 @@ export class RestaurantsService {
       throw new ApiException(404, "SUPERMARKET_DEPARTMENT_NOT_FOUND", "This supermarket department does not exist.");
     }
 
+    // Typo-tolerant, Arabic-letter-form-aware search on the product name: matching ids and their
+    // similarity scores are found separately via pg_trgm word_similarity against the normalized
+    // name (see the trigram-search migration and arabic-normalize.ts). Brand/SKU/description stay
+    // on the original plain (non-fuzzy) match below them in the `where`'s OR — a fuzzy match on a
+    // SKU would be actively wrong (e.g. "SKU-123" should never surface "SKU-124"), and this way a
+    // name search gains typo tolerance without losing any product the old search used to find.
+    // `null` means "no search term"; a search that matches nothing by name is `[]`, not `null`.
+    let matchedIds: string[] | null = null;
+    let similarityById = new Map<string, number>();
+    if (search) {
+      const normalizedSearch = normalizeArabicText(search);
+      const matches = await this.prisma.$queryRaw<MenuItemSimilarityMatch[]>`
+        SELECT id, word_similarity(${normalizedSearch}, jovo_normalize_arabic_text(name)) AS score
+        FROM "MenuItem"
+        WHERE "restaurantId" = ${supermarketId}::uuid
+          AND word_similarity(${normalizedSearch}, jovo_normalize_arabic_text(name)) > ${menuItemSearchSimilarityThreshold}
+        ORDER BY score DESC
+      `;
+      matchedIds = matches.map((match) => match.id);
+      similarityById = new Map(matches.map((match) => [match.id, match.score]));
+    }
+
     const where: Prisma.MenuItemWhereInput = {
       restaurantId: supermarketId,
       isAvailable: true,
@@ -430,26 +462,26 @@ export class RestaurantsService {
       costPriceMinor: { not: null },
       categoryId: query.categoryId ?? { in: departmentIds },
       isFeatured: query.featured,
-      AND: [
-        { OR: [{ stockQuantity: null }, { stockQuantity: { gt: 0 } }] },
-        ...(search
-          ? [{
-              OR: [
-                { name: { contains: search, mode: "insensitive" as const } },
-                { description: { contains: search, mode: "insensitive" as const } },
-                { brand: { contains: search, mode: "insensitive" as const } },
-                { sku: { contains: search, mode: "insensitive" as const } }
-              ]
-            }]
-          : [])
-      ]
+      ...(matchedIds !== null
+        ? {
+            OR: [
+              { id: { in: matchedIds } },
+              { description: { contains: search, mode: "insensitive" as const } },
+              { brand: { contains: search, mode: "insensitive" as const } },
+              { sku: { contains: search, mode: "insensitive" as const } }
+            ]
+          }
+        : {}),
+      AND: [{ OR: [{ stockQuantity: null }, { stockQuantity: { gt: 0 } }] }]
     };
-    const [products, total, allAvailable, offers] = await Promise.all([
+    const [productsMatched, total, allAvailable, offers] = await Promise.all([
       this.prisma.menuItem.findMany({
         where,
-        orderBy: [{ displayPriority: "desc" }, { isFeatured: "desc" }, { name: "asc" }],
-        skip: (page - 1) * pageSize,
-        take: pageSize
+        // A search's relevance order (highest similarity first) is computed in JS below, since it
+        // depends on scores Prisma has no way to sort by; the normal browse order is unaffected.
+        ...(matchedIds === null
+          ? { orderBy: [{ displayPriority: "desc" as const }, { isFeatured: "desc" as const }, { name: "asc" as const }], skip: (page - 1) * pageSize, take: pageSize }
+          : {})
       }),
       this.prisma.menuItem.count({ where }),
       this.prisma.menuItem.findMany({
@@ -464,6 +496,11 @@ export class RestaurantsService {
       }),
       this.activeProductOffers(supermarketId)
     ]);
+    const products = matchedIds === null
+      ? productsMatched
+      : [...productsMatched]
+          .sort((left, right) => (similarityById.get(right.id) ?? 0) - (similarityById.get(left.id) ?? 0))
+          .slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
     const offerByItem = bestOfferByMenuItem(offers);
     const departmentName = new Map(departments.map((department) => [department.id, department.name]));
     const countByDepartment = new Map<string, number>();

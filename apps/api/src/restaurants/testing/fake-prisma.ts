@@ -119,6 +119,19 @@ export class FakeRestaurantPrisma {
   readonly businessMembers: { businessId: string; userId: string; roleId: string; isActive: boolean }[] = [];
   private transactionTail: Promise<void> = Promise.resolve();
 
+  /**
+   * Simulates the trigram name search's raw query (see restaurants.service.ts's
+   * getSupermarketCatalog) with a plain case-insensitive substring match — good enough to exercise
+   * the service's own id/score plumbing without a real Postgres. Real fuzzy/typo/Arabic-normalized
+   * matching is verified against real Postgres in integration/menu-search.e2e.test.ts instead.
+   */
+  async $queryRaw(_strings: TemplateStringsArray, normalizedSearch: string, restaurantId: string): Promise<{ id: string; score: number }[]> {
+    const needle = normalizedSearch.toLowerCase();
+    return this.menuItems
+      .filter((item) => item.restaurantId === restaurantId && item.name.toLowerCase().includes(needle))
+      .map((item) => ({ id: item.id, score: 1 }));
+  }
+
   readonly user = {} as any;
   readonly restaurant = {} as any;
   readonly menuCategory = {} as any;
@@ -586,6 +599,7 @@ function menuItemMatchesCatalogWhere(item: MenuItemRecord, where: any): boolean 
           return item.stockQuantity !== null && item.stockQuantity > cond.stockQuantity.gt;
         }
       }
+      if (cond.id?.in !== undefined) return cond.id.in.includes(item.id);
       if (cond.name?.contains !== undefined) return contains(item.name, cond.name.contains);
       if (cond.description?.contains !== undefined) return contains(item.description, cond.description.contains);
       if (cond.brand?.contains !== undefined) return contains(item.brand, cond.brand.contains);
