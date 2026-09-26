@@ -7,9 +7,11 @@ import { test } from "node:test";
 // loud, short and audible on a phone speaker over road noise, and these properties are what make
 // it so, so a regenerated or replaced file is held to them.
 const file = path.resolve(__dirname, "../../assets/sounds/jovo_delivery.wav");
-const wav = readFileSync(file);
+// The store's new-order sound, from the same generator, played in-app on a shop floor.
+const orderFile = path.resolve(__dirname, "../../assets/sounds/jovo_order.wav");
 
-function parse() {
+function parse(target = file) {
+  const wav = readFileSync(target);
   assert.equal(wav.toString("ascii", 0, 4), "RIFF");
   assert.equal(wav.toString("ascii", 8, 12), "WAVE");
   assert.equal(wav.readUInt16LE(20), 1, "linear PCM: the format iOS accepts for custom notification sounds");
@@ -109,4 +111,59 @@ test("the file name is a valid Android raw resource (lowercase letters, digits, 
   assert.match(name, /^[a-z0-9_]+\.wav$/);
   const api = readFileSync(path.resolve(__dirname, "../../../api/src/notifications/push-presentation.ts"), "utf8");
   assert.ok(api.includes(`"${name}"`), "the API names a different sound file than the one bundled in the app");
+});
+
+// --- the store's new-order sound -----------------------------------------------------------------
+
+function levels(samples: Float64Array): { peakDb: number; rmsDb: number } {
+  let peak = 0;
+  for (const value of samples) peak = Math.max(peak, Math.abs(value));
+  const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
+  return { peakDb: 20 * Math.log10(peak), rmsDb: 20 * Math.log10(rms) };
+}
+
+function spectralCentroidHz(samples: Float64Array, sampleRate: number): number {
+  const { magnitudes, size } = fftMagnitudes(samples);
+  let weighted = 0;
+  let total = 0;
+  for (let index = 1; index < magnitudes.length; index += 1) {
+    const energy = magnitudes[index] ** 2;
+    weighted += energy * index * (sampleRate / size);
+    total += energy;
+  }
+  return weighted / total;
+}
+
+test("the store sound is the same format and short enough to repeat while an order waits", () => {
+  const { channels, bits, samples, sampleRate } = parse(orderFile);
+  assert.equal(channels, 1);
+  assert.equal(bits, 16);
+  const seconds = samples.length / sampleRate;
+  assert.ok(seconds >= 1.5 && seconds <= 3, `duration ${seconds.toFixed(2)} s`);
+  assert.ok(Math.abs(samples[samples.length - 1]) < 0.01, "ends without a click, so a loop does not pop");
+});
+
+test("the store sound carries across a room: near full-scale peak and a solid average level", () => {
+  const { peakDb, rmsDb } = levels(parse(orderFile).samples);
+  assert.ok(peakDb >= -3 && peakDb <= -0.1, `peak ${peakDb.toFixed(1)} dBFS`);
+  assert.ok(rmsDb >= -16, `RMS ${rmsDb.toFixed(1)} dBFS: too quiet to notice from across a shop`);
+});
+
+test("the store sound is gentler than the driver alarm: lower average level and a warmer (lower) spectrum", () => {
+  const order = parse(orderFile);
+  const delivery = parse(file);
+  assert.ok(levels(order.samples).rmsDb < levels(delivery.samples).rmsDb, "the store sound must not be as dense as the road alarm");
+  const orderCentroid = spectralCentroidHz(order.samples, order.sampleRate);
+  const deliveryCentroid = spectralCentroidHz(delivery.samples, delivery.sampleRate);
+  assert.ok(
+    orderCentroid < deliveryCentroid * 0.8,
+    `store ${orderCentroid.toFixed(0)} Hz vs driver ${deliveryCentroid.toFixed(0)} Hz: it should sound warmer, not shriller`
+  );
+  // Still above the murmur of a room, and within what a phone or laptop speaker reproduces well.
+  assert.ok(orderCentroid > 700 && orderCentroid < 3_000, `centroid ${orderCentroid.toFixed(0)} Hz`);
+});
+
+test("the admin console plays exactly the same store sound as the app", () => {
+  const admin = readFileSync(path.resolve(__dirname, "../../../admin/src/assets/sounds/jovo_order.wav"));
+  assert.ok(admin.equals(readFileSync(orderFile)), "regenerate with node scripts/generate-alert-sound.mjs");
 });

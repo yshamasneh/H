@@ -68,6 +68,28 @@ channel cannot be corrected once created (only a reinstall or a new channel id f
 - **After the build**, on a real phone: log in as a driver, allow notifications, go online, close the app, and mark a test order
   ready for pickup. Check the sound, the vibration, the heads-up banner, and that tapping opens the driver's home.
 
+## In-app new-order sound for stores needs a new native build (0.16.0)
+
+A business account with JOVO open hears a new order the moment it arrives, on whatever screen it is on,
+and the sound repeats until the order leaves NEW on the server (accepted on any device). It plays
+`assets/sounds/jovo_order.wav` (from `node scripts/generate-alert-sound.mjs`; the admin console ships a
+byte-identical copy) through **`expo-audio`, a new native module**, so the app version moved to `0.16.0`
+(build 16): an update published for `0.16.0` is only ever delivered to binaries that contain the module.
+
+- **Android**: expo-audio's library manifest also brings a media-playback foreground service, a recording
+  service and `FOREGROUND_SERVICE_MEDIA_PLAYBACK`. None are used (no lock-screen controls, no recording) and
+  they would need Play Console foreground-service declarations, so `AndroidManifest.xml` removes them with
+  `tools:node="remove"`; the permission is in `blockedPermissions` so `check:native-config` pins it.
+  `RECORD_AUDIO` was already blocked. The sound is a Metro asset, not a `res/raw` resource.
+- **iOS**: the `expo-audio` plugin runs with `microphonePermission: false`, so no microphone usage string is
+  added. Playback uses `playsInSilentMode: true` so a store phone on silent still rings for an order.
+- **Closed app**: unchanged. The store's `ORDER_PLACED` push still uses the `orders` channel and the default
+  sound. Moving it to a custom channel needs the server to know each token's app version (a 0.15 Android
+  build has no such channel), which `PushToken` does not record yet.
+- **After the build**, on a real phone signed in as the store: keep JOVO open on any screen, place an order
+  from another device, and check the sound is audible across the shop, the popup appears, and accepting on
+  a second device (or the web console) stops the sound on this one.
+
 ## Safe update workflow
 
 1. Change `app.json` and the maintained Android files together when a mapped value changes.

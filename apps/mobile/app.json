@@ -2,7 +2,7 @@
   "expo": {
     "name": "JOVO",
     "slug": "jovo",
-    "version": "0.15.0",
+    "version": "0.16.0",
     "scheme": "jovo",
     "icon": "./assets/store/app-icon-1024.png",
     "orientation": "portrait",
@@ -22,13 +22,14 @@
         "foregroundImage": "./assets/store/adaptive-icon-foreground.png",
         "backgroundColor": "#FFFFFF"
       },
-      "versionCode": 15,
+      "versionCode": 16,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -79,7 +80,14 @@
         }
       ],
       "expo-localization",
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "runtimeVersion": {
       "policy": "appVersion"
