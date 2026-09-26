@@ -1,3 +1,67 @@
+## 2026-09-26 — Trigram-search migration applied to Trial
+
+Ops action, no application code change. Migration
+`apps/api/prisma/migrations/20260926114347_add_menu_item_trigram_search`
+(`pg_trgm` extension, `jovo_normalize_arabic_text()`, GIN trigram index on
+`MenuItem.name`) is now live on the Trial database
+(`jovo-market-db-shamasneh.postgres.database.azure.com` / `jovo`), and the
+Trial API is running the commit that contains the trigram-search service code.
+
+**Used the documented process** (`deploy.ps1`'s migration step / the same
+commands `.github/workflows/deploy-trial-api.yml` runs): `docker build
+--target migration -t jovo-migrate .` then `docker run --rm -e
+DATABASE_URL=<trial> jovo-migrate`.
+
+**Found and fixed a real blocker first.** A prior attempt to apply this same
+migration to Trial had already failed and was sitting stuck in
+`_prisma_migrations` (`applied_steps_count: 0`, no `finished_at`) — this is
+almost certainly why the CI deploy workflow for that push never reached its
+"deploy image" step, and why Trial was still serving the previous commit.
+Root cause: Azure Postgres Flexible Server's `azure.extensions` allow-list
+was empty, so `CREATE EXTENSION pg_trgm` was rejected
+(`extension "pg_trgm" is not allow-listed for users in Azure Database for
+PostgreSQL`). The failed transaction had rolled back cleanly — nothing else
+in the DB was touched (verified: only `plpgsql` was installed beforehand).
+
+Fix, in order:
+1. `az postgres flexible-server parameter set --resource-group jovo-trial
+   --server-name jovo-market-db-shamasneh --name azure.extensions --value
+   pg_trgm` — dynamic parameter, no restart needed. Nothing else was on the
+   allow-list, so this was purely additive.
+2. `docker run --rm -e DATABASE_URL=<trial> jovo-migrate npx prisma migrate
+   resolve --rolled-back 20260926114347_add_menu_item_trigram_search` (run
+   with `-w /app/apps/api`, the image's actual schema location) to clear the
+   stuck failed-migration record.
+3. Re-ran the migration (step above) — applied cleanly this time.
+4. Also built and deployed the **runtime** image for the same commit
+   (`docker build --target runtime`, push to ACR, `az webapp sitecontainers
+   update`) so the live API would actually run the trigram-search code for
+   the smoke test below, rather than just having the DB side ready. This is
+   the same thing the CI workflow does on every push to this branch, and
+   that workflow will keep doing it on the next push — this was only done
+   by hand here to verify end-to-end within this task.
+
+**Verified on Trial (not just locally):**
+- `SELECT extname, extversion FROM pg_extension WHERE extname='pg_trgm'` → `pg_trgm 1.6`.
+- `jovo_normalize_arabic_text` function present and correct on real data:
+  `jovo_normalize_arabic_text('أَحْمَد إبراهيم آلة مرآة')` → `احمد ابراهيم اله مراه`.
+- `MenuItem_name_normalized_trgm_idx` GIN index present, on the expected expression.
+- `/api/v1/health/ready` reports the new commit and `database: connected`.
+- **Smoke test against the real live catalog** (JOVO MARKET, `GET
+  /api/v1/supermarkets/{id}/catalog?search=...`), using real seeded Arabic
+  product names, not synthetic fixtures:
+  - Typo `حلبب` (a garbled "حليب"/milk) → correctly returns all 5 real milk
+    products ("الجبريني حليب طازج1ل", "ارويد حليب جوزهند 1ل", etc.), which a
+    plain substring search would have missed entirely.
+  - Alef-variant `أرز` (hamza-alef "rice") → correctly finds "الوليمة ارز
+    بسمتي 1كغم", stored with the bare alef (ارز) — real cross-alef-form
+    matching, not a contrived test case.
+
+No file diff was required for the migration/deploy itself; this note and
+the ACR image push/App Service container update are the record of it.
+
+---
+
 # Trial Deployment Readiness (Dev Mode, Azure)
 
 **Target:** JOVO API on Azure App Service (Docker) + Azure Database for PostgreSQL
