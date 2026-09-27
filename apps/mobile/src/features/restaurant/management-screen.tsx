@@ -32,10 +32,11 @@ import { getAccessToken } from "../../core/session";
 import { getCurrentCoordinates } from "../../core/location";
 import { removeUploadedImage, uploadPreparedImage, type PreparedImage } from "../../core/image-upload";
 import i18n from "../../i18n";
-import { Icon } from "../../theme/icon";
+import { backIconName, disclosureIconName, Icon } from "../../theme/icon";
 import { colors, radius, spacing, statusFamily, statusPalette as tokenStatusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { InventoryWorkspace } from "./inventory-screen";
+import { categorySummaries, hiddenAcrossCategories, productsInCategory, type BrowseTab } from "./catalogue-browse";
 import { filterProducts } from "./product-search";
 import { RemoteImage } from "../../components/remote-image";
 import { useToast } from "../../components/toast";
@@ -444,6 +445,11 @@ function CategoriesSection(props: {
   );
 }
 
+type Browse =
+  | { mode: "categories" }
+  | { mode: "category"; categoryId: string; tab: BrowseTab }
+  | { mode: "hidden" };
+
 type ItemDraft = {
   categoryId: string;
   name: string;
@@ -503,6 +509,20 @@ function ItemsSection(props: {
   const { showToast } = useToast();
   const filtered = useMemo(() => filterProducts(props.items, props.search), [props.items, props.search]);
   const hiddenTotal = useMemo(() => props.items.filter((item) => !item.isAvailable).length, [props.items]);
+  // Categories first; a category opens on its Available products. Every view reads the same list,
+  // so a product hidden in one is hidden in all of them at once.
+  const [browse, setBrowse] = useState<Browse>({ mode: "categories" });
+  const isSupermarket = props.businessType === "SUPERMARKET";
+  const searching = props.search.trim().length > 0;
+  const summaries = useMemo(() => categorySummaries(props.categories, props.items), [props.categories, props.items]);
+  const categoryNames = useMemo(() => new Map(props.categories.map((category) => [category.id, category.name])), [props.categories]);
+  const openCategory = browse.mode === "category" ? summaries.find((summary) => summary.category.id === browse.categoryId) ?? null : null;
+  const listed = useMemo(
+    () => browse.mode === "category"
+      ? productsInCategory(props.items, browse.categoryId, browse.tab)
+      : browse.mode === "hidden" ? hiddenAcrossCategories(props.items, props.categories) : [],
+    [browse, props.items, props.categories]
+  );
   const priceMinor = Math.round(Number(price.replace(",", ".")) * 100);
   const costPriceMinor = costPrice.trim() ? Math.round(Number(costPrice.replace(",", ".")) * 100) : undefined;
 
@@ -650,6 +670,68 @@ function ItemsSection(props: {
     }
   }
 
+  function browseTo(next: Browse) {
+    setBrowse(next);
+    setShownCount(productPageSize);
+    props.onRequestScrollTop();
+  }
+
+  /** One product row, the same in every view; the category is named where the list mixes them. */
+  function renderRows(list: MenuItemOwner[], showCategory: boolean) {
+    return (
+      <>
+        {list.slice(0, shownCount).map((item) => {
+          const toggling = togglingIds.has(item.id);
+          const rowError = rowErrors[item.id];
+          return (
+            <View key={item.id} style={[styles.stockRow, item.isAvailable ? styles.stockRowVisible : styles.stockRowHidden]}>
+              <RemoteImage style={[styles.stockImage, !item.isAvailable && styles.stockImageHidden]} uri={item.imageUrl ?? null} />
+              <View style={styles.stockBody}>
+                <Text numberOfLines={2} style={[styles.stockName, !item.isAvailable && styles.stockNameHidden]}>{item.name}</Text>
+                <Text numberOfLines={1} style={styles.stockMeta}>
+                  {showCategory ? `${categoryNames.get(item.categoryId) ?? ""} · ` : ""}
+                  {formatPrice(item.priceMinor)}
+                  {item.stockQuantity === null ? "" : t("management.stockSuffix", { count: item.stockQuantity })}
+                </Text>
+                <View style={[styles.stockChip, item.isAvailable ? styles.stockChipVisible : styles.stockChipHidden]}>
+                  <Text style={[styles.stockChipText, !item.isAvailable && styles.stockChipTextHidden]}>
+                    {item.isAvailable ? t("management.availableLabel") : t("management.hiddenFromCustomers")}
+                  </Text>
+                </View>
+                {rowError ? <Text style={styles.stockError}>{rowError}</Text> : null}
+                <Pressable accessibilityRole="button" hitSlop={6} onPress={() => edit(item)} style={styles.stockEdit}>
+                  <Text style={styles.stockEditText}>{t("management.editButton")}</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                accessibilityLabel={t(item.isAvailable ? "management.hideNamed" : "management.showNamed", { name: item.name })}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: toggling }}
+                disabled={toggling}
+                onPress={() => void toggleAvailability(item)}
+                style={({ pressed }) => [
+                  styles.stockToggle,
+                  item.isAvailable ? styles.stockToggleHide : styles.stockToggleShow,
+                  (pressed || toggling) && styles.rowPressed
+                ]}
+              >
+                <Icon color={item.isAvailable ? colors.text : colors.textInverse} name={item.isAvailable ? "eyeOff" : "eye"} size="md" />
+                <Text style={[styles.stockToggleText, !item.isAvailable && { color: colors.textInverse }]}>
+                  {item.isAvailable ? t("management.hideButton") : t("management.showButton")}
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })}
+        {list.length > shownCount ? (
+          <Pressable accessibilityRole="button" onPress={() => setShownCount((count) => count + productPageSize)} style={styles.moreButton}>
+            <Text style={styles.moreButtonText}>{t("management.showMore", { count: list.length - shownCount })}</Text>
+          </Pressable>
+        ) : null}
+      </>
+    );
+  }
+
   if (props.categories.length === 0) return <Empty text={t("management.createCategoryFirstEmpty")} />;
 
   return (
@@ -721,68 +803,131 @@ function ItemsSection(props: {
       </View>
       ) : null}
       {!formOpen && !editingId ? (
-        <Pressable accessibilityRole="button" onPress={() => setFormOpen(true)} style={({ pressed }) => [styles.addButton, pressed && styles.rowPressed]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            // Adding from inside a category files the new product there by default.
+            if (browse.mode === "category") setCategoryId(browse.categoryId);
+            setFormOpen(true);
+          }}
+          style={({ pressed }) => [styles.addButton, pressed && styles.rowPressed]}
+        >
           <Icon color={colors.textInverse} name="add" size="sm" />
           <Text style={styles.addButtonText}>{t("management.addItemButton")}</Text>
         </Pressable>
       ) : null}
       <Text style={styles.stockSummary}>
         {t("management.stockSummary", { visible: props.items.length - hiddenTotal, hidden: hiddenTotal })}
-        {props.search.trim() ? ` · ${t("management.searchShowing", { shown: filtered.length })}` : ""}
       </Text>
       {props.items.length === 0 ? (
         <Empty text={props.businessType === "SUPERMARKET" ? t("management.noProductsYet") : t("management.noMenuItemsYet")} />
-      ) : filtered.length === 0 ? (
-        <Empty text={t("management.noSearchMatches")} />
-      ) : null}
-      {filtered.slice(0, shownCount).map((item) => {
-        const toggling = togglingIds.has(item.id);
-        const rowError = rowErrors[item.id];
-        return (
-          <View key={item.id} style={[styles.stockRow, item.isAvailable ? styles.stockRowVisible : styles.stockRowHidden]}>
-            <RemoteImage style={[styles.stockImage, !item.isAvailable && styles.stockImageHidden]} uri={item.imageUrl ?? null} />
-            <View style={styles.stockBody}>
-              <Text numberOfLines={2} style={[styles.stockName, !item.isAvailable && styles.stockNameHidden]}>{item.name}</Text>
-              <Text numberOfLines={1} style={styles.stockMeta}>
-                {formatPrice(item.priceMinor)}
-                {item.stockQuantity === null ? "" : t("management.stockSuffix", { count: item.stockQuantity })}
-              </Text>
-              <View style={[styles.stockChip, item.isAvailable ? styles.stockChipVisible : styles.stockChipHidden]}>
-                <Text style={[styles.stockChipText, !item.isAvailable && styles.stockChipTextHidden]}>
-                  {item.isAvailable ? t("management.availableLabel") : t("management.hiddenFromCustomers")}
-                </Text>
-              </View>
-              {rowError ? <Text style={styles.stockError}>{rowError}</Text> : null}
-              <Pressable accessibilityRole="button" hitSlop={6} onPress={() => edit(item)} style={styles.stockEdit}>
-                <Text style={styles.stockEditText}>{t("management.editButton")}</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              accessibilityLabel={t(item.isAvailable ? "management.hideNamed" : "management.showNamed", { name: item.name })}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: toggling }}
-              disabled={toggling}
-              onPress={() => void toggleAvailability(item)}
-              style={({ pressed }) => [
-                styles.stockToggle,
-                item.isAvailable ? styles.stockToggleHide : styles.stockToggleShow,
-                (pressed || toggling) && styles.rowPressed
-              ]}
-            >
-              <Icon color={item.isAvailable ? colors.text : colors.textInverse} name={item.isAvailable ? "eyeOff" : "eye"} size="md" />
-              <Text style={[styles.stockToggleText, !item.isAvailable && { color: colors.textInverse }]}>
-                {item.isAvailable ? t("management.hideButton") : t("management.showButton")}
-              </Text>
-            </Pressable>
+      ) : searching ? (
+        // Search always spans the whole catalogue, whichever view it was typed in.
+        <>
+          <Text style={styles.stockSummary}>{t("management.searchAcrossAll", { shown: filtered.length })}</Text>
+          {filtered.length === 0 ? <Empty text={t("management.noSearchMatches")} /> : null}
+          {renderRows(filtered, true)}
+        </>
+      ) : (
+        <>
+          <View accessibilityRole="tablist" style={styles.segment}>
+            <SegmentButton
+              active={browse.mode !== "hidden"}
+              label={isSupermarket ? t("management.browseDepartments") : t("management.browseCategories")}
+              onPress={() => browseTo({ mode: "categories" })}
+            />
+            <SegmentButton
+              active={browse.mode === "hidden"}
+              alert={hiddenTotal > 0}
+              label={t("management.browseHidden", { count: hiddenTotal })}
+              onPress={() => browseTo({ mode: "hidden" })}
+            />
           </View>
-        );
-      })}
-      {filtered.length > shownCount ? (
-        <Pressable accessibilityRole="button" onPress={() => setShownCount((count) => count + productPageSize)} style={styles.moreButton}>
-          <Text style={styles.moreButtonText}>{t("management.showMore", { count: filtered.length - shownCount })}</Text>
-        </Pressable>
-      ) : null}
+          {browse.mode === "categories" ? (
+            summaries.map((summary) => (
+              <Pressable
+                accessibilityLabel={t("management.openCategoryA11y", { name: summary.category.name, total: summary.total, hidden: summary.hidden })}
+                accessibilityRole="button"
+                key={summary.category.id}
+                onPress={() => browseTo({ mode: "category", categoryId: summary.category.id, tab: "AVAILABLE" })}
+                style={({ pressed }) => [styles.categoryCard, pressed && styles.rowPressed]}
+              >
+                <View style={styles.categoryCardBody}>
+                  <Text numberOfLines={2} style={styles.categoryCardName}>{summary.category.name}</Text>
+                  <Text style={styles.stockMeta}>
+                    {t("management.categoryProductCount", { count: summary.total })}
+                    {summary.category.isActive ? "" : ` · ${t("management.categoryInactive")}`}
+                  </Text>
+                </View>
+                {summary.hidden > 0 ? (
+                  <View style={styles.hiddenBadge}>
+                    <View style={styles.hiddenDot} />
+                    <Text style={styles.hiddenBadgeText}>{t("management.categoryHiddenBadge", { count: summary.hidden })}</Text>
+                  </View>
+                ) : null}
+                <Icon color={colors.textMuted} name={disclosureIconName()} size="sm" />
+              </Pressable>
+            ))
+          ) : browse.mode === "category" && openCategory ? (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => browseTo({ mode: "categories" })}
+                style={({ pressed }) => [styles.backToCategories, pressed && styles.rowPressed]}
+              >
+                <Icon color={colors.primaryPressed} name={backIconName()} size="sm" />
+                <Text style={styles.backToCategoriesText}>
+                  {isSupermarket ? t("management.allDepartments") : t("management.allCategories")}
+                </Text>
+              </Pressable>
+              <Text style={styles.categoryTitle}>{openCategory.category.name}</Text>
+              <View accessibilityRole="tablist" style={styles.segment}>
+                <SegmentButton
+                  active={browse.tab === "AVAILABLE"}
+                  label={t("management.tabAvailable", { count: openCategory.available })}
+                  onPress={() => browseTo({ ...browse, tab: "AVAILABLE" })}
+                />
+                <SegmentButton
+                  active={browse.tab === "HIDDEN"}
+                  alert={openCategory.hidden > 0}
+                  label={t("management.tabHidden", { count: openCategory.hidden })}
+                  onPress={() => browseTo({ ...browse, tab: "HIDDEN" })}
+                />
+              </View>
+              {listed.length === 0 ? (
+                <Empty
+                  text={openCategory.total === 0
+                    ? t("management.emptyCategory")
+                    : browse.tab === "AVAILABLE" ? t("management.emptyCategoryAvailable") : t("management.emptyCategoryHidden")}
+                />
+              ) : null}
+              {renderRows(listed, false)}
+            </>
+          ) : browse.mode === "hidden" ? (
+            <>
+              <Text style={styles.stockSummary}>{t("management.hiddenViewHint")}</Text>
+              {listed.length === 0 ? <Empty text={t("management.noHiddenProducts")} /> : null}
+              {renderRows(listed, true)}
+            </>
+          ) : null}
+        </>
+      )}
     </>
+  );
+}
+
+/** One half of a two-way switch; a red dot marks the side that has something hidden in it. */
+function SegmentButton(props: { label: string; active: boolean; alert?: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: props.active }}
+      onPress={props.onPress}
+      style={[styles.segmentButton, props.active && styles.segmentButtonActive]}
+    >
+      {props.alert ? <View style={[styles.hiddenDot, props.active && styles.hiddenDotOnActive]} /> : null}
+      <Text numberOfLines={1} style={[styles.segmentText, props.active && styles.segmentTextActive]}>{props.label}</Text>
+    </Pressable>
   );
 }
 
@@ -909,6 +1054,32 @@ const styles = StyleSheet.create({
   },
   addButtonText: { ...text("bodySm", "bold"), color: colors.textInverse },
   stockSummary: { ...text("caption", "semibold"), color: colors.textMuted, marginBottom: spacing[2] },
+  segment: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flexDirection: "row", gap: spacing[1], marginBottom: spacing[3], padding: spacing[1] },
+  segmentButton: { alignItems: "center", borderRadius: radius.sm, flex: 1, flexDirection: "row", gap: spacing[1], justifyContent: "center", minHeight: 44, paddingHorizontal: spacing[2] },
+  segmentButtonActive: { backgroundColor: colors.primary },
+  segmentText: { ...text("bodySm", "bold"), color: colors.textMuted, flexShrink: 1 },
+  segmentTextActive: { color: colors.textInverse },
+  categoryCard: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing[3],
+    marginBottom: spacing[2],
+    minHeight: 64,
+    padding: spacing[3]
+  },
+  categoryCardBody: { alignItems: "flex-start", flex: 1, gap: 2 },
+  categoryCardName: { ...text("body", "bold"), color: colors.text },
+  hiddenBadge: { alignItems: "center", backgroundColor: colors.errorSubtle, borderRadius: radius.pill, flexDirection: "row", gap: spacing[1], paddingHorizontal: spacing[2], paddingVertical: 2 },
+  hiddenBadgeText: { ...text("label", "bold"), color: colors.error },
+  hiddenDot: { backgroundColor: colors.error, borderRadius: 4, height: 8, width: 8 },
+  hiddenDotOnActive: { backgroundColor: colors.textInverse },
+  backToCategories: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.primarySubtle, borderRadius: radius.md, flexDirection: "row", gap: spacing[2], marginBottom: spacing[2], minHeight: 44, paddingHorizontal: spacing[3] },
+  backToCategoriesText: { ...text("bodySm", "bold"), color: colors.primaryPressed },
+  categoryTitle: { ...text("h2", "bold"), color: colors.text, marginBottom: spacing[2] },
   stockRow: {
     alignItems: "center",
     borderRadius: radius.lg,
