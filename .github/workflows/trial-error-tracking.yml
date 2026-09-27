@@ -45,8 +45,17 @@ jobs:
         run: |
           set -euo pipefail
           az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors
-          az provider register --namespace Microsoft.OperationalInsights --only-show-errors || true
-          az provider register --namespace Microsoft.Insights --only-show-errors || true
+          # Registering a resource provider is a one-time, subscription-level action; this deploy identity
+          # is scoped to the resource group and is not allowed to do it, so a subscription Owner must.
+          for namespace in Microsoft.OperationalInsights Microsoft.Insights; do
+            state=$(az provider show --namespace "$namespace" --query registrationState --output tsv 2>/dev/null || echo Unknown)
+            echo "$namespace: $state"
+            if [[ "$state" != "Registered" ]]; then
+              echo "::error::$namespace is not registered on this subscription. A subscription Owner must run once: az provider register --namespace $namespace (or Portal: Subscriptions > Resource providers > $namespace > Register), then re-run this workflow."
+              missing=1
+            fi
+          done
+          [[ -z "${missing:-}" ]] || exit 1
           location=$(az group show --name "$RESOURCE_GROUP" --query location --output tsv)
           echo "Resource group location: $location"
           if ! az monitor log-analytics workspace show --resource-group "$RESOURCE_GROUP" --workspace-name "$WORKSPACE" --output none 2>/dev/null; then

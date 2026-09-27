@@ -49,7 +49,7 @@ test("a malformed or non-HTTPS connection string counts as not configured", () =
 test("a 5xx is sent to Application Insights as exception telemetry carrying the request id", async () => {
   const calls = recordFetch();
   reporter({ APPLICATIONINSIGHTS_CONNECTION_STRING: connectionString, NODE_ENV: "development", APP_VERSION: "abc123" })
-    .capture(new Error("connect failed postgresql://jovo:s3cret-pass@db.example.com/jovo"), context);
+    .capture(new Error("upstream said: Bearer leaked-token-value"), context);
   await flush();
 
   assert.equal(calls.length, 1);
@@ -62,7 +62,7 @@ test("a 5xx is sent to Application Insights as exception telemetry carrying the 
   assert.equal(envelope.data.baseType, "ExceptionData");
   assert.equal(envelope.data.baseData.properties.requestId, "req-123");
   assert.equal(envelope.data.baseData.properties.statusCode, "500");
-  assert.doesNotMatch(envelope.data.baseData.exceptions[0].message, /s3cret-pass/, "credentials are redacted exactly as for the webhook");
+  assert.doesNotMatch(envelope.data.baseData.exceptions[0].message, /leaked-token-value/, "credentials are redacted exactly as for the webhook");
 });
 
 test("both destinations receive the error when both are configured, and neither when none is", async () => {
