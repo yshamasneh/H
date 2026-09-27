@@ -107,8 +107,10 @@ export class UsersService {
       }
       await tx.pushToken.upsert({
         where: { token },
-        create: { userId, token, platform: input.platform },
-        update: { userId, platform: input.platform, isActive: true, lastRegisteredAt: new Date() }
+        // An older build re-registering reports no version, so the stored one is cleared rather
+        // than left claiming alert sounds that binary does not have.
+        create: { userId, token, platform: input.platform, appVersion: input.appVersion ?? null },
+        update: { userId, platform: input.platform, appVersion: input.appVersion ?? null, isActive: true, lastRegisteredAt: new Date() }
       });
     });
     return { registered: true };

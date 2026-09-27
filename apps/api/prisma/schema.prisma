@@ -432,6 +432,9 @@ model PushToken {
   userId           String         @db.Uuid
   token            String         @unique
   platform         String
+  /// The installed binary's version (e.g. "0.17.0"), reported at registration. Decides which alert
+  /// channels and sounds a push may name: an older build lacks them. Null for builds before 0.17.0.
+  appVersion       String?
   isActive         Boolean        @default(true)
   lastRegisteredAt DateTime       @default(now())
   createdAt        DateTime       @default(now())

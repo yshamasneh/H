@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import i18n from "../i18n";
 import type { CountryCode } from "./phone";
@@ -510,7 +511,15 @@ export function registerMyPushToken(
   token: string,
   platform: "android" | "ios" | "web"
 ): Promise<{ registered: true }> {
-  return request("/api/v1/users/me/push-tokens", { method: "POST", body: { token, platform }, accessToken });
+  // The binary's version (the runtime version policy is appVersion, so this bundle's app.json
+  // version is the installed binary's): the API uses it to address alert channels and sounds only
+  // to builds that contain them.
+  const appVersion = Constants.expoConfig?.version;
+  return request("/api/v1/users/me/push-tokens", {
+    method: "POST",
+    body: appVersion ? { token, platform, appVersion } : { token, platform },
+    accessToken
+  });
 }
 
 export function unregisterMyPushToken(accessToken: string, token: string): Promise<void> {

@@ -4,7 +4,7 @@ import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import i18n from "../i18n";
-import { ensureDeliveryAlertChannel } from "./push-channels";
+import { ensureDeliveryAlertChannel, ensureStoreOrderChannel } from "./push-channels";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -15,7 +15,7 @@ Notifications.setNotificationHandler({
   })
 });
 
-/** `role` decides which Android channels exist: only drivers get the delivery-alert channel. */
+/** `role` decides which Android channels exist: drivers get the delivery alert, stores the new-order alert. */
 export async function getPushToken(role?: string): Promise<string> {
   if (Platform.OS === "web") {
     throw new Error(i18n.t("common:pushWebUnsupported"));
@@ -30,6 +30,7 @@ export async function getPushToken(role?: string): Promise<string> {
       vibrationPattern: [0, 250, 250, 250]
     });
     if (role === "DRIVER") await ensureDeliveryAlertChannel();
+    if (role === "RESTAURANT") await ensureStoreOrderChannel();
   }
   const existing = await Notifications.getPermissionsAsync();
   const permission = existing.granted ? existing : await Notifications.requestPermissionsAsync();

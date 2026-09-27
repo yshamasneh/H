@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsBoolean, IsEmail, IsIn, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsBoolean, IsEmail, IsIn, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 
 export class UpdateMyProfileDto {
   @ApiPropertyOptional({ example: "Mohammad Ahmad" })
@@ -97,6 +97,11 @@ export class RegisterPushTokenDto {
   @ApiProperty({ enum: ["android", "ios", "web"] })
   @IsIn(["android", "ios", "web"])
   platform!: "android" | "ios" | "web";
+
+  @ApiPropertyOptional({ example: "0.17.0", description: "The installed app binary's version; builds before 0.17.0 omit it." })
+  @IsOptional()
+  @Matches(/^\d{1,3}\.\d{1,3}\.\d{1,3}$/)
+  appVersion?: string;
 }
 
 export class DeletePushTokenDto {

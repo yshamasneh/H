@@ -248,7 +248,7 @@ export class PushSenderService implements OnModuleInit, OnModuleDestroy {
         type: delivery.notification.type,
         relatedEntityId: delivery.notification.relatedEntityId ?? undefined
       },
-      ...pushPresentation(delivery.notification.type, delivery.pushToken.platform),
+      ...pushPresentation(delivery.notification.type, delivery.pushToken.platform, delivery.pushToken.appVersion),
       priority: "high"
     })));
 

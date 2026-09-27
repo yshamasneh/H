@@ -42,6 +42,7 @@ type PushTokenRecord = {
   token: string;
   isActive: boolean;
   platform?: string;
+  appVersion?: string | null;
   lastRegisteredAt?: Date;
 };
 type PushDeliveryRecord = { pushTokenId: string; status: string; lastErrorCode?: string | null };
@@ -180,6 +181,7 @@ export class FakeUsersPrisma {
       if (existing) {
         existing.userId = update.userId;
         existing.platform = update.platform;
+        existing.appVersion = update.appVersion;
         existing.isActive = update.isActive;
         existing.lastRegisteredAt = update.lastRegisteredAt;
         return { ...existing };
@@ -189,6 +191,7 @@ export class FakeUsersPrisma {
         userId: create.userId,
         token: create.token,
         platform: create.platform,
+        appVersion: create.appVersion,
         isActive: true,
         lastRegisteredAt: new Date()
       };

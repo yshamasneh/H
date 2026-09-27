@@ -20,6 +20,7 @@ Because Android is maintained rather than regenerated for every build, the Expo 
 | New architecture | `newArchEnabled` | `gradle.properties` |
 | Notification channel | runtime Push setup | `src/core/push-notifications.ts` (`orders`, high importance) |
 | Driver delivery-alert channel and sound | `expo-notifications` plugin `sounds` | `src/core/push-channels.ts` (`delivery-alerts`, max importance) and `android/app/src/main/res/raw/jovo_delivery.wav` |
+| Store new-order channel and sound | `expo-notifications` plugin `sounds` | `src/core/push-channels.ts` (`store-orders`, max importance) and `android/app/src/main/res/raw/jovo_order.wav` |
 
 `check:native-config` also protects the native-only release choices that a standard prebuild removes: release minification/resource shrinking, no debug signing for release, and a disabled development-client network inspector.
 
@@ -83,12 +84,39 @@ byte-identical copy) through **`expo-audio`, a new native module**, so the app v
   `RECORD_AUDIO` was already blocked. The sound is a Metro asset, not a `res/raw` resource.
 - **iOS**: the `expo-audio` plugin runs with `microphonePermission: false`, so no microphone usage string is
   added. Playback uses `playsInSilentMode: true` so a store phone on silent still rings for an order.
-- **Closed app**: unchanged. The store's `ORDER_PLACED` push still uses the `orders` channel and the default
-  sound. Moving it to a custom channel needs the server to know each token's app version (a 0.15 Android
-  build has no such channel), which `PushToken` does not record yet.
+- **Closed app**: handled from 0.17.0 (next section). On 0.16.0 the store's `ORDER_PLACED` push still uses
+  the `orders` channel and the default sound.
 - **After the build**, on a real phone signed in as the store: keep JOVO open on any screen, place an order
   from another device, and check the sound is audible across the shop, the popup appears, and accepting on
   a second device (or the web console) stops the sound on this one.
+
+## Closed-app new-order sound for stores needs a new native build (0.17.0)
+
+With JOVO closed, a store's new order arrived with the phone's default sound, because the only thing that
+played `jovo_order.wav` was the in-app expo-audio player. Two platform rules made that impossible to fix
+over the air:
+
+- **Android** takes a notification's sound from its channel, never from the push, and a channel's sound is
+  fixed when the channel is first created. The `orders` channel was created with the default sound on every
+  existing install and cannot be changed, so the fix is a **new channel**, `store-orders` (max importance,
+  alarm audio stream, like the driver's). Its sound must be a `res/raw` resource, which is binary content:
+  `jovo_order.wav` is now copied there, and `check:native-config` fails if the copy is missing or differs.
+- **iOS** plays a custom push sound only if the file is inside the app bundle. The `expo-notifications`
+  plugin now lists `jovo_order.wav`, so `eas build` bundles it, and the API names it in the payload.
+
+Because a 0.16.0 binary has neither the channel nor the file, the API must not address them to it. The app
+now reports its version when it registers a push token (`PushToken.appVersion`, migration
+`20260927090000_add_push_token_app_version`), and the API sends `ORDER_PLACED` to `store-orders` /
+`jovo_order.wav` only for tokens reporting 0.17.0 or later (`apps/api/src/notifications/push-presentation.ts`).
+Older builds keep the `orders` channel and default sound, exactly as before. The version moved to `0.17.0`
+(build 17) so this JavaScript is never delivered over the air to a 0.16.0 binary.
+
+- **After the build**, on a real phone signed in as the store: open Settings and turn notifications on (this
+  registers the token with version 0.17.0 and creates the channel), fully close JOVO (swipe it away), place
+  an order from another device, and check that the JOVO order sound plays, the banner appears as a heads-up,
+  and tapping it opens the order. On Android, Settings → Apps → JOVO → Notifications should list "New orders".
+  A store phone upgraded from 0.16.0 must re-register once: opening the app after login does that
+  automatically if notifications were already on.
 
 ## Safe update workflow
 

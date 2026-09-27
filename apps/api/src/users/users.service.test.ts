@@ -150,6 +150,20 @@ test("one user cannot deactivate another user's device token", async () => {
   assert.equal(prisma.pushTokens[0].isActive, true);
 });
 
+test("a token records the app version it reports, and an older build re-registering clears it", async () => {
+  const { prisma, service } = createService();
+  const store = prisma.seedUser();
+  const token = "ExponentPushToken[store-installation-789]";
+
+  await service.registerPushToken(store.id, { token, platform: "android", appVersion: "0.17.0" });
+  assert.equal(prisma.pushTokens[0].appVersion, "0.17.0");
+
+  // The same installation downgraded to a build without the store alert sound must not keep
+  // claiming it: the API would address a channel that build never created.
+  await service.registerPushToken(store.id, { token, platform: "android" });
+  assert.equal(prisma.pushTokens[0].appVersion, null);
+});
+
 // --- Saved address CRUD + default selection --------------------------------------
 
 test("the first saved address is forced to be the default even without asking", async () => {

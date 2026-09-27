@@ -51,3 +51,39 @@ export async function ensureDeliveryAlertChannel(): Promise<void> {
   if (Platform.OS !== "android") return;
   await Notifications.setNotificationChannelAsync(deliveryAlertChannelId, deliveryAlertChannel);
 }
+
+/**
+ * The store new-order alert.
+ *
+ * A shop hears a new order in the app through expo-audio, but only while JOVO is open. With the app
+ * closed, the push is all there is, so an ORDER_PLACED push gets a channel of its own carrying the
+ * same JOVO order sound (assets/sounds/jovo_order.wav, copied to res/raw for Android and listed in
+ * the expo-notifications plugin for iOS). The same Android rule applies as for drivers: the sound has
+ * to be in the binary before the channel is first created, which is why this ships in 0.17.0 and why
+ * the API only addresses this channel on tokens that report 0.17.0 or later.
+ */
+export const storeOrderChannelId = "store-orders";
+export const storeOrderSound = "jovo_order.wav";
+
+export const storeOrderChannel: Notifications.NotificationChannelInput = {
+  name: "New orders",
+  description: "A customer has placed an order with your store.",
+  importance: Notifications.AndroidImportance.MAX,
+  sound: storeOrderSound,
+  audioAttributes: {
+    usage: alertAudioUsage,
+    contentType: Notifications.AndroidAudioContentType.SONIFICATION
+  },
+  vibrationPattern: [0, 500, 200, 500, 200, 500],
+  enableVibrate: true,
+  enableLights: true,
+  lightColor: "#F45A00",
+  lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  showBadge: true
+};
+
+/** Creates the store new-order channel. Android only; safe to call repeatedly, like the driver's. */
+export async function ensureStoreOrderChannel(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync(storeOrderChannelId, storeOrderChannel);
+}
