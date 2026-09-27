@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
 import {
   ApiError,
-  getAdminRestaurant,
   getAdminRestaurantOrders,
   readApiError,
   updateStoreLocation,
@@ -23,35 +21,30 @@ import {
 import { CatalogueManager, type CatalogueApi } from "../components/CatalogueManager";
 import { StoreDetailsCard } from "../components/StoreDetailsCard";
 import { LeafletPicker, type PickerCoordinate } from "../components/LeafletPicker";
-import { StatusBadge } from "../components/StatusBadge";
+import { useAdminStore } from "./store/AdminStoreSection";
 
 const currencyCode = "ILS";
 // The Biddu-enclave service area — a sensible starting view before an admin taps to set a store
 // that has no coordinates yet. Matches the landmarks screen default.
 const defaultCoordinate: PickerCoordinate = { latitude: 31.83804, longitude: 35.14047 };
 
+/**
+ * The Overview tab of a store in the admin console (the section around it loads the store and
+ * renders its header and tabs): the admin-only controls (profile, public location, owner) and the
+ * store's product catalogue, browsed by category exactly as the store sees it in its own portal.
+ */
 export function RestaurantDetailPage() {
   const { t } = useTranslation();
-  const { restaurantId = "" } = useParams();
-  const navigate = useNavigate();
-  const [restaurant, setRestaurant] = useState<AdminRestaurantView | null>(null);
+  const { restaurant, setRestaurant } = useAdminStore();
+  const restaurantId = restaurant.id;
   const [orders, setOrders] = useState<{ id: string; status: string; totalMinor: number; createdAt: string }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [restaurantData, ordersData] = await Promise.all([
-          getAdminRestaurant(restaurantId),
-          getAdminRestaurantOrders(restaurantId)
-        ]);
-        setRestaurant(restaurantData);
-        setOrders(ordersData.items);
-      } catch (requestError) {
-        setError(readApiError(requestError, t("restaurantDetail.loadError")));
-      }
-    }
-    void load();
+    getAdminRestaurantOrders(restaurantId).then(
+      (ordersData) => setOrders(ordersData.items),
+      (requestError: unknown) => setError(readApiError(requestError, t("restaurantDetail.loadError")))
+    );
   }, [restaurantId]);
 
   // Bind the store-scoped admin catalogue endpoints to this store's id so the shared
@@ -71,24 +64,9 @@ export function RestaurantDetailPage() {
     [restaurantId]
   );
 
-  if (error) return <div className="error-banner">{error}</div>;
-  if (!restaurant) return <div className="loading-state">{t("common.loading")}</div>;
-
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <button className="btn btn-outline btn-sm" onClick={() => navigate("/restaurants")} type="button">
-            {t("common.back")}
-          </button>
-          <h1 className="page-title" style={{ marginTop: 10 }}>
-            {restaurant.name}
-          </h1>
-          <p className="page-subtitle">{restaurant.addressLine}</p>
-        </div>
-        <StatusBadge status={restaurant.status} />
-      </div>
-
+      {error ? <div className="error-banner">{error}</div> : null}
       <div className="stat-grid">
         <div className="stat-card">
           <div className="stat-label">{t("restaurantDetail.totalOrders")}</div>
@@ -107,13 +85,13 @@ export function RestaurantDetailPage() {
       </div>
 
       <StoreDetailsCard
-        onUpdated={(profile) => setRestaurant((current) => (current ? { ...current, ...profile } : current))}
+        onUpdated={(profile) => setRestaurant((current) => ({ ...current, ...profile }))}
         restaurant={restaurant}
       />
 
       <StoreLocationCard
         restaurant={restaurant}
-        onUpdated={(profile) => setRestaurant((current) => (current ? { ...current, ...profile } : current))}
+        onUpdated={(profile) => setRestaurant((current) => ({ ...current, ...profile }))}
       />
 
       <div className="card">
@@ -143,10 +121,11 @@ export function RestaurantDetailPage() {
       </div>
 
       <h2 className="card-title" style={{ marginTop: 4 }}>{t("restaurantDetail.products")}</h2>
-      {/* Full product CRUD over this store, admin-scoped. Reuses the same editor the store owner
-          sees in their own portal; the admin always holds full price control. */}
+      {/* Full product CRUD over this store, admin-scoped: the same editor, with the same category
+          browsing, the store sees in its own portal; the admin always holds full price control. */}
       <CatalogueManager
         api={catalogueApi}
+        browseByCategory
         restaurantId={restaurantId}
         capabilities={{
           isSupermarket: restaurant.businessType === "SUPERMARKET",

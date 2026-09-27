@@ -2,7 +2,7 @@ import { Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { writeAuditLog } from "../common/audit-log.util";
 import { cashDue } from "../common/cash-rounding";
-import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
+import { actorUserIdOf, resolveActorBusinessId, type BusinessActor } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
 import {
   BusinessType,
@@ -244,8 +244,8 @@ export class OrdersService {
     return toOrderDetailView(order);
   }
 
-  async listForRestaurantOwner(ownerUserId: string, page: number, pageSize: number): Promise<Page<OrderDetailView>> {
-    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+  async listForRestaurantOwner(actor: BusinessActor, page: number, pageSize: number): Promise<Page<OrderDetailView>> {
+    const restaurant = await this.requireOwnRestaurant(actor);
     const where = { restaurantId: restaurant.id };
     const [orders, total] = await Promise.all([
       this.prisma.order.findMany({
@@ -285,8 +285,8 @@ export class OrdersService {
    * (restaurantId, status, createdAt) index. Each bucket is capped; see below for why the cap has
    * to fall on the oldest orders and not the newest.
    */
-  async listLiveForBusiness(memberUserId: string): Promise<LiveOrderQueueView> {
-    const restaurant = await this.requireOwnRestaurant(memberUserId);
+  async listLiveForBusiness(actor: BusinessActor): Promise<LiveOrderQueueView> {
+    const restaurant = await this.requireOwnRestaurant(actor);
     const groups = {
       new: [OrderStatus.PLACED],
       inProgress: [OrderStatus.ACCEPTED, OrderStatus.PREPARING],
@@ -327,8 +327,8 @@ export class OrdersService {
     };
   }
 
-  async getForRestaurantOwner(ownerUserId: string, orderId: string): Promise<OrderDetailView> {
-    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+  async getForRestaurantOwner(actor: BusinessActor, orderId: string): Promise<OrderDetailView> {
+    const restaurant = await this.requireOwnRestaurant(actor);
     const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: orderInclude });
     if (!order || order.restaurantId !== restaurant.id) {
       throw orderNotFound();
@@ -345,12 +345,12 @@ export class OrdersService {
    * replacement the customer has not answered — there is nothing decided to pack yet.
    */
   async setItemPicked(
-    ownerUserId: string,
+    actor: BusinessActor,
     orderId: string,
     orderItemId: string,
     isPicked: boolean
   ): Promise<OrderDetailView> {
-    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    const restaurant = await this.requireOwnRestaurant(actor);
     const emitter = new DeferredEmitter(this.realtime);
     const updated = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
@@ -374,6 +374,8 @@ export class OrdersService {
       }
       // Business members only: customers and drivers have no use for the packer's working state.
       emitter.emitToRestaurant(restaurant.id, "order.packing.changed", { orderId, orderItemId, isPicked });
+      // Admins can run a store's packing screen from the admin console too.
+      emitter.emitToAdmins("order.packing.changed", { orderId, orderItemId, isPicked });
       return tx.order.findUnique({ where: { id: orderId }, include: orderInclude });
     });
     emitter.flush();
@@ -381,12 +383,12 @@ export class OrdersService {
   }
 
   async proposeFulfillmentAdjustment(
-    ownerUserId: string,
+    actor: BusinessActor,
     orderId: string,
     orderItemId: string,
     input: ProposeFulfillmentAdjustmentDto
   ): Promise<OrderDetailView> {
-    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    const restaurant = await this.requireOwnRestaurant(actor);
     if (restaurant.businessType !== BusinessType.SUPERMARKET) {
       throw new ApiException(404, "SUPERMARKET_NOT_FOUND", "Fulfillment adjustments are available only for supermarket orders.");
     }
@@ -512,7 +514,7 @@ export class OrdersService {
         create: {
           orderItemId: orderItem.id,
           replacementMenuItemId: replacement?.id ?? null,
-          proposedByUserId: ownerUserId,
+          proposedByUserId: actorUserIdOf(actor),
           replacementNameSnapshot: replacement?.name ?? null,
           replacementUnitLabelSnapshot: replacement?.unitLabel ?? null,
           actualQuantityMilli,
@@ -523,7 +525,7 @@ export class OrdersService {
         },
         update: {
           replacementMenuItemId: replacement?.id ?? null,
-          proposedByUserId: ownerUserId,
+          proposedByUserId: actorUserIdOf(actor),
           replacementNameSnapshot: replacement?.name ?? null,
           replacementUnitLabelSnapshot: replacement?.unitLabel ?? null,
           actualQuantityMilli,
@@ -702,12 +704,12 @@ export class OrdersService {
   }
 
   async updateStatusForRestaurantOwner(
-    ownerUserId: string,
+    actor: BusinessActor,
     orderId: string,
     action: RestaurantOrderStatusAction,
     note: string | undefined
   ): Promise<OrderDetailView> {
-    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+    const restaurant = await this.requireOwnRestaurant(actor);
     const targetStatus = restaurantStatusTransitions[action];
 
     const emitter = new DeferredEmitter(this.realtime);
@@ -739,7 +741,7 @@ export class OrdersService {
         data: {
           status: targetStatus,
           ...(targetStatus === OrderStatus.ACCEPTED
-            ? { acceptedByUserId: ownerUserId, acceptedAt: new Date() }
+            ? { acceptedByUserId: actorUserIdOf(actor), acceptedAt: new Date() }
             : {})
         }
       });
@@ -751,7 +753,7 @@ export class OrdersService {
           orderId,
           fromStatus: existing.status,
           toStatus: targetStatus,
-          changedByUserId: ownerUserId,
+          changedByUserId: actorUserIdOf(actor),
           note: note?.trim() || null
         }
       });
@@ -949,8 +951,8 @@ export class OrdersService {
   }
 
   /** Resolves the caller's business from their membership, so staff accounts work, not just owners. */
-  private async requireOwnRestaurant(memberUserId: string): Promise<Restaurant> {
-    const businessId = await resolveMemberBusinessId(this.prisma, memberUserId);
+  private async requireOwnRestaurant(actor: BusinessActor): Promise<Restaurant> {
+    const businessId = await resolveActorBusinessId(this.prisma, actor);
     const restaurant = await this.prisma.restaurant.findUnique({ where: { id: businessId } });
     if (!restaurant) {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "No restaurant is linked to this account.");

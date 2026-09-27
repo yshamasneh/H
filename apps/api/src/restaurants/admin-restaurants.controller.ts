@@ -16,10 +16,13 @@ import {
   CreateMenuItemDto,
   RestaurantAdminActionReasonDto,
   SetItemAvailabilityDto,
+  SetOpenStatusDto,
   UpdateMenuCategoryDto,
   UpdateMenuItemDto,
   UpdateRestaurantProfileDto
 } from "./restaurants.dto";
+import { AddBusinessStaffDto, UpdateBusinessStaffDto } from "./business-staff.dto";
+import { BusinessStaffService } from "./business-staff.service";
 import { RestaurantsService } from "./restaurants.service";
 import { OrdersPaginationQueryDto } from "../orders/orders.dto";
 
@@ -32,7 +35,8 @@ import { OrdersPaginationQueryDto } from "../orders/orders.dto";
 export class AdminRestaurantsController {
   constructor(
     private readonly restaurants: RestaurantsService,
-    private readonly menu: MenuService
+    private readonly menu: MenuService,
+    private readonly staff: BusinessStaffService
   ) {}
 
   @Get()
@@ -211,5 +215,69 @@ export class AdminRestaurantsController {
   ) {
     await this.restaurants.assertStoreExists(restaurantId);
     return this.menu.setItemAvailability(restaurantId, itemId, input.isAvailable);
+  }
+
+  // ---- The rest of the store's own workspace (open/close, reports, staff) -----------------------
+  // Same services and rules as the store's /restaurant/me/* routes; the store is named by id and the
+  // admin is the actor on every audit entry. Order handling and inventory have their own admin
+  // controllers in their modules (admin/restaurants/:restaurantId/orders|inventory).
+
+  @Patch(":restaurantId/open-status")
+  @RequirePermission("MANAGE_BUSINESSES", "MANAGE_ALL_ORDERS")
+  @ApiOperation({ summary: "Open or close any store for new orders" })
+  setOpenStatus(
+    @Req() request: AuthenticatedRequest,
+    @Param("restaurantId", new ParseUUIDPipe()) restaurantId: string,
+    @Body() input: SetOpenStatusDto
+  ) {
+    return this.restaurants.adminSetOpenStatus(request.user.id, restaurantId, input.isOpen);
+  }
+
+  @Get(":restaurantId/stats")
+  @ApiOperation({ summary: "A store's sales and order-volume snapshot for today and the current month" })
+  async getStats(@Req() request: AuthenticatedRequest, @Param("restaurantId", new ParseUUIDPipe()) restaurantId: string) {
+    await this.restaurants.assertStoreExists(restaurantId);
+    return this.restaurants.getOwnStats({ actorUserId: request.user.id, businessId: restaurantId });
+  }
+
+  @Get(":restaurantId/staff")
+  @ApiOperation({ summary: "List everyone with access to a store" })
+  async listStaff(@Req() request: AuthenticatedRequest, @Param("restaurantId", new ParseUUIDPipe()) restaurantId: string) {
+    await this.restaurants.assertStoreExists(restaurantId);
+    return this.staff.list({ actorUserId: request.user.id, businessId: restaurantId });
+  }
+
+  @Post(":restaurantId/staff")
+  @ApiOperation({ summary: "Create a staff account with access to a store" })
+  async addStaff(
+    @Req() request: AuthenticatedRequest,
+    @Param("restaurantId", new ParseUUIDPipe()) restaurantId: string,
+    @Body() input: AddBusinessStaffDto
+  ) {
+    await this.restaurants.assertStoreExists(restaurantId);
+    return this.staff.add({ actorUserId: request.user.id, businessId: restaurantId }, input);
+  }
+
+  @Patch(":restaurantId/staff/:staffUserId")
+  @ApiOperation({ summary: "Change a store staff member's role or suspend their access" })
+  async updateStaff(
+    @Req() request: AuthenticatedRequest,
+    @Param("restaurantId", new ParseUUIDPipe()) restaurantId: string,
+    @Param("staffUserId", new ParseUUIDPipe()) staffUserId: string,
+    @Body() input: UpdateBusinessStaffDto
+  ) {
+    await this.restaurants.assertStoreExists(restaurantId);
+    return this.staff.update({ actorUserId: request.user.id, businessId: restaurantId }, staffUserId, input);
+  }
+
+  @Delete(":restaurantId/staff/:staffUserId")
+  @ApiOperation({ summary: "Remove a store staff member's access, keeping their history intact" })
+  async removeStaff(
+    @Req() request: AuthenticatedRequest,
+    @Param("restaurantId", new ParseUUIDPipe()) restaurantId: string,
+    @Param("staffUserId", new ParseUUIDPipe()) staffUserId: string
+  ) {
+    await this.restaurants.assertStoreExists(restaurantId);
+    return this.staff.remove({ actorUserId: request.user.id, businessId: restaurantId }, staffUserId);
   }
 }

@@ -1,15 +1,16 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, readApiError } from "./api";
-import { getLiveOrders, updateBusinessOrderStatus, type BusinessOrder, type LiveOrderQueue } from "./api.business";
+import type { BusinessOrder, LiveOrderQueue } from "./api.business";
 import { useNewOrderAlert, type AlertState } from "./alert-sound";
-import { useAuth } from "./auth";
 import { alertRepeatMs, oldestAgeMs, pruneSetAside, shortReference } from "./order-queue";
 import { parsePackingEvent, withPicked } from "./packChecklist";
 import { useLiveRefresh, useRealtimeEvent } from "./socket";
+import { useStoreWorkspace } from "./store-workspace";
 
 /**
- * The store's live order queue, held once for the whole business shell rather than by one page.
+ * The store's live order queue, held once for the whole store workspace rather than by one page
+ * (the business shell, or a store's section of the admin console).
  *
  * That is what lets the new-order sound and popup work on every screen — catalogue, inventory,
  * an order's detail — and not only while the Live Orders board happens to be open. The board reads
@@ -47,7 +48,7 @@ export function useLiveQueue(): LiveQueueValue | null {
 }
 
 export function LiveQueueProvider({ children }: { children: ReactNode }) {
-  const { can } = useAuth();
+  const { can } = useStoreWorkspace();
   // A staff role without order access never loads the queue and never rings.
   if (!can("VIEW_ORDERS")) return <>{children}</>;
   return <ActiveLiveQueueProvider>{children}</ActiveLiveQueueProvider>;
@@ -55,6 +56,7 @@ export function LiveQueueProvider({ children }: { children: ReactNode }) {
 
 function ActiveLiveQueueProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
+  const { api } = useStoreWorkspace();
   const [queue, setQueue] = useState<LiveOrderQueue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null);
@@ -69,7 +71,7 @@ function ActiveLiveQueueProvider({ children }: { children: ReactNode }) {
   async function reload(): Promise<void> {
     const seq = ++requestSeq.current;
     try {
-      const next = await getLiveOrders();
+      const next = await api.getLiveOrders();
       if (seq !== requestSeq.current) return;
       setQueue(next);
       setSetAside((current) => pruneSetAside(current, next.new));
@@ -118,7 +120,7 @@ function ActiveLiveQueueProvider({ children }: { children: ReactNode }) {
     if (acceptingIds.has(order.id)) return;
     setAcceptingIds((current) => new Set(current).add(order.id));
     try {
-      const accepted = await updateBusinessOrderStatus(order.id, "ACCEPTED");
+      const accepted = await api.updateBusinessOrderStatus(order.id, "ACCEPTED");
       // Move it locally at once so the sound stops on this device without waiting for the round
       // trip; the reload below then confirms it against the server. Any refresh already in flight
       // was started before the accept and would put the order back (and ring once), so it is

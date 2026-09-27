@@ -1,19 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, readApiError } from "../../api";
-import {
-  adjustInventory,
-  cancelPurchaseOrder,
-  createPurchaseOrder,
-  createSupplier,
-  listInventory,
-  listPurchaseOrders,
-  listSuppliers,
-  receivePurchaseOrder,
-  type InventoryRow,
-  type PurchaseOrderView,
-  type Supplier
-} from "../../api.business";
+import type { InventoryRow, PurchaseOrderView, Supplier } from "../../api.business";
+import { useStoreWorkspace } from "../../store-workspace";
 import { parsePositiveMoneyToMinor, parseWholeNumber } from "../../money";
 import { BarcodeLookup, MovementsCard } from "./InventoryMovements";
 
@@ -26,6 +15,7 @@ const stockPageSize = 30;
  */
 export function InventoryPage() {
   const { t } = useTranslation();
+  const { api } = useStoreWorkspace();
   const [rows, setRows] = useState<InventoryRow[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderView[]>([]);
@@ -44,9 +34,9 @@ export function InventoryPage() {
   async function load() {
     try {
       const [inventory, nextSuppliers, nextOrders] = await Promise.all([
-        listInventory({ search: search || undefined, lowStock: lowStockOnly || undefined, page, pageSize: stockPageSize }),
-        listSuppliers(),
-        listPurchaseOrders()
+        api.listInventory({ search: search || undefined, lowStock: lowStockOnly || undefined, page, pageSize: stockPageSize }),
+        api.listSuppliers(),
+        api.listPurchaseOrders()
       ]);
       setRows(inventory.items);
       setTotal(inventory.total);
@@ -133,7 +123,7 @@ export function InventoryPage() {
                     <td className="num">{row.reorderLevel ?? t("common.dash")}</td>
                     <td>
                       <AdjustStockControl
-                        onSubmit={(quantityDelta, reason) => run(() => adjustInventory(row.id, { quantityDelta, reason }))}
+                        onSubmit={(quantityDelta, reason) => run(() => api.adjustInventory(row.id, { quantityDelta, reason }))}
                       />
                     </td>
                   </tr>
@@ -174,7 +164,7 @@ export function InventoryPage() {
             disabled={!supplierName.trim()}
             onClick={() =>
               void run(async () => {
-                await createSupplier({ name: supplierName.trim() });
+                await api.createSupplier({ name: supplierName.trim() });
                 setSupplierName("");
               })
             }
@@ -259,7 +249,7 @@ export function InventoryPage() {
                   const unitCostMinor = parsePositiveMoneyToMinor(draft.unitCost);
                   if (quantity === null) throw new ApiError(400, "INVALID_QUANTITY", t("inventory.invalidQuantity"));
                   if (unitCostMinor === null) throw new ApiError(400, "INVALID_COST", t("inventory.invalidCost"));
-                  await createPurchaseOrder({
+                  await api.createPurchaseOrder({
                     supplierId: draft.supplierId || suppliers[0].id,
                     items: [{ menuItemId: draft.menuItemId || rows[0].id, quantity, unitCostMinor }]
                   });
@@ -298,14 +288,14 @@ export function InventoryPage() {
                         <div className="filters-row" style={{ margin: 0 }}>
                           <button
                             className="btn btn-primary btn-sm"
-                            onClick={() => void run(() => receivePurchaseOrder(purchaseOrder.id))}
+                            onClick={() => void run(() => api.receivePurchaseOrder(purchaseOrder.id))}
                             type="button"
                           >
                             {t("inventory.receive")}
                           </button>
                           <button
                             className="btn btn-danger btn-sm"
-                            onClick={() => void run(() => cancelPurchaseOrder(purchaseOrder.id))}
+                            onClick={() => void run(() => api.cancelPurchaseOrder(purchaseOrder.id))}
                             type="button"
                           >
                             {t("common.cancel")}

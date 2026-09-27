@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { matchPath, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../auth";
 import { useLiveQueue } from "../live-queue";
+import { useStoreWorkspace } from "../store-workspace";
 import { ageLabel, countItems, escalateAfterMs, popupOrder, shortReference } from "../order-queue";
 import { FallbackImage } from "./FallbackImage";
 import { Money } from "./Money";
@@ -16,7 +16,7 @@ export function NewOrderPopup() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { can } = useAuth();
+  const { can, basePath, boardPath } = useStoreWorkspace();
   const live = useLiveQueue();
   if (!live?.queue) return null;
 
@@ -24,7 +24,7 @@ export function NewOrderPopup() {
   if (!target) return null;
   const { order, othersWaiting } = target;
   // On that very order's page the Accept button is already the main thing on screen.
-  const viewingThisOrder = matchPath("/business/orders/:orderId", location.pathname)?.params.orderId === order.id;
+  const viewingThisOrder = matchPath(`${basePath}/orders/:orderId`, location.pathname)?.params.orderId === order.id;
   if (viewingThisOrder) return null;
 
   const age = ageLabel(live.now - new Date(order.createdAt).getTime());
@@ -64,7 +64,7 @@ export function NewOrderPopup() {
             {accepting ? t("common.working") : t("liveOrders.accept")}
           </button>
         ) : null}
-        <button className="btn btn-outline btn-lg" onClick={() => navigate(`/business/orders/${order.id}`)} type="button">
+        <button className="btn btn-outline btn-lg" onClick={() => navigate(`${basePath}/orders/${order.id}`)} type="button">
           {t("liveOrders.openOrder")}
         </button>
         <button className="btn btn-ghost" onClick={() => live.setOrderAside(order.id)} type="button">
@@ -72,7 +72,7 @@ export function NewOrderPopup() {
         </button>
       </div>
       {othersWaiting > 0 ? (
-        <button className="new-order-popup-others" onClick={() => navigate("/business")} type="button">
+        <button className="new-order-popup-others" onClick={() => navigate(boardPath)} type="button">
           {t("liveOrders.othersWaiting", { count: othersWaiting })}
         </button>
       ) : null}

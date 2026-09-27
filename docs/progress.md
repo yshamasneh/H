@@ -3025,3 +3025,36 @@ drivers see the rounded cash due; the customer also sees the exact total and the
 
 ### Suites
 API 519 pass / 4 skipped; E2E 44 pass against PostgreSQL; admin 74; mobile 165 unit + 63 UI; typechecks, native-config check, secret scan clean.
+
+## 2026-09-28: Admin store page at parity with the store's own workspace
+
+There is one business (JOVO MARKET), so the Super Admin's store page (Stores → store) now gives the same catalogue and
+workspace the store's own team has, instead of a reduced admin view.
+
+### Gaps found (store workspace vs. admin store page)
+| Area | Store's own portal | Admin store page before | Now |
+| --- | --- | --- | --- |
+| Catalogue: categories, Available/Hidden tabs, all-hidden view | yes (`browseByCategory`) | flat list only (0fdc727 left it off) | same view |
+| Product image upload, sale price, prices, search, CRUD | yes | yes (same `CatalogueManager`) | unchanged |
+| Profile (name, description, address, hours) | yes | yes (same DTO and write path) | unchanged |
+| Open / close the store | yes (live board) | no | yes, audited |
+| Live order board, accept / reject / advance, packing checklist, fulfillment proposals | yes | read-only order list + cancel | yes |
+| Stock, adjustments, movements, barcode lookup, suppliers, purchase orders (supermarket) | yes | no | yes |
+| Sales report (today / month / all time) | yes | totals only | yes |
+| Staff accounts and roles | yes | no | yes |
+| Operating costs | store proposes | admin approves in Accounting | unchanged (deciding is the admin's side) |
+
+### How
+- API: `admin/restaurants/:restaurantId/{orders/live, orders/:id, orders/:id/status, orders/:id/items/:itemId/picked,
+  orders/:id/items/:itemId/fulfillment, inventory/*, stats, open-status, staff/*}` mirror the store's `/restaurant/me/*` routes path for
+  path and call the same services. Services take a `BusinessActor` (business-scope.util.ts): a member's id, resolved by membership as before,
+  or `{ actorUserId, businessId }`, which only ADMIN-role controllers build. The admin is the actor on every order history, stock movement,
+  purchase order and audit entry. Guards: ADMIN + `MANAGE_BUSINESSES`; changing orders or opening/closing also needs `MANAGE_ALL_ORDERS`.
+  Business accounts gain nothing; no permission was widened. Packing ticks are also broadcast to the admins room.
+- Admin console: `createStoreApi(base)` binds the workspace calls to `/restaurant/me` or `/admin/restaurants/:id`; `store-workspace.tsx`
+  provides the API, permission check and base path, so the business pages (live board, order/packing, inventory, reports, staff) serve both
+  shells unchanged. `/restaurants/:id` is now a section with tabs: Overview & products (admin controls + category catalogue), Live orders,
+  Inventory (supermarkets), Sales, Staff. Admin sub-roles see only what their permissions allow (`store-permissions.ts`).
+
+### Suites
+API 602 (595 pass, 7 skipped); admin 110; admin build; typechecks.

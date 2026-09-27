@@ -1,3 +1,4 @@
+import { AdminStoreOrdersController } from "./admin-store-orders.controller";
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -9,7 +10,7 @@ import { RestaurantOrdersController } from "./restaurant-orders.controller";
 
 @Module({
   imports: [JwtModule.register({})],
-  controllers: [OrdersController, RestaurantOrdersController, AdminOrdersController],
+  controllers: [OrdersController, RestaurantOrdersController, AdminOrdersController, AdminStoreOrdersController],
   providers: [OrdersService, JwtAuthGuard, RolesGuard]
 })
 export class OrdersModule {}

@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, readApiError } from "../../api";
-import {
-  listInventoryMovements,
-  lookupInventoryBarcode,
-  type InventoryMovement,
-  type InventoryRow
-} from "../../api.business";
+import type { InventoryMovement, InventoryRow } from "../../api.business";
+import { useStoreWorkspace } from "../../store-workspace";
 
 /**
  * The two inventory tools the mobile client had and this console lacked: finding a product by its
@@ -18,6 +14,7 @@ const pageSize = 20;
 
 export function BarcodeLookup({ onShowHistory }: { onShowHistory: (product: InventoryRow) => void }) {
   const { t } = useTranslation();
+  const { api } = useStoreWorkspace();
   const [barcode, setBarcode] = useState("");
   const [found, setFound] = useState<InventoryRow | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +24,7 @@ export function BarcodeLookup({ onShowHistory }: { onShowHistory: (product: Inve
     setError(null);
     if (!barcode.trim()) return;
     try {
-      setFound(await lookupInventoryBarcode(barcode));
+      setFound(await api.lookupInventoryBarcode(barcode));
     } catch (requestError) {
       setError(
         requestError instanceof ApiError && requestError.statusCode === 404
@@ -85,6 +82,7 @@ export function MovementsCard({
   reloadToken: number;
 }) {
   const { t } = useTranslation();
+  const { api } = useStoreWorkspace();
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState<InventoryMovement[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -99,7 +97,7 @@ export function MovementsCard({
     let cancelled = false;
     void (async () => {
       try {
-        const result = await listInventoryMovements({ menuItemId: productId, page, pageSize });
+        const result = await api.listInventoryMovements({ menuItemId: productId, page, pageSize });
         if (cancelled) return;
         setRows(result.items);
         setTotal(result.total);

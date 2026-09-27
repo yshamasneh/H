@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { readApiError } from "../../api";
-import { setBusinessOpenStatus, updateBusinessOrderStatus, type BusinessOrder } from "../../api.business";
-import { useAuth } from "../../auth";
+import type { BusinessOrder } from "../../api.business";
 import { useLiveQueue } from "../../live-queue";
 import { ageLabel, countItems, escalateAfterMs, queueSections, shortReference, type QueueSectionStatus } from "../../order-queue";
 import { isPackingStatus, packProgress } from "../../packChecklist";
 import { Money } from "../../components/Money";
 import { SoundToggle } from "../../components/SoundToggle";
+import { useStoreWorkspace } from "../../store-workspace";
 
 /**
  * The live board: one section per store status (New, Accepted, Preparing, Ready for pickup), each
@@ -21,7 +21,7 @@ import { SoundToggle } from "../../components/SoundToggle";
  */
 export function LiveOrdersPage() {
   const { t } = useTranslation();
-  const { can, refreshAccess } = useAuth();
+  const { api, can, refreshBusiness } = useStoreWorkspace();
   const live = useLiveQueue();
   const [error, setError] = useState<string | null>(null);
 
@@ -35,8 +35,8 @@ export function LiveOrdersPage() {
   async function toggleOpen() {
     if (!queue) return;
     try {
-      await setBusinessOpenStatus(!queue.business.isOpen);
-      await Promise.all([live!.reload(), refreshAccess()]);
+      await api.setBusinessOpenStatus(!queue.business.isOpen);
+      await Promise.all([live!.reload(), refreshBusiness()]);
     } catch (requestError) {
       setError(readApiError(requestError, t("common.genericActionError")));
     }
@@ -113,7 +113,7 @@ function QueueSectionView({ status, orders }: { status: QueueSectionStatus; orde
 function OrderTicket({ order }: { order: BusinessOrder }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { can } = useAuth();
+  const { api, can, basePath } = useStoreWorkspace();
   const live = useLiveQueue()!;
   const [starting, setStarting] = useState(false);
 
@@ -127,7 +127,7 @@ function OrderTicket({ order }: { order: BusinessOrder }) {
   async function startPreparing() {
     setStarting(true);
     try {
-      await updateBusinessOrderStatus(order.id, "PREPARING");
+      await api.updateBusinessOrderStatus(order.id, "PREPARING");
       live.showFeedback("success", t("liveOrders.preparingToast", { ref: shortReference(order.id) }));
     } catch (requestError) {
       live.showFeedback("error", readApiError(requestError, t("common.genericActionError")));
@@ -139,7 +139,7 @@ function OrderTicket({ order }: { order: BusinessOrder }) {
 
   return (
     <article className={`order-ticket${isNew ? " is-new" : ""}${isLate ? " late" : ""}`}>
-      <button className="order-ticket-open" onClick={() => navigate(`/business/orders/${order.id}`)} type="button">
+      <button className="order-ticket-open" onClick={() => navigate(`${basePath}/orders/${order.id}`)} type="button">
         <div className="order-ticket-head">
           <span className="order-ticket-ref">{shortReference(order.id)}</span>
           <span className="order-ticket-age">{t(age.key, { minutes: age.count, count: age.count })}</span>

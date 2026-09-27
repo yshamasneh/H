@@ -2,16 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError, readApiError } from "../../api";
-import {
-  getBusinessOrder,
-  listBusinessItems,
-  proposeFulfillment,
-  setItemPicked,
-  updateBusinessOrderStatus,
-  type BusinessOrder,
-  type MenuItemOwner
-} from "../../api.business";
-import { useAuth } from "../../auth";
+import type { BusinessOrder, MenuItemOwner } from "../../api.business";
 import { telHref } from "../../tel";
 import { ConfirmModal } from "../../components/ConfirmModal";
 import { FallbackImage } from "../../components/FallbackImage";
@@ -28,6 +19,7 @@ import {
 } from "../../packChecklist";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useLiveRefresh, useRealtimeEvent } from "../../socket";
+import { useStoreWorkspace } from "../../store-workspace";
 
 const currencyCode = "ILS";
 
@@ -42,7 +34,7 @@ export function BusinessOrderPage() {
   const { t } = useTranslation();
   const { orderId = "" } = useParams();
   const navigate = useNavigate();
-  const { can, access } = useAuth();
+  const { api, can, business, boardPath } = useStoreWorkspace();
   const [order, setOrder] = useState<BusinessOrder | null>(null);
   const [items, setItems] = useState<MenuItemOwner[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +43,11 @@ export function BusinessOrderPage() {
   const [showReject, setShowReject] = useState(false);
   const [showReadyAnyway, setShowReadyAnyway] = useState(false);
 
-  const isSupermarket = access?.business?.businessType === "SUPERMARKET";
+  const isSupermarket = business?.businessType === "SUPERMARKET";
 
   async function load() {
     try {
-      setOrder(await getBusinessOrder(orderId));
+      setOrder(await api.getBusinessOrder(orderId));
       setError(null);
     } catch (requestError) {
       setError(readApiError(requestError, t("businessOrder.loadError")));
@@ -65,7 +57,7 @@ export function BusinessOrderPage() {
   useEffect(() => {
     void load();
     // The replacement picker needs the catalogue; only a supermarket can substitute.
-    if (isSupermarket) void listBusinessItems().then(setItems, () => setItems([]));
+    if (isSupermarket) void api.listBusinessItems().then(setItems, () => setItems([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId, isSupermarket]);
 
@@ -81,7 +73,7 @@ export function BusinessOrderPage() {
     if (next === null) return;
     const previous = line.isPicked === true;
     setOrder((current) => (current ? { ...current, items: withPicked(current.items, lineId, next) } : current));
-    void setItemPicked(orderId, lineId, next).then(
+    void api.setItemPicked(orderId, lineId, next).then(
       () => setError(null),
       (requestError) => {
         setOrder((current) => (current ? { ...current, items: withPicked(current.items, lineId, previous) } : current));
@@ -102,7 +94,7 @@ export function BusinessOrderPage() {
     setIsWorking(true);
     setNotice(null);
     try {
-      setOrder(await updateBusinessOrderStatus(orderId, status, note));
+      setOrder(await api.updateBusinessOrderStatus(orderId, status, note));
       setError(null);
     } catch (requestError) {
       const apiError = requestError instanceof ApiError ? requestError : null;
@@ -134,7 +126,7 @@ export function BusinessOrderPage() {
     <div>
       <div className="page-header">
         <div>
-          <button className="btn btn-outline btn-sm" onClick={() => navigate("/business")} type="button">
+          <button className="btn btn-outline btn-sm" onClick={() => navigate(boardPath)} type="button">
             {t("common.back")}
           </button>
           <h1 className="page-title" style={{ marginTop: 10 }}>
@@ -198,7 +190,7 @@ export function BusinessOrderPage() {
                     item={item}
                     onSubmit={async (body) => {
                       try {
-                        setOrder(await proposeFulfillment(orderId, item.id, body));
+                        setOrder(await api.proposeFulfillment(orderId, item.id, body));
                         setError(null);
                       } catch (requestError) {
                         setError(

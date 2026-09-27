@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { readApiError } from "../../api";
-import { getBusinessStats, type BusinessStats, type PeriodStats } from "../../api.business";
+import type { BusinessStats, PeriodStats } from "../../api.business";
+import { useStoreWorkspace } from "../../store-workspace";
 import { Money } from "../../components/Money";
 
 /**
@@ -16,12 +17,13 @@ const periods: (keyof BusinessStats)[] = ["today", "month", "total"];
 
 export function BusinessReportsPage() {
   const { t } = useTranslation();
+  const { api } = useStoreWorkspace();
   const [stats, setStats] = useState<BusinessStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
     try {
-      setStats(await getBusinessStats());
+      setStats(await api.getBusinessStats());
       setError(null);
     } catch (requestError) {
       setError(readApiError(requestError, t("businessReports.loadError")));

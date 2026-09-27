@@ -30,3 +30,20 @@ export async function resolveMemberBusinessId(client: MembershipClient, userId: 
     { businessIds: memberships.map((membership) => membership.businessId) }
   );
 }
+
+/**
+ * Who a business operation acts for. A plain user id is a business member on a `/me` route: the
+ * business is resolved from their membership, exactly as `resolveMemberBusinessId` does. The object
+ * form is a platform admin on an `admin/restaurants/:restaurantId/...` route, which names the store
+ * explicitly; only admin controllers (guarded by the ADMIN role) ever construct it, so a member can
+ * never reach another business through it. Either way `actorUserId` is who the audit trail names.
+ */
+export type BusinessActor = string | { actorUserId: string; businessId: string };
+
+export function actorUserIdOf(actor: BusinessActor): string {
+  return typeof actor === "string" ? actor : actor.actorUserId;
+}
+
+export async function resolveActorBusinessId(client: MembershipClient, actor: BusinessActor): Promise<string> {
+  return typeof actor === "string" ? resolveMemberBusinessId(client, actor) : actor.businessId;
+}

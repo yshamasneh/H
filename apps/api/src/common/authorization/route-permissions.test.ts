@@ -7,10 +7,12 @@ import { AdminDashboardController } from "../../admin/admin-dashboard.controller
 import { AdminUsersController } from "../../admin/admin-users.controller";
 import { AdminDriversController } from "../../drivers/admin-drivers.controller";
 import { DriverPortalController } from "../../drivers/driver-portal.controller";
+import { AdminStoreInventoryController } from "../../inventory/admin-store-inventory.controller";
 import { InventoryController } from "../../inventory/inventory.controller";
 import { AdminLandmarksController } from "../../landmarks/admin-landmarks.controller";
 import { AdminOffersController } from "../../offers/admin-offers.controller";
 import { AdminOrdersController } from "../../orders/admin-orders.controller";
+import { AdminStoreOrdersController } from "../../orders/admin-store-orders.controller";
 import { OrdersController } from "../../orders/orders.controller";
 import { RestaurantOrdersController } from "../../orders/restaurant-orders.controller";
 import { AdminRestaurantsController } from "../../restaurants/admin-restaurants.controller";
@@ -18,6 +20,8 @@ import { RestaurantPortalController } from "../../restaurants/restaurant-portal.
 import { ErrorTrackingTestController } from "../../observability/error-tracking-test.controller";
 import { AdminSettingsController } from "../../settings/admin-settings.controller";
 import { PERMISSIONS_KEY } from "../decorators/require-permission.decorator";
+import { ROLES_KEY } from "../decorators/roles.decorator";
+import { UserRole } from "../../generated/prisma/client";
 import { PermissionsGuard } from "../guards/permissions.guard";
 import { allPermissions, type Permission } from "./permissions";
 
@@ -54,6 +58,8 @@ test("every platform administration controller is protected by a permission", ()
     [AdminOffersController, "MANAGE_OFFERS"],
     [AdminLandmarksController, "MANAGE_LANDMARKS"],
     [AdminRestaurantsController, "MANAGE_BUSINESSES"],
+    [AdminStoreOrdersController, "MANAGE_BUSINESSES"],
+    [AdminStoreInventoryController, "MANAGE_BUSINESSES"],
     [AdminOrdersController, "VIEW_ALL_ORDERS"],
     [AdminSettingsController, "MANAGE_PLATFORM_SETTINGS"],
     [ErrorTrackingTestController, "MANAGE_PLATFORM_SETTINGS"]
@@ -147,6 +153,23 @@ test("stock, supplier, and purchasing routes require MANAGE_INVENTORY", () => {
   assert.deepEqual(classPermissions(InventoryController), ["MANAGE_INVENTORY"]);
 });
 
+test("an admin running a store's workspace needs MANAGE_BUSINESSES, and MANAGE_ALL_ORDERS to change its orders", () => {
+  for (const controller of [AdminStoreOrdersController, AdminStoreInventoryController]) {
+    assert.ok(usesPermissionsGuard(controller), `${controller.name} must apply PermissionsGuard`);
+    assert.deepEqual(Reflect.getMetadata(ROLES_KEY, controller), [UserRole.ADMIN], controller.name);
+  }
+  for (const method of ["live", "getOne"]) {
+    assert.equal(methodPermissions(AdminStoreOrdersController, method), undefined, method);
+  }
+  for (const method of ["updateStatus", "setItemPicked", "proposeFulfillment"]) {
+    assert.deepEqual(methodPermissions(AdminStoreOrdersController, method), ["MANAGE_BUSINESSES", "MANAGE_ALL_ORDERS"], method);
+  }
+  assert.deepEqual(methodPermissions(AdminRestaurantsController, "setOpenStatus"), ["MANAGE_BUSINESSES", "MANAGE_ALL_ORDERS"]);
+  for (const method of ["getStats", "listStaff", "addStaff", "updateStaff", "removeStaff"]) {
+    assert.equal(methodPermissions(AdminRestaurantsController, method), undefined, method);
+  }
+});
+
 test("customer and driver routes carry no permission requirements", () => {
   for (const controller of [OrdersController, DriverPortalController]) {
     assert.equal(usesPermissionsGuard(controller), false, `${controller.name} needs no permissions`);
@@ -173,7 +196,9 @@ test("every permission a route requires exists in the catalogue", () => {
     BusinessAccountingController,
     RestaurantPortalController,
     RestaurantOrdersController,
-    InventoryController
+    InventoryController,
+    AdminStoreOrdersController,
+    AdminStoreInventoryController
   ];
   const known = new Set<string>(allPermissions);
 

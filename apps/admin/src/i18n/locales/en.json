@@ -193,7 +193,9 @@
     "saveLocation": "Save location",
     "locationSaved": "Location updated.",
     "detailsTitle": "Store details",
-    "detailsHint": "Name, description, address and opening hours. A store's status (approve / suspend) changes with the status buttons, and its location in the next card."
+    "detailsHint": "Name, description, address and opening hours. A store's status (approve / suspend) changes with the status buttons, and its location in the next card.",
+    "overviewTab": "Overview & products",
+    "sectionsLabel": "Store sections"
   },
   "orders": {
     "title": "Orders",

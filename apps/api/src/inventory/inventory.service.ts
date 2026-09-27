@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { writeAuditLog } from "../common/audit-log.util";
-import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
+import { actorUserIdOf, resolveActorBusinessId, type BusinessActor } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
 import {
   BusinessType,
@@ -23,8 +23,8 @@ import { writeInventoryMovement } from "./inventory.util";
 export class InventoryService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listInventory(ownerUserId: string, query: InventoryQueryDto) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async listInventory(actor: BusinessActor, query: InventoryQueryDto) {
+    const store = await this.requireSupermarket(actor);
     const search = query.search?.trim();
     const items = await this.prisma.menuItem.findMany({
       where: {
@@ -61,18 +61,18 @@ export class InventoryService {
     };
   }
 
-  async lookupBarcode(ownerUserId: string, barcode: string) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async lookupBarcode(actor: BusinessActor, barcode: string) {
+    const store = await this.requireSupermarket(actor);
     const item = await this.prisma.menuItem.findFirst({ where: { restaurantId: store.id, barcode: barcode.trim() } });
     if (!item) throw new ApiException(404, "INVENTORY_BARCODE_NOT_FOUND", "No product in this store uses this barcode.");
     return toInventoryItem(item);
   }
 
-  async adjust(ownerUserId: string, itemId: string, input: AdjustInventoryDto) {
+  async adjust(actor: BusinessActor, itemId: string, input: AdjustInventoryDto) {
     if (input.quantityDelta === 0) {
       throw new ApiException(400, "INVENTORY_DELTA_REQUIRED", "Inventory adjustment must be greater or less than zero.");
     }
-    const store = await this.requireSupermarket(ownerUserId);
+    const store = await this.requireSupermarket(actor);
     return this.prisma.$transaction(async (tx) => {
       const item = await this.requireOwnItem(tx, store.id, itemId);
       const nextStock = (item.stockQuantity ?? 0) + input.quantityDelta;
@@ -88,14 +88,14 @@ export class InventoryService {
       await writeInventoryMovement(tx, {
         restaurantId: store.id,
         menuItemId: item.id,
-        actorUserId: ownerUserId,
+        actorUserId: actorUserIdOf(actor),
         type: InventoryMovementType.MANUAL_ADJUSTMENT,
         quantityDelta: input.quantityDelta,
         stockAfter: nextStock,
         reason: input.reason
       });
       await writeAuditLog(tx, {
-        actorUserId: ownerUserId,
+        actorUserId: actorUserIdOf(actor),
         action: "INVENTORY_MANUALLY_ADJUSTED",
         entityType: "MenuItem",
         entityId: item.id,
@@ -106,8 +106,8 @@ export class InventoryService {
     });
   }
 
-  async listMovements(ownerUserId: string, query: InventoryMovementQueryDto) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async listMovements(actor: BusinessActor, query: InventoryMovementQueryDto) {
+    const store = await this.requireSupermarket(actor);
     const where = { restaurantId: store.id, menuItemId: query.menuItemId };
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 50;
@@ -124,13 +124,13 @@ export class InventoryService {
     return { items, page, pageSize, total };
   }
 
-  async listSuppliers(ownerUserId: string) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async listSuppliers(actor: BusinessActor) {
+    const store = await this.requireSupermarket(actor);
     return this.prisma.supplier.findMany({ where: { restaurantId: store.id }, orderBy: { name: "asc" } });
   }
 
-  async createSupplier(ownerUserId: string, input: CreateSupplierDto) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async createSupplier(actor: BusinessActor, input: CreateSupplierDto) {
+    const store = await this.requireSupermarket(actor);
     return this.prisma.supplier.create({
       data: {
         restaurantId: store.id,
@@ -141,8 +141,8 @@ export class InventoryService {
     });
   }
 
-  async listPurchaseOrders(ownerUserId: string) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async listPurchaseOrders(actor: BusinessActor) {
+    const store = await this.requireSupermarket(actor);
     return this.prisma.purchaseOrder.findMany({
       where: { restaurantId: store.id },
       include: { supplier: true, items: { include: { menuItem: { select: { name: true, sku: true } } } } },
@@ -150,8 +150,8 @@ export class InventoryService {
     });
   }
 
-  async createPurchaseOrder(ownerUserId: string, input: CreatePurchaseOrderDto) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async createPurchaseOrder(actor: BusinessActor, input: CreatePurchaseOrderDto) {
+    const store = await this.requireSupermarket(actor);
     const supplier = await this.prisma.supplier.findUnique({ where: { id: input.supplierId } });
     if (!supplier || supplier.restaurantId !== store.id || !supplier.isActive) {
       throw new ApiException(404, "SUPPLIER_NOT_FOUND", "This active supplier does not belong to your store.");
@@ -169,7 +169,7 @@ export class InventoryService {
       data: {
         restaurantId: store.id,
         supplierId: supplier.id,
-        createdByUserId: ownerUserId,
+        createdByUserId: actorUserIdOf(actor),
         reference: input.reference?.trim() || null,
         note: input.note?.trim() || null,
         totalCostMinor,
@@ -179,8 +179,8 @@ export class InventoryService {
     });
   }
 
-  async receivePurchaseOrder(ownerUserId: string, purchaseOrderId: string) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async receivePurchaseOrder(actor: BusinessActor, purchaseOrderId: string) {
+    const store = await this.requireSupermarket(actor);
     return this.prisma.$transaction(async (tx) => {
       const purchaseOrder = await tx.purchaseOrder.findUnique({
         where: { id: purchaseOrderId },
@@ -215,7 +215,7 @@ export class InventoryService {
         await writeInventoryMovement(tx, {
           restaurantId: store.id,
           menuItemId: line.menuItemId,
-          actorUserId: ownerUserId,
+          actorUserId: actorUserIdOf(actor),
           type: InventoryMovementType.PURCHASE_RECEIPT,
           quantityDelta: line.quantity,
           stockAfter,
@@ -223,7 +223,7 @@ export class InventoryService {
         });
       }
       await writeAuditLog(tx, {
-        actorUserId: ownerUserId,
+        actorUserId: actorUserIdOf(actor),
         action: "PURCHASE_ORDER_RECEIVED",
         entityType: "PurchaseOrder",
         entityId: purchaseOrder.id,
@@ -236,8 +236,8 @@ export class InventoryService {
     });
   }
 
-  async cancelPurchaseOrder(ownerUserId: string, purchaseOrderId: string) {
-    const store = await this.requireSupermarket(ownerUserId);
+  async cancelPurchaseOrder(actor: BusinessActor, purchaseOrderId: string) {
+    const store = await this.requireSupermarket(actor);
     const changed = await this.prisma.purchaseOrder.updateMany({
       where: { id: purchaseOrderId, restaurantId: store.id, status: PurchaseOrderStatus.DRAFT },
       data: { status: PurchaseOrderStatus.CANCELLED }
@@ -251,9 +251,10 @@ export class InventoryService {
     });
   }
 
-  /** Resolves the caller's business from their membership, so staff accounts work, not just owners. */
-  private async requireSupermarket(memberUserId: string) {
-    const businessId = await resolveMemberBusinessId(this.prisma, memberUserId);
+  /** Resolves the caller's business from their membership (so staff accounts work, not just owners),
+   *  or the store an admin named. */
+  private async requireSupermarket(actor: BusinessActor) {
+    const businessId = await resolveActorBusinessId(this.prisma, actor);
     const restaurant = await this.prisma.restaurant.findUnique({ where: { id: businessId } });
     if (!restaurant || restaurant.businessType !== BusinessType.SUPERMARKET) {
       throw new ApiException(404, "SUPERMARKET_NOT_FOUND", "Inventory operations are available only to supermarket owners.");

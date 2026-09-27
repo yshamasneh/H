@@ -9,6 +9,7 @@ import { ROLES_KEY } from "../common/decorators/roles.decorator";
 import { BusinessType, RestaurantStatus, UserRole } from "../generated/prisma/client";
 import { FakeRealtimeGateway } from "../realtime/testing/fake-realtime-gateway";
 import { AdminRestaurantsController } from "./admin-restaurants.controller";
+import { BusinessStaffService } from "./business-staff.service";
 import { MenuService } from "./menu.service";
 import { RestaurantsService } from "./restaurants.service";
 import { FakeRestaurantPrisma } from "./testing/fake-prisma";
@@ -27,7 +28,7 @@ function createController() {
   const menu = new MenuService(prisma as never);
   const config = new ConfigService({ RESTAURANT_ORDERING_ENABLED: true });
   const restaurants = new RestaurantsService(prisma as never, new FakeRealtimeGateway() as never, config);
-  const controller = new AdminRestaurantsController(restaurants, menu);
+  const controller = new AdminRestaurantsController(restaurants, menu, new BusinessStaffService(prisma as never));
   return { prisma, controller };
 }
 

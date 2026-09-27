@@ -985,6 +985,33 @@ test("accepting an order records who accepted it and when, in the same atomic wr
   assert.equal(prisma.orders[0].acceptedByUserId, restaurant.ownerUserId);
 });
 
+test("an admin acting on a named store handles its order as that store, and is recorded as the actor", async () => {
+  const { prisma, service } = createService();
+  const store = prisma.seedRestaurant();
+  const otherStore = prisma.seedRestaurant({ name: "Other" });
+  const menuItem = prisma.seedMenuItem(store.id);
+  const order = await service.createOrder(randomUUID(), baseInput(store.id, menuItem.id) as never);
+  const adminUserId = randomUUID();
+
+  // Naming a different store never reaches this store's order.
+  await assert.rejects(
+    service.updateStatusForRestaurantOwner({ actorUserId: adminUserId, businessId: otherStore.id }, order.id, "ACCEPTED", undefined),
+    hasCode("ORDER_NOT_FOUND")
+  );
+
+  const accepted = await service.updateStatusForRestaurantOwner(
+    { actorUserId: adminUserId, businessId: store.id },
+    order.id,
+    "ACCEPTED",
+    undefined
+  );
+  assert.equal(accepted.status, "ACCEPTED");
+  assert.equal(accepted.acceptedByUserId, adminUserId);
+
+  const live = await service.listLiveForBusiness({ actorUserId: adminUserId, businessId: store.id });
+  assert.deepEqual(live.inProgress.map((entry) => entry.id), [order.id]);
+});
+
 test("rejecting an order leaves the acceptance attribution empty", async () => {
   const { prisma, service } = createService();
   const restaurant = prisma.seedRestaurant();
@@ -1788,17 +1815,17 @@ test("an ACCEPTED order can already be packed", async () => {
   assert.equal(updated.items[0].isPicked, true);
 });
 
-test("ticking tells every device on the business, and nobody else", async () => {
+test("ticking tells every device on the business and the platform admins, and nobody else", async () => {
   const { service, realtime, restaurant, order } = await orderBeingPacked();
   realtime.emitted.length = 0;
 
   await service.setItemPicked(restaurant.ownerUserId, order.id, order.items[0].id, true);
 
-  assert.deepEqual(realtime.emitted, [{
-    room: `restaurant:${restaurant.id}`,
-    event: "order.packing.changed",
-    payload: { orderId: order.id, orderItemId: order.items[0].id, isPicked: true }
-  }]);
+  const payload = { orderId: order.id, orderItemId: order.items[0].id, isPicked: true };
+  assert.deepEqual(realtime.emitted, [
+    { room: `restaurant:${restaurant.id}`, event: "order.packing.changed", payload },
+    { room: "admins", event: "order.packing.changed", payload }
+  ]);
 });
 
 test("nothing can be ticked before the order is accepted, or once it is ready or over", async () => {

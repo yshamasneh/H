@@ -3,7 +3,7 @@ import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { writeAuditLog } from "../common/audit-log.util";
 import { grantBusinessMembership } from "../common/authorization/business-membership.util";
-import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
+import { actorUserIdOf, resolveActorBusinessId, type BusinessActor } from "../common/authorization/business-scope.util";
 import { systemRoleKeys, type SystemRoleKey } from "../common/authorization/permissions";
 import { ApiException } from "../common/api.exception";
 import { Prisma, RoleScope, UserRole } from "../generated/prisma/client";
@@ -15,8 +15,9 @@ import type { BusinessStaffView } from "./restaurants.types";
 export class BusinessStaffService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(actorUserId: string): Promise<BusinessStaffView[]> {
-    const businessId = await resolveMemberBusinessId(this.prisma, actorUserId);
+  async list(actor: BusinessActor): Promise<BusinessStaffView[]> {
+    const businessId = await resolveActorBusinessId(this.prisma, actor);
+    const actorUserId = actorUserIdOf(actor);
     const members = await this.prisma.businessMember.findMany({
       where: { businessId },
       include: { user: true, role: true },
@@ -44,8 +45,9 @@ export class BusinessStaffService {
    * and driver accounts are already created: the business admin sets an initial password and passes
    * it on. The new user is phone-verified immediately for the same reason.
    */
-  async add(actorUserId: string, input: AddBusinessStaffDto): Promise<BusinessStaffView> {
-    const businessId = await resolveMemberBusinessId(this.prisma, actorUserId);
+  async add(actor: BusinessActor, input: AddBusinessStaffDto): Promise<BusinessStaffView> {
+    const businessId = await resolveActorBusinessId(this.prisma, actor);
+    const actorUserId = actorUserIdOf(actor);
     const roleKey = await this.requireAssignableRole(input.roleKey);
     const phone = normalizePhoneNumber(input.countryCode, input.phoneNumber);
     const fullName = input.fullName.trim().replace(/\s+/g, " ");
@@ -123,8 +125,9 @@ export class BusinessStaffService {
     }
   }
 
-  async update(actorUserId: string, staffUserId: string, input: UpdateBusinessStaffDto): Promise<BusinessStaffView> {
-    const businessId = await resolveMemberBusinessId(this.prisma, actorUserId);
+  async update(actor: BusinessActor, staffUserId: string, input: UpdateBusinessStaffDto): Promise<BusinessStaffView> {
+    const businessId = await resolveActorBusinessId(this.prisma, actor);
+    const actorUserId = actorUserIdOf(actor);
     const membership = await this.requireMembership(businessId, staffUserId);
     await this.assertNotOwner(businessId, staffUserId, "The business owner's own access cannot be changed here.");
     if (staffUserId === actorUserId) {
@@ -177,8 +180,8 @@ export class BusinessStaffService {
    * Removing a staff member deactivates their membership rather than deleting it, so audit entries
    * and any orders they accepted keep pointing at a resolvable person.
    */
-  async remove(actorUserId: string, staffUserId: string): Promise<{ message: string }> {
-    await this.update(actorUserId, staffUserId, { isActive: false });
+  async remove(actor: BusinessActor, staffUserId: string): Promise<{ message: string }> {
+    await this.update(actor, staffUserId, { isActive: false });
     return { message: "This staff member no longer has access to your business." };
   }
 

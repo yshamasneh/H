@@ -93,40 +93,156 @@ export type LiveOrderQueue = {
   serverTime: string;
 };
 
-export function getLiveOrders(): Promise<LiveOrderQueue> {
-  return request("/api/v1/restaurant/me/orders/live");
+/**
+ * The store workspace's calls (orders, open/close, reports, stock, staff, and the product list the
+ * order screen offers as replacements), bound to one API base. The store's own shell uses
+ * `/api/v1/restaurant/me`; the admin console's store section uses `/api/v1/admin/restaurants/:id`,
+ * whose routes mirror the owner ones path for path. The server decides what either caller may do.
+ */
+export function createStoreApi(base: string) {
+  return {
+    getLiveOrders(): Promise<LiveOrderQueue> {
+      return request(`${base}/orders/live`);
+    },
+
+    getBusinessOrder(orderId: string): Promise<BusinessOrder> {
+      return request(`${base}/orders/${orderId}`);
+    },
+
+    updateBusinessOrderStatus(
+      orderId: string,
+      status: "ACCEPTED" | "PREPARING" | "READY_FOR_PICKUP" | "REJECTED",
+      note?: string
+    ): Promise<BusinessOrder> {
+      return request(`${base}/orders/${orderId}/status`, { method: "PATCH", body: { status, note } });
+    },
+
+    /** Sets whether one line of an order being packed is in the bag. A set, not a flip, so two devices converge. */
+    setItemPicked(orderId: string, orderItemId: string, isPicked: boolean): Promise<BusinessOrder> {
+      return request(`${base}/orders/${orderId}/items/${orderItemId}/picked`, {
+        method: "PUT",
+        body: { isPicked }
+      });
+    },
+
+    proposeFulfillment(
+      orderId: string,
+      orderItemId: string,
+      body: { replacementMenuItemId?: string; actualQuantityMilli?: number; note?: string }
+    ): Promise<BusinessOrder> {
+      return request(`${base}/orders/${orderId}/items/${orderItemId}/fulfillment`, {
+        method: "POST",
+        body
+      });
+    },
+
+    getBusinessStats(): Promise<BusinessStats> {
+      return request(`${base}/stats`);
+    },
+
+    setBusinessOpenStatus(isOpen: boolean): Promise<BusinessProfile> {
+      return request(`${base}/open-status`, { method: "PATCH", body: { isOpen } });
+    },
+
+    listBusinessItems(): Promise<MenuItemOwner[]> {
+      return request(`${base}/menu/items`);
+    },
+
+    listInventory(
+      params: { search?: string; lowStock?: boolean; page?: number; pageSize?: number } = {}
+    ): Promise<Page<InventoryRow>> {
+      return request(`${base}/inventory${toQuery(params)}`);
+    },
+
+    listInventoryMovements(
+      params: { menuItemId?: string; page?: number; pageSize?: number } = {}
+    ): Promise<Page<InventoryMovement>> {
+      return request(`${base}/inventory/movements${toQuery(params)}`);
+    },
+
+    lookupInventoryBarcode(barcode: string): Promise<InventoryRow> {
+      return request(`${base}/inventory/barcode/${encodeURIComponent(barcode.trim())}`);
+    },
+
+    adjustInventory(itemId: string, body: { quantityDelta: number; reason: string }): Promise<unknown> {
+      return request(`${base}/inventory/items/${itemId}/adjust`, { method: "POST", body });
+    },
+
+    listSuppliers(): Promise<Supplier[]> {
+      return request(`${base}/inventory/suppliers`);
+    },
+
+    createSupplier(body: { name: string; phone?: string; note?: string }): Promise<Supplier> {
+      return request(`${base}/inventory/suppliers`, { method: "POST", body });
+    },
+
+    listPurchaseOrders(): Promise<PurchaseOrderView[]> {
+      return request(`${base}/inventory/purchase-orders`);
+    },
+
+    createPurchaseOrder(body: {
+      supplierId: string;
+      reference?: string;
+      note?: string;
+      items: { menuItemId: string; quantity: number; unitCostMinor: number }[];
+    }): Promise<PurchaseOrderView> {
+      return request(`${base}/inventory/purchase-orders`, { method: "POST", body });
+    },
+
+    receivePurchaseOrder(purchaseOrderId: string): Promise<PurchaseOrderView> {
+      return request(`${base}/inventory/purchase-orders/${purchaseOrderId}/receive`, { method: "POST" });
+    },
+
+    cancelPurchaseOrder(purchaseOrderId: string): Promise<PurchaseOrderView> {
+      return request(`${base}/inventory/purchase-orders/${purchaseOrderId}/cancel`, { method: "POST" });
+    },
+
+    listBusinessStaff(): Promise<BusinessStaffMember[]> {
+      return request(`${base}/staff`);
+    },
+
+    addBusinessStaff(body: {
+      fullName: string;
+      countryCode: string;
+      phoneNumber: string;
+      password: string;
+      confirmPassword: string;
+      roleKey: string;
+    }): Promise<BusinessStaffMember> {
+      return request(`${base}/staff`, { method: "POST", body });
+    },
+
+    updateBusinessStaff(
+      staffUserId: string,
+      body: { roleKey?: string; isActive?: boolean }
+    ): Promise<BusinessStaffMember> {
+      return request(`${base}/staff/${staffUserId}`, { method: "PATCH", body });
+    },
+
+    removeBusinessStaff(staffUserId: string): Promise<{ message: string }> {
+      return request(`${base}/staff/${staffUserId}`, { method: "DELETE" });
+    }
+  };
 }
 
-export function getBusinessOrder(orderId: string): Promise<BusinessOrder> {
-  return request(`/api/v1/restaurant/me/orders/${orderId}`);
+export type StoreApi = ReturnType<typeof createStoreApi>;
+
+export const ownStoreApi = createStoreApi("/api/v1/restaurant/me");
+
+/** The same calls bound to a store an admin manages by id (admin/restaurants/:restaurantId/...). */
+export function adminStoreApi(restaurantId: string): StoreApi {
+  return createStoreApi(`/api/v1/admin/restaurants/${restaurantId}`);
 }
 
-export function updateBusinessOrderStatus(
-  orderId: string,
-  status: "ACCEPTED" | "PREPARING" | "READY_FOR_PICKUP" | "REJECTED",
-  note?: string
-): Promise<BusinessOrder> {
-  return request(`/api/v1/restaurant/me/orders/${orderId}/status`, { method: "PATCH", body: { status, note } });
-}
+export const getLiveOrders = ownStoreApi.getLiveOrders;
 
-/** Sets whether one line of an order being packed is in the bag. A set, not a flip, so two devices converge. */
-export function setItemPicked(orderId: string, orderItemId: string, isPicked: boolean): Promise<BusinessOrder> {
-  return request(`/api/v1/restaurant/me/orders/${orderId}/items/${orderItemId}/picked`, {
-    method: "PUT",
-    body: { isPicked }
-  });
-}
+export const getBusinessOrder = ownStoreApi.getBusinessOrder;
 
-export function proposeFulfillment(
-  orderId: string,
-  orderItemId: string,
-  body: { replacementMenuItemId?: string; actualQuantityMilli?: number; note?: string }
-): Promise<BusinessOrder> {
-  return request(`/api/v1/restaurant/me/orders/${orderId}/items/${orderItemId}/fulfillment`, {
-    method: "POST",
-    body
-  });
-}
+export const updateBusinessOrderStatus = ownStoreApi.updateBusinessOrderStatus;
+
+export const setItemPicked = ownStoreApi.setItemPicked;
+
+export const proposeFulfillment = ownStoreApi.proposeFulfillment;
 
 export type BusinessProfile = RestaurantProfile & { businessType: BusinessType };
 
@@ -141,13 +257,9 @@ export function updateBusinessProfile(body: ProfileBody): Promise<BusinessProfil
 export type PeriodStats = { salesMinor: number; ordersCount: number };
 export type BusinessStats = { today: PeriodStats; month: PeriodStats; total: PeriodStats };
 
-export function getBusinessStats(): Promise<BusinessStats> {
-  return request("/api/v1/restaurant/me/stats");
-}
+export const getBusinessStats = ownStoreApi.getBusinessStats;
 
-export function setBusinessOpenStatus(isOpen: boolean): Promise<BusinessProfile> {
-  return request("/api/v1/restaurant/me/open-status", { method: "PATCH", body: { isOpen } });
-}
+export const setBusinessOpenStatus = ownStoreApi.setBusinessOpenStatus;
 
 // ---- catalogue ----
 
@@ -196,9 +308,7 @@ export function deleteBusinessCategory(categoryId: string): Promise<{ message: s
   return request(`/api/v1/restaurant/me/menu/categories/${categoryId}`, { method: "DELETE" });
 }
 
-export function listBusinessItems(): Promise<MenuItemOwner[]> {
-  return request("/api/v1/restaurant/me/menu/items");
-}
+export const listBusinessItems = ownStoreApi.listBusinessItems;
 
 export function createBusinessItem(body: Record<string, unknown>): Promise<MenuItemOwner> {
   return request("/api/v1/restaurant/me/menu/items", { method: "POST", body });
@@ -277,11 +387,7 @@ export type InventoryRow = {
   isLowStock?: boolean;
 };
 
-export function listInventory(
-  params: { search?: string; lowStock?: boolean; page?: number; pageSize?: number } = {}
-): Promise<Page<InventoryRow>> {
-  return request(`/api/v1/restaurant/me/inventory${toQuery(params)}`);
-}
+export const listInventory = ownStoreApi.listInventory;
 
 export type InventoryMovementType =
   | "ORDER_RESERVATION"
@@ -302,29 +408,17 @@ export type InventoryMovement = {
   menuItem: { name: string; sku: string | null };
 };
 
-export function listInventoryMovements(
-  params: { menuItemId?: string; page?: number; pageSize?: number } = {}
-): Promise<Page<InventoryMovement>> {
-  return request(`/api/v1/restaurant/me/inventory/movements${toQuery(params)}`);
-}
+export const listInventoryMovements = ownStoreApi.listInventoryMovements;
 
-export function lookupInventoryBarcode(barcode: string): Promise<InventoryRow> {
-  return request(`/api/v1/restaurant/me/inventory/barcode/${encodeURIComponent(barcode.trim())}`);
-}
+export const lookupInventoryBarcode = ownStoreApi.lookupInventoryBarcode;
 
-export function adjustInventory(itemId: string, body: { quantityDelta: number; reason: string }): Promise<unknown> {
-  return request(`/api/v1/restaurant/me/inventory/items/${itemId}/adjust`, { method: "POST", body });
-}
+export const adjustInventory = ownStoreApi.adjustInventory;
 
 export type Supplier = { id: string; name: string; phone: string | null; note: string | null; isActive: boolean };
 
-export function listSuppliers(): Promise<Supplier[]> {
-  return request("/api/v1/restaurant/me/inventory/suppliers");
-}
+export const listSuppliers = ownStoreApi.listSuppliers;
 
-export function createSupplier(body: { name: string; phone?: string; note?: string }): Promise<Supplier> {
-  return request("/api/v1/restaurant/me/inventory/suppliers", { method: "POST", body });
-}
+export const createSupplier = ownStoreApi.createSupplier;
 
 export type PurchaseOrderView = {
   id: string;
@@ -338,26 +432,13 @@ export type PurchaseOrderView = {
   items: { menuItemId: string; quantity: number; unitCostMinor: number }[];
 };
 
-export function listPurchaseOrders(): Promise<PurchaseOrderView[]> {
-  return request("/api/v1/restaurant/me/inventory/purchase-orders");
-}
+export const listPurchaseOrders = ownStoreApi.listPurchaseOrders;
 
-export function createPurchaseOrder(body: {
-  supplierId: string;
-  reference?: string;
-  note?: string;
-  items: { menuItemId: string; quantity: number; unitCostMinor: number }[];
-}): Promise<PurchaseOrderView> {
-  return request("/api/v1/restaurant/me/inventory/purchase-orders", { method: "POST", body });
-}
+export const createPurchaseOrder = ownStoreApi.createPurchaseOrder;
 
-export function receivePurchaseOrder(purchaseOrderId: string): Promise<PurchaseOrderView> {
-  return request(`/api/v1/restaurant/me/inventory/purchase-orders/${purchaseOrderId}/receive`, { method: "POST" });
-}
+export const receivePurchaseOrder = ownStoreApi.receivePurchaseOrder;
 
-export function cancelPurchaseOrder(purchaseOrderId: string): Promise<PurchaseOrderView> {
-  return request(`/api/v1/restaurant/me/inventory/purchase-orders/${purchaseOrderId}/cancel`, { method: "POST" });
-}
+export const cancelPurchaseOrder = ownStoreApi.cancelPurchaseOrder;
 
 // ---- staff ----
 
@@ -371,28 +452,10 @@ export type BusinessStaffMember = {
   createdAt: string;
 };
 
-export function listBusinessStaff(): Promise<BusinessStaffMember[]> {
-  return request("/api/v1/restaurant/me/staff");
-}
+export const listBusinessStaff = ownStoreApi.listBusinessStaff;
 
-export function addBusinessStaff(body: {
-  fullName: string;
-  countryCode: string;
-  phoneNumber: string;
-  password: string;
-  confirmPassword: string;
-  roleKey: string;
-}): Promise<BusinessStaffMember> {
-  return request("/api/v1/restaurant/me/staff", { method: "POST", body });
-}
+export const addBusinessStaff = ownStoreApi.addBusinessStaff;
 
-export function updateBusinessStaff(
-  staffUserId: string,
-  body: { roleKey?: string; isActive?: boolean }
-): Promise<BusinessStaffMember> {
-  return request(`/api/v1/restaurant/me/staff/${staffUserId}`, { method: "PATCH", body });
-}
+export const updateBusinessStaff = ownStoreApi.updateBusinessStaff;
 
-export function removeBusinessStaff(staffUserId: string): Promise<{ message: string }> {
-  return request(`/api/v1/restaurant/me/staff/${staffUserId}`, { method: "DELETE" });
-}
+export const removeBusinessStaff = ownStoreApi.removeBusinessStaff;

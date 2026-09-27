@@ -1,3 +1,4 @@
+import { AdminStoreInventoryController } from "./admin-store-inventory.controller";
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -7,7 +8,7 @@ import { InventoryService } from "./inventory.service";
 
 @Module({
   imports: [JwtModule.register({})],
-  controllers: [InventoryController],
+  controllers: [InventoryController, AdminStoreInventoryController],
   providers: [InventoryService, JwtAuthGuard, RolesGuard]
 })
 export class InventoryModule {}

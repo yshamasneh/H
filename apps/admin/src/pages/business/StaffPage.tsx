@@ -1,13 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, readApiError } from "../../api";
-import {
-  addBusinessStaff,
-  listBusinessStaff,
-  removeBusinessStaff,
-  updateBusinessStaff,
-  type BusinessStaffMember
-} from "../../api.business";
+import type { BusinessStaffMember } from "../../api.business";
+import { useStoreWorkspace } from "../../store-workspace";
 
 const assignableRoles = ["BUSINESS_ADMIN", "BUSINESS_STAFF"] as const;
 
@@ -17,6 +12,7 @@ const assignableRoles = ["BUSINESS_ADMIN", "BUSINESS_STAFF"] as const;
  */
 export function StaffPage() {
   const { t } = useTranslation();
+  const { api } = useStoreWorkspace();
   const [staff, setStaff] = useState<BusinessStaffMember[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -30,7 +26,7 @@ export function StaffPage() {
 
   async function load() {
     try {
-      setStaff(await listBusinessStaff());
+      setStaff(await api.listBusinessStaff());
       setError(null);
     } catch (requestError) {
       setError(readApiError(requestError, t("staff.loadError")));
@@ -111,7 +107,7 @@ export function StaffPage() {
             disabled={!draft.fullName.trim() || !draft.phoneNumber.trim() || draft.password.length < 8}
             onClick={() =>
               void run(async () => {
-                await addBusinessStaff({
+                await api.addBusinessStaff({
                   fullName: draft.fullName.trim(),
                   countryCode: draft.countryCode.trim(),
                   phoneNumber: draft.phoneNumber.trim(),
@@ -165,7 +161,7 @@ export function StaffPage() {
                           <select
                             className="select"
                             onChange={(event) =>
-                              void run(() => updateBusinessStaff(member.userId, { roleKey: event.target.value }))
+                              void run(() => api.updateBusinessStaff(member.userId, { roleKey: event.target.value }))
                             }
                             value={member.roleKey}
                           >
@@ -178,7 +174,7 @@ export function StaffPage() {
                           {member.isActive ? (
                             <button
                               className="btn btn-danger btn-sm"
-                              onClick={() => void run(() => removeBusinessStaff(member.userId))}
+                              onClick={() => void run(() => api.removeBusinessStaff(member.userId))}
                               type="button"
                             >
                               {t("staff.revoke")}
@@ -186,7 +182,7 @@ export function StaffPage() {
                           ) : (
                             <button
                               className="btn btn-outline btn-sm"
-                              onClick={() => void run(() => updateBusinessStaff(member.userId, { isActive: true }))}
+                              onClick={() => void run(() => api.updateBusinessStaff(member.userId, { isActive: true }))}
                               type="button"
                             >
                               {t("staff.restore")}

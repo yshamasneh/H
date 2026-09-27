@@ -4,7 +4,7 @@ import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { writeAuditLog } from "../common/audit-log.util";
 import { grantBusinessMembership } from "../common/authorization/business-membership.util";
-import { resolveMemberBusinessId } from "../common/authorization/business-scope.util";
+import { resolveActorBusinessId, type BusinessActor } from "../common/authorization/business-scope.util";
 import { ApiException } from "../common/api.exception";
 import { normalizeArabicText } from "../common/arabic-normalize";
 import { assertAllowedImageUrl } from "../common/image-url.util";
@@ -165,8 +165,8 @@ export class RestaurantsService {
   }
 
   /** Resolves the caller's business from their membership, so staff accounts work, not just owners. */
-  async requireOwnRestaurant(memberUserId: string): Promise<Restaurant> {
-    const businessId = await resolveMemberBusinessId(this.prisma, memberUserId);
+  async requireOwnRestaurant(actor: BusinessActor): Promise<Restaurant> {
+    const businessId = await resolveActorBusinessId(this.prisma, actor);
     const restaurant = await this.prisma.restaurant.findUnique({ where: { id: businessId } });
     if (!restaurant) {
       throw new ApiException(404, "RESTAURANT_NOT_FOUND", "No restaurant is linked to this account.");
@@ -182,8 +182,8 @@ export class RestaurantsService {
    * Owner-facing business snapshot: revenue (from delivered orders) and order volume for today
    * and the current calendar month. Boundaries are server-local so "today" matches the owner's day.
    */
-  async getOwnStats(ownerUserId: string): Promise<RestaurantStatsView> {
-    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+  async getOwnStats(actor: BusinessActor): Promise<RestaurantStatsView> {
+    const restaurant = await this.requireOwnRestaurant(actor);
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -240,6 +240,24 @@ export class RestaurantsService {
       entityType: "Restaurant",
       entityId: restaurantId,
       metadata: { fields: Object.keys(input).filter((key) => (input as Record<string, unknown>)[key] !== undefined) }
+    });
+    return updated;
+  }
+
+  /**
+   * A platform admin opening or closing a store from its admin page. Same rules as the owner's
+   * own toggle (approved, location set), because it is the same method; the audit entry is what
+   * records that an admin, not the store, made the change.
+   */
+  async adminSetOpenStatus(adminUserId: string, restaurantId: string, isOpen: boolean): Promise<RestaurantProfileView> {
+    await this.assertStoreExists(restaurantId);
+    const updated = await this.setOwnOpenStatus({ actorUserId: adminUserId, businessId: restaurantId }, isOpen);
+    await writeAuditLog(this.prisma, {
+      actorUserId: adminUserId,
+      action: "RESTAURANT_OPEN_STATUS_CHANGED",
+      entityType: "Restaurant",
+      entityId: restaurantId,
+      metadata: { isOpen }
     });
     return updated;
   }
@@ -311,8 +329,8 @@ export class RestaurantsService {
     return { opensAt, closesAt };
   }
 
-  async setOwnOpenStatus(ownerUserId: string, isOpen: boolean): Promise<RestaurantProfileView> {
-    const restaurant = await this.requireOwnRestaurant(ownerUserId);
+  async setOwnOpenStatus(actor: BusinessActor, isOpen: boolean): Promise<RestaurantProfileView> {
+    const restaurant = await this.requireOwnRestaurant(actor);
     if (isOpen && restaurant.status !== RestaurantStatus.APPROVED) {
       throw new ApiException(409, "RESTAURANT_NOT_APPROVED", "The restaurant must be approved before it can open.");
     }

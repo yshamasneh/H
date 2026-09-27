@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import type { Permission } from "../api";
 import { setLanguage, supportedLanguages, type SupportedLanguage } from "../i18n";
 import { LiveQueueProvider, useLiveQueue } from "../live-queue";
+import { OwnStoreWorkspaceProvider } from "../store-workspace";
 import { NewOrderPopup } from "./NewOrderPopup";
 import { FeedbackToast, SoundToggle } from "./SoundToggle";
 
@@ -63,11 +64,13 @@ export function Layout({ children }: { children: ReactNode }) {
   // and popup follow the person to whatever screen they are on.
   if (user?.role === "RESTAURANT") {
     return (
-      <LiveQueueProvider>
-        <Shell isBusinessShell>{children}</Shell>
-        <NewOrderPopup />
-        <FeedbackToast />
-      </LiveQueueProvider>
+      <OwnStoreWorkspaceProvider>
+        <LiveQueueProvider>
+          <Shell isBusinessShell>{children}</Shell>
+          <NewOrderPopup />
+          <FeedbackToast />
+        </LiveQueueProvider>
+      </OwnStoreWorkspaceProvider>
     );
   }
   return <Shell isBusinessShell={false}>{children}</Shell>;

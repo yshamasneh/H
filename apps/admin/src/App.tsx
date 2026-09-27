@@ -20,6 +20,7 @@ import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { RestaurantDetailPage } from "./pages/RestaurantDetailPage";
 import { RestaurantsPage } from "./pages/RestaurantsPage";
+import { AdminStoreSection } from "./pages/store/AdminStoreSection";
 import { SettingsPage } from "./pages/SettingsPage";
 import { UsersPage } from "./pages/UsersPage";
 import { AccountingPage } from "./pages/AccountingPage";
@@ -64,7 +65,15 @@ function PlatformRoutes() {
     <Routes>
       <Route element={<DashboardPage />} path="/" />
       <Route element={<RestaurantsPage />} path="/restaurants" />
-      <Route element={<RestaurantDetailPage />} path="/restaurants/:restaurantId" />
+      {/* A store: its admin overview plus the same workspace the store itself runs (see AdminStoreSection). */}
+      <Route element={<AdminStoreSection />} path="/restaurants/:restaurantId">
+        <Route element={<RestaurantDetailPage />} index />
+        <Route element={<LiveOrdersPage />} path="orders" />
+        <Route element={<BusinessOrderPage />} path="orders/:orderId" />
+        <Route element={<InventoryPage />} path="inventory" />
+        <Route element={<BusinessReportsPage />} path="reports" />
+        <Route element={<StaffPage />} path="staff" />
+      </Route>
       <Route element={<OrdersPage />} path="/orders" />
       <Route element={<OrderDetailPage />} path="/orders/:orderId" />
       <Route element={<DriversPage />} path="/drivers" />
