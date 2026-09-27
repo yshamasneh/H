@@ -168,18 +168,14 @@ async function seedRepresentativeLegacyData(databaseUrl: string): Promise<void> 
       });
       await tx.businessMember.create({ data: { id: ids.membership, businessId: ids.restaurant, userId: ids.owner, roleId: businessRole.id } });
       await tx.menuCategory.create({ data: { id: ids.category, restaurantId: ids.restaurant, name: "Legacy Pantry", sortOrder: 1 } });
-      await tx.menuItem.create({
-        data: {
-          id: ids.item,
-          restaurantId: ids.restaurant,
-          categoryId: ids.category,
-          name: "Legacy Rice",
-          priceMinor: 1200,
-          costPriceMinor: 800,
-          sku: "LEGACY-RICE-1",
-          stockQuantity: 11
-        }
-      });
+      // Tables that gained a column with a schema default after the cutoff are written in SQL naming
+      // only cutoff-era columns: the Prisma client always sends schema defaults (displayPriority,
+      // isPicked, cashRoundingMinor), which a legacy database does not have yet.
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "MenuItem" ("id", "restaurantId", "categoryId", "name", "priceMinor", "costPriceMinor", "sku", "stockQuantity", "updatedAt")
+         VALUES ($1::uuid, $2::uuid, $3::uuid, 'Legacy Rice', 1200, 800, 'LEGACY-RICE-1', 11, now())`,
+        ids.item, ids.restaurant, ids.category
+      );
       await tx.order.create({
         data: {
           id: ids.order,
@@ -195,17 +191,11 @@ async function seedRepresentativeLegacyData(databaseUrl: string): Promise<void> 
           totalMinor: 2200
         }
       });
-      await tx.orderItem.create({
-        data: {
-          id: ids.orderItem,
-          orderId: ids.order,
-          menuItemId: ids.item,
-          nameSnapshot: "Legacy Rice",
-          priceMinorSnapshot: 1200,
-          costPriceMinorSnapshot: 800,
-          quantity: 1
-        }
-      });
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "OrderItem" ("id", "orderId", "menuItemId", "nameSnapshot", "priceMinorSnapshot", "costPriceMinorSnapshot", "quantity")
+         VALUES ($1::uuid, $2::uuid, $3::uuid, 'Legacy Rice', 1200, 800, 1)`,
+        ids.orderItem, ids.order, ids.item
+      );
       await tx.inventoryMovement.create({
         data: {
           id: ids.movement,
@@ -232,26 +222,20 @@ async function seedRepresentativeLegacyData(databaseUrl: string): Promise<void> 
           relatedEntityId: ids.order
         }
       });
-      await tx.pushToken.create({ data: { id: ids.pushToken, userId: ids.owner, token: "ExponentPushToken[legacy-migration-fixture]", platform: "android" } });
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "PushToken" ("id", "userId", "token", "platform", "updatedAt")
+         VALUES ($1::uuid, $2::uuid, 'ExponentPushToken[legacy-migration-fixture]', 'android', now())`,
+        ids.pushToken, ids.owner
+      );
       await tx.partnerAccount.create({
         data: { id: ids.ownerAccount, key: "OWNER_A", name: "Legacy owner name preserved", kind: "PLATFORM_OWNER" }
       });
-      await tx.orderFinancialRecord.create({
-        data: {
-          id: ids.financialRecord,
-          orderId: ids.order,
-          businessId: ids.restaurant,
-          rateSetId: rateSet.id,
-          vertical: "SUPERMARKET",
-          outcome: "DELIVERED",
-          isPromotionalBusiness: false,
-          itemSubtotalMinor: 1200,
-          deliveryFeeMinor: 1000,
-          cashCollectedMinor: 2200,
-          goodsCostMinor: 800,
-          marginMinor: 400
-        }
-      });
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "OrderFinancialRecord" ("id", "orderId", "businessId", "rateSetId", "vertical", "outcome", "isPromotionalBusiness",
+           "itemSubtotalMinor", "deliveryFeeMinor", "cashCollectedMinor", "goodsCostMinor", "marginMinor")
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'SUPERMARKET', 'DELIVERED', false, 1200, 1000, 2200, 800, 400)`,
+        ids.financialRecord, ids.order, ids.restaurant, rateSet.id
+      );
       await tx.partnerEarning.create({
         data: {
           id: ids.earning,
@@ -291,8 +275,10 @@ async function migrationNames(client: Client): Promise<string[]> {
 async function verifyUpgradedData(client: Client, before: Record<string, number>): Promise<void> {
   const after = await tableCounts(client);
   for (const table of legacyTables) {
-    const expected = table === "PartnerAccount" ? before[table] + 2 : before[table];
-    assert.equal(after[table], expected, `${table} count changed unexpectedly`);
+    // Post-cutoff migrations add partner accounts: OWNER_B and DELIVERY_OPS (seed_required_partner_accounts;
+    // the fixture already holds OWNER_A) and PLATFORM_ROUNDING (cash_rounding_account_and_column).
+    const expected = table === "PartnerAccount" ? before[table] + 3 : before[table];
+    assert.equal(after[table], expected, `${table} count changed unexpectedly (before ${before[table]}, after ${after[table]}, expected ${expected})`);
   }
 
   const relationships = await client.query(
@@ -339,7 +325,11 @@ async function verifyUpgradedData(client: Client, before: Record<string, number>
   assert.equal(ownerA?.id, ids.ownerAccount);
   assert.equal(ownerA?.name, "Legacy owner name preserved");
   assert.ok(accounts.rows.every((row) => row.isActive === true && row.businessId === null && row.userId === null));
-  const readiness = inspectPartnerAccountInvariants(accounts.rows.map((row) => ({
+  // Readiness checks every required account, including PLATFORM_ROUNDING, which a later migration adds.
+  const allAccounts = await client.query(
+    `SELECT id::text, key, kind::text, "isActive", "businessId"::text FROM "PartnerAccount" ORDER BY key`
+  );
+  const readiness = inspectPartnerAccountInvariants(allAccounts.rows.map((row) => ({
     id: row.id,
     key: row.key,
     kind: row.kind,

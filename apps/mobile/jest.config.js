@@ -9,7 +9,8 @@ module.exports = {
   testMatch: ["**/*.ui.test.tsx"],
   // The first run after an edit compiles each screen from a cold transform cache; under load that can
   // exceed the 5 s default on the first test of a file and fail a test that is otherwise fine.
-  testTimeout: 20000,
+  // CI runners are slower still: a suite's first hook there has taken >20 s on a cold cache.
+  testTimeout: process.env.CI ? 60000 : 20000,
   // The node:test files (`*.test.ts`) are not Jest tests — keep them out of this runner.
   testPathIgnorePatterns: ["/node_modules/", "\\.test\\.ts$"]
 };
