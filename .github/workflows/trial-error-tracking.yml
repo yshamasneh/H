@@ -1,0 +1,95 @@
+name: Trial error tracking (App Insights) setup and proof
+
+# The Trial API had no error-tracking destination at all (NODE_ENV=development skips the boot check,
+# and ERROR_TRACKING_WEBHOOK_URL was never set). This provisions Azure Application Insights in the
+# Trial resource group, points the API at it, then waits for a real exception to arrive: trigger one
+# with POST /api/v1/admin/diagnostics/test-error (platform admin) while this job is polling.
+# Idempotent: re-running reuses the existing resources and only rewrites the setting if it changed.
+# The connection string is never printed (this repository's logs are public).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/phase-15-and-jovo-brand
+    paths:
+      - .github/workflows/trial-error-tracking.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  error-tracking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AZURE_SUBSCRIPTION_ID: e3e66992-6146-4a39-a173-9a916c66bdcd
+      AZURE_TENANT_ID: bb4fc368-77bb-45aa-80a3-9a53558d8552
+      AZURE_CLIENT_ID: bc6ffa2a-6b3d-4e37-a47e-967e9317757c
+      RESOURCE_GROUP: jovo-trial
+      WEBAPP: jovo-market-api
+      WORKSPACE: jovo-trial-logs
+      APP_INSIGHTS: jovo-market-api-insights
+      # Log Analytics daily ingestion cap in GB: bounds the bill if something starts erroring in a loop.
+      DAILY_CAP_GB: "0.5"
+    steps:
+      - name: Sign in to Trial Azure subscription
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision Log Analytics workspace and Application Insights
+        shell: bash
+        run: |
+          set -euo pipefail
+          az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors
+          az provider register --namespace Microsoft.OperationalInsights --only-show-errors || true
+          az provider register --namespace Microsoft.Insights --only-show-errors || true
+          location=$(az group show --name "$RESOURCE_GROUP" --query location --output tsv)
+          echo "Resource group location: $location"
+          if ! az monitor log-analytics workspace show --resource-group "$RESOURCE_GROUP" --workspace-name "$WORKSPACE" --output none 2>/dev/null; then
+            az monitor log-analytics workspace create --resource-group "$RESOURCE_GROUP" --workspace-name "$WORKSPACE" --location "$location" --retention-time 30 --output none
+            echo "Created workspace $WORKSPACE"
+          fi
+          az monitor log-analytics workspace update --resource-group "$RESOURCE_GROUP" --workspace-name "$WORKSPACE" --quota "$DAILY_CAP_GB" --output none
+          workspace_id=$(az monitor log-analytics workspace show --resource-group "$RESOURCE_GROUP" --workspace-name "$WORKSPACE" --query id --output tsv)
+          if ! az monitor app-insights component show --resource-group "$RESOURCE_GROUP" --app "$APP_INSIGHTS" --output none 2>/dev/null; then
+            az monitor app-insights component create --resource-group "$RESOURCE_GROUP" --app "$APP_INSIGHTS" --location "$location" --kind web --application-type Node.JS --workspace "$workspace_id" --output none
+            echo "Created Application Insights $APP_INSIGHTS"
+          fi
+          az monitor log-analytics workspace show --resource-group "$RESOURCE_GROUP" --workspace-name "$WORKSPACE" --query "{workspace:name,retentionDays:retentionInDays,dailyCapGb:workspaceCapping.dailyQuotaGb}" --output json
+
+      - name: Point the API at Application Insights
+        shell: bash
+        run: |
+          set -euo pipefail
+          connection=$(az monitor app-insights component show --resource-group "$RESOURCE_GROUP" --app "$APP_INSIGHTS" --query connectionString --output tsv)
+          echo "::add-mask::$connection"
+          current=$(az webapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query "[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING'].value | [0]" --output tsv)
+          if [[ "$current" == "$connection" ]]; then
+            echo "APPLICATIONINSIGHTS_CONNECTION_STRING already set to this component."
+          else
+            az webapp config appsettings set --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --settings APPLICATIONINSIGHTS_CONNECTION_STRING="$connection" --output none
+            echo "APPLICATIONINSIGHTS_CONNECTION_STRING set; App Service restarts to pick it up."
+          fi
+
+      - name: Wait for a real exception to arrive in Application Insights
+        shell: bash
+        run: |
+          set -uo pipefail
+          query="exceptions | where timestamp > ago(2h) | order by timestamp desc | project timestamp, type, outerMessage, requestId=tostring(customDimensions.requestId), path=tostring(customDimensions.path), statusCode=tostring(customDimensions.statusCode), environment=tostring(customDimensions.environment), release=application_Version | take 10"
+          for attempt in $(seq 1 60); do
+            result=$(az monitor app-insights query --resource-group "$RESOURCE_GROUP" --app "$APP_INSIGHTS" --analytics-query "$query" --output json 2>/dev/null || echo '{}')
+            rows=$(jq '[.tables[0].rows // [] | .[]] | length' <<< "$result")
+            if [[ "$rows" -gt 0 ]]; then
+              echo "Exceptions received by Application Insights ($rows):"
+              jq -r '.tables[0] as $t | $t.rows[] | [$t.columns[].name, .] | transpose | map("\(.[0])=\(.[1])") | join("  ")' <<< "$result"
+              exit 0
+            fi
+            echo "[$attempt/60] no exceptions yet; waiting (trigger POST /api/v1/admin/diagnostics/test-error)"
+            sleep 30
+          done
+          echo "::error::No exception reached Application Insights within 30 minutes"
+          exit 1

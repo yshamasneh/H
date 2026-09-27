@@ -1,3 +1,4 @@
+import { parseAppInsightsConnectionString } from "../observability/app-insights";
 const requiredSecrets = ["JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET", "OTP_HASH_SECRET"] as const;
 const productionPlaceholders = ["replace_with_", "change_me", "changeme", "tasawaq_dev_password"];
 const supportedNodeEnvironments = ["development", "test", "production"] as const;
@@ -63,8 +64,16 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   }
 
   const errorTrackingUrl = readString(environment, "ERROR_TRACKING_WEBHOOK_URL", "");
-  if (isProduction && !errorTrackingUrl) {
-    throw new Error("ERROR_TRACKING_WEBHOOK_URL is required in production");
+  const appInsightsConnection = readString(environment, "APPLICATIONINSIGHTS_CONNECTION_STRING", "");
+  if (isProduction && !errorTrackingUrl && !appInsightsConnection) {
+    throw new Error("ERROR_TRACKING_WEBHOOK_URL or APPLICATIONINSIGHTS_CONNECTION_STRING is required in production");
+  }
+  if (appInsightsConnection) {
+    // A malformed value would otherwise mean errors are silently dropped; fail at boot instead.
+    if (!parseAppInsightsConnectionString(appInsightsConnection)) {
+      throw new Error("APPLICATIONINSIGHTS_CONNECTION_STRING must contain an InstrumentationKey and an HTTPS IngestionEndpoint");
+    }
+    environment.APPLICATIONINSIGHTS_CONNECTION_STRING = appInsightsConnection;
   }
   if (errorTrackingUrl) {
     environment.ERROR_TRACKING_WEBHOOK_URL = readHttpsUrl(environment, "ERROR_TRACKING_WEBHOOK_URL", isProduction);

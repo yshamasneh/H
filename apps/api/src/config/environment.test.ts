@@ -44,6 +44,36 @@ test("production accepts explicit HTTPS integrations and secure secrets", () => 
   assert.equal(result.OTP_PROVIDER, "webhook");
 });
 
+const productionWithoutTracking = {
+  ...base,
+  ...imageStorage,
+  NODE_ENV: "production",
+  CORS_ORIGIN: "https://admin.example.com",
+  OTP_PROVIDER: "webhook",
+  OTP_WEBHOOK_URL: "https://messaging.example.com/otp",
+  OTP_WEBHOOK_TOKEN: "otp-delivery-token-that-is-at-least-32-characters",
+  MONITORING_TOKEN: "monitoring-token-that-is-at-least-32-characters"
+};
+
+test("production refuses to boot with no error-tracking destination at all", () => {
+  assert.throws(() => validateEnvironment(productionWithoutTracking), /ERROR_TRACKING_WEBHOOK_URL or APPLICATIONINSIGHTS_CONNECTION_STRING/);
+});
+
+test("production accepts Application Insights alone as its error-tracking destination", () => {
+  const result = validateEnvironment({
+    ...productionWithoutTracking,
+    APPLICATIONINSIGHTS_CONNECTION_STRING: "InstrumentationKey=abc;IngestionEndpoint=https://uaenorth-0.in.applicationinsights.azure.com/"
+  });
+  assert.match(String(result.APPLICATIONINSIGHTS_CONNECTION_STRING), /InstrumentationKey=abc/);
+});
+
+test("a malformed Application Insights connection string fails at boot instead of dropping errors", () => {
+  assert.throws(
+    () => validateEnvironment({ ...base, APPLICATIONINSIGHTS_CONNECTION_STRING: "InstrumentationKey=abc" }),
+    /APPLICATIONINSIGHTS_CONNECTION_STRING/
+  );
+});
+
 test("the DB connection-pool size defaults sensibly and is tunable", () => {
   // Regression for the load-test finding: the pool must not silently sit at the pg driver default
   // of 10. Our validated default lifts it, and a deployment can tune it further.
