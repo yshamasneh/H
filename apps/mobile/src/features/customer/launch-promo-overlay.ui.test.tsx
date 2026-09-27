@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react-native";
 import i18n from "../../i18n";
 import type { RestaurantOffer } from "../../core/api";
 import { selectFeaturedOffer } from "./home-screen";
@@ -28,8 +28,19 @@ function offer(overrides: Partial<RestaurantOffer> = {}): RestaurantOffer {
   };
 }
 
-test("shows the featured offer full-screen and auto-dismisses after the timeout", () => {
+// Fake timers stay on until this file's own cleanup has unmounted the overlay: switching back to real
+// timers mid-test left its entrance animation and auto-dismiss timer scheduled on the fake clock, and
+// that stalled RNTL's cleanup in every suite run after this one in the same Jest worker (CI hung on it).
+beforeEach(() => {
   jest.useFakeTimers();
+});
+afterEach(() => {
+  cleanup();
+  jest.runOnlyPendingTimers();
+  jest.useRealTimers();
+});
+
+test("shows the featured offer full-screen and auto-dismisses after the timeout", () => {
   const onDone = jest.fn();
   render(<LaunchPromoOverlay offer={offer({ title: "Weekend deal" })} onDone={onDone} />);
 
@@ -42,11 +53,9 @@ test("shows the featured offer full-screen and auto-dismisses after the timeout"
 
   act(() => jest.advanceTimersByTime(1));
   expect(onDone).toHaveBeenCalledTimes(1);
-  jest.useRealTimers();
 });
 
 test("tapping the overlay dismisses it immediately, without waiting for the timeout", () => {
-  jest.useFakeTimers();
   const onDone = jest.fn();
   render(<LaunchPromoOverlay offer={offer()} onDone={onDone} />);
 
@@ -56,7 +65,6 @@ test("tapping the overlay dismisses it immediately, without waiting for the time
   // The pending auto-dismiss timer must not also fire and call onDone a second time.
   act(() => jest.advanceTimersByTime(launchPromoDurationMs));
   expect(onDone).toHaveBeenCalledTimes(1);
-  jest.useRealTimers();
 });
 
 test("selectFeaturedOffer is what decides the overlay is skipped when there is nothing to feature", () => {
