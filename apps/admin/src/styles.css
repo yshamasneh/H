@@ -1266,6 +1266,29 @@ article.order-ticket:hover { border-color: var(--border); box-shadow: none; }
   .stock-toggle { flex: 1; }
 }
 
+/* Business catalogue, category-first: tiles scan fast, and a red dot says "something is hidden in here". */
+.category-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-2); }
+.category-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1);
+  min-height: 88px; padding: var(--space-3) var(--space-4); text-align: start; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); color: var(--text);
+  font: inherit;
+}
+.category-tile:hover { border-color: var(--primary-border); background: var(--primary-subtle); }
+.category-tile:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.category-tile-name { font-size: var(--fs-h3); font-weight: var(--fw-bold); }
+.category-tile-count { font-size: var(--fs-caption); color: var(--text-muted); }
+.hidden-badge {
+  display: inline-flex; align-items: center; gap: var(--space-1); margin-top: auto;
+  padding: 2px var(--space-2); border-radius: var(--radius-pill);
+  background: var(--error-subtle); color: var(--error); font-size: var(--fs-caption); font-weight: var(--fw-bold);
+}
+.hidden-dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--error); margin-inline-end: var(--space-1); }
+.btn-primary .hidden-dot { background: var(--text-inverse); }
+.category-heading { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.category-heading-title { margin: 0; font-size: var(--fs-h2); }
+.stock-more { width: 100%; margin-top: var(--space-2); min-height: 48px; }
+
 /* Touch screens get the larger version of every small control in these workflows. */
 @media (pointer: coarse) {
   .btn-sm { min-height: 44px; padding: var(--space-2) var(--space-4); }

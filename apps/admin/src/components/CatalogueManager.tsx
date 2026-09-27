@@ -2,7 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError, readApiError } from "../api";
 import { type MenuCategoryOwner, type MenuItemOwner } from "../api.business";
-import { categoryCounts, emptyFilter, filterProducts, hiddenCount, onSaleCount, type ProductFilter } from "../catalogue-view";
+import {
+  categoriesInOrder,
+  categoryCounts,
+  emptyFilter,
+  filterProducts,
+  hiddenAcrossCategories,
+  hiddenCount,
+  onSaleCount,
+  productsInCategory,
+  type BrowseTab,
+  type ProductFilter
+} from "../catalogue-view";
 import { parseMoneyToMinor, parseWholeNumber, toMoneyInput } from "../money";
 import { isBelowCost, parseSaleInput, salePercentOff } from "../sale";
 import { ConfirmModal } from "./ConfirmModal";
@@ -11,6 +22,13 @@ import { ImageUploadField } from "./ImageUploadField";
 import { isSafeExternalImageUrl, saveProductWithImage } from "../image-upload";
 
 const currencyCode = "ILS";
+/** Rows rendered per view before "show more"; a category rarely needs more, search narrows first. */
+const browsePageSize = 100;
+
+type Browse =
+  | { mode: "categories" }
+  | { mode: "category"; categoryId: string; tab: BrowseTab }
+  | { mode: "hidden" };
 
 /**
  * The set of catalogue calls this editor needs, injected so the same UI drives two shells: the
@@ -76,7 +94,21 @@ const emptyDraft: ItemDraft = {
   isVariableWeight: false
 };
 
-export function CatalogueManager({ api, capabilities, restaurantId }: { api: CatalogueApi; capabilities: CatalogueCapabilities; restaurantId: string }) {
+export function CatalogueManager({
+  api,
+  capabilities,
+  restaurantId,
+  browseByCategory = false
+}: {
+  api: CatalogueApi;
+  capabilities: CatalogueCapabilities;
+  restaurantId: string;
+  /**
+   * The business workspace browses a large catalogue category-first (categories → Available/Hidden,
+   * plus an all-hidden view). The super-admin store page keeps the single filterable list.
+   */
+  browseByCategory?: boolean;
+}) {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<MenuCategoryOwner[]>([]);
   const [items, setItems] = useState<MenuItemOwner[]>([]);
@@ -101,6 +133,9 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   const [selectedImage, setSelectedImage] = useState<File | null | undefined>(undefined);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [savingItem, setSavingItem] = useState(false);
+  const [browse, setBrowse] = useState<Browse>({ mode: "categories" });
+  const [shownCount, setShownCount] = useState(browsePageSize);
+  const listTopRef = useRef<HTMLDivElement | null>(null);
 
   const { isSupermarket, canManagePrices, canManageProducts, canManageMenu, canManageOrders } = capabilities;
 
@@ -159,6 +194,10 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   }
 
   function openForm() {
+    // Adding from inside a category files the new product there by default.
+    if (!editingId && browseByCategory && browse.mode === "category") {
+      setDraft((current) => ({ ...current, categoryId: browse.categoryId }));
+    }
     setFormOpen(true);
     window.requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
@@ -315,9 +354,88 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
   const draftBelowCost = draftSale.ok && isBelowCost(draftSale.saleMinor, draft.costPrice.trim() ? parseMoneyToMinor(draft.costPrice) : null);
   const categoryNameOf = (id: string) => categories.find((category) => category.id === id)?.name ?? "—";
   const canHide = canManageProducts || canManageOrders;
+  // Category browsing (business workspace): every view derives from `items`, so hiding or showing a
+  // product anywhere moves it everywhere at once.
+  const orderedCategories = categoriesInOrder(categories);
+  const openCategory = browse.mode === "category" ? categories.find((category) => category.id === browse.categoryId) ?? null : null;
+  const openCount = (openCategory && counts.get(openCategory.id)) || { total: 0, visible: 0, hidden: 0 };
+  const browsed = browse.mode === "category"
+    ? productsInCategory(items, browse.categoryId, browse.tab)
+    : browse.mode === "hidden" ? hiddenAcrossCategories(items, categories) : [];
 
   function changeFilter(patch: Partial<ProductFilter>) {
     setFilter((previous) => ({ ...previous, ...patch }));
+    setShownCount(browsePageSize);
+  }
+
+  function browseTo(next: Browse) {
+    setBrowse(next);
+    setShownCount(browsePageSize);
+    window.requestAnimationFrame(() => listTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  /** One product row, identical in every view; the category is named where a list mixes them. */
+  function renderRow(item: MenuItemOwner, showCategory: boolean) {
+    const toggling = togglingIds.has(item.id);
+    const rowError = rowErrors[item.id];
+    return (
+      <li className={`stock-row ${item.isAvailable ? "is-visible" : "is-hidden"}`} key={item.id}>
+        <FallbackImage alt="" className="stock-image" loading="lazy" src={item.imageUrl ?? undefined} />
+        <div className="stock-body">
+          <span className="stock-name">{item.name}</span>
+          <span className="stock-meta">
+            {showCategory ? <span>{categoryNameOf(item.categoryId)}</span> : null}
+            <span className="money">
+              {item.salePriceMinor !== null ? (
+                <>
+                  <s>{formatPrice(item.priceMinor)}</s> <strong>{formatPrice(item.salePriceMinor)}</strong>
+                </>
+              ) : (
+                formatPrice(item.priceMinor)
+              )}
+            </span>
+            {isSupermarket && item.stockQuantity !== null ? (
+              <span>{t("catalogue.stockInline", { count: item.stockQuantity })}</span>
+            ) : null}
+          </span>
+          <span className={`stock-state ${item.isAvailable ? "is-visible" : "is-hidden"}`}>
+            {item.isAvailable ? t("catalogue.statusVisible") : t("catalogue.statusHiddenLong")}
+          </span>
+          {rowError ? <span className="stock-error" role="alert">{rowError}</span> : null}
+        </div>
+        <div className="stock-actions">
+          {canHide ? (
+            <button
+              aria-label={t(item.isAvailable ? "catalogue.hideNamed" : "catalogue.unhideNamed", { name: item.name })}
+              className={`btn btn-lg stock-toggle ${item.isAvailable ? "btn-outline" : "btn-success"}`}
+              disabled={toggling}
+              onClick={() => void toggleVisibility(item)}
+              type="button"
+            >
+              {item.isAvailable ? t("catalogue.hide") : t("catalogue.unhide")}
+            </button>
+          ) : null}
+          {canManageProducts ? (
+            <button className="btn btn-ghost stock-edit" onClick={() => startEdit(item)} type="button">
+              {t("common.edit")}
+            </button>
+          ) : null}
+        </div>
+      </li>
+    );
+  }
+
+  function renderList(list: MenuItemOwner[], showCategory: boolean) {
+    return (
+      <>
+        <ul className="stock-list">{list.slice(0, shownCount).map((item) => renderRow(item, showCategory))}</ul>
+        {list.length > shownCount ? (
+          <button className="btn btn-outline stock-more" onClick={() => setShownCount((count) => count + browsePageSize)} type="button">
+            {t("catalogue.showMore", { count: list.length - shownCount })}
+          </button>
+        ) : null}
+      </>
+    );
   }
 
   async function saveRename() {
@@ -541,6 +659,146 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
           ) : null}
         </div>
 
+{browseByCategory ? (
+        <>
+        <div ref={listTopRef} />
+        <div className="stock-search">
+          <div className="stock-search-field">
+            <input
+              aria-label={t("catalogue.searchPlaceholder")}
+              autoComplete="off"
+              className="text-input stock-search-input"
+              enterKeyHint="search"
+              onChange={(event) => changeFilter({ search: event.target.value })}
+              placeholder={t("catalogue.searchPlaceholder")}
+              type="search"
+              value={filter.search}
+            />
+            {filter.search ? (
+              <button aria-label={t("catalogue.clearSearch")} className="stock-search-clear" onClick={() => changeFilter({ search: "" })} type="button">
+                ×
+              </button>
+            ) : null}
+          </div>
+          <label className="checkbox-row" style={{ margin: 0 }}>
+            <input
+              checked={filter.onSaleOnly}
+              onChange={(event) => changeFilter({ onSaleOnly: event.target.checked })}
+              type="checkbox"
+            />
+            {t("catalogue.onSaleOnly", { count: saleTotal })}
+          </label>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="empty-state">{t("catalogue.noProducts")}</div>
+        ) : filter.search.trim() || filter.onSaleOnly ? (
+          // Search spans the whole catalogue, whichever view it was typed in.
+          <>
+            <p className="field-hint">{t("catalogue.searchAcrossAll", { shown: filtered.length })}</p>
+            {filtered.length === 0 ? <div className="empty-state">{t("catalogue.noMatches")}</div> : renderList(filtered, true)}
+          </>
+        ) : (
+          <>
+            <div className="tab-row" role="tablist">
+              <button
+                aria-selected={browse.mode !== "hidden"}
+                className={`btn ${browse.mode !== "hidden" ? "btn-primary" : "btn-outline"}`}
+                onClick={() => browseTo({ mode: "categories" })}
+                role="tab"
+                type="button"
+              >
+                {t("catalogue.browseCategories")}
+              </button>
+              <button
+                aria-selected={browse.mode === "hidden"}
+                className={`btn ${browse.mode === "hidden" ? "btn-primary" : "btn-outline"}`}
+                onClick={() => browseTo({ mode: "hidden" })}
+                role="tab"
+                type="button"
+              >
+                {hiddenTotal > 0 ? <span aria-hidden="true" className="hidden-dot" /> : null}
+                {t("catalogue.browseHidden", { count: hiddenTotal })}
+              </button>
+            </div>
+
+            {browse.mode === "categories" ? (
+              <div className="category-tiles">
+                {orderedCategories.map((category) => {
+                  const count = counts.get(category.id) ?? { total: 0, visible: 0, hidden: 0 };
+                  return (
+                    <button
+                      aria-label={t("catalogue.openCategoryLabel", { name: category.name, total: count.total, hidden: count.hidden })}
+                      className="category-tile"
+                      key={category.id}
+                      onClick={() => browseTo({ mode: "category", categoryId: category.id, tab: "AVAILABLE" })}
+                      type="button"
+                    >
+                      <span className="category-tile-name">{category.name}</span>
+                      <span className="category-tile-count">
+                        {t("catalogue.categoryProductCount", { count: count.total })}
+                        {category.isActive ? "" : ` · ${t("catalogue.categoryInactiveNote")}`}
+                      </span>
+                      {count.hidden > 0 ? (
+                        <span className="hidden-badge">
+                          <span aria-hidden="true" className="hidden-dot" />
+                          {t("catalogue.categoryHiddenBadge", { count: count.hidden })}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : browse.mode === "category" && openCategory ? (
+              <>
+                <div className="category-heading">
+                  <button className="btn btn-outline btn-lg" onClick={() => browseTo({ mode: "categories" })} type="button">
+                    {t("catalogue.backToCategories")}
+                  </button>
+                  <h3 className="category-heading-title">{openCategory.name}</h3>
+                </div>
+                <div className="tab-row" role="tablist">
+                  <button
+                    aria-selected={browse.tab === "AVAILABLE"}
+                    className={`btn ${browse.tab === "AVAILABLE" ? "btn-primary" : "btn-outline"}`}
+                    onClick={() => browseTo({ ...browse, tab: "AVAILABLE" })}
+                    role="tab"
+                    type="button"
+                  >
+                    {t("catalogue.tabAvailable", { count: openCount.visible })}
+                  </button>
+                  <button
+                    aria-selected={browse.tab === "HIDDEN"}
+                    className={`btn ${browse.tab === "HIDDEN" ? "btn-primary" : "btn-outline"}`}
+                    onClick={() => browseTo({ ...browse, tab: "HIDDEN" })}
+                    role="tab"
+                    type="button"
+                  >
+                    {openCount.hidden > 0 ? <span aria-hidden="true" className="hidden-dot" /> : null}
+                    {t("catalogue.tabHidden", { count: openCount.hidden })}
+                  </button>
+                </div>
+                {browsed.length === 0 ? (
+                  <div className="empty-state">
+                    {openCount.total === 0
+                      ? t("catalogue.emptyCategory")
+                      : browse.tab === "AVAILABLE" ? t("catalogue.emptyCategoryAvailable") : t("catalogue.emptyCategoryHidden")}
+                  </div>
+                ) : (
+                  renderList(browsed, false)
+                )}
+              </>
+            ) : browse.mode === "hidden" ? (
+              <>
+                <p className="field-hint">{t("catalogue.hiddenViewHint")}</p>
+                {browsed.length === 0 ? <div className="empty-state">{t("catalogue.noHiddenProducts")}</div> : renderList(browsed, true)}
+              </>
+            ) : null}
+          </>
+        )}
+        </>
+        ) : (
+        <>
         {/* The search narrows the list with every character (no button, no delay) and stays pinned
             while scrolling, so the next product is always one word away. */}
         <div className="stock-search">
@@ -592,57 +850,9 @@ export function CatalogueManager({ api, capabilities, restaurantId }: { api: Cat
         ) : filtered.length === 0 ? (
           <div className="empty-state">{t("catalogue.noMatches")}</div>
         ) : (
-          <ul className="stock-list">
-            {filtered.map((item) => {
-              const toggling = togglingIds.has(item.id);
-              const rowError = rowErrors[item.id];
-              return (
-                <li className={`stock-row ${item.isAvailable ? "is-visible" : "is-hidden"}`} key={item.id}>
-                  <FallbackImage alt="" className="stock-image" loading="lazy" src={item.imageUrl ?? undefined} />
-                  <div className="stock-body">
-                    <span className="stock-name">{item.name}</span>
-                    <span className="stock-meta">
-                      <span>{categoryNameOf(item.categoryId)}</span>
-                      <span className="money">
-                        {item.salePriceMinor !== null ? (
-                          <>
-                            <s>{formatPrice(item.priceMinor)}</s> <strong>{formatPrice(item.salePriceMinor)}</strong>
-                          </>
-                        ) : (
-                          formatPrice(item.priceMinor)
-                        )}
-                      </span>
-                      {isSupermarket && item.stockQuantity !== null ? (
-                        <span>{t("catalogue.stockInline", { count: item.stockQuantity })}</span>
-                      ) : null}
-                    </span>
-                    <span className={`stock-state ${item.isAvailable ? "is-visible" : "is-hidden"}`}>
-                      {item.isAvailable ? t("catalogue.statusVisible") : t("catalogue.statusHiddenLong")}
-                    </span>
-                    {rowError ? <span className="stock-error" role="alert">{rowError}</span> : null}
-                  </div>
-                  <div className="stock-actions">
-                    {canHide ? (
-                      <button
-                        aria-label={t(item.isAvailable ? "catalogue.hideNamed" : "catalogue.unhideNamed", { name: item.name })}
-                        className={`btn btn-lg stock-toggle ${item.isAvailable ? "btn-outline" : "btn-success"}`}
-                        disabled={toggling}
-                        onClick={() => void toggleVisibility(item)}
-                        type="button"
-                      >
-                        {item.isAvailable ? t("catalogue.hide") : t("catalogue.unhide")}
-                      </button>
-                    ) : null}
-                    {canManageProducts ? (
-                      <button className="btn btn-ghost stock-edit" onClick={() => startEdit(item)} type="button">
-                        {t("common.edit")}
-                      </button>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          <ul className="stock-list">{filtered.map((item) => renderRow(item, true))}</ul>
+        )}
+        </>
         )}
         <p className="field-hint">{t("catalogue.hideNote")}</p>
       </div>

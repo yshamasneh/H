@@ -97,3 +97,34 @@ export function onSaleCount(items: Pick<MenuItemOwner, "salePriceMinor">[]): num
 export function hiddenCount(items: Pick<MenuItemOwner, "isAvailable">[]): number {
   return items.reduce((sum, item) => sum + (item.isAvailable ? 0 : 1), 0);
 }
+
+/**
+ * Category-first browsing for the business workspace (the same rules as the mobile app's
+ * apps/mobile/src/features/restaurant/catalogue-browse.ts): categories in the store's order, one
+ * category split into Available and Hidden, and every hidden product across all categories. Each
+ * derives from the one product list, so a product hidden in one view is hidden in all of them.
+ */
+export type BrowseTab = "AVAILABLE" | "HIDDEN";
+
+type BrowseProduct = Pick<MenuItemOwner, "name" | "categoryId" | "isAvailable">;
+type BrowseCategory = { id: string; name: string; sortOrder: number };
+
+export function categoriesInOrder<T extends BrowseCategory>(categories: T[]): T[] {
+  return [...categories].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+}
+
+export function productsInCategory<T extends BrowseProduct>(items: T[], categoryId: string, tab: BrowseTab): T[] {
+  return items
+    .filter((item) => item.categoryId === categoryId && item.isAvailable === (tab === "AVAILABLE"))
+    .sort(byName);
+}
+
+export function hiddenAcrossCategories<T extends BrowseProduct>(items: T[], categories: BrowseCategory[]): T[] {
+  const order = new Map(categories.map((category) => [category.id, category.sortOrder]));
+  const rank = (item: T) => order.get(item.categoryId) ?? Number.MAX_SAFE_INTEGER;
+  return items.filter((item) => !item.isAvailable).sort((a, b) => rank(a) - rank(b) || byName(a, b));
+}
+
+function byName(a: Pick<MenuItemOwner, "name">, b: Pick<MenuItemOwner, "name">): number {
+  return a.name.localeCompare(b.name, "ar");
+}

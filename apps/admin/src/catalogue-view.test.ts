@@ -95,3 +95,26 @@ test("search matches every typed word in any order, and narrows on partial words
 test("search folds the wasla alef like the API's trigram normalizer does", () => {
   assert.equal(normalizeSearch("ٱلمراعي"), normalizeSearch("المراعي"));
 });
+
+test("category browsing: store order, Available/Hidden split, and one cross-category hidden list", async () => {
+  const { categoriesInOrder, hiddenAcrossCategories, productsInCategory } = await import("./catalogue-view");
+  const categories = [
+    { id: "canned", name: "معلبات", sortOrder: 2 },
+    { id: "dairy", name: "ألبان", sortOrder: 1 }
+  ];
+  const products = [
+    { id: "1", name: "لبنة", categoryId: "dairy", isAvailable: true },
+    { id: "2", name: "حليب", categoryId: "dairy", isAvailable: false },
+    { id: "3", name: "جبنة", categoryId: "dairy", isAvailable: true },
+    { id: "4", name: "فول", categoryId: "canned", isAvailable: false }
+  ];
+  assert.deepEqual(categoriesInOrder(categories).map((category) => category.id), ["dairy", "canned"]);
+  assert.deepEqual(productsInCategory(products, "dairy", "AVAILABLE").map((item) => item.name), ["جبنة", "لبنة"]);
+  assert.deepEqual(productsInCategory(products, "dairy", "HIDDEN").map((item) => item.id), ["2"]);
+  assert.deepEqual(hiddenAcrossCategories(products, categories).map((item) => item.id), ["2", "4"]);
+
+  // Unhiding from the all-hidden view moves the product in the category view too: one source.
+  const afterUnhide = products.map((item) => (item.id === "4" ? { ...item, isAvailable: true } : item));
+  assert.deepEqual(hiddenAcrossCategories(afterUnhide, categories).map((item) => item.id), ["2"]);
+  assert.deepEqual(productsInCategory(afterUnhide, "canned", "AVAILABLE").map((item) => item.id), ["4"]);
+});
