@@ -37,17 +37,24 @@ jobs:
             echo "::error::${{ github.sha }} is no longer the branch tip ($tip); refusing to deploy a superseded commit."
             exit 1
           fi
-      # A revoked or expired token otherwise only surfaces after the (up to 30 min) gate wait.
-      - name: Check the Vercel token is still valid
+      # A revoked or expired token otherwise only surfaces after the (up to 30 min) gate wait. This
+      # asks for the two projects the deploy jobs use, so a team-scoped token passes exactly when it
+      # can deploy (a user-level endpoint like /v2/user can refuse a team-scoped token).
+      - name: Check the Vercel token can reach both projects
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          PROJECT_IDS: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }} ${{ secrets.VERCEL_PROJECT_ID_MOBILE_WEB }}
         run: |
           set -euo pipefail
-          status=$(curl --silent --output /dev/null --write-out '%{http_code}' --header "Authorization: Bearer $VERCEL_TOKEN" https://api.vercel.com/v2/user)
-          if [[ "$status" != "200" ]]; then
-            echo "::error::The VERCEL_TOKEN secret was rejected by Vercel (HTTP $status). Create a new token at https://vercel.com/account/tokens and run: gh secret set VERCEL_TOKEN"
-            exit 1
-          fi
+          for project in $PROJECT_IDS; do
+            status=$(curl --silent --output /dev/null --write-out '%{http_code}' --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v9/projects/$project?teamId=$VERCEL_ORG_ID")
+            if [[ "$status" != "200" ]]; then
+              echo "::error::Vercel refused VERCEL_TOKEN for a deploy project (HTTP $status). Create a token scoped to the project's team at https://vercel.com/account/tokens and run: gh secret set VERCEL_TOKEN"
+              exit 1
+            fi
+          done
       - name: Poll for this commit's Release gates result
         env:
           GH_TOKEN: ${{ github.token }}
