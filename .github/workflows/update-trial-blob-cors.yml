@@ -1,0 +1,82 @@
+name: Update Trial image-storage CORS (one-off)
+
+# Browsers PUT product/offer images straight to Blob Storage with a short-lived SAS, so the storage
+# account's own CORS rules must list every web origin that uploads. The admin console moved to new
+# Vercel projects (see update-trial-cors.yml for the API side); without this, image upload from the
+# current admin fails in the browser's preflight. Additive and deduplicated: existing origins stay.
+on:
+  workflow_dispatch:
+    inputs:
+      add_origins:
+        description: "Comma-separated HTTPS origins to add to the blob service CORS rule"
+        required: true
+        default: "https://jovo-admin.vercel.app,https://h-admin-gray.vercel.app"
+  push:
+    branches:
+      - agent/phase-15-and-jovo-brand
+    paths:
+      - .github/workflows/update-trial-blob-cors.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  update-blob-cors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AZURE_SUBSCRIPTION_ID: e3e66992-6146-4a39-a173-9a916c66bdcd
+      AZURE_TENANT_ID: bb4fc368-77bb-45aa-80a3-9a53558d8552
+      AZURE_CLIENT_ID: bc6ffa2a-6b3d-4e37-a47e-967e9317757c
+      RESOURCE_GROUP: jovo-trial
+      STORAGE_ACCOUNT: jovotrialimages
+      ADD_ORIGINS: ${{ inputs.add_origins || 'https://jovo-admin.vercel.app,https://h-admin-gray.vercel.app' }}
+    steps:
+      - name: Sign in to Trial Azure subscription
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Add origins to the upload CORS rule (additive, deduped)
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(az storage account blob-service-properties show --account-name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --query "cors.corsRules[0].allowedOrigins" --output json)
+          echo "Current origins: $current"
+          merged=$(jq -c --arg add "$ADD_ORIGINS" '(. // []) + ($add | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) | unique' <<< "$current")
+          echo "Merged origins: $merged"
+          if [[ "$(jq -c 'sort' <<< "$current")" == "$merged" ]]; then
+            echo "No change needed."
+            exit 0
+          fi
+          scope=$(az storage account show --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --query id --output tsv)
+          url="https://management.azure.com${scope}/blobServices/default?api-version=2023-05-01"
+          # Read the whole blob-service resource and change only its CORS rule, so the PUT cannot
+          # reset any other property (retention, versioning) that is already set.
+          az rest --method get --url "$url" --output json > current.json
+          jq --argjson origins "$merged" '{properties: (.properties | .cors = {corsRules: [{
+            allowedOrigins: $origins,
+            allowedMethods: ["PUT", "OPTIONS"],
+            allowedHeaders: ["content-type", "x-ms-blob-type"],
+            exposedHeaders: ["etag", "x-ms-request-id"],
+            maxAgeInSeconds: 300
+          }]})}' current.json > desired.json
+          echo "Properties other than CORS (unchanged): $(jq -c '.properties | del(.cors)' current.json)"
+          az rest --method put --url "$url" --body @desired.json --output none
+          echo "Applied."
+
+      - name: Verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          az storage account blob-service-properties show --account-name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --query "cors.corsRules[].{origins:allowedOrigins,methods:allowedMethods,headers:allowedHeaders}" --output json
+          for origin in ${ADD_ORIGINS//,/ }; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS \
+              -H "Origin: $origin" -H "Access-Control-Request-Method: PUT" \
+              -H "Access-Control-Request-Headers: content-type,x-ms-blob-type" \
+              "https://${STORAGE_ACCOUNT}.blob.core.windows.net/image-uploads/preflight-probe.jpg")
+            echo "Preflight from $origin -> HTTP $code (200 = allowed)"
+          done
