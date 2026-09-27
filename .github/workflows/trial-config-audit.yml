@@ -1,0 +1,105 @@
+name: Trial config audit (read-only)
+
+# Reports what the live Trial API is actually configured with for OTP delivery, error tracking and
+# image storage, so launch readiness is judged on the deployment rather than on the code. It reads
+# settings and resource metadata only; it changes nothing. This repository is public, so the logs
+# are too: no setting value is printed except non-secret names (NODE_ENV, provider choice, storage
+# account/container names) and the scheme + host of webhook URLs.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/phase-15-and-jovo-brand
+    paths:
+      - .github/workflows/trial-config-audit.yml
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AZURE_SUBSCRIPTION_ID: e3e66992-6146-4a39-a173-9a916c66bdcd
+      AZURE_TENANT_ID: bb4fc368-77bb-45aa-80a3-9a53558d8552
+      AZURE_CLIENT_ID: bc6ffa2a-6b3d-4e37-a47e-967e9317757c
+      RESOURCE_GROUP: jovo-trial
+      WEBAPP: jovo-market-api
+    steps:
+      - name: Sign in to Trial Azure subscription
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: App settings (names, presence, non-secret values only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          settings=$(az webapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --output json)
+          value() { jq -r --arg k "$1" '[.[] | select(.name == $k) | .value][0] // ""' <<< "$settings"; }
+          presence() { local v; v=$(value "$1"); if [[ -n "$v" ]]; then echo "$1: SET (${#v} chars)"; else echo "$1: NOT SET"; fi; }
+          host_of() { local v; v=$(value "$1"); if [[ -n "$v" ]]; then echo "$1: SET -> $(sed -E 's#^(https?://[^/]+).*#\1#' <<< "$v")"; else echo "$1: NOT SET"; fi; }
+          echo "== Mode =="
+          for k in NODE_ENV OTP_PROVIDER LOG_LEVEL RESTAURANT_ORDERING_ENABLED; do echo "$k: $(value "$k")"; done
+          echo "== OTP =="
+          host_of OTP_WEBHOOK_URL
+          presence OTP_WEBHOOK_TOKEN
+          echo "== Error tracking =="
+          host_of ERROR_TRACKING_WEBHOOK_URL
+          presence ERROR_TRACKING_TOKEN
+          presence MONITORING_TOKEN
+          echo "== Image storage =="
+          for k in AZURE_STORAGE_ACCOUNT_NAME AZURE_STORAGE_PUBLIC_CONTAINER_NAME AZURE_STORAGE_UPLOAD_CONTAINER_NAME; do echo "$k: $(value "$k")"; done
+          presence AZURE_CLIENT_ID
+          echo "== Any other monitoring/SMS-looking setting names =="
+          jq -r '.[].name' <<< "$settings" | grep -Ei 'sentry|insights|appinsights|otel|sms|whatsapp|twilio|jawwal|webhook|tracking' || echo "(none)"
+          echo "== All setting names (values withheld) =="
+          jq -r '.[].name' <<< "$settings" | sort | tr '\n' ' '; echo
+
+      - name: Storage account, containers, CORS, and the API identity's access
+        shell: bash
+        run: |
+          set -uo pipefail
+          account=$(az webapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query "[?name=='AZURE_STORAGE_ACCOUNT_NAME'].value | [0]" --output tsv)
+          principal=$(az webapp identity show --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query principalId --output tsv 2>/dev/null || true)
+          echo "App Service managed identity principalId: ${principal:-NONE}"
+          echo "Storage accounts in $RESOURCE_GROUP:"
+          az storage account list --resource-group "$RESOURCE_GROUP" --query "[].{name:name,sku:sku.name,kind:kind,publicBlobAccess:allowBlobPublicAccess}" --output table || true
+          if [[ -z "$account" || "$account" == "None" ]]; then
+            echo "API has no AZURE_STORAGE_ACCOUNT_NAME: image upload returns 503 IMAGE_STORAGE_UNAVAILABLE."
+            exit 0
+          fi
+          scope=$(az storage account show --name "$account" --query id --output tsv 2>/dev/null || true)
+          if [[ -z "$scope" ]]; then echo "Configured account '$account' was NOT found in this subscription."; exit 0; fi
+          echo "Containers:"
+          az storage container list --account-name "$account" --auth-mode login --query "[].{name:name,publicAccess:properties.publicAccess}" --output table || echo "(could not list containers with this identity)"
+          echo "Blob CORS rules:"
+          az storage account blob-service-properties show --account-name "$account" --query "cors.corsRules[].{origins:allowedOrigins,methods:allowedMethods}" --output json || true
+          echo "Lifecycle policy present:"
+          az storage account management-policy show --account-name "$account" --resource-group "$RESOURCE_GROUP" --query "policy.rules[].name" --output tsv 2>/dev/null || echo "none"
+          if [[ -n "$principal" ]]; then
+            echo "Role assignments for the API identity on the account:"
+            az role assignment list --assignee "$principal" --scope "$scope" --include-inherited --query "[].roleDefinitionName" --output tsv || true
+          fi
+          echo "Published product images (count, first 5 names):"
+          az storage blob list --account-name "$account" --container-name "$(az webapp config appsettings list --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query "[?name=='AZURE_STORAGE_PUBLIC_CONTAINER_NAME'].value | [0]" --output tsv)" --auth-mode login --query "length(@)" --output tsv 2>/dev/null || echo "(not readable with this identity)"
+
+      - name: Recent log evidence (counts only, no content)
+        shell: bash
+        run: |
+          set -uo pipefail
+          az webapp log config --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --query "{appLogs:applicationLogs.fileSystem.level,docker:httpLogs.fileSystem.enabled}" --output json 2>/dev/null || true
+          if az webapp log download --resource-group "$RESOURCE_GROUP" --name "$WEBAPP" --log-file logs.zip >/dev/null 2>&1; then
+            mkdir -p logs && unzip -q -o logs.zip -d logs
+            echo "Log files: $(find logs -type f | wc -l)"
+            echo "[DEV OTP] lines (development provider printed a code): $(grep -rh '\[DEV OTP\]' logs | wc -l)"
+            echo "Last [DEV OTP] timestamp: $(grep -rh '\[DEV OTP\]' logs | grep -oE '20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9:]{8}' | sort | tail -1)"
+            echo "error_tracking_delivery_failed lines: $(grep -rh 'error_tracking_delivery_failed' logs | wc -l)"
+            echo "OTP_DELIVERY_FAILED lines: $(grep -rh 'OTP_DELIVERY_FAILED' logs | wc -l)"
+          else
+            echo "Could not download App Service logs."
+          fi
