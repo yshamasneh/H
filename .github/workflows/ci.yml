@@ -25,6 +25,12 @@ env:
   CORS_ORIGIN: "*"
   EXPO_PUBLIC_API_URL: https://app.example.test
 
+# An explicit bash shell runs with `-eo pipefail`; GitHub's implicit default is plain `bash -e`, under
+# which `npm test 2>&1 | tee log` takes tee's exit status and a failing suite still passes the step.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   quality:
     name: Lint, types, unit tests and security
