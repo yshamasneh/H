@@ -1449,6 +1449,76 @@ export async function fetchAdminAccess(accessToken: string): Promise<AdminAccess
   };
 }
 
+/** Platform analytics — the same endpoints as the admin web console. DELIVERED orders only. */
+export type AdminAnalyticsPeriodParams = { fromDate?: string; toDate?: string; restaurantId?: string };
+
+export type AdminAnalyticsPeriod = {
+  fromDate: string | null;
+  toDate: string | null;
+  fromUtc: string | null;
+  toUtcExclusive: string | null;
+  timeZone: string;
+};
+
+export type AdminTopProductRow = {
+  rank: number;
+  menuItemId: string;
+  name: string;
+  unitLabel: string;
+  /** Thousandths of a unit: 3 items = 3000, 1.25 kg = 1250. */
+  quantityMilli: number;
+  /** Agorot. */
+  revenueMinor: number;
+  orders: number;
+};
+
+export type AdminTopProducts = {
+  period: AdminAnalyticsPeriod;
+  sortBy: "quantity" | "revenue";
+  totals: { deliveredOrders: number; productsSold: number; revenueMinor: number };
+  items: AdminTopProductRow[];
+};
+
+export type AdminPeakTimes = {
+  period: AdminAnalyticsPeriod;
+  totalOrders: number;
+  /** 24 entries, Asia/Hebron local hour. */
+  byHour: { hour: number; orders: number }[];
+  /** 0 = Sunday … 6 = Saturday. */
+  byWeekday: { weekday: number; orders: number }[];
+  /** [weekday][hour]. */
+  byWeekdayHour: number[][];
+};
+
+export type AdminCustomerRetention = {
+  period: AdminAnalyticsPeriod;
+  customers: number;
+  oneTimeCustomers: number;
+  returningCustomers: number;
+  /** 10000 = 100%. */
+  returningRateBp: number;
+  deliveredOrders: number;
+  ordersFromReturningCustomers: number;
+};
+
+export function getAdminTopProducts(
+  accessToken: string,
+  params: AdminAnalyticsPeriodParams & { sortBy?: "quantity" | "revenue"; limit?: number } = {}
+): Promise<AdminTopProducts> {
+  return request(`/api/v1/admin/analytics/top-products${toQuery(params)}`, { accessToken });
+}
+
+export function getAdminPeakTimes(accessToken: string, params: AdminAnalyticsPeriodParams = {}): Promise<AdminPeakTimes> {
+  return request(`/api/v1/admin/analytics/peak-times${toQuery(params)}`, { accessToken });
+}
+
+export function getAdminCustomerRetention(
+  accessToken: string,
+  params: AdminAnalyticsPeriodParams = {}
+): Promise<AdminCustomerRetention> {
+  return request(`/api/v1/admin/analytics/customer-retention${toQuery(params)}`, { accessToken });
+}
+
 export function listAdminAuditLog(
   accessToken: string,
   params: { action?: string; actorUserId?: string; page?: number } = {}
