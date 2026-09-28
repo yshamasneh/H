@@ -13,13 +13,12 @@ import {
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
 import { useRealtimeEvent } from "../../core/socket";
+import { Icon } from "../../theme/icon";
 import { useTheme } from "../../theme/theme-context";
 import { radius, spacing, type ThemeColors } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import { attentionItems, type AttentionDestination } from "./attention.rules";
 import {
-  ActionButton,
-  ActionRow,
   AdminPage,
   Card,
   CardTitle,
@@ -34,7 +33,6 @@ import {
 } from "./ui";
 import { formatMinorExact, hasAdminPermission } from "./users.rules";
 
-type Tool = { key: string; permission?: string; onPress: () => void };
 
 /**
  * The admin home on the phone: an operations tool, not a shrunken web console. It answers, in
@@ -44,20 +42,16 @@ type Tool = { key: string; permission?: string; onPress: () => void };
  */
 export function AdminDashboardScreen(props: {
   user: PublicUser;
-  onLogout: () => Promise<void>;
   onRestaurants: (filter?: "PENDING") => void;
-  onOffers: () => void;
-  onProductOffers: () => void;
   onOrders: (filter?: "PLACED") => void;
   onOpenOrder: (orderId: string) => void;
   onDrivers: (filter?: "PENDING") => void;
   onDriverCash: () => void;
   onCosts: () => void;
   onUsers: () => void;
-  onAuditLog: () => void;
-  onAnalytics: () => void;
   onNotifications: () => void;
-  onOpenSettings: () => void;
+  /** Rendered as the Home tab above the admin tab bar. */
+  tabRoot?: boolean;
 }) {
   const { t } = useTranslation(["admin", "common"]);
   const adminStyles = useAdminStyles();
@@ -67,7 +61,6 @@ export function AdminDashboardScreen(props: {
   const [books, setBooks] = useState<AdminAccountingOverview | null>(null);
   const [access, setAccess] = useState<AdminAccess | null | "failed">(null);
   const [error, setError] = useState<string | null>(null);
-  const [loggingOut, setLoggingOut] = useState(false);
   const knownAccess = access === "failed" ? null : access;
   // If the access check itself failed, every tool is offered and the server decides.
   const can = (permission?: string) => !permission || access === "failed" || hasAdminPermission(knownAccess, permission);
@@ -112,15 +105,6 @@ export function AdminDashboardScreen(props: {
   useRealtimeEvent("order.status.changed", () => void load());
   useRealtimeEvent("restaurant.pending.created", () => void load());
 
-  async function logOut() {
-    setLoggingOut(true);
-    try {
-      await props.onLogout();
-    } finally {
-      setLoggingOut(false);
-    }
-  }
-
   const go: Record<AttentionDestination, (() => void) | null> = {
     "orders-placed": () => props.onOrders("PLACED"),
     "stores-pending": () => props.onRestaurants("PENDING"),
@@ -131,41 +115,24 @@ export function AdminDashboardScreen(props: {
   };
   const attention = dashboard ? attentionItems(dashboard, books, knownAccess) : [];
 
-  const sections: { key: string; tools: Tool[] }[] = [
-    {
-      key: "operations",
-      tools: [
-        { key: "orders", permission: "VIEW_ALL_ORDERS", onPress: () => props.onOrders() },
-        { key: "drivers", permission: "MANAGE_DRIVERS", onPress: () => props.onDrivers() },
-        { key: "driverCash", permission: "VIEW_ACCOUNTING", onPress: props.onDriverCash }
-      ]
-    },
-    {
-      key: "approvals",
-      tools: [
-        { key: "stores", permission: "MANAGE_BUSINESSES", onPress: () => props.onRestaurants() },
-        { key: "costs", permission: "VIEW_ACCOUNTING", onPress: props.onCosts }
-      ]
-    },
-    {
-      key: "people",
-      tools: [
-        { key: "users", permission: "MANAGE_USERS", onPress: props.onUsers },
-        { key: "productOffers", permission: "MANAGE_BUSINESSES", onPress: props.onProductOffers },
-        { key: "offers", permission: "MANAGE_OFFERS", onPress: props.onOffers }
-      ]
-    },
-    {
-      key: "insights",
-      tools: [
-        { key: "analytics", permission: "VIEW_ALL_ORDERS", onPress: props.onAnalytics },
-        { key: "auditLog", permission: "VIEW_AUDIT_LOG", onPress: props.onAuditLog }
-      ]
-    }
-  ];
-
   return (
-    <AdminPage title={t("dashboard.brandTitle")} subtitle={t("dashboard.signedInAs", { name: props.user.fullName })}>
+    <AdminPage
+      headerAction={
+        <Pressable
+          accessibilityLabel={t("common:notifications")}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={props.onNotifications}
+          style={({ pressed }) => [styles.bell, pressed ? styles.pressed : null]}
+          testID="admin-notifications"
+        >
+          <Icon color={colors.text} name="notifications" size="md" />
+        </Pressable>
+      }
+      subtitle={t("dashboard.signedInAs", { name: props.user.fullName })}
+      tabRoot={props.tabRoot}
+      title={t("dashboard.brandTitle")}
+    >
       <ErrorBanner message={error} />
       {dashboard ? (
         <>
@@ -214,23 +181,6 @@ export function AdminDashboardScreen(props: {
             <Stat label={t("dashboard.statNewCustomers")} onPress={can("MANAGE_USERS") ? props.onUsers : undefined} value={String(dashboard.newCustomerSignupsToday)} />
           </View>
 
-          {sections.map((section) => {
-            const tools = section.tools.filter((tool) => can(tool.permission));
-            if (tools.length === 0) return null;
-            return (
-              <View key={section.key}>
-                <Text style={adminStyles.sectionTitle}>{t(`dashboard.sections.${section.key}`)}</Text>
-                {tools.map((tool) => (
-                  <Card key={tool.key} onPress={tool.onPress}>
-                    <CardTitle>{t(`dashboard.tools.${tool.key}.title`)}</CardTitle>
-                    <Meta>{t(`dashboard.tools.${tool.key}.meta`)}</Meta>
-                  </Card>
-                ))}
-              </View>
-            );
-          })}
-          <Meta>{t("dashboard.webOnlyNote")}</Meta>
-
           <Text style={adminStyles.sectionTitle}>{t("dashboard.recentActivity")}</Text>
           {dashboard.activityFeed.length === 0 ? (
             <EmptyState message={t("dashboard.noActivity")} />
@@ -245,11 +195,6 @@ export function AdminDashboardScreen(props: {
           )}
         </>
       ) : error ? null : <LoadingState />}
-      <ActionRow>
-        <ActionButton label={t("common:notifications")} onPress={props.onNotifications} variant="secondary" />
-        <ActionButton label={t("common:settings")} onPress={props.onOpenSettings} variant="secondary" />
-        <ActionButton label={t("common:logout")} loading={loggingOut} onPress={() => void logOut()} variant="danger" />
-      </ActionRow>
     </AdminPage>
   );
 }
@@ -297,7 +242,8 @@ function createStyles(colors: ThemeColors) {
     attentionLabel: { ...text("bodySm", "semibold"), color: colors.text },
     attentionAction: { ...text("caption", "semibold"), color: colors.primary, marginTop: spacing[1] },
     allClear: { ...text("bodySm", "semibold"), color: colors.success },
-    pressed: { opacity: 0.7 }
+    pressed: { opacity: 0.7 },
+    bell: { alignItems: "center", height: 44, justifyContent: "center", width: 44 }
   });
 }
 

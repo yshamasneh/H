@@ -53,10 +53,12 @@ const filterValues: OrderFilter[] = [
 ];
 
 export function AdminOrdersScreen(props: {
-  onBack: () => void;
+  /** Absent when the list is the Orders tab (the tab bar is the way out). */
+  onBack?: () => void;
   onOpenOrder: (orderId: string) => void;
   /** Opens the list already filtered, e.g. from the dashboard's "not yet accepted" item. */
   initialFilter?: OrderFilter;
+  tabRoot?: boolean;
 }) {
   const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
@@ -113,7 +115,7 @@ export function AdminOrdersScreen(props: {
   useRealtimeEvent("order.status.changed", () => void load());
 
   return (
-    <AdminPage onBack={props.onBack} subtitle={t("orders.subtitle")} title={t("orders.title")}>
+    <AdminPage onBack={props.onBack} subtitle={t("orders.subtitle")} tabRoot={props.tabRoot} title={t("orders.title")}>
       <FilterChips onChange={setFilter} options={filters} value={filter} />
       <ErrorBanner message={error} />
       {orders === null ? (

@@ -43,7 +43,6 @@ import {
   SignupScreen
 } from "./src/features/auth/screens";
 import {
-  DriverRegistrationScreen,
   RestaurantRegistrationScreen
 } from "./src/features/auth/role-registration-screens";
 import {
@@ -72,7 +71,13 @@ import {
   authResultToHome,
   forgotRequestToOtp,
   goToAdminAnalytics,
+  adminToolBack,
   goToAdminCosts,
+  goToAdminDriverCreate,
+  goToAdminDriverDetail,
+  goToAdminMore,
+  goToAdminOrderFromDriver,
+  goToAdminOrderFromHome,
   goToAdminProductOffers,
   goToAdminDriverCash,
   goToAdminDriverCashDetail,
@@ -94,7 +99,6 @@ import {
   goToDeliveryDetail,
   goToDriverHome,
   goToDriverStats,
-  goToDriverSignup,
   goToLogin,
   goToNotifications,
   goToOfferDetail,
@@ -151,6 +155,9 @@ import { AdminOrderDetailScreen, AdminOrdersScreen } from "./src/features/admin/
 import { AdminUsersScreen } from "./src/features/admin/users-screen";
 import { AdminAnalyticsScreen } from "./src/features/admin/analytics-screen";
 import { AdminCostApprovalsScreen } from "./src/features/admin/cost-approvals-screen";
+import { AdminTabShell, resetAdminAccessCache, type AdminTab } from "./src/features/admin/admin-tabs";
+import { AdminCreateDriverScreen, AdminDriverDetailScreen } from "./src/features/admin/driver-account-screens";
+import { AdminMoreScreen } from "./src/features/admin/more-screen";
 import { AdminProductOffersScreen } from "./src/features/admin/product-offers-screen";
 import { RestaurantOffersScreen } from "./src/features/restaurant/offers-screen";
 import { AdminDriverCashDetailScreen, AdminDriverCashScreen } from "./src/features/admin/driver-cash-screens";
@@ -422,7 +429,22 @@ function TasawaQApp() {
     );
   }
 
+  /** The screen each admin tab opens. */
+  function adminTabScreen(tab: AdminTab, user: AuthResult["user"]): AppScreen {
+    switch (tab) {
+      case "orders":
+        return goToAdminOrders(user);
+      case "drivers":
+        return goToAdminDrivers(user);
+      case "more":
+        return goToAdminMore(user);
+      default:
+        return goToAdminDashboard(user);
+    }
+  }
+
   async function handleLogout() {
+    resetAdminAccessCache();
     // Before the session is thrown away: tell the server this app is closed (so no more delivery
     // alerts are attempted for it) and stop background location outright.
     await closeDriverPresence().catch(() => undefined);
@@ -602,7 +624,6 @@ function TasawaQApp() {
         <LoginScreen
           notice={screen.notice}
           onAuthenticated={handleAuthenticated}
-          onDriverSignup={(prefill) => setScreen(goToDriverSignup(prefill))}
           onForgotPassword={(prefill) => setScreen({ name: "forgot-password", prefill })}
           onRestaurantSignup={(prefill) => setScreen(goToRestaurantSignup(prefill))}
           onSignup={(prefill) => setScreen(goToSignup(prefill))}
@@ -621,14 +642,6 @@ function TasawaQApp() {
     case "restaurant-signup":
       return (
         <RestaurantRegistrationScreen
-          onBack={(prefill) => setScreen(goToLogin(prefill))}
-          onRegistered={(prefill, notice) => setScreen(goToLogin(prefill, notice))}
-          prefill={screen.prefill}
-        />
-      );
-    case "driver-signup":
-      return (
-        <DriverRegistrationScreen
           onBack={(prefill) => setScreen(goToLogin(prefill))}
           onRegistered={(prefill, notice) => setScreen(goToLogin(prefill, notice))}
           prefill={screen.prefill}
@@ -739,7 +752,7 @@ function TasawaQApp() {
     case "settings":
       return (
         <SettingsScreen
-          onBack={() => setScreen(homeForUser(screen.user))}
+          onBack={() => setScreen(screen.user.role === "ADMIN" ? goToAdminMore(screen.user) : homeForUser(screen.user))}
           onDeleted={screen.user.role === "CUSTOMER" ? handleLogout : undefined}
           onLogout={handleLogout}
           onManageAccount={
@@ -929,31 +942,47 @@ function TasawaQApp() {
       );
     case "admin-dashboard":
       return (
-        <AdminDashboardScreen
-          onAnalytics={() => setScreen(goToAdminAnalytics(screen.user))}
-          onAuditLog={() => setScreen(goToAdminAuditLog(screen.user))}
-          onCosts={() => setScreen(goToAdminCosts(screen.user))}
-          onDriverCash={() => setScreen(goToAdminDriverCash(screen.user))}
-          onDrivers={(filter) => setScreen(goToAdminDrivers(screen.user, filter))}
-          onLogout={handleLogout}
-          onNotifications={() => setScreen(goToNotifications(screen.user))}
-          onOffers={() => setScreen(goToAdminOffers(screen.user))}
-          onProductOffers={() => setScreen(goToAdminProductOffers(screen.user))}
-          onOpenOrder={(orderId) => setScreen(goToAdminOrderDetail(screen.user, orderId))}
-          onOpenSettings={() => setScreen(goToSettings(screen.user))}
-          onOrders={(filter) => setScreen(goToAdminOrders(screen.user, filter))}
-          onRestaurants={(filter) => setScreen(goToAdminRestaurants(screen.user, filter))}
-          onUsers={() => setScreen(goToAdminUsers(screen.user))}
-          user={screen.user}
-        />
+        <AdminTabShell active="home" onNavigate={(tab) => setScreen(adminTabScreen(tab, screen.user))}>
+          <AdminDashboardScreen
+            onCosts={() => setScreen(goToAdminCosts(screen.user, "home"))}
+            onDriverCash={() => setScreen(goToAdminDriverCash(screen.user, "home"))}
+            onDrivers={(filter) => setScreen(goToAdminDrivers(screen.user, filter))}
+            onNotifications={() => setScreen(goToNotifications(screen.user))}
+            onOpenOrder={(orderId) => setScreen(goToAdminOrderFromHome(screen.user, orderId))}
+            onOrders={(filter) => setScreen(goToAdminOrders(screen.user, filter))}
+            onRestaurants={(filter) => setScreen(goToAdminRestaurants(screen.user, filter, "home"))}
+            onUsers={() => setScreen(goToAdminUsers(screen.user))}
+            tabRoot
+            user={screen.user}
+          />
+        </AdminTabShell>
+      );
+    case "admin-more":
+      return (
+        <AdminTabShell active="more" onNavigate={(tab) => setScreen(adminTabScreen(tab, screen.user))}>
+          <AdminMoreScreen
+            onAnalytics={() => setScreen(goToAdminAnalytics(screen.user))}
+            onAuditLog={() => setScreen(goToAdminAuditLog(screen.user))}
+            onCosts={() => setScreen(goToAdminCosts(screen.user))}
+            onDriverCash={() => setScreen(goToAdminDriverCash(screen.user))}
+            onLogout={handleLogout}
+            onNotifications={() => setScreen(goToNotifications(screen.user))}
+            onOffers={() => setScreen(goToAdminOffers(screen.user))}
+            onOpenSettings={() => setScreen(goToSettings(screen.user))}
+            onProductOffers={() => setScreen(goToAdminProductOffers(screen.user))}
+            onRestaurants={() => setScreen(goToAdminRestaurants(screen.user))}
+            onUsers={() => setScreen(goToAdminUsers(screen.user))}
+            user={screen.user}
+          />
+        </AdminTabShell>
       );
     case "admin-offers":
-      return <AdminOffersScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+      return <AdminOffersScreen onBack={() => setScreen(goToAdminMore(screen.user))} />;
     case "admin-restaurants":
       return (
         <AdminRestaurantsScreen
           initialFilter={screen.filter}
-          onBack={() => setScreen(goToAdminDashboard(screen.user))}
+          onBack={() => setScreen(adminToolBack(screen))}
           onOpenRestaurant={(restaurantId) => setScreen(goToAdminRestaurantDetail(screen.user, restaurantId))}
         />
       );
@@ -966,11 +995,14 @@ function TasawaQApp() {
       );
     case "admin-orders":
       return (
-        <AdminOrdersScreen
-          initialFilter={screen.filter}
-          onBack={() => setScreen(goToAdminDashboard(screen.user))}
-          onOpenOrder={(orderId) => setScreen(goToAdminOrderDetail(screen.user, orderId))}
-        />
+        <AdminTabShell active="orders" onNavigate={(tab) => setScreen(adminTabScreen(tab, screen.user))}>
+          <AdminOrdersScreen
+            initialFilter={screen.filter}
+            key={screen.filter ?? "all"}
+            onOpenOrder={(orderId) => setScreen(goToAdminOrderDetail(screen.user, orderId))}
+            tabRoot
+          />
+        </AdminTabShell>
       );
     case "admin-order-detail":
       return (
@@ -981,17 +1013,38 @@ function TasawaQApp() {
       );
     case "admin-drivers":
       return (
-        <AdminDriversScreen
-          initialFilter={screen.filter}
-          onBack={() => setScreen(goToAdminDashboard(screen.user))}
+        <AdminTabShell active="drivers" onNavigate={(tab) => setScreen(adminTabScreen(tab, screen.user))}>
+          <AdminDriversScreen
+            initialFilter={screen.filter}
+            key={screen.filter ?? "all"}
+            onAddDriver={() => setScreen(goToAdminDriverCreate(screen.user))}
+            onOpenCash={(driverUserId) => setScreen(goToAdminDriverCashDetail(screen.user, driverUserId))}
+            onOpenDriver={(driverUserId) => setScreen(goToAdminDriverDetail(screen.user, driverUserId))}
+            tabRoot
+          />
+        </AdminTabShell>
+      );
+    case "admin-driver-detail":
+      return (
+        <AdminDriverDetailScreen
+          driverUserId={screen.driverUserId}
+          onBack={() => setScreen(goToAdminDrivers(screen.user))}
           onOpenCash={(driverUserId) => setScreen(goToAdminDriverCashDetail(screen.user, driverUserId))}
+          onOpenOrder={(orderId) => setScreen(goToAdminOrderFromDriver(screen.user, orderId, screen.driverUserId))}
+        />
+      );
+    case "admin-driver-create":
+      return (
+        <AdminCreateDriverScreen
+          onBack={() => setScreen(goToAdminDrivers(screen.user))}
+          onCreated={(driverUserId) => setScreen(goToAdminDriverDetail(screen.user, driverUserId))}
         />
       );
     case "admin-users":
       return (
         <AdminUsersScreen
           currentUserId={screen.user.id}
-          onBack={() => setScreen(goToAdminDashboard(screen.user))}
+          onBack={() => setScreen(goToAdminMore(screen.user))}
           onOpenCustomer={(userId) => setScreen(goToAdminCustomerDetail(screen.user, userId))}
         />
       );
@@ -1006,7 +1059,7 @@ function TasawaQApp() {
     case "admin-driver-cash":
       return (
         <AdminDriverCashScreen
-          onBack={() => setScreen(goToAdminDashboard(screen.user))}
+          onBack={() => setScreen(adminToolBack(screen))}
           onOpenDriver={(driver) => setScreen(goToAdminDriverCashDetail(screen.user, driver.driverUserId))}
         />
       );
@@ -1019,13 +1072,13 @@ function TasawaQApp() {
         />
       );
     case "admin-costs":
-      return <AdminCostApprovalsScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+      return <AdminCostApprovalsScreen onBack={() => setScreen(adminToolBack(screen))} />;
     case "admin-product-offers":
-      return <AdminProductOffersScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+      return <AdminProductOffersScreen onBack={() => setScreen(goToAdminMore(screen.user))} />;
     case "admin-analytics":
-      return <AdminAnalyticsScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+      return <AdminAnalyticsScreen onBack={() => setScreen(goToAdminMore(screen.user))} />;
     case "admin-audit-log":
-      return <AdminAuditLogScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+      return <AdminAuditLogScreen onBack={() => setScreen(goToAdminMore(screen.user))} />;
     case "notifications":
       return <NotificationInboxScreen onBack={() => setScreen(homeForUser(screen.user))} />;
   }

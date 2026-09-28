@@ -7,7 +7,6 @@ export type AppScreen =
   | { name: "login"; prefill?: PhonePrefill; notice?: string }
   | { name: "signup"; prefill?: PhonePrefill }
   | { name: "restaurant-signup"; prefill?: PhonePrefill }
-  | { name: "driver-signup"; prefill?: PhonePrefill }
   | { name: "forgot-password"; prefill?: PhonePrefill }
   | {
       name: "otp";
@@ -63,19 +62,31 @@ export type AppScreen =
   | { name: "notifications"; user: PublicUser }
   | { name: "admin-dashboard"; user: PublicUser }
   | { name: "admin-offers"; user: PublicUser }
-  | { name: "admin-restaurants"; user: PublicUser; filter?: "PENDING" }
+  | { name: "admin-more"; user: PublicUser }
+  // Tools live under More; opened from a Home attention item, Back returns Home instead.
+  | { name: "admin-restaurants"; user: PublicUser; filter?: "PENDING"; from?: "home" }
   | { name: "admin-restaurant-detail"; user: PublicUser; restaurantId: string }
   | { name: "admin-orders"; user: PublicUser; filter?: "PLACED" }
   // Opened from a customer's order history, Back returns to that customer rather than the order list.
-  | { name: "admin-order-detail"; user: PublicUser; orderId: string; backToCustomerId?: string; backToDriverCashId?: string }
+  | {
+      name: "admin-order-detail";
+      user: PublicUser;
+      orderId: string;
+      backToCustomerId?: string;
+      backToDriverCashId?: string;
+      backToDriverId?: string;
+      backToHome?: boolean;
+    }
   | { name: "admin-drivers"; user: PublicUser; filter?: "PENDING" }
+  | { name: "admin-driver-detail"; user: PublicUser; driverUserId: string }
+  | { name: "admin-driver-create"; user: PublicUser }
   | { name: "admin-users"; user: PublicUser }
   | { name: "admin-customer-detail"; user: PublicUser; userId: string }
   | { name: "admin-audit-log"; user: PublicUser }
   | { name: "admin-analytics"; user: PublicUser }
-  | { name: "admin-driver-cash"; user: PublicUser }
+  | { name: "admin-driver-cash"; user: PublicUser; from?: "home" }
   | { name: "admin-driver-cash-detail"; user: PublicUser; driverUserId: string }
-  | { name: "admin-costs"; user: PublicUser }
+  | { name: "admin-costs"; user: PublicUser; from?: "home" }
   | { name: "admin-product-offers"; user: PublicUser };
 
 export const initialScreen: AppScreen = { name: "login" };
@@ -88,10 +99,6 @@ export function goToRestaurantSignup(
   prefill?: PhonePrefill
 ): Extract<AppScreen, { name: "restaurant-signup" }> {
   return { name: "restaurant-signup", prefill };
-}
-
-export function goToDriverSignup(prefill?: PhonePrefill): Extract<AppScreen, { name: "driver-signup" }> {
-  return { name: "driver-signup", prefill };
 }
 
 export function goToLogin(prefill?: PhonePrefill, notice?: string): Extract<AppScreen, { name: "login" }> {
@@ -307,8 +314,40 @@ export function goToAdminOffers(user: PublicUser): Extract<AppScreen, { name: "a
   return { name: "admin-offers", user };
 }
 
-export function goToAdminRestaurants(user: PublicUser, filter?: "PENDING"): Extract<AppScreen, { name: "admin-restaurants" }> {
-  return filter ? { name: "admin-restaurants", user, filter } : { name: "admin-restaurants", user };
+export function goToAdminRestaurants(
+  user: PublicUser,
+  filter?: "PENDING",
+  from?: "home"
+): Extract<AppScreen, { name: "admin-restaurants" }> {
+  return { name: "admin-restaurants", user, ...(filter ? { filter } : {}), ...(from ? { from } : {}) };
+}
+
+/** The More tab: every tool that is not a tab of its own, plus notifications, settings, sign-out. */
+export function goToAdminMore(user: PublicUser): Extract<AppScreen, { name: "admin-more" }> {
+  return { name: "admin-more", user };
+}
+
+/** Back from a tool: Home when it was opened from a Home attention item, else More where tools live. */
+export function adminToolBack(screen: { user: PublicUser; from?: "home" }): Extract<AppScreen, { name: "admin-dashboard" | "admin-more" }> {
+  return screen.from === "home" ? goToAdminDashboard(screen.user) : goToAdminMore(screen.user);
+}
+
+export function goToAdminDriverDetail(user: PublicUser, driverUserId: string): Extract<AppScreen, { name: "admin-driver-detail" }> {
+  return { name: "admin-driver-detail", user, driverUserId };
+}
+
+export function goToAdminDriverCreate(user: PublicUser): Extract<AppScreen, { name: "admin-driver-create" }> {
+  return { name: "admin-driver-create", user };
+}
+
+/** An order opened from Home's recent activity: Back returns Home. */
+export function goToAdminOrderFromHome(user: PublicUser, orderId: string): Extract<AppScreen, { name: "admin-order-detail" }> {
+  return { name: "admin-order-detail", user, orderId, backToHome: true };
+}
+
+/** An order opened from a driver's recent deliveries: Back returns to that driver. */
+export function goToAdminOrderFromDriver(user: PublicUser, orderId: string, driverUserId: string): Extract<AppScreen, { name: "admin-order-detail" }> {
+  return { name: "admin-order-detail", user, orderId, backToDriverId: driverUserId };
 }
 
 export function goToAdminRestaurantDetail(
@@ -350,9 +389,14 @@ export function goToAdminCustomerDetail(
 /** Where Back leads from an admin order: the customer or driver it was opened from, else the order list. */
 export function adminOrderDetailBack(
   screen: Extract<AppScreen, { name: "admin-order-detail" }>
-): Extract<AppScreen, { name: "admin-customer-detail" | "admin-driver-cash-detail" | "admin-orders" }> {
+): Extract<
+  AppScreen,
+  { name: "admin-customer-detail" | "admin-driver-cash-detail" | "admin-driver-detail" | "admin-dashboard" | "admin-orders" }
+> {
   if (screen.backToCustomerId) return goToAdminCustomerDetail(screen.user, screen.backToCustomerId);
   if (screen.backToDriverCashId) return goToAdminDriverCashDetail(screen.user, screen.backToDriverCashId);
+  if (screen.backToDriverId) return goToAdminDriverDetail(screen.user, screen.backToDriverId);
+  if (screen.backToHome) return goToAdminDashboard(screen.user);
   return goToAdminOrders(screen.user);
 }
 
@@ -369,8 +413,8 @@ export function goToAdminAnalytics(user: PublicUser): Extract<AppScreen, { name:
   return { name: "admin-analytics", user };
 }
 
-export function goToAdminDriverCash(user: PublicUser): Extract<AppScreen, { name: "admin-driver-cash" }> {
-  return { name: "admin-driver-cash", user };
+export function goToAdminDriverCash(user: PublicUser, from?: "home"): Extract<AppScreen, { name: "admin-driver-cash" }> {
+  return from ? { name: "admin-driver-cash", user, from } : { name: "admin-driver-cash", user };
 }
 
 export function goToAdminDriverCashDetail(
@@ -388,8 +432,8 @@ export function goToAdminProductOffers(user: PublicUser): Extract<AppScreen, { n
   return { name: "admin-product-offers", user };
 }
 
-export function goToAdminCosts(user: PublicUser): Extract<AppScreen, { name: "admin-costs" }> {
-  return { name: "admin-costs", user };
+export function goToAdminCosts(user: PublicUser, from?: "home"): Extract<AppScreen, { name: "admin-costs" }> {
+  return from ? { name: "admin-costs", user, from } : { name: "admin-costs", user };
 }
 
 export function goToAdminAuditLog(user: PublicUser): Extract<AppScreen, { name: "admin-audit-log" }> {

@@ -4,7 +4,6 @@ import {
   accountNotFoundToSignup,
   authResultToHome,
   forgotRequestToOtp,
-  goToDriverSignup,
   goToRestaurantManagement,
   goToRestaurantMenu,
   goToRestaurantSignup,
@@ -72,9 +71,8 @@ test("successful customer authentication navigates to Customer Home", () => {
   assert.equal(screen.name === "home" && screen.user.role, "CUSTOMER");
 });
 
-test("login exposes restaurant and driver registration routes", () => {
+test("login exposes the restaurant registration route; driver accounts are created by JOVO admins", () => {
   assert.deepEqual(goToRestaurantSignup(prefill), { name: "restaurant-signup", prefill });
-  assert.deepEqual(goToDriverSignup(prefill), { name: "driver-signup", prefill });
 });
 
 test("successful admin authentication opens the in-app admin dashboard", () => {
@@ -167,4 +165,18 @@ test("the catalogue can be opened ready to type a search", () => {
   const catalog = goToSupermarketCatalog(customer, { id: "s1", name: "JOVO MARKET" }, { focusSearch: true });
   assert.equal(catalog.focusSearch, true);
   assert.equal("focusSearch" in goToSupermarketCatalog(customer, { id: "s1", name: "JOVO MARKET" }), false);
+});
+
+test("admin tools go back to where they were opened: Home for an attention item, else More", async () => {
+  const { adminToolBack, adminOrderDetailBack, goToAdminCosts, goToAdminRestaurants, goToAdminOrderFromHome, goToAdminOrderFromDriver } =
+    await import("./navigation");
+  const admin = { id: "a1", fullName: "Admin", phone: "+970590000001", role: "ADMIN" as const };
+  assert.deepEqual(adminToolBack(goToAdminRestaurants(admin, "PENDING", "home")), { name: "admin-dashboard", user: admin });
+  assert.deepEqual(adminToolBack(goToAdminCosts(admin)), { name: "admin-more", user: admin });
+  assert.deepEqual(adminOrderDetailBack(goToAdminOrderFromHome(admin, "o1")), { name: "admin-dashboard", user: admin });
+  assert.deepEqual(adminOrderDetailBack(goToAdminOrderFromDriver(admin, "o1", "d1")), {
+    name: "admin-driver-detail",
+    user: admin,
+    driverUserId: "d1"
+  });
 });

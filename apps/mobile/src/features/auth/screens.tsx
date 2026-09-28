@@ -54,7 +54,6 @@ type LoginScreenProps = {
   onAuthenticated: (result: AuthResult) => Promise<void>;
   onSignup: (prefill: PhonePrefill) => void;
   onRestaurantSignup: (prefill: PhonePrefill) => void;
-  onDriverSignup: (prefill: PhonePrefill) => void;
   onForgotPassword: (prefill: PhonePrefill) => void;
 };
 
@@ -103,6 +102,7 @@ export function LoginScreen(props: LoginScreenProps) {
       <PrimaryButton label={t("login.submit")} loading={loading} onPress={submit} />
       <LinkButton label={t("login.createAccount")} onPress={() => props.onSignup(prefill)} />
       <LinkButton label={t("login.forgotPassword")} onPress={() => props.onForgotPassword(prefill)} />
+      <DriverNote />
       <DeveloperApiLabel />
     </AuthLayout>
   );
@@ -641,6 +641,13 @@ function Notice({ text }: { text: string }) {
   return <Text style={styles.notice}>{text}</Text>;
 }
 
+/** Drivers do not sign up: their account comes from the JOVO team (admin-created). */
+function DriverNote() {
+  const styles = useAuthStyles();
+  const { t } = useTranslation(["auth"]);
+  return <Text style={styles.driverNote}>{t("login.driverNote")}</Text>;
+}
+
 function DeveloperApiLabel() {
   const styles = useAuthStyles();
   const { t } = useTranslation(["auth"]);
@@ -742,6 +749,7 @@ function createStyles(colors: ThemeColors) {
   roleBadgeText: { ...text("caption", "bold"), color: colors.text },
   apiBox: { marginTop: spacing[5] },
   apiLabel: { ...text("label", "bold"), color: colors.textMuted },
+  driverNote: { ...text("caption"), color: colors.textMuted, marginTop: spacing[3], textAlign: "center" },
   apiValue: { ...text("caption"), color: colors.textMuted, marginTop: spacing[1] }
 });
 }

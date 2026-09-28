@@ -25,13 +25,20 @@ export function AdminPage(props: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
+  /** A control on the header's trailing side, e.g. the primary action of a tab screen. */
+  headerAction?: ReactNode;
+  /**
+   * Rendered above the admin tab bar, which owns the bottom safe-area inset: the page then must not
+   * reserve it a second time (see AdminTabShell).
+   */
+  tabRoot?: boolean;
   children: ReactNode;
 }) {
   const styles = useUiStyles();
   const { colors, isDark } = useTheme();
   const { t } = useTranslation(["common"]);
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView edges={props.tabRoot ? ["top", "left", "right"] : undefined} style={styles.screen}>
       <StatusBar backgroundColor={colors.surface} barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.header}>
         {props.onBack ? (
@@ -52,6 +59,7 @@ export function AdminPage(props: {
           <Text style={styles.title}>{props.title}</Text>
           {props.subtitle ? <Text style={styles.subtitle}>{props.subtitle}</Text> : null}
         </View>
+        {props.headerAction ? <View>{props.headerAction}</View> : null}
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {props.children}

@@ -80,21 +80,10 @@ export type RestaurantRegistrationInput = PhoneInput & {
   businessType?: BusinessType;
 };
 
-export type DriverRegistrationInput = PhoneInput & {
-  fullName: string;
-  password: string;
-  confirmPassword: string;
-};
-
 export type RestaurantRegistrationResult = {
   message: string;
   restaurantId: string;
   status: RestaurantStatusValue;
-};
-
-export type DriverRegistrationResult = {
-  message: string;
-  userId: string;
 };
 
 export type VerifyOtpInput = PhoneInput & { code: string };
@@ -546,10 +535,6 @@ export function resetPassword(input: {
 
 export function registerRestaurant(input: RestaurantRegistrationInput): Promise<RestaurantRegistrationResult> {
   return request("/api/v1/restaurants/register", { method: "POST", body: input });
-}
-
-export function registerDriver(input: DriverRegistrationInput): Promise<DriverRegistrationResult> {
-  return request("/api/v1/drivers/register", { method: "POST", body: input });
 }
 
 export function listRestaurants(page = 1, pageSize = 20): Promise<Page<RestaurantSummary>> {
@@ -1365,6 +1350,44 @@ export function cancelAdminOrder(accessToken: string, orderId: string, reason: s
 
 export function listAdminDrivers(accessToken: string): Promise<AdminDriver[]> {
   return request("/api/v1/admin/drivers", { accessToken });
+}
+
+export type AdminDriverDetail = AdminDriver & {
+  lastLocationAt: string | null;
+  failedDeliveriesCount: number;
+  recentDeliveries: {
+    deliveryId: string;
+    orderId: string;
+    status: string;
+    storeName: string;
+    totalMinor: number;
+    assignedAt: string | null;
+    finishedAt: string | null;
+  }[];
+};
+
+/** Driver accounts are created by an administrator — there is no public driver registration. */
+export function createAdminDriver(
+  accessToken: string,
+  input: { fullName: string; countryCode: string; phoneNumber: string; password: string }
+): Promise<AdminDriver> {
+  return request("/api/v1/admin/drivers", { method: "POST", body: input, accessToken });
+}
+
+export function getAdminDriver(accessToken: string, userId: string): Promise<AdminDriverDetail> {
+  return request(`/api/v1/admin/drivers/${userId}`, { accessToken });
+}
+
+export function updateAdminDriver(
+  accessToken: string,
+  userId: string,
+  input: { fullName?: string; countryCode?: string; phoneNumber?: string }
+): Promise<AdminDriver> {
+  return request(`/api/v1/admin/drivers/${userId}`, { method: "PATCH", body: input, accessToken });
+}
+
+export function setAdminDriverPassword(accessToken: string, userId: string, password: string): Promise<{ ok: true }> {
+  return request(`/api/v1/admin/drivers/${userId}/password`, { method: "POST", body: { password }, accessToken });
 }
 
 export function approveAdminDriver(accessToken: string, userId: string): Promise<AdminDriver> {

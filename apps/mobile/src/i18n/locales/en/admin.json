@@ -112,8 +112,8 @@
   },
   "drivers": {
     "title": "Drivers",
-    "subtitle": "Approvals and delivery availability",
-    "empty": "No driver accounts yet.",
+    "subtitle": "Driver accounts, who is on shift, and cash held",
+    "empty": "No driver matches this search or filter.",
     "onlineLabel": "Online",
     "completedDeliveriesLabel": "Completed deliveries",
     "createdLabel": "Created",
@@ -130,7 +130,52 @@
       "REJECTED": "Rejected"
     },
     "cashHeldLabel": "Cash held",
-    "receiveCash": "Receive cash"
+    "receiveCash": "Receive cash",
+    "add": "Add driver",
+    "searchPlaceholder": "Search name or phone",
+    "emptyFirst": "No drivers yet. Add a driver — they sign in to the JOVO app with the number and password you set.",
+    "deliveringNow": "Delivering now",
+    "account": {
+      "subtitle": "Driver account",
+      "createTitle": "Add driver",
+      "createBody": "Driver accounts are created only here — there is no public sign-up.",
+      "fullName": "Full name",
+      "phone": "Mobile number (used to sign in)",
+      "firstPassword": "First password",
+      "passwordRule": "Use 8+ characters with upper and lower case, a number and a symbol.",
+      "suggestAnother": "Suggest another password",
+      "passwordHint": "A strong password is suggested for you. You give it to the driver; they can change it later with “Forgot password”.",
+      "create": "Create driver",
+      "createdTitle": "Driver created",
+      "createdBody": "Give the driver these details to sign in to the JOVO app. They can go on shift straight away.",
+      "loginPhone": "Sign-in number",
+      "password": "Password",
+      "shareHint": "The password is shown only now.",
+      "share": "Share details",
+      "openDriver": "Open driver",
+      "shareMessage": "JOVO driver account for {{name}}\nSign-in number: {{phone}}\nPassword: {{password}}",
+      "onShift": "On shift",
+      "failedDeliveries": "Failed deliveries",
+      "lastLocation": "Last location report",
+      "accountTitle": "Account",
+      "edit": "Edit name or number",
+      "save": "Save",
+      "phoneChangeHint": "The driver signs in with this number. Tell them when it changes.",
+      "savedNotice": "Driver details saved.",
+      "resetPassword": "New password",
+      "newPassword": "New password",
+      "resetHint": "The driver is signed out everywhere and taken off shift, then signs in with this password.",
+      "setPassword": "Set password",
+      "passwordSetNotice": "New password set. Give it to the driver:",
+      "suspendedBanner": "Suspended: the driver can sign in but cannot go on shift or take deliveries.",
+      "reactivatedNotice": "Driver reactivated.",
+      "approvedNotice": "Driver approved.",
+      "rejectedNotice": "Application rejected.",
+      "suspendedNotice": "Driver suspended.",
+      "recentTitle": "Recent deliveries",
+      "noDeliveries": "No deliveries yet.",
+      "orderTotal": "Order total"
+    }
   },
   "orders": {
     "title": "Orders",
@@ -507,5 +552,21 @@
     "endConfirm": "End offer",
     "savedNotice": "Offer saved for {{name}}.",
     "endedNotice": "Offer ended — {{name}} is back to its regular price."
+  },
+  "nav": {
+    "home": "Home",
+    "orders": "Orders",
+    "drivers": "Drivers",
+    "more": "More"
+  },
+  "more": {
+    "logoutTitle": "Sign out?",
+    "logoutBody": "You will need your phone number and password to sign in again.",
+    "sections": {
+      "approvals": "Approvals & cash",
+      "catalogue": "Products & offers",
+      "people": "People",
+      "insights": "Insights"
+    }
   }
 }

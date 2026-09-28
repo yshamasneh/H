@@ -48,20 +48,14 @@ const books = {
 function dashboardProps() {
   return {
     user: admin,
-    onLogout: jest.fn().mockResolvedValue(undefined),
     onRestaurants: jest.fn(),
-    onOffers: jest.fn(),
-    onProductOffers: jest.fn(),
     onOrders: jest.fn(),
     onOpenOrder: jest.fn(),
     onDrivers: jest.fn(),
     onDriverCash: jest.fn(),
     onCosts: jest.fn(),
     onUsers: jest.fn(),
-    onAuditLog: jest.fn(),
-    onAnalytics: jest.fn(),
-    onNotifications: jest.fn(),
-    onOpenSettings: jest.fn()
+    onNotifications: jest.fn()
   };
 }
 
@@ -99,8 +93,10 @@ test("the dashboard leads with what needs attention, each opening the screen tha
 
   fireEvent.press(screen.getByText("JOVO MARKET"));
   expect(props.onOpenOrder).toHaveBeenCalledWith("o1");
-  expect(screen.getByText("Driver cash")).toBeTruthy();
-  expect(screen.getByText("Cost approvals")).toBeTruthy();
+  // Notifications are one tap away in the header; tools and sign-out live under the More tab.
+  fireEvent.press(screen.getByLabelText("Notifications"));
+  expect(props.onNotifications).toHaveBeenCalled();
+  expect(screen.queryByText("Sign out")).toBeNull();
 });
 
 test("a ledger problem is shown first and sends the admin to the web console", async () => {
@@ -117,9 +113,6 @@ test("an account only sees the items and tools it can use", async () => {
   expect(screen.queryByText("Orders not yet accepted by the store")).toBeNull();
   expect(screen.queryByText("Cash still held by drivers")).toBeNull();
   expect(mocked.getAdminAccountingOverview).not.toHaveBeenCalled();
-  expect(screen.queryByText("Driver cash")).toBeNull();
-  expect(screen.queryByText("Analytics")).toBeNull();
-  expect(screen.getByText("Drivers")).toBeTruthy();
 });
 
 test("nothing waiting reads as all clear", async () => {

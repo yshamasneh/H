@@ -13,13 +13,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  registerDriver,
-  registerRestaurant,
-  type BusinessType,
-  type DriverRegistrationInput,
-  type RestaurantRegistrationInput
-} from "../../core/api";
+import { registerRestaurant, type BusinessType, type RestaurantRegistrationInput } from "../../core/api";
 import {
   countryCodes,
   normalizePhoneNumber,
@@ -136,62 +130,6 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
         loading={loading}
         onPress={() => void submit()}
       />
-      <BackButton onPress={() => props.onBack(prefill)} />
-    </RegistrationLayout>
-  );
-}
-
-export function DriverRegistrationScreen(props: RegistrationProps) {
-  const { t } = useTranslation(["auth", "common"]);
-  const [fullName, setFullName] = useState("");
-  const [countryCode, setCountryCode] = useState<CountryCode>(props.prefill?.countryCode ?? "+970");
-  const [phoneNumber, setPhoneNumber] = useState(props.prefill?.phoneNumber ?? "");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const prefill = { countryCode, phoneNumber };
-
-  async function submit() {
-    const input: DriverRegistrationInput = {
-      fullName: fullName.trim(),
-      countryCode,
-      phoneNumber,
-      password,
-      confirmPassword
-    };
-    const validationError = validateCommon(input.fullName, prefill, password, confirmPassword);
-    if (validationError) return setError(validationError);
-
-    setError(null);
-    setLoading(true);
-    try {
-      await registerDriver(input);
-      props.onRegistered(prefill, t("driverRegistration.success"));
-    } catch (requestError) {
-      setError(readRegistrationError(requestError));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <RegistrationLayout title={t("driverRegistration.title")} subtitle={t("driverRegistration.subtitle")}>
-      <Field label={t("fields.fullName")} value={fullName} onChangeText={setFullName} />
-      <PhoneFields
-        countryCode={countryCode}
-        phoneNumber={phoneNumber}
-        onCountryCodeChange={setCountryCode}
-        onPhoneNumberChange={setPhoneNumber}
-      />
-      <PasswordFields
-        password={password}
-        confirmPassword={confirmPassword}
-        onPasswordChange={setPassword}
-        onConfirmPasswordChange={setConfirmPassword}
-      />
-      <ErrorMessage message={error} />
-      <PrimaryButton label={t("driverRegistration.submit")} loading={loading} onPress={() => void submit()} />
       <BackButton onPress={() => props.onBack(prefill)} />
     </RegistrationLayout>
   );

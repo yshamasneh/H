@@ -45,7 +45,6 @@ function renderLogin() {
       onAuthenticated={jest.fn()}
       onSignup={jest.fn()}
       onRestaurantSignup={jest.fn()}
-      onDriverSignup={jest.fn()}
       onForgotPassword={jest.fn()}
     />
   );
@@ -81,4 +80,10 @@ test("a code with no catalogued translation falls back to the server's own messa
   });
 
   expect(screen.getByText(serverMessage)).toBeTruthy();
+});
+
+test("drivers are told their account comes from JOVO; there is no driver sign-up on the login screen", () => {
+  renderLogin();
+  expect(screen.getByText(i18n.t("auth:login.driverNote"))).toBeTruthy();
+  expect(screen.queryByText(/Register Driver|تسجيل كسائق/)).toBeNull();
 });
