@@ -60,6 +60,9 @@ export function QuantityControl(props: {
   onDecrement: () => void;
   size?: "compact" | "large";
   addLabel?: string;
+  /** Screen-specific accessibility labels (e.g. naming the product); generic ones otherwise. */
+  increaseLabel?: string;
+  decreaseLabel?: string;
   style?: StyleProp<ViewStyle>;
 }) {
   const { t } = useTranslation(["customer"]);
@@ -96,7 +99,9 @@ export function QuantityControl(props: {
     <View style={[styles.stepper, large && styles.stepperLarge, props.style]}>
       <Pressable
         accessibilityLabel={
-          props.quantity === 1 ? t("shop.removeFromBasket", { name: props.name }) : t("supermarket.decreaseQuantityAccessibility")
+          props.quantity === 1
+            ? t("shop.removeFromBasket", { name: props.name })
+            : props.decreaseLabel ?? t("supermarket.decreaseQuantityAccessibility")
         }
         accessibilityRole="button"
         hitSlop={6}
@@ -113,7 +118,7 @@ export function QuantityControl(props: {
         {props.quantity}
       </Animated.Text>
       <Pressable
-        accessibilityLabel={t("supermarket.increaseQuantityAccessibility")}
+        accessibilityLabel={props.increaseLabel ?? t("supermarket.increaseQuantityAccessibility")}
         accessibilityRole="button"
         accessibilityState={{ disabled: !props.canAdd }}
         disabled={!props.canAdd}

@@ -18,7 +18,11 @@
     "storeClosed": "متجر JOVO MARKET مغلق حاليًا. سلتك محفوظة ويمكنك إكمال الطلب عند فتحه.",
     "storeStatusUnavailable": "تعذر التحقق من حالة المتجر. سلتك محفوظة؛ حاول مرة أخرى.",
     "checkingStore": "جارٍ التحقق من حالة المتجر...",
-    "retryStoreStatus": "تحقق من المتجر مجددًا"
+    "retryStoreStatus": "تحقق من المتجر مجددًا",
+    "quantityLabel": "الكمية: {{quantity}}",
+    "itemsFromStore": "{{items}} قطعة من {{store}}",
+    "addMore": "إضافة المزيد",
+    "savingsLabel": "وفّرت بأسعار التخفيض"
   },
   "checkout": {
     "title": "إتمام الطلب",
@@ -75,7 +79,8 @@
     "activePin": "التوصيل إلى الدبوس الذي وضعته",
     "deliveryFeeHere": "رسوم التوصيل إلى هذا المكان",
     "distanceKm": "{{km}} كم",
-    "calculatingFee": "جارٍ حساب رسوم التوصيل..."
+    "calculatingFee": "جارٍ حساب رسوم التوصيل...",
+    "estimatedBeforeDelivery": "المجموع التقديري (قبل التوصيل)"
   },
   "confirmation": {
     "title": "تم إرسال الطلب",
@@ -95,7 +100,11 @@
     "subtitle": "الأحدث أولاً",
     "emptyTitle": "لا توجد طلبات بعد",
     "emptyText": "لم تقم بإرسال أي طلب حتى الآن.",
-    "emptyCta": "تصفّح جوفو ماركت"
+    "emptyCta": "تصفّح جوفو ماركت",
+    "activeTitle": "قيد التنفيذ",
+    "pastTitle": "الطلبات السابقة",
+    "rowMeta": "#{{reference}} · {{date}} · {{items}} قطعة",
+    "track": "تتبّع الطلب"
   },
   "detail": {
     "title": "تفاصيل الطلب",

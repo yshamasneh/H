@@ -5,9 +5,9 @@ import {
   Animated,
   FlatList,
   Pressable,
+  SectionList,
   RefreshControl,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -49,6 +49,8 @@ import { OrderDetailSkeleton, OrderListSkeleton } from "../../components/skeleto
 import { RemoteImage } from "../../components/remote-image";
 import { PriceDisplay, SaleBadge } from "../../components/sale-price";
 import { useCustomerTheme, type CustomerTheme } from "./theme";
+import { QuantityControl, ThemedStatusBar } from "./shop-kit";
+import { cartSavingsMinor, formatShekel } from "./shop.rules";
 import { Icon, backIconName } from "../../theme/icon";
 import { motionDuration, motionEasing, useReducedMotion } from "../../theme/motion";
 import { iconSize, radius, spacing, statusFamily, statusPaletteFor, type ThemeColors } from "../../theme/tokens";
@@ -58,7 +60,6 @@ import i18n from "../../i18n";
 import { LocationMap } from "../../components/location-map";
 import { landmarkMarkerColor, type LocationMapMarker, type MapCoordinate } from "../../components/location-map.types";
 
-const currencyCode = "ILS";
 // Default checkout-map center: the Biddu-enclave service area, used only until
 // the customer's saved/detected location is available.
 const defaultMapCoordinate: MapCoordinate = { latitude: 31.83804, longitude: 35.14047 };
@@ -118,7 +119,7 @@ export function CartScreen(props: CartScreenProps) {
   const store = useStoreAvailability(props.cart?.restaurantId);
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
+      <ThemedStatusBar backgroundColor={customerTheme.colors.background} />
       <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? t("cart.emptySubtitle")} title={t("cart.title")} />
       {isEmpty ? (
         <View style={styles.centered}>
@@ -133,6 +134,16 @@ export function CartScreen(props: CartScreenProps) {
             contentContainerStyle={styles.listContent}
             data={props.cart!.items}
             keyExtractor={(item) => item.menuItemId}
+            ListHeaderComponent={
+              <View style={styles.cartListHeader}>
+                <Text style={styles.cartListHeaderText}>
+                  {t("cart.itemsFromStore", { items: cartItemCount(props.cart!), store: props.cart!.restaurantName })}
+                </Text>
+                <Pressable accessibilityRole="button" hitSlop={8} onPress={props.onBrowse}>
+                  <Text style={styles.cartAddMore}>{t("cart.addMore")}</Text>
+                </Pressable>
+              </View>
+            }
             renderItem={({ item }) => (
               <View style={styles.cartRow}>
                 <View style={styles.cartItemTop}>
@@ -176,22 +187,19 @@ export function CartScreen(props: CartScreenProps) {
                     <Icon color={customerTheme.colors.danger} name="close" size="sm" />
                   </Pressable>
                 </View>
-                <View style={styles.quantityStepper}>
-                  <Pressable
-                    accessibilityLabel={t("cart.decreaseQuantityAccessibility", { name: item.name })}
-                    onPress={() => props.onDecrement(item.menuItemId)}
-                    style={styles.stepperButton}
-                  >
-                    <Icon color={customerTheme.colors.primary} name="remove" size="sm" />
-                  </Pressable>
-                  <Text style={styles.stepperValue}>{item.quantity}</Text>
-                  <Pressable
-                    accessibilityLabel={t("cart.increaseQuantityAccessibility", { name: item.name })}
-                    onPress={() => props.onIncrement(item.menuItemId)}
-                    style={styles.stepperButton}
-                  >
-                    <Icon color={customerTheme.colors.primary} name="add" size="sm" />
-                  </Pressable>
+                <View style={styles.cartRowFooter}>
+                  <Text style={styles.cartRowQuantityLabel}>{t("cart.quantityLabel", { quantity: item.quantity })}</Text>
+                  <QuantityControl
+                    canAdd
+                    decreaseLabel={t("cart.decreaseQuantityAccessibility", { name: item.name })}
+                    increaseLabel={t("cart.increaseQuantityAccessibility", { name: item.name })}
+                    name={item.name}
+                    onAdd={() => props.onIncrement(item.menuItemId)}
+                    onDecrement={() => props.onDecrement(item.menuItemId)}
+                    onIncrement={() => props.onIncrement(item.menuItemId)}
+                    quantity={item.quantity}
+                    style={styles.cartRowStepper}
+                  />
                 </View>
               </View>
             )}
@@ -202,6 +210,12 @@ export function CartScreen(props: CartScreenProps) {
             {store.status === "checking" ? <Text style={styles.footerNote}>{t("cart.checkingStore")}</Text> : null}
             {store.status === "closed" || store.status === "error" ? (
               <SecondaryButton label={t("cart.retryStoreStatus")} onPress={() => void store.refresh()} />
+            ) : null}
+            {cartSavingsMinor(props.cart) > 0 ? (
+              <View style={styles.footerRow}>
+                <Text style={styles.savingsLabel}>{t("cart.savingsLabel")}</Text>
+                <Text style={styles.savingsValue}>-{formatPrice(cartSavingsMinor(props.cart))}</Text>
+              </View>
             ) : null}
             <View style={styles.footerRow}>
               <Text style={styles.footerLabel}>{t("cart.estimatedSubtotal")}</Text>
@@ -629,9 +643,14 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
+      <ThemedStatusBar backgroundColor={customerTheme.colors.background} />
       <Header onBack={props.onBack} subtitle={props.cart?.restaurantName ?? t("checkout.title")} title={t("checkout.title")} />
-      <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={styles.formContent}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.checkoutSteps}>
           <View style={styles.stepComplete}><Text style={styles.stepCompleteText}>✓</Text></View>
           <View style={styles.stepLine} />
@@ -818,14 +837,28 @@ export function CheckoutScreen(props: CheckoutScreenProps) {
           value={customerNote}
         />
 
+      </ScrollView>
+      {/* Always in reach: what the customer will pay and the one button that places the order, with
+          anything stopping it (store closed, a problem with the order) right above it. */}
+      <View style={styles.checkoutBar}>
         {store.status === "closed" ? <ErrorText message={t("checkout.storeClosed")} /> : null}
         {store.status === "error" ? <ErrorText message={t("checkout.storeStatusUnavailable")} /> : null}
         {store.status === "closed" || store.status === "error" ? (
           <SecondaryButton label={t("cart.retryStoreStatus")} onPress={() => void store.refresh()} />
         ) : null}
         <ErrorText message={error} />
+        {props.cart ? (
+          <View style={styles.checkoutBarTotals}>
+            <Text style={styles.checkoutBarLabel}>
+              {quote ? t("checkout.cashDueOnDelivery") : t("checkout.estimatedBeforeDelivery")}
+            </Text>
+            <Text style={styles.checkoutBarValue} testID="checkout-bar-total">
+              {formatPrice(quote ? cashDueMinorOf(quote) : cartSubtotalMinor(props.cart))}
+            </Text>
+          </View>
+        ) : null}
         <PrimaryButton disabled={store.status !== "open" || outOfRange} label={t(priceChanged ? "checkout.confirmUpdatedPrice" : "checkout.placeOrder")} loading={loading} onPress={submit} />
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -844,7 +877,7 @@ export function OrderConfirmationScreen(props: OrderConfirmationScreenProps) {
   const { order } = props;
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
+      <ThemedStatusBar backgroundColor={customerTheme.colors.background} />
       <Header onBack={props.onDone} subtitle={order.restaurant.name} title={t("confirmation.title")} />
       <ScrollView contentContainerStyle={styles.formContent}>
         <View style={styles.successBanner}>
@@ -928,12 +961,29 @@ type OrderHistoryScreenProps = {
   onOpenOrder: (orderId: string) => void;
 };
 
+/** Statuses in which an order is still on its way; everything else is history. */
+const activeOrderStatuses: OrderDetail["status"][] = ["PLACED", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP"];
+
+export function isActiveOrder(order: Pick<OrderDetail, "status">): boolean {
+  return activeOrderStatuses.includes(order.status);
+}
+
+const historyPageSize = 20;
+
+/**
+ * The customer's orders, split the way they are thought about: what is still on its way (first, so
+ * it can be followed) and what is done. Each row carries the short order number the store uses,
+ * how many items it had, and its total; older orders load as the list is scrolled.
+ */
 export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
   const { t } = useTranslation(["cart", "common"]);
   const { colors } = useTheme();
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -945,10 +995,28 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
         setError(t("common:sessionExpired"));
         return;
       }
-      const page = await listMyOrders(accessToken, 1, 20);
-      setOrders(page.items);
+      const result = await listMyOrders(accessToken, 1, historyPageSize);
+      setOrders(result.items);
+      setTotal(result.total);
+      setPage(1);
     } catch (requestError) {
       setError(readError(requestError));
+    }
+  }
+
+  async function loadMore() {
+    if (!orders || loadingMore || orders.length >= total) return;
+    setLoadingMore(true);
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) return;
+      const result = await listMyOrders(accessToken, page + 1, historyPageSize);
+      setOrders((current) => [...(current ?? []), ...result.items.filter((order) => !(current ?? []).some((existing) => existing.id === order.id))]);
+      setPage(page + 1);
+    } catch {
+      // The next scroll tries again.
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -962,9 +1030,16 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
     setRefreshing(false);
   }
 
+  const sections = orders
+    ? [
+        { key: "active", title: t("history.activeTitle"), data: orders.filter(isActiveOrder) },
+        { key: "past", title: t("history.pastTitle"), data: orders.filter((order) => !isActiveOrder(order)) }
+      ].filter((section) => section.data.length > 0)
+    : [];
+
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
+      <ThemedStatusBar backgroundColor={customerTheme.colors.background} />
       <Header onBack={props.onBack} subtitle={t("history.subtitle")} title={t("history.title")} />
       {orders === null ? (
         error ? <View style={styles.centered}><ErrorState message={error} onRetry={load} /></View> : <OrderListSkeleton />
@@ -976,24 +1051,38 @@ export function OrderHistoryScreen(props: OrderHistoryScreenProps) {
           <PrimaryButton label={t("history.emptyCta")} onPress={props.onBrowse} />
         </View>
       ) : (
-        <FlatList
+        <SectionList
           contentContainerStyle={styles.listContent}
-          data={orders}
           keyExtractor={(item) => item.id}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={customerTheme.colors.primary} style={styles.historyLoadingMore} /> : null}
+          onEndReached={() => void loadMore()}
+          onEndReachedThreshold={0.5}
           refreshControl={<RefreshControl onRefresh={refresh} refreshing={refreshing} tintColor={customerTheme.colors.primary} />}
+          renderSectionHeader={({ section }) => <Text style={styles.historySectionTitle}>{section.title}</Text>}
+          sections={sections}
+          stickySectionHeadersEnabled={false}
           renderItem={({ item }) => (
             <Pressable
               accessibilityRole="button"
               onPress={() => props.onOpenOrder(item.id)}
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+              style={({ pressed }) => [styles.card, isActiveOrder(item) && styles.cardActive, pressed && styles.cardPressed]}
             >
               <View style={styles.orderIcon}><Icon color={customerTheme.colors.primary} name="orders" size="sm" /></View>
               <View style={styles.orderRowHeader}>
                 <Text style={styles.cardTitle}>{item.restaurant.name}</Text>
                 <StatusBadge status={item.status} />
               </View>
-              <Text style={styles.cardSubtitle}>{formatDate(item.createdAt)}</Text>
-              <Text style={styles.orderRowTotal}>{formatPrice(item.totalMinor)}</Text>
+              <Text style={styles.cardSubtitle}>
+                {t("history.rowMeta", {
+                  reference: orderReference(item.id),
+                  date: formatDate(item.createdAt),
+                  items: item.items.reduce((sum, line) => sum + line.quantity, 0)
+                })}
+              </Text>
+              <View style={styles.historyRowFooter}>
+                <Text style={styles.orderRowTotal}>{formatPrice(item.totalMinor)}</Text>
+                {isActiveOrder(item) ? <Text style={styles.historyTrack}>{t("history.track")}</Text> : null}
+              </View>
             </Pressable>
           )}
         />
@@ -1073,7 +1162,7 @@ export function OrderDetailScreen(props: OrderDetailScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
+      <ThemedStatusBar backgroundColor={customerTheme.colors.background} />
       <Header onBack={props.onBack} subtitle={order?.restaurant.name ?? t("detail.defaultSubtitle")} title={t("detail.title")} />
       {error ? (
         <View style={styles.centered}>
@@ -1397,9 +1486,7 @@ export function cartSummaryLabel(cart: Cart): string {
   return i18n.t("cart:cartSummaryLabel", { count, price: formatPrice(cartSubtotalMinor(cart)) });
 }
 
-function formatPrice(priceMinor: number): string {
-  return `${(priceMinor / 100).toFixed(2)} ${currencyCode}`;
-}
+const formatPrice = formatShekel;
 
 function formatPackedQuantity(quantityMilli: number): string {
   return (quantityMilli / 1_000).toFixed(3).replace(/\.?0+$/, "");
@@ -1413,6 +1500,30 @@ function formatDate(iso: string): string {
 
 
 const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
+  checkoutBar: {
+    backgroundColor: customerTheme.colors.surface,
+    borderTopColor: customerTheme.colors.border,
+    borderTopWidth: 1,
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3]
+  },
+  checkoutBarTotals: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between" },
+  checkoutBarLabel: { ...text("bodySm", "semibold"), color: customerTheme.colors.textMuted, flexShrink: 1 },
+  checkoutBarValue: { ...text("h3", "heavy"), color: customerTheme.colors.text },
+  cardActive: { borderColor: customerTheme.colors.primary, borderWidth: 1 },
+  historySectionTitle: { ...text("h3", "bold"), color: customerTheme.colors.text, marginBottom: spacing[3], marginTop: spacing[3] },
+  historyRowFooter: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  historyTrack: { ...text("caption", "bold"), color: customerTheme.colors.primary },
+  historyLoadingMore: { marginVertical: spacing[5] },
+  cartListHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[3] },
+  cartListHeaderText: { ...text("caption", "semibold"), color: customerTheme.colors.textMuted, flexShrink: 1 },
+  cartAddMore: { ...text("caption", "bold"), color: customerTheme.colors.primary },
+  cartRowFooter: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[3] },
+  cartRowQuantityLabel: { ...text("caption"), color: customerTheme.colors.textMuted },
+  cartRowStepper: { minWidth: 120 },
+  savingsLabel: { ...text("bodySm", "semibold"), color: customerTheme.colors.success },
+  savingsValue: { ...text("bodySm", "bold"), color: customerTheme.colors.success },
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   header: {
     alignItems: "center",

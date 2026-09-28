@@ -283,7 +283,9 @@ test("a changed server price requires a second explicit confirmation using the n
   await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.placeOrder"))); });
   expect(onPlaced).not.toHaveBeenCalled();
   expect(screen.getByText(i18n.t("cart:checkout.priceChanged"))).toBeTruthy();
-  expect(screen.getByText("22.50 ILS")).toBeTruthy();
+  // The new price is in the summary and in the pinned bar beside the confirm button.
+  expect(screen.getAllByText("22.50 ILS").length).toBeGreaterThan(0);
+  expect(screen.getByTestId("checkout-bar-total").props.children).toBe("22.50 ILS");
   await act(async () => { fireEvent.press(screen.getByText(i18n.t("cart:checkout.confirmUpdatedPrice"))); });
   expect((createOrder as jest.Mock).mock.calls[0][1].expectedDeliveryFeeMinor).toBe(1000);
   expect((createOrder as jest.Mock).mock.calls[1][1].expectedDeliveryFeeMinor).toBe(1500);

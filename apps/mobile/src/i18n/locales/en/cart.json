@@ -18,7 +18,11 @@
     "storeClosed": "JOVO MARKET is closed right now. Your cart is saved; you can check out when it reopens.",
     "storeStatusUnavailable": "We could not check the store status. Your cart is safe. Try again.",
     "checkingStore": "Checking if the store is open...",
-    "retryStoreStatus": "Check store again"
+    "retryStoreStatus": "Check store again",
+    "quantityLabel": "Quantity: {{quantity}}",
+    "itemsFromStore": "{{items}} items from {{store}}",
+    "addMore": "Add more",
+    "savingsLabel": "Saved with sale prices"
   },
   "checkout": {
     "title": "Checkout",
@@ -75,7 +79,8 @@
     "activePin": "Delivering to the pin you placed",
     "deliveryFeeHere": "Delivery fee to this spot",
     "distanceKm": "{{km}} km",
-    "calculatingFee": "Calculating the delivery fee..."
+    "calculatingFee": "Calculating the delivery fee...",
+    "estimatedBeforeDelivery": "Estimated total (before delivery)"
   },
   "confirmation": {
     "title": "Order Placed",
@@ -95,7 +100,11 @@
     "subtitle": "Most recent first",
     "emptyTitle": "No orders yet",
     "emptyText": "You have not placed any orders yet.",
-    "emptyCta": "Browse JOVO MARKET"
+    "emptyCta": "Browse JOVO MARKET",
+    "activeTitle": "On the way",
+    "pastTitle": "Past orders",
+    "rowMeta": "#{{reference}} · {{date}} · {{items}} items",
+    "track": "Track order"
   },
   "detail": {
     "title": "Order Details",
