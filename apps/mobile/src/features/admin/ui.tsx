@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StatusBar,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { readError } from "../../core/errors";
+import { telUrl } from "../../core/tel";
 import { colors, radius, shadow, spacing, statusFamily, statusPalette } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 
@@ -131,14 +133,24 @@ export function Input(props: {
   onChangeText: (value: string) => void;
   placeholder: string;
   multiline?: boolean;
+  secureTextEntry?: boolean;
+  keyboardType?: "default" | "phone-pad";
+  /** "off" for a form that creates someone else's account, so the device never autofills your own login. */
+  autoComplete?: "off" | "new-password";
+  /** Numbers and codes read left to right even in Arabic. */
+  ltr?: boolean;
 }) {
   return (
     <TextInput
+      autoComplete={props.autoComplete}
+      keyboardType={props.keyboardType}
+      secureTextEntry={props.secureTextEntry}
+      textContentType={props.autoComplete === "new-password" ? "newPassword" : props.autoComplete === "off" ? "none" : undefined}
       multiline={props.multiline}
       onChangeText={props.onChangeText}
       placeholder={props.placeholder}
       placeholderTextColor={colors.textMuted}
-      style={[styles.input, props.multiline && styles.multilineInput]}
+      style={[styles.input, props.multiline && styles.multilineInput, props.ltr && styles.ltrInput]}
       value={props.value}
     />
   );
@@ -163,6 +175,62 @@ export function FilterChips<T extends string>(props: {
         </Pressable>
       ))}
     </ScrollView>
+  );
+}
+
+/**
+ * A registered phone number: bold, always left to right inside Arabic text, and tapping it opens
+ * the device's own dialer (no in-app calling). A number that cannot be dialled is shown as text.
+ */
+export function PhoneNumber({ phone }: { phone: string }) {
+  const { t } = useTranslation(["common"]);
+  const url = telUrl(phone);
+  const number = <Text style={[styles.phoneNumber, url ? styles.phoneLink : null]}>{`\u2066${phone}\u2069`}</Text>;
+  if (!url) return number;
+  return (
+    <Pressable
+      accessibilityLabel={`${t("common:callCustomer")} ${phone}`}
+      accessibilityRole="link"
+      hitSlop={8}
+      onPress={() => void Linking.openURL(url).catch(() => undefined)}
+      style={({ pressed }) => [styles.phoneTap, pressed && styles.pressed]}
+    >
+      {number}
+    </Pressable>
+  );
+}
+
+/** A labelled figure with a one-line explanation under it. */
+export function StatCard(props: { label: string; value: string; hint?: string }) {
+  return (
+    <View style={adminStyles.statCard}>
+      <Text style={adminStyles.statLabel}>{props.label}</Text>
+      <Text style={adminStyles.statValue}>{props.value}</Text>
+      {props.hint ? <Text style={adminStyles.statHint}>{props.hint}</Text> : null}
+    </View>
+  );
+}
+
+/** Previous / next through a paged list, with "page X of Y" between them. */
+export function Pager(props: { page: number; pages: number; onPage: (page: number) => void }) {
+  const { t } = useTranslation(["admin"]);
+  if (props.pages <= 1) return null;
+  return (
+    <View style={styles.pager}>
+      <ActionButton
+        disabled={props.page <= 1}
+        label={t("admin:pager.previous")}
+        onPress={() => props.onPage(props.page - 1)}
+        variant="secondary"
+      />
+      <Text style={styles.pagerLabel}>{t("admin:pager.pageOf", { page: props.page, pages: props.pages })}</Text>
+      <ActionButton
+        disabled={props.page >= props.pages}
+        label={t("admin:pager.next")}
+        onPress={() => props.onPage(props.page + 1)}
+        variant="secondary"
+      />
+    </View>
   );
 }
 
@@ -209,6 +277,7 @@ export const adminStyles = StyleSheet.create({
   },
   statValue: { ...text("display", "heavy"), color: colors.text },
   statLabel: { ...text("label", "medium"), color: colors.textMuted, marginTop: spacing[1] },
+  statHint: { ...text("caption"), color: colors.textMuted, marginTop: spacing[1] },
   rowBetween: { alignItems: "center", flexDirection: "row", gap: spacing[3], justifyContent: "space-between" },
   reasonBox: { backgroundColor: colors.surfaceSunk, borderRadius: radius.md, marginTop: spacing[3], padding: spacing[3] }
 });
@@ -271,6 +340,12 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.62 },
   input: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: radius.sm, borderWidth: 1, color: colors.text, ...text("bodySm"), paddingHorizontal: spacing[3], paddingVertical: spacing[3] },
   multilineInput: { minHeight: 78, textAlignVertical: "top" },
+  ltrInput: { textAlign: "left", writingDirection: "ltr" },
+  phoneTap: { alignSelf: "flex-start", minHeight: 32, justifyContent: "center" },
+  phoneNumber: { ...text("body", "bold"), color: colors.text, writingDirection: "ltr", fontVariant: ["tabular-nums"] },
+  phoneLink: { color: colors.primary, textDecorationLine: "underline" },
+  pager: { alignItems: "center", flexDirection: "row", gap: spacing[2], justifyContent: "space-between", marginTop: spacing[2] },
+  pagerLabel: { ...text("caption", "medium"), color: colors.textMuted, flexShrink: 1, textAlign: "center" },
   chips: { flexGrow: 0 },
   chip: { backgroundColor: colors.surfaceSunk, borderRadius: radius.pill, marginEnd: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   chipSelected: { backgroundColor: colors.primary },
