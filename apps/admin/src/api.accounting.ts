@@ -189,7 +189,9 @@ export const listPendingSettlements = () => request<PartnerBalance[]>(`${base}/b
 export const listDriverCash = () => request<DriverCash[]>(`${base}/cash/drivers`);
 export const listDriverCustody = (driverUserId: string) =>
   request<DriverCustodyLine[]>(`${base}/cash/drivers/${driverUserId}`);
-export const listCashSettlements = () => request<CashSettlement[]>(`${base}/cash/settlements`);
+/** Handovers, most recent first; one driver's only when `driverUserId` is given. */
+export const listCashSettlements = (driverUserId?: string) =>
+  request<CashSettlement[]>(`${base}/cash/settlements${driverUserId ? `?driverUserId=${encodeURIComponent(driverUserId)}` : ""}`);
 export const listPartnerSettlements = () => request<PartnerSettlement[]>(`${base}/settlements`);
 export const listOperatingCosts = (status?: string) =>
   request<OperatingCostEntry[]>(`${base}/operating-costs${status ? `?status=${status}` : ""}`);

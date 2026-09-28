@@ -1,21 +1,16 @@
 import { Fragment, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import { ApiError, readApiError } from "../api";
+import { readApiError } from "../api";
 import { useAuth } from "../auth";
 import {
   decideOperatingCost,
   formatMinor,
   getAccountingOverview,
-  listDriverCash,
-  listDriverCustody,
   listOperatingCosts,
   listPartnerBalances,
-  recordCashSettlement,
   recordPartnerSettlement,
   type AccountingOverview,
-  type DriverCash,
-  type DriverCustodyLine,
   type OperatingCostEntry,
   type PartnerBalance
 } from "../api.accounting";
@@ -23,8 +18,9 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { Field } from "../components/Field";
 import { Money } from "../components/Money";
 import { ReasonModal } from "../components/ReasonModal";
-import { parseMoneyToMinor, parsePositiveMoneyToMinor } from "../money";
+import { parsePositiveMoneyToMinor } from "../money";
 import { AdjustmentsSection } from "./accounting/AdjustmentsSection";
+import { DriverCashSection } from "./accounting/DriverCashSection";
 import { HistorySection } from "./accounting/HistorySection";
 import { RatesSection } from "./accounting/RatesSection";
 import { suggestReference, type SectionProps } from "./accounting/types";
@@ -426,272 +422,6 @@ function PayoutForm({
           {t("common.cancel")}
         </button>
       </div>
-    </div>
-  );
-}
-
-/**
- * Cash still in drivers' pockets. Reported entirely separately from what each driver has earned:
- * a driver holding 320.00 of customers' money and being owed 14.00 in pay are two different facts
- * about two different pockets, and adding them together is how a cash business loses track.
- */
-function DriverCashSection({
-  onError,
-  reloadToken,
-  onChanged,
-  canReceive
-}: Omit<SectionProps, "onChanged"> & { canReceive: boolean; onChanged: (message?: string) => void }) {
-  const { t } = useTranslation();
-  const [rows, setRows] = useState<DriverCash[] | null>(null);
-  const [openDriver, setOpenDriver] = useState<DriverCash | null>(null);
-  const [custody, setCustody] = useState<DriverCustodyLine[] | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [counted, setCounted] = useState("");
-  const [reference, setReference] = useState("");
-  const [note, setNote] = useState("");
-  const [discrepancyNote, setDiscrepancyNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        setRows(await listDriverCash());
-      } catch (requestError) {
-        onError(requestError, t("accounting.loadError"));
-      }
-    })();
-  }, [reloadToken]);
-
-  const openHandover = async (driver: DriverCash) => {
-    setOpenDriver(driver);
-    setCounted(formatMinor(driver.outstandingMinor));
-    setReference(suggestReference("HANDOVER"));
-    setNote("");
-    setDiscrepancyNote("");
-    setSelected(new Set());
-    setError(null);
-    setCustody(null);
-    try {
-      setCustody(await listDriverCustody(driver.driverUserId));
-    } catch (requestError) {
-      onError(requestError, t("accounting.loadError"));
-    }
-  };
-
-  // What the receiver should be holding: the whole balance, or just the ticked orders.
-  const expectedMinor = !openDriver
-    ? 0
-    : selected.size === 0
-      ? openDriver.outstandingMinor
-      : (custody ?? []).filter((line) => selected.has(line.custodyId)).reduce((sum, line) => sum + line.outstandingMinor, 0);
-  const countedMinor = parseMoneyToMinor(counted);
-  const differenceMinor = countedMinor === null ? null : countedMinor - expectedMinor;
-
-  const toggle = (custodyId: string) => {
-    const next = new Set(selected);
-    if (next.has(custodyId)) next.delete(custodyId);
-    else next.add(custodyId);
-    setSelected(next);
-    const expected =
-      next.size === 0
-        ? (openDriver?.outstandingMinor ?? 0)
-        : (custody ?? []).filter((line) => next.has(line.custodyId)).reduce((sum, line) => sum + line.outstandingMinor, 0);
-    setCounted(formatMinor(expected));
-  };
-
-  const submitHandover = async () => {
-    if (!openDriver) return;
-    if (countedMinor === null) return setError(t("accounting.cash.invalidAmount"));
-    if (reference.trim().length < 3) return setError(t("accounting.balances.referenceRequired"));
-    if (differenceMinor !== 0 && !discrepancyNote.trim()) return setError(t("accounting.cash.discrepancyNoteRequired"));
-    setBusy(true);
-    setError(null);
-    try {
-      await recordCashSettlement({
-        driverUserId: openDriver.driverUserId,
-        reference: reference.trim(),
-        countedAmountMinor: countedMinor,
-        ...(selected.size > 0 ? { custodyIds: [...selected] } : {}),
-        ...(differenceMinor !== 0 ? { discrepancyNote: discrepancyNote.trim() } : {}),
-        ...(note.trim() ? { note: note.trim() } : {})
-      });
-      const name = openDriver.driverName;
-      setOpenDriver(null);
-      onChanged(t("accounting.cash.recorded", { name }));
-    } catch (requestError) {
-      setError(readApiError(requestError, t("common.genericActionError")));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (rows === null) return <div className="loading-state">{t("common.loading")}</div>;
-  if (rows.length === 0) return <div className="empty-state">{t("accounting.cash.empty")}</div>;
-
-  return (
-    <div className="card">
-      <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>{t("common.name")}</th>
-              <th>{t("accounting.cash.collected")}</th>
-              <th>{t("accounting.cash.settled")}</th>
-              <th>{t("accounting.cash.outstanding")}</th>
-              <th>{t("accounting.cash.openOrders")}</th>
-              <th>{t("accounting.cash.earnings")}</th>
-              <th>{t("common.actions")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.driverUserId}>
-                <td>
-                  {row.driverName}
-                  <br />
-                  <small dir="ltr">{row.driverPhone}</small>
-                </td>
-                <td>
-                  <Money minor={row.collectedMinor} />
-                </td>
-                <td>
-                  <Money minor={row.settledMinor} />
-                </td>
-                <td>
-                  <strong>
-                    <Money minor={row.outstandingMinor} />
-                  </strong>
-                </td>
-                <td>{row.outstandingOrderCount}</td>
-                <td>
-                  <Money minor={row.earningsMinor} /> ({t("accounting.cash.paidLabel")}{" "}
-                  <Money minor={row.earningsPaidMinor} />)
-                </td>
-                <td>
-                  {canReceive && row.outstandingMinor > 0 ? (
-                    <button className="btn btn-primary btn-sm" onClick={() => void openHandover(row)} type="button">
-                      {t("accounting.cash.recordHandover")}
-                    </button>
-                  ) : (
-                    t("common.dash")
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {openDriver ? (
-        <div className="card" style={{ marginTop: 16 }}>
-          <h3 className="card-title">{t("accounting.cash.handoverTitle", { name: openDriver.driverName })}</h3>
-          {error ? <div className="error-banner">{error}</div> : null}
-          <p className="page-subtitle">
-            {t("accounting.cash.expected")}: <strong><Money minor={expectedMinor} /></strong>
-          </p>
-          <div className="form-grid">
-            <Field label={t("accounting.cash.amountLabel")}>
-              <input
-                className="text-input"
-                dir="ltr"
-                inputMode="decimal"
-                onChange={(event) => setCounted(event.target.value)}
-                placeholder={t("accounting.cash.countedPlaceholder")}
-                value={counted}
-              />
-            </Field>
-            <Field label={t("accounting.cash.referenceLabel")}>
-              <input
-                className="text-input"
-                dir="ltr"
-                onChange={(event) => setReference(event.target.value)}
-                placeholder={t("accounting.balances.referencePlaceholder")}
-                value={reference}
-              />
-            </Field>
-            <Field label={t("accounting.cash.noteLabel")}>
-              <input className="text-input" maxLength={500} onChange={(event) => setNote(event.target.value)} value={note} />
-            </Field>
-          </div>
-
-          {differenceMinor === null ? null : differenceMinor === 0 ? (
-            <p className="field-hint">{t("accounting.cash.matches")}</p>
-          ) : (
-            <div className="warning-banner">
-              {differenceMinor < 0
-                ? t("accounting.cash.shortBy", { amount: formatMinor(-differenceMinor) })
-                : t("accounting.cash.overBy", { amount: formatMinor(differenceMinor) })}
-              <Field label={t("accounting.cash.discrepancyNote")}>
-                <input
-                  className="text-input full-width"
-                  maxLength={500}
-                  onChange={(event) => setDiscrepancyNote(event.target.value)}
-                  value={discrepancyNote}
-                />
-              </Field>
-            </div>
-          )}
-          {differenceMinor !== null && differenceMinor < 0 ? (
-            <p className="field-hint">{t("accounting.cash.partialHint")}</p>
-          ) : null}
-
-          <p className="field-hint">{t("accounting.cash.selectOrders")}</p>
-          {custody ? (
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{t("accounting.cash.select")}</th>
-                    <th>{t("accounting.cash.order")}</th>
-                    <th>{t("accounting.cash.collectedAt")}</th>
-                    <th>{t("accounting.cash.collected")}</th>
-                    <th>{t("accounting.cash.settled")}</th>
-                    <th>{t("accounting.cash.outstanding")}</th>
-                    <th>{t("common.status")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {custody.map((line) => (
-                    <tr key={line.custodyId}>
-                      <td>
-                        <input
-                          checked={selected.has(line.custodyId)}
-                          onChange={() => toggle(line.custodyId)}
-                          type="checkbox"
-                        />
-                      </td>
-                      <td dir="ltr">{line.orderId.slice(0, 8)}</td>
-                      <td>{new Date(line.collectedAt).toLocaleString()}</td>
-                      <td>
-                        <Money minor={line.collectedAmountMinor} />
-                      </td>
-                      <td>
-                        <Money minor={line.settledAmountMinor} />
-                      </td>
-                      <td>
-                        <Money minor={line.outstandingMinor} />
-                      </td>
-                      <td>{t(`accounting.custodyStatus.${line.status}`)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="loading-state">{t("common.loading")}</div>
-          )}
-
-          <div className="row-actions" style={{ marginTop: 12 }}>
-            <button className="btn btn-primary" disabled={busy} onClick={() => void submitHandover()} type="button">
-              {busy ? t("common.working") : t("accounting.cash.recordHandover")}
-            </button>
-            <button className="btn btn-outline" onClick={() => setOpenDriver(null)} type="button">
-              {t("common.cancel")}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

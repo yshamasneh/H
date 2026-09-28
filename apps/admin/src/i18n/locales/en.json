@@ -813,7 +813,20 @@
       "selectOrders": "Leave the orders unticked to settle oldest first, or tick specific ones.",
       "partialHint": "If less is counted than expected, only what the money covers is settled; the rest stays with the driver.",
       "recorded": "Cash handover from {{name}} recorded.",
-      "select": "Select"
+      "select": "Select",
+      "summary": "{{count}} driver(s) holding cash, in total",
+      "allHandedOver": "Every driver has handed over the cash they collected.",
+      "carryingSince": "Carrying since",
+      "today": "Today",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "history": "History",
+      "historyTitle": "Handovers from {{name}}",
+      "noHistory": "This driver has not handed over any cash yet.",
+      "stepOrders": "1. Orders",
+      "stepCount": "2. Count the cash",
+      "stepRecord": "3. Record",
+      "selectOrder": "Select order {{order}}"
     },
     "costs": {
       "empty": "No operating costs have been reported.",
@@ -964,6 +977,19 @@
       "confirmBody": "A subscription charge will be recorded for every approved restaurant not yet billed for this month, and cannot be deleted afterwards.",
       "result": "Created {{created}}, skipped {{skipped}}, totalling {{amount}} ₪.",
       "invalidPeriod": "Choose a valid year and month (1–12)."
+    },
+    "receipt": {
+      "title": "Cash handover receipt",
+      "balanced": "Matches",
+      "withDifference": "With a difference",
+      "date": "Date",
+      "from": "Handed over by",
+      "receivedBy": "Received by",
+      "settledAmount": "Settled",
+      "settledTotal": "Total settled",
+      "noOrders": "No order was settled by this handover.",
+      "print": "Print",
+      "open": "Receipt"
     }
   },
   "operatingCosts": {

@@ -7,6 +7,7 @@ import {
   type PartnerSettlement
 } from "../../api.accounting";
 import { Money } from "../../components/Money";
+import { HandoverReceipt } from "./HandoverReceipt";
 import type { SectionProps } from "./types";
 
 /**
@@ -19,6 +20,7 @@ export function HistorySection({ onError, reloadToken }: SectionProps) {
   const { t } = useTranslation();
   const [payouts, setPayouts] = useState<PartnerSettlement[] | null>(null);
   const [handovers, setHandovers] = useState<CashSettlement[] | null>(null);
+  const [receipt, setReceipt] = useState<CashSettlement | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -102,6 +104,7 @@ export function HistorySection({ onError, reloadToken }: SectionProps) {
                   <th>{t("accounting.history.orders")}</th>
                   <th>{t("accounting.history.reference")}</th>
                   <th>{t("accounting.history.receivedBy")}</th>
+                  <th>{t("common.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -133,6 +136,11 @@ export function HistorySection({ onError, reloadToken }: SectionProps) {
                     <td>{handover.allocations.length}</td>
                     <td dir="ltr">{handover.reference}</td>
                     <td>{handover.receivedByName}</td>
+                    <td>
+                      <button className="btn btn-outline btn-sm" onClick={() => setReceipt(handover)} type="button">
+                        {t("accounting.receipt.open")}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -140,6 +148,7 @@ export function HistorySection({ onError, reloadToken }: SectionProps) {
           </div>
         )}
       </div>
+      {receipt ? <HandoverReceipt onClose={() => setReceipt(null)} settlement={receipt} /> : null}
     </>
   );
 }
