@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { AdminAccountingController } from "../../accounting/admin-accounting.controller";
 import { BusinessAccountingController } from "../../accounting/business-accounting.controller";
 import { AdminAuditLogController } from "../../admin/admin-audit-log.controller";
+import { AdminAnalyticsController } from "../../analytics/admin-analytics.controller";
 import { AdminDashboardController } from "../../admin/admin-dashboard.controller";
 import { AdminUsersController } from "../../admin/admin-users.controller";
 import { AdminDriversController } from "../../drivers/admin-drivers.controller";
@@ -61,6 +62,8 @@ test("every platform administration controller is protected by a permission", ()
     [AdminStoreOrdersController, "MANAGE_BUSINESSES"],
     [AdminStoreInventoryController, "MANAGE_BUSINESSES"],
     [AdminOrdersController, "VIEW_ALL_ORDERS"],
+    // Analytics is aggregated from every business's orders: the same authority as the all-orders list.
+    [AdminAnalyticsController, "VIEW_ALL_ORDERS"],
     [AdminSettingsController, "MANAGE_PLATFORM_SETTINGS"],
     [ErrorTrackingTestController, "MANAGE_PLATFORM_SETTINGS"]
   ];

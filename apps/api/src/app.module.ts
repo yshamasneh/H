@@ -4,6 +4,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AccountingModule } from "./accounting/accounting.module";
 import { AdminModule } from "./admin/admin.module";
+import { AnalyticsModule } from "./analytics/analytics.module";
 import { AuthModule } from "./auth/auth.module";
 import { AuthorizationModule } from "./common/authorization/authorization.module";
 import { validateEnvironment } from "./config/environment";
@@ -55,7 +56,8 @@ import { UploadsModule } from "./uploads/uploads.module";
     AccountingModule,
     SettingsModule,
     UploadsModule,
-    AdminModule
+    AdminModule,
+    AnalyticsModule
   ],
   providers: [
     {
