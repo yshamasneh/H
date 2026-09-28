@@ -33,17 +33,20 @@ import {
   LoadingState,
   Meta,
   StatusPill,
-  adminStyles,
+  useAdminStyles,
   formatDate,
   formatMoney,
   readAdminError
 } from "./ui";
-import { colors, radius, spacing } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
+import { radius, spacing, type ThemeColors } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 
 const typeValues: OfferTypeValue[] = ["PRODUCT_PERCENTAGE", "ORDER_PERCENTAGE", "DELIVERY_PERCENTAGE", "FREE_DELIVERY"];
 
 export function AdminOffersScreen({ onBack }: { onBack: () => void }) {
+  const adminStyles = useAdminStyles();
+  const styles = useScreenStyles();
   const { t } = useTranslation(["admin", "common"]);
   const typeOptions = typeValues.map((value) => ({
     value,
@@ -341,7 +344,8 @@ async function requireToken(): Promise<string> {
   return token;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   copy: { flex: 1 },
   choice: { backgroundColor: colors.surfaceSunk, borderRadius: radius.pill, marginEnd: spacing[2], marginTop: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   choiceSelected: { backgroundColor: colors.primary },
@@ -353,3 +357,9 @@ const styles = StyleSheet.create({
   offerImage: { aspectRatio: 1, borderRadius: radius.md, marginBottom: spacing[3], width: "100%" },
   row: { alignItems: "flex-start", flexDirection: "row", gap: spacing[3], justifyContent: "space-between" }
 });
+}
+
+function useScreenStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}

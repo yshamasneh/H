@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
@@ -13,7 +13,8 @@ import {
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
 import i18n from "../../i18n";
-import { colors, radius, spacing } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
+import { radius, spacing, withAlpha, type ThemeColors } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 import {
   barPercent,
@@ -42,7 +43,7 @@ import {
   LoadingState,
   Meta,
   StatCard,
-  adminStyles,
+  useAdminStyles,
   readAdminError
 } from "./ui";
 import { formatMinorExact, hasAdminPermission } from "./users.rules";
@@ -62,6 +63,8 @@ async function requireToken(): Promise<string> {
  * DELIVERED orders only; every figure is computed by the API and only laid out here.
  */
 export function AdminAnalyticsScreen({ onBack }: { onBack: () => void }) {
+  const adminStyles = useAdminStyles();
+  const styles = useScreenStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [permitted, setPermitted] = useState<boolean | null>(null);
   const [preset, setPreset] = useState<PeriodPreset>("last30");
@@ -192,6 +195,7 @@ export function AdminAnalyticsScreen({ onBack }: { onBack: () => void }) {
 }
 
 function Section<T>(props: { title: string; subtitle?: string; state: Loaded<T>; children: (data: T) => ReactNode; header?: ReactNode }) {
+  const styles = useScreenStyles();
   return (
     <Card>
       <CardTitle>{props.title}</CardTitle>
@@ -211,6 +215,9 @@ function Section<T>(props: { title: string; subtitle?: string; state: Loaded<T>;
 }
 
 function RetentionSection({ state }: { state: Loaded<AdminCustomerRetention> }) {
+  const adminStyles = useAdminStyles();
+  const styles = useScreenStyles();
+  const { colors } = useTheme();
   const { t } = useTranslation(["admin"]);
   return (
     <Section state={state} title={t("analytics.retention.title")}>
@@ -256,6 +263,7 @@ function RetentionSection({ state }: { state: Loaded<AdminCustomerRetention> }) 
 }
 
 function Legend(props: { color: string; label: string; outlined?: boolean }) {
+  const styles = useScreenStyles();
   return (
     <View style={styles.legendItem}>
       <View style={[styles.swatch, { backgroundColor: props.color }, props.outlined && styles.swatchOutlined]} />
@@ -265,15 +273,13 @@ function Legend(props: { color: string; label: string; outlined?: boolean }) {
 }
 
 /** Five steps of one hue, from the primary token: the weekday x hour grid's scale on the web. */
-const heatColors = [
-  colors.surfaceSunk,
-  `${colors.primary}38`,
-  `${colors.primary}73`,
-  `${colors.primary}B3`,
-  colors.primary
-];
+function heatColorsFor(colors: ThemeColors): string[] {
+  return [colors.surfaceSunk, withAlpha(colors.primary, 0.22), withAlpha(colors.primary, 0.45), withAlpha(colors.primary, 0.7), colors.primary];
+}
 
 function PeakSection({ state }: { state: Loaded<AdminPeakTimes> }) {
+  const styles = useScreenStyles();
+  const { colors } = useTheme();
   const { t } = useTranslation(["admin"]);
   const [day, setDay] = useState<number | "all">("all");
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
@@ -352,7 +358,7 @@ function PeakSection({ state }: { state: Loaded<AdminPeakTimes> }) {
                 {hours.map((row) => (
                   <View key={row.hour} style={styles.listRow}>
                     <Text style={styles.listHour}>{hourLabel(row.hour)}</Text>
-                    <View style={[styles.heatDot, { backgroundColor: heatColors[heatStep(row.orders, maxHour)] }]} />
+                    <View style={[styles.heatDot, { backgroundColor: heatColorsFor(colors)[heatStep(row.orders, maxHour)] }]} />
                     <Text style={styles.listValue}>{row.orders}</Text>
                   </View>
                 ))}
@@ -394,6 +400,8 @@ function TopProductsSection(props: {
   sortBy: "quantity" | "revenue";
   onSort: (sortBy: "quantity" | "revenue") => void;
 }) {
+  const adminStyles = useAdminStyles();
+  const styles = useScreenStyles();
   const { t } = useTranslation(["admin"]);
   return (
     <Section
@@ -444,7 +452,8 @@ function TopProductsSection(props: {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   sectionBody: { marginTop: spacing[3] },
   dateRow: { flexDirection: "row", gap: spacing[2], marginBottom: spacing[2] },
   dateField: { flex: 1, gap: spacing[1] },
@@ -494,3 +503,9 @@ const styles = StyleSheet.create({
   rank: { ...text("h3", "bold"), color: colors.primary, minWidth: 28 },
   productName: { ...text("bodySm", "semibold"), color: colors.text, flex: 1 }
 });
+}
+
+function useScreenStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}

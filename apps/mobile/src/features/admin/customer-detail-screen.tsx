@@ -16,7 +16,7 @@ import {
   PhoneNumber,
   StatCard,
   StatusPill,
-  adminStyles,
+  useAdminStyles,
   formatDate,
   readAdminError
 } from "./ui";
@@ -36,6 +36,7 @@ export function AdminCustomerDetailScreen(props: {
   onBack: () => void;
   onOpenOrder: (orderId: string) => void;
 }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [detail, setDetail] = useState<AdminCustomerDetail | null>(null);
   const [error, setError] = useState<string | null>(null);

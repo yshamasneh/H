@@ -16,7 +16,7 @@ import {
   KeyValue,
   LoadingState,
   Meta,
-  adminStyles,
+  useAdminStyles,
   formatDate,
   formatMoney,
   readAdminError
@@ -35,6 +35,7 @@ export function AdminDashboardScreen(props: {
   onNotifications: () => void;
   onOpenSettings: () => void;
 }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +116,7 @@ export function AdminDashboardScreen(props: {
 }
 
 function Stat(props: { label: string; value: string }) {
+  const adminStyles = useAdminStyles();
   return (
     <View style={adminStyles.statCard}>
       <Text style={adminStyles.statValue}>{props.value}</Text>

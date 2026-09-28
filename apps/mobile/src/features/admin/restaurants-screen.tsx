@@ -28,7 +28,7 @@ import {
   LoadingState,
   Meta,
   StatusPill,
-  adminStyles,
+  useAdminStyles,
   formatDate,
   formatMoney,
   readAdminError
@@ -42,6 +42,7 @@ export function AdminRestaurantsScreen(props: {
   onBack: () => void;
   onOpenRestaurant: (restaurantId: string) => void;
 }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [restaurants, setRestaurants] = useState<AdminRestaurant[] | null>(null);
   const [filter, setFilter] = useState<RestaurantFilter>("ALL");
@@ -96,6 +97,7 @@ export function AdminRestaurantsScreen(props: {
 }
 
 export function AdminRestaurantDetailScreen(props: { restaurantId: string; onBack: () => void }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [restaurant, setRestaurant] = useState<AdminRestaurantDetail | null>(null);
   const [reason, setReason] = useState("");

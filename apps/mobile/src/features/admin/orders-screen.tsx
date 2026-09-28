@@ -27,7 +27,7 @@ import {
   LoadingState,
   Meta,
   StatusPill,
-  adminStyles,
+  useAdminStyles,
   formatDate,
   formatMoney,
   readAdminError
@@ -38,6 +38,7 @@ type OrderFilter = "ALL" | OrderStatusValue;
 const filterValues: OrderFilter[] = ["ALL", "PLACED", "PREPARING", "READY_FOR_PICKUP", "DELIVERED", "CANCELLED"];
 
 export function AdminOrdersScreen(props: { onBack: () => void; onOpenOrder: (orderId: string) => void }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
   const [filter, setFilter] = useState<OrderFilter>("ALL");
@@ -93,6 +94,7 @@ export function AdminOrdersScreen(props: { onBack: () => void; onOpenOrder: (ord
 }
 
 export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => void }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [reason, setReason] = useState("");

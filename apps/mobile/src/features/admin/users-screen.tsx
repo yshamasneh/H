@@ -28,7 +28,7 @@ import {
   Pager,
   PhoneNumber,
   StatusPill,
-  adminStyles,
+  useAdminStyles,
   formatDate,
   readAdminError
 } from "./ui";
@@ -62,6 +62,7 @@ export function AdminUsersScreen(props: {
   onBack: () => void;
   onOpenCustomer: (userId: string) => void;
 }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [section, setSection] = useState<UserSection>("customers");
   const [users, setUsers] = useState<AdminUser[] | null>(null);

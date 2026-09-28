@@ -15,12 +15,13 @@ import {
   KeyValue,
   LoadingState,
   Meta,
-  adminStyles,
+  useAdminStyles,
   formatDate,
   readAdminError
 } from "./ui";
 
 export function AdminAuditLogScreen({ onBack }: { onBack: () => void }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin"]);
   const [entries, setEntries] = useState<AdminAuditLogEntry[] | null>(null);
   const [action, setAction] = useState("");

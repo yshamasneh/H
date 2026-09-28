@@ -24,12 +24,13 @@ import {
   LoadingState,
   Meta,
   StatusPill,
-  adminStyles,
+  useAdminStyles,
   formatDate,
   readAdminError
 } from "./ui";
 
 export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
+  const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [drivers, setDrivers] = useState<AdminDriver[] | null>(null);
   const [reasonAction, setReasonAction] = useState<{ userId: string; kind: "reject" | "suspend" } | null>(null);

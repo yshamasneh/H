@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -15,7 +15,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { readError } from "../../core/errors";
 import { telUrl } from "../../core/tel";
-import { colors, radius, shadow, spacing, statusFamily, statusPalette } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
+import { radius, shadow, spacing, statusFamily, statusPaletteFor, type ThemeColors } from "../../theme/tokens";
 import { text } from "../../theme/typography";
 
 const brandMarkSource = require("../../../assets/logo/jovo-mark.png");
@@ -26,10 +27,12 @@ export function AdminPage(props: {
   onBack?: () => void;
   children: ReactNode;
 }) {
+  const styles = useUiStyles();
+  const { colors, isDark } = useTheme();
   const { t } = useTranslation(["common"]);
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={colors.surface} barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surface} barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.header}>
         {props.onBack ? (
           <Pressable onPress={props.onBack} style={styles.backButton}>
@@ -58,6 +61,7 @@ export function AdminPage(props: {
 }
 
 export function Card(props: { children: ReactNode; onPress?: () => void }) {
+  const styles = useUiStyles();
   if (props.onPress) {
     return (
       <Pressable onPress={props.onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
@@ -69,14 +73,17 @@ export function Card(props: { children: ReactNode; onPress?: () => void }) {
 }
 
 export function CardTitle({ children }: { children: ReactNode }) {
+  const styles = useUiStyles();
   return <Text style={styles.cardTitle}>{children}</Text>;
 }
 
 export function Meta({ children }: { children: ReactNode }) {
+  const styles = useUiStyles();
   return <Text style={styles.meta}>{children}</Text>;
 }
 
 export function KeyValue(props: { label: string; value: string }) {
+  const styles = useUiStyles();
   return (
     <View style={styles.keyValue}>
       <Text style={styles.key}>{props.label}</Text>
@@ -86,8 +93,10 @@ export function KeyValue(props: { label: string; value: string }) {
 }
 
 export function StatusPill({ status }: { status: string }) {
+  const styles = useUiStyles();
+  const { colors } = useTheme();
   const { t } = useTranslation(["common"]);
-  const palette = statusPalette[statusFamily(status)];
+  const palette = statusPaletteFor(colors)[statusFamily(status)];
   return (
     <View style={[styles.pill, { backgroundColor: palette.background }]}>
       <Text style={[styles.pillText, { color: palette.foreground }]}>{t(`status.${status}`, status.replace(/_/g, " "))}</Text>
@@ -102,6 +111,8 @@ export function ActionButton(props: {
   disabled?: boolean;
   loading?: boolean;
 }) {
+  const styles = useUiStyles();
+  const { colors } = useTheme();
   const variant = props.variant ?? "primary";
   return (
     <Pressable
@@ -125,6 +136,7 @@ export function ActionButton(props: {
 }
 
 export function ActionRow({ children }: { children: ReactNode }) {
+  const styles = useUiStyles();
   return <View style={styles.actionRow}>{children}</View>;
 }
 
@@ -140,6 +152,8 @@ export function Input(props: {
   /** Numbers and codes read left to right even in Arabic. */
   ltr?: boolean;
 }) {
+  const styles = useUiStyles();
+  const { colors } = useTheme();
   return (
     <TextInput
       autoComplete={props.autoComplete}
@@ -161,6 +175,7 @@ export function FilterChips<T extends string>(props: {
   value: T;
   onChange: (value: T) => void;
 }) {
+  const styles = useUiStyles();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
       {props.options.map((option) => (
@@ -183,6 +198,7 @@ export function FilterChips<T extends string>(props: {
  * the device's own dialer (no in-app calling). A number that cannot be dialled is shown as text.
  */
 export function PhoneNumber({ phone }: { phone: string }) {
+  const styles = useUiStyles();
   const { t } = useTranslation(["common"]);
   const url = telUrl(phone);
   const number = <Text style={[styles.phoneNumber, url ? styles.phoneLink : null]}>{`\u2066${phone}\u2069`}</Text>;
@@ -202,6 +218,7 @@ export function PhoneNumber({ phone }: { phone: string }) {
 
 /** A labelled figure with a one-line explanation under it. */
 export function StatCard(props: { label: string; value: string; hint?: string }) {
+  const adminStyles = useAdminStyles();
   return (
     <View style={adminStyles.statCard}>
       <Text style={adminStyles.statLabel}>{props.label}</Text>
@@ -213,6 +230,7 @@ export function StatCard(props: { label: string; value: string; hint?: string })
 
 /** Previous / next through a paged list, with "page X of Y" between them. */
 export function Pager(props: { page: number; pages: number; onPage: (page: number) => void }) {
+  const styles = useUiStyles();
   const { t } = useTranslation(["admin"]);
   if (props.pages <= 1) return null;
   return (
@@ -235,6 +253,8 @@ export function Pager(props: { page: number; pages: number; onPage: (page: numbe
 }
 
 export function LoadingState() {
+  const styles = useUiStyles();
+  const { colors } = useTheme();
   return (
     <View style={styles.stateBox}>
       <ActivityIndicator color={colors.primary} size="large" />
@@ -243,10 +263,12 @@ export function LoadingState() {
 }
 
 export function EmptyState({ message }: { message: string }) {
+  const styles = useUiStyles();
   return <Text style={styles.empty}>{message}</Text>;
 }
 
 export function ErrorBanner({ message }: { message: string | null }) {
+  const styles = useUiStyles();
   return message ? <Text style={styles.error}>{message}</Text> : null;
 }
 
@@ -262,7 +284,8 @@ export function readAdminError(error: unknown): string {
   return readError(error);
 }
 
-export const adminStyles = StyleSheet.create({
+function createAdminStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   sectionTitle: { ...text("h3", "bold"), color: colors.text, marginBottom: spacing[3], marginTop: spacing[3] },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
   statCard: {
@@ -281,8 +304,10 @@ export const adminStyles = StyleSheet.create({
   rowBetween: { alignItems: "center", flexDirection: "row", gap: spacing[3], justifyContent: "space-between" },
   reasonBox: { backgroundColor: colors.surfaceSunk, borderRadius: radius.md, marginTop: spacing[3], padding: spacing[3] }
 });
+}
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   header: {
     alignItems: "center",
@@ -355,3 +380,18 @@ const styles = StyleSheet.create({
   empty: { ...text("bodySm"), color: colors.textMuted, padding: spacing[7], textAlign: "center" },
   error: { backgroundColor: colors.errorSubtle, borderRadius: radius.sm, color: colors.error, padding: spacing[3], ...text("bodySm") }
 });
+}
+
+/**
+ * The admin kit's shared styles for the active light/dark palette. Screens call this instead of
+ * importing a fixed StyleSheet, so a theme switch repaints every admin screen.
+ */
+export function useAdminStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createAdminStyles(colors), [colors]);
+}
+
+function useUiStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}
