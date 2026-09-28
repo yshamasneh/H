@@ -72,6 +72,8 @@ import {
   goToAdminDashboard,
   goToAdminDrivers,
   goToAdminOrderDetail,
+  goToAdminCustomerDetail,
+  adminOrderDetailBack,
   goToAdminOrders,
   goToAdminOffers,
   goToAdminRestaurantDetail,
@@ -136,6 +138,7 @@ import { AdminRestaurantsScreen, AdminRestaurantDetailScreen } from "./src/featu
 import { AdminDriversScreen } from "./src/features/admin/drivers-screen";
 import { AdminOrderDetailScreen, AdminOrdersScreen } from "./src/features/admin/orders-screen";
 import { AdminUsersScreen } from "./src/features/admin/users-screen";
+import { AdminCustomerDetailScreen } from "./src/features/admin/customer-detail-screen";
 import { AdminAuditLogScreen } from "./src/features/admin/audit-log-screen";
 import { AdminOffersScreen } from "./src/features/admin/offers-screen";
 import { CustomerHomeScreen, selectFeaturedOffer } from "./src/features/customer/home-screen";
@@ -918,14 +921,28 @@ function TasawaQApp() {
     case "admin-order-detail":
       return (
         <AdminOrderDetailScreen
-          onBack={() => setScreen(goToAdminOrders(screen.user))}
+          onBack={() => setScreen(adminOrderDetailBack(screen))}
           orderId={screen.orderId}
         />
       );
     case "admin-drivers":
       return <AdminDriversScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "admin-users":
-      return <AdminUsersScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+      return (
+        <AdminUsersScreen
+          currentUserId={screen.user.id}
+          onBack={() => setScreen(goToAdminDashboard(screen.user))}
+          onOpenCustomer={(userId) => setScreen(goToAdminCustomerDetail(screen.user, userId))}
+        />
+      );
+    case "admin-customer-detail":
+      return (
+        <AdminCustomerDetailScreen
+          onBack={() => setScreen(goToAdminUsers(screen.user))}
+          onOpenOrder={(orderId) => setScreen(goToAdminOrderDetail(screen.user, orderId, screen.userId))}
+          userId={screen.userId}
+        />
+      );
     case "admin-audit-log":
       return <AdminAuditLogScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "notifications":

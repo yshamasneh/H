@@ -61,9 +61,11 @@ export type AppScreen =
   | { name: "admin-restaurants"; user: PublicUser }
   | { name: "admin-restaurant-detail"; user: PublicUser; restaurantId: string }
   | { name: "admin-orders"; user: PublicUser }
-  | { name: "admin-order-detail"; user: PublicUser; orderId: string }
+  // Opened from a customer's order history, Back returns to that customer rather than the order list.
+  | { name: "admin-order-detail"; user: PublicUser; orderId: string; backToCustomerId?: string }
   | { name: "admin-drivers"; user: PublicUser }
   | { name: "admin-users"; user: PublicUser }
+  | { name: "admin-customer-detail"; user: PublicUser; userId: string }
   | { name: "admin-audit-log"; user: PublicUser };
 
 export const initialScreen: AppScreen = { name: "login" };
@@ -299,9 +301,12 @@ export function goToAdminOrders(user: PublicUser): Extract<AppScreen, { name: "a
 
 export function goToAdminOrderDetail(
   user: PublicUser,
-  orderId: string
+  orderId: string,
+  backToCustomerId?: string
 ): Extract<AppScreen, { name: "admin-order-detail" }> {
-  return { name: "admin-order-detail", user, orderId };
+  return backToCustomerId
+    ? { name: "admin-order-detail", user, orderId, backToCustomerId }
+    : { name: "admin-order-detail", user, orderId };
 }
 
 export function goToAdminDrivers(user: PublicUser): Extract<AppScreen, { name: "admin-drivers" }> {
@@ -310,6 +315,22 @@ export function goToAdminDrivers(user: PublicUser): Extract<AppScreen, { name: "
 
 export function goToAdminUsers(user: PublicUser): Extract<AppScreen, { name: "admin-users" }> {
   return { name: "admin-users", user };
+}
+
+export function goToAdminCustomerDetail(
+  user: PublicUser,
+  userId: string
+): Extract<AppScreen, { name: "admin-customer-detail" }> {
+  return { name: "admin-customer-detail", user, userId };
+}
+
+/** Where Back leads from an admin order: the customer it was opened from, else the order list. */
+export function adminOrderDetailBack(
+  screen: Extract<AppScreen, { name: "admin-order-detail" }>
+): Extract<AppScreen, { name: "admin-customer-detail" | "admin-orders" }> {
+  return screen.backToCustomerId
+    ? goToAdminCustomerDetail(screen.user, screen.backToCustomerId)
+    : goToAdminOrders(screen.user);
 }
 
 export function goToAdminAuditLog(user: PublicUser): Extract<AppScreen, { name: "admin-audit-log" }> {

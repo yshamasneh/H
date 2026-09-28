@@ -135,3 +135,15 @@ test("restaurant owners can navigate to profile and menu management", () => {
   const owner = { id: "owner", fullName: "Owner", phone: "+970591234568", role: "RESTAURANT" as const };
   assert.deepEqual(goToRestaurantManagement(owner), { name: "restaurant-management", user: owner });
 });
+
+test("an admin order opened from a customer's history goes back to that customer", async () => {
+  const { adminOrderDetailBack, goToAdminCustomerDetail, goToAdminOrderDetail } = await import("./navigation");
+  const admin = { id: "a1", fullName: "Admin", phone: "+970590000001", role: "ADMIN" as const };
+
+  const fromCustomer = goToAdminOrderDetail(admin, "o1", "c1");
+  assert.deepEqual(adminOrderDetailBack(fromCustomer), goToAdminCustomerDetail(admin, "c1"));
+
+  const fromList = goToAdminOrderDetail(admin, "o1");
+  assert.deepEqual(adminOrderDetailBack(fromList), { name: "admin-orders", user: admin });
+  assert.ok(!("backToCustomerId" in fromList));
+});

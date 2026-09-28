@@ -95,17 +95,67 @@
   },
   "users": {
     "title": "Users",
-    "subtitle": "Search accounts by role, name, or phone",
-    "filterAll": "All",
-    "filterCustomers": "Customers",
-    "filterRestaurants": "Restaurants",
-    "filterDrivers": "Drivers",
-    "filterAdmins": "Admins",
-    "searchPlaceholder": "Name or phone number",
-    "empty": "No users match this search.",
+    "subtitle": "Customers and the team, in two separate lists",
+    "sections": {
+      "customers": "Customers",
+      "staff": "Staff & admins"
+    },
+    "sectionTitles": {
+      "customers": "Customer accounts",
+      "staff": "Staff and administrator accounts"
+    },
+    "allStaffRoles": "All staff roles",
+    "searchPlaceholder": "Search name or phone",
+    "emptySection": {
+      "customers": "No customers match this search.",
+      "staff": "No staff or administrators match this filter."
+    },
+    "registeredPhone": "Registered phone",
+    "viewCustomer": "Customer details",
     "roleLabel": "Role",
-    "phoneVerifiedLabel": "Phone verified",
-    "createdLabel": "Created"
+    "joined": "Joined",
+    "you": "you",
+    "suspend": "Suspend",
+    "suspendDescription": "{{name}}'s sessions end immediately and they will not be able to sign in.",
+    "suspendReasonPlaceholder": "Reason for suspending (required)",
+    "restore": "Restore",
+    "restoredReason": "Reactivated by an administrator",
+    "makeSuperAdmin": "Make super admin",
+    "removePlatformRole": "Remove platform role",
+    "createAdminTitle": "Create an administrator",
+    "createAdmin": "Create admin",
+    "createdNotice": "Administrator created. Give them the password so they can sign in and change it.",
+    "fullName": "Full name",
+    "countryCode": "Code",
+    "phoneNumber": "Phone number",
+    "initialPassword": "Initial password (8+ characters)",
+    "noPlatformRole": "No platform role",
+    "superAdmin": "Super admin",
+    "passwordHint": "There is no email or SMS delivery, so you set the initial password and pass it on yourself."
+  },
+  "customerDetail": {
+    "title": "Customer details",
+    "noPermission": "Viewing a customer's order history needs permission to view all orders.",
+    "registeredOn": "Registered {{date}}",
+    "deliveredOrders": "Completed orders",
+    "deliveredOrdersHint": "Delivered orders only; cancelled, rejected and failed orders are excluded",
+    "totalSpent": "Total spent",
+    "totalSpentHint": "Sum of completed orders since registration, exact to the agora",
+    "allOrders": "All orders",
+    "firstOrderOn": "First order on {{date}}",
+    "noOrdersYet": "This customer has not placed an order yet.",
+    "historyTitle": "Order history",
+    "historyHint": "Every order, newest first back to the first one. Amounts are exact order totals; the cash collected can be up to 0.99 more because of shekel rounding.",
+    "items": "Items",
+    "orderTotal": "Order total",
+    "counted": "In total",
+    "countedYes": "Yes",
+    "countedNo": "No"
+  },
+  "pager": {
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {{page}} of {{pages}}"
   },
   "auditLog": {
     "title": "Audit Log",

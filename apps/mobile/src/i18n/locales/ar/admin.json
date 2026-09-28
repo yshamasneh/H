@@ -95,17 +95,67 @@
   },
   "users": {
     "title": "المستخدمون",
-    "subtitle": "البحث عن الحسابات حسب الدور أو الاسم أو الهاتف",
-    "filterAll": "الكل",
-    "filterCustomers": "الزبائن",
-    "filterRestaurants": "المطاعم",
-    "filterDrivers": "السائقون",
-    "filterAdmins": "المسؤولون",
-    "searchPlaceholder": "الاسم أو رقم الهاتف",
-    "empty": "لا يوجد مستخدمون مطابقون لهذا البحث.",
+    "subtitle": "الزبائن وفريق العمل في قائمتين منفصلتين",
+    "sections": {
+      "customers": "الزبائن",
+      "staff": "الموظفون والمشرفون"
+    },
+    "sectionTitles": {
+      "customers": "حسابات الزبائن",
+      "staff": "حسابات الموظفين والمشرفين"
+    },
+    "allStaffRoles": "كل أدوار الموظفين",
+    "searchPlaceholder": "ابحث بالاسم أو الهاتف",
+    "emptySection": {
+      "customers": "لا يوجد زبائن مطابقون لهذا البحث.",
+      "staff": "لا يوجد موظفون أو مشرفون مطابقون لهذا الفلتر."
+    },
+    "registeredPhone": "رقم الهاتف المسجّل",
+    "viewCustomer": "تفاصيل الزبون",
     "roleLabel": "الدور",
-    "phoneVerifiedLabel": "تم التحقق من الهاتف",
-    "createdLabel": "تاريخ الإنشاء"
+    "joined": "تاريخ الانضمام",
+    "you": "أنت",
+    "suspend": "إيقاف الحساب",
+    "suspendDescription": "سيتم إنهاء جلسات {{name}} فورًا ولن يتمكن من الدخول.",
+    "suspendReasonPlaceholder": "سبب الإيقاف (مطلوب)",
+    "restore": "إعادة تفعيل",
+    "restoredReason": "أعاد المسؤول تفعيل الحساب",
+    "makeSuperAdmin": "تعيين مدير منصة",
+    "removePlatformRole": "إزالة دور المنصة",
+    "createAdminTitle": "إنشاء حساب مسؤول",
+    "createAdmin": "إنشاء المسؤول",
+    "createdNotice": "تم إنشاء حساب المسؤول. سلّم كلمة المرور للمستخدم ليغيّرها لاحقًا.",
+    "fullName": "الاسم الكامل",
+    "countryCode": "المقدمة",
+    "phoneNumber": "رقم الهاتف",
+    "initialPassword": "كلمة مرور أولية (8 أحرف على الأقل)",
+    "noPlatformRole": "بدون دور على مستوى المنصة",
+    "superAdmin": "مدير المنصة",
+    "passwordHint": "لا يوجد إرسال بريد أو رسائل نصية، لذلك تضع كلمة المرور الأولية وتسلّمها بنفسك."
+  },
+  "customerDetail": {
+    "title": "تفاصيل الزبون",
+    "noPermission": "عرض سجل طلبات الزبون يتطلب صلاحية عرض جميع الطلبات.",
+    "registeredOn": "مسجّل منذ {{date}}",
+    "deliveredOrders": "الطلبات المكتملة",
+    "deliveredOrdersHint": "الطلبات التي تم توصيلها فقط، دون الملغاة أو المرفوضة أو التي فشل توصيلها",
+    "totalSpent": "إجمالي المشتريات",
+    "totalSpentHint": "مجموع قيمة الطلبات المكتملة منذ التسجيل، بدقة الأغورة",
+    "allOrders": "كل الطلبات",
+    "firstOrderOn": "أول طلب في {{date}}",
+    "noOrdersYet": "لم يطلب هذا الزبون أي طلب بعد.",
+    "historyTitle": "سجل الطلبات",
+    "historyHint": "كل طلبات الزبون من الأحدث حتى أول طلب. القيمة هي إجمالي الطلب الدقيق، وقد يزيد المبلغ النقدي المحصَّل عنها بأقل من شيكل بسبب التقريب.",
+    "items": "عدد الأصناف",
+    "orderTotal": "قيمة الطلب",
+    "counted": "ضمن الإجمالي",
+    "countedYes": "نعم",
+    "countedNo": "لا"
+  },
+  "pager": {
+    "previous": "السابق",
+    "next": "التالي",
+    "pageOf": "صفحة {{page}} من {{pages}}"
   },
   "auditLog": {
     "title": "سجل التدقيق",
