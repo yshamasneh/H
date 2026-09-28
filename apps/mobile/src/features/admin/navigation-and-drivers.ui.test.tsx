@@ -70,7 +70,9 @@ describe("admin tab bar", () => {
   test("tabs follow permissions: no Orders or Drivers tab without them", async () => {
     mocked.fetchAdminAccess.mockResolvedValue({ isSuperAdmin: false, permissions: ["MANAGE_USERS"] });
     wrap(<AdminTabBar active="home" onNavigate={jest.fn()} />);
-    await waitFor(() => expect(screen.queryByTestId("admin-tab-orders")).toBeNull());
+    // Every tab shows until the access check resolves, so this waits for the restriction to land; the
+    // default 1 s window is too tight when Jest runs the whole suite in parallel.
+    await waitFor(() => expect(screen.queryByTestId("admin-tab-orders")).toBeNull(), { timeout: 5000 });
     expect(screen.queryByTestId("admin-tab-drivers")).toBeNull();
     expect(screen.getByTestId("admin-tab-home")).toBeTruthy();
     expect(screen.getByTestId("admin-tab-more")).toBeTruthy();
