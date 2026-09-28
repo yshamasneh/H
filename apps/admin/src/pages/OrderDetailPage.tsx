@@ -45,7 +45,7 @@ export function OrderDetailPage() {
     <div>
       <div className="page-header">
         <div>
-          <button className="btn btn-outline btn-sm" onClick={() => navigate("/orders")} type="button">
+          <button className="btn btn-outline btn-sm" onClick={() => backToPrevious(navigate, "/orders")} type="button">
             {t("common.back")}
           </button>
           <h1 className="page-title" style={{ marginTop: 10 }}>
@@ -182,6 +182,16 @@ export function OrderDetailPage() {
 
 function formatPrice(priceMinor: number): string {
   return `${(priceMinor / 100).toFixed(2)} ${currencyCode}`;
+}
+
+/**
+ * An order is opened from many places (the orders list, a customer's history, the dashboard), so
+ * Back returns to wherever it was opened from; a direct link with no history goes to the list.
+ */
+function backToPrevious(navigate: ReturnType<typeof useNavigate>, fallback: string) {
+  const index = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+  if (index > 0) navigate(-1);
+  else navigate(fallback);
 }
 
 function formatDate(iso: string): string {

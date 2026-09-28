@@ -151,6 +151,10 @@ export type DashboardOverview = {
   pendingRestaurantApprovals: number;
   onlineDriversCount: number;
   newCustomerSignupsToday: number;
+  /** Driver applications waiting for a decision (absent on an API that predates it). */
+  pendingDriverApprovals?: number;
+  /** Orders placed and not yet accepted by their store (absent on an API that predates it). */
+  ordersAwaitingAcceptance?: number;
   /** All-time counts from the tables (absent on an API that predates them). */
   totals?: {
     businesses: number;

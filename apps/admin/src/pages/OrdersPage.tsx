@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { listAdminOrders, readApiError, type OrderDetail } from "../api";
 import { Pager } from "../components/Pager";
 import { StatusBadge } from "../components/StatusBadge";
@@ -25,7 +25,9 @@ export function OrdersPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
-  const [status, setStatus] = useState("");
+  // A link can open the list already filtered, e.g. the dashboard's "awaiting approval" item.
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState(() => searchParams.get("status") ?? "");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [error, setError] = useState<string | null>(null);

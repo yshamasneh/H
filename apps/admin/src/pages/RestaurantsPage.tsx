@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pager } from "../components/Pager";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ApiError,
   approveRestaurant,
@@ -27,7 +27,9 @@ export function RestaurantsPage() {
   const navigate = useNavigate();
   const { can } = useAuth();
   const [restaurants, setRestaurants] = useState<RestaurantProfile[] | null>(null);
-  const [status, setStatus] = useState("");
+  // A link can open the list already filtered, e.g. the dashboard's "awaiting approval" item.
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState(() => searchParams.get("status") ?? "");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
