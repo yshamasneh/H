@@ -25,6 +25,15 @@ export class AdminUsersController {
     return this.admin.listUsers(query);
   }
 
+  @Get(":userId/customer-detail")
+  // Order history is order data, so this needs the cross-business order permission as well as
+  // user management: holding MANAGE_USERS alone must not become a back door to every order.
+  @RequirePermission("MANAGE_USERS", "VIEW_ALL_ORDERS")
+  @ApiOperation({ summary: "A customer's delivered-order count, amount spent on delivered orders, and full order history" })
+  customerDetail(@Param("userId", new ParseUUIDPipe()) userId: string) {
+    return this.admin.getCustomerDetail(userId);
+  }
+
   @Post("admins")
   @RequirePermission("MANAGE_ADMINS")
   @ApiOperation({ summary: "Create an administrator account with an initial password" })

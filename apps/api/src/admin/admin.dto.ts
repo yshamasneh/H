@@ -4,6 +4,10 @@ import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, M
 
 const userRoleValues = ["CUSTOMER", "RESTAURANT", "DRIVER", "ADMIN"] as const;
 
+/** Customers and everyone who works the platform are managed as two separate lists. */
+export const userAudienceValues = ["CUSTOMERS", "STAFF"] as const;
+export type UserAudience = (typeof userAudienceValues)[number];
+
 export class AdminUsersQueryDto {
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()
@@ -24,6 +28,14 @@ export class AdminUsersQueryDto {
   @IsOptional()
   @IsIn(userRoleValues)
   role?: (typeof userRoleValues)[number];
+
+  @ApiPropertyOptional({
+    enum: userAudienceValues,
+    description: "CUSTOMERS = customer accounts only; STAFF = business, driver and administrator accounts"
+  })
+  @IsOptional()
+  @IsIn(userAudienceValues)
+  audience?: UserAudience;
 
   @ApiPropertyOptional({ description: "Matches against full name or phone number" })
   @IsOptional()

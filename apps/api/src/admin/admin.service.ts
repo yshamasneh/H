@@ -18,9 +18,10 @@ import type {
   AdminUsersQueryDto,
   AssignPlatformRoleDto,
   CreateAdminUserDto,
-  SetUserActiveDto
+  SetUserActiveDto,
+  UserAudience
 } from "./admin.dto";
-import type { AdminUserView, AuditLogEntryView, DashboardOverview, Page } from "./admin.types";
+import type { AdminUserView, AuditLogEntryView, CustomerDetailView, DashboardOverview, Page } from "./admin.types";
 
 @Injectable()
 export class AdminService {
@@ -115,7 +116,7 @@ export class AdminService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const where: Prisma.UserWhereInput = {
-      role: query.role as UserRole | undefined,
+      role: roleFilter(query.audience, query.role as UserRole | undefined),
       OR: query.search
         ? [{ fullName: { contains: query.search, mode: "insensitive" } }, { phone: { contains: query.search } }]
         : undefined
@@ -130,18 +131,67 @@ export class AdminService {
       this.prisma.user.count({ where })
     ]);
     return {
-      items: users.map((user) => ({
-        id: user.id,
-        fullName: user.fullName,
-        phone: user.phone,
-        role: user.role,
-        isActive: user.isActive,
-        phoneVerifiedAt: user.phoneVerifiedAt,
-        createdAt: user.createdAt
-      })),
+      items: users.map(toAdminUserView),
       page,
       pageSize,
       total
+    };
+  }
+
+  /**
+   * One customer's account, their completed-order totals and their whole order history.
+   *
+   * "Amount spent" is the sum of `Order.totalMinor` over DELIVERED orders, and the history rows show
+   * that same field, so the headline always equals the sum of the delivered rows to the agora.
+   * `totalMinor` is what was bought: items at the price actually charged (a sale price when one was
+   * on), plus the delivery fee, minus discounts, re-stated if packing re-weighed a line. The cash a
+   * driver collected is that total rounded up to a whole shekel; the 0-99 agorot on top is a
+   * settlement convention booked to the platform as CASH_ROUNDING, not something the customer
+   * bought, and it only exists on orders that have a financial record. Cancelled, rejected, failed
+   * and still-open orders appear in the history but count toward neither total.
+   */
+  async getCustomerDetail(userId: string): Promise<CustomerDetailView> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.role !== UserRole.CUSTOMER) {
+      throw new ApiException(404, "CUSTOMER_NOT_FOUND", "No customer account exists with this id.");
+    }
+    const [delivered, orders] = await Promise.all([
+      this.prisma.order.aggregate({
+        where: { customerId: userId, status: OrderStatus.DELIVERED },
+        _sum: { totalMinor: true },
+        _count: { _all: true }
+      }),
+      this.prisma.order.findMany({
+        where: { customerId: userId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          totalMinor: true,
+          createdAt: true,
+          restaurant: { select: { name: true } },
+          _count: { select: { items: true } }
+        }
+      })
+    ]);
+    const deliveredSpentMinor = delivered._sum.totalMinor ?? 0;
+    if (!Number.isSafeInteger(deliveredSpentMinor)) {
+      throw new ApiException(500, "CUSTOMER_TOTAL_OUT_OF_RANGE", "This customer's total cannot be computed exactly.");
+    }
+    return {
+      customer: toAdminUserView(user),
+      deliveredOrdersCount: delivered._count._all,
+      deliveredSpentMinor,
+      ordersCount: orders.length,
+      firstOrderAt: orders.length > 0 ? orders[orders.length - 1].createdAt : null,
+      orders: orders.map((order) => ({
+        id: order.id,
+        status: order.status,
+        totalMinor: order.totalMinor,
+        createdAt: order.createdAt,
+        storeName: order.restaurant.name,
+        itemsCount: order._count.items
+      }))
     };
   }
 
@@ -326,6 +376,16 @@ export class AdminService {
       total
     };
   }
+}
+
+const staffRoles: UserRole[] = [UserRole.RESTAURANT, UserRole.DRIVER, UserRole.ADMIN];
+
+/** The role condition for a user list: the audience's roles, narrowed to one role if asked. */
+export function roleFilter(audience: UserAudience | undefined, role: UserRole | undefined): Prisma.UserWhereInput["role"] {
+  if (!audience) return role;
+  const allowed = audience === "CUSTOMERS" ? [UserRole.CUSTOMER] : staffRoles;
+  // A role outside the audience matches nothing rather than silently widening the list.
+  return { in: role ? allowed.filter((candidate) => candidate === role) : allowed };
 }
 
 function toAdminUserView(user: {

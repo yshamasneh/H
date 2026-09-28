@@ -79,6 +79,12 @@ test("cancelling any order platform-wide requires a write permission, not just t
   assert.deepEqual(methodPermissions(AdminOrdersController, "cancel"), ["MANAGE_ALL_ORDERS"]);
 });
 
+test("a customer's order history needs order visibility as well as user management", () => {
+  // The guard ANDs every listed permission, so MANAGE_USERS alone never reaches order data.
+  assert.deepEqual(methodPermissions(AdminUsersController, "customerDetail"), ["MANAGE_USERS", "VIEW_ALL_ORDERS"]);
+  assert.equal(methodPermissions(AdminUsersController, "list"), undefined, "listing keeps the class-level MANAGE_USERS");
+});
+
 test("business catalogue writes require the matching permission and reads stay open to staff", () => {
   assert.ok(usesPermissionsGuard(RestaurantPortalController));
 

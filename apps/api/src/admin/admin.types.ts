@@ -45,6 +45,29 @@ export type AdminUserView = {
   createdAt: Date;
 };
 
+export type CustomerOrderSummary = {
+  id: string;
+  status: OrderStatus;
+  /** The order's exact total in agorot: the one "amount" this view uses. */
+  totalMinor: number;
+  createdAt: Date;
+  storeName: string;
+  itemsCount: number;
+};
+
+export type CustomerDetailView = {
+  customer: AdminUserView;
+  /** DELIVERED orders only. */
+  deliveredOrdersCount: number;
+  /** Sum of `totalMinor` over DELIVERED orders since the account was created, in agorot. */
+  deliveredSpentMinor: number;
+  /** Every order in any status. */
+  ordersCount: number;
+  firstOrderAt: Date | null;
+  /** Newest first, from today back to the first order. */
+  orders: CustomerOrderSummary[];
+};
+
 export type AuditLogEntryView = {
   id: string;
   actorUserId: string;

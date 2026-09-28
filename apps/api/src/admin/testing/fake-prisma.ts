@@ -17,6 +17,8 @@ type RestaurantRecord = { id: string; name: string; status: RestaurantStatus };
 type OrderRecord = {
   id: string;
   restaurantId: string;
+  customerId: string;
+  itemsCount: number;
   status: OrderStatus;
   totalMinor: number;
   createdAt: Date;
@@ -83,26 +85,36 @@ export class FakeAdminPrisma {
   constructor() {
     this.order.count = async ({ where }: any = {}) =>
       this.orders.filter((order) => (!where?.createdAt?.gte || order.createdAt >= where.createdAt.gte)).length;
-    this.order.findMany = async ({ where, select }: any) => {
-      const matches = this.orders.filter(
-        (order) =>
-          (!where?.createdAt?.gte || order.createdAt >= where.createdAt.gte) &&
-          inFilter(order.status, where?.status)
-      );
+    const orderMatches = (order: OrderRecord, where: any) =>
+      (!where?.createdAt?.gte || order.createdAt >= where.createdAt.gte) &&
+      inFilter(order.status, where?.status) &&
+      inFilter(order.customerId, where?.customerId);
+    this.order.findMany = async ({ where, select, orderBy }: any) => {
+      let matches = this.orders.filter((order) => orderMatches(order, where));
+      if (orderBy?.createdAt === "desc") {
+        matches = [...matches].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+      }
       if (!select) return matches;
+      if (select.restaurant) {
+        return matches.map((order) => ({
+          id: order.id,
+          status: order.status,
+          totalMinor: order.totalMinor,
+          createdAt: order.createdAt,
+          restaurant: { name: this.restaurants.find((restaurant) => restaurant.id === order.restaurantId)!.name },
+          _count: { items: order.itemsCount }
+        }));
+      }
       return matches.map((order) => ({ totalMinor: order.totalMinor }));
     };
-    this.order.aggregate = async ({ where, _sum }: any) => {
-      const matches = this.orders.filter(
-        (order) =>
-          (!where?.createdAt?.gte || order.createdAt >= where.createdAt.gte) &&
-          inFilter(order.status, where?.status)
-      );
-      const sum: Record<string, number> = {};
+    this.order.aggregate = async ({ where, _sum, _count }: any) => {
+      const matches = this.orders.filter((order) => orderMatches(order, where));
+      // Like SQL SUM, an empty match set sums to null rather than 0.
+      const sum: Record<string, number | null> = {};
       for (const key of Object.keys(_sum ?? {})) {
-        sum[key] = matches.reduce((total, order) => total + ((order as any)[key] ?? 0), 0);
+        sum[key] = matches.length === 0 ? null : matches.reduce((total, order) => total + ((order as any)[key] ?? 0), 0);
       }
-      return { _sum: sum };
+      return _count ? { _sum: sum, _count: { _all: matches.length } } : { _sum: sum };
     };
 
     this.delivery.count = async ({ where }: any) =>
@@ -156,7 +168,7 @@ export class FakeAdminPrisma {
     this.user.count = async ({ where }: any = {}) =>
       this.users.filter(
         (user) =>
-          (!where?.role || user.role === where.role) &&
+          inFilter(user.role, where?.role) &&
           (!where?.createdAt?.gte || user.createdAt >= where.createdAt.gte) &&
           matchesSearch(user, where?.OR)
       ).length;
@@ -164,7 +176,7 @@ export class FakeAdminPrisma {
     this.user.findMany = async ({ where, skip = 0, take, orderBy }: any) => {
       let matches = this.users.filter(
         (user) =>
-          (!where?.role || user.role === where.role) &&
+          inFilter(user.role, where?.role) &&
           (!where?.createdAt?.gte || user.createdAt >= where.createdAt.gte) &&
           matchesSearch(user, where?.OR)
       );
@@ -253,6 +265,8 @@ export class FakeAdminPrisma {
     const order: OrderRecord = {
       id: randomUUID(),
       restaurantId,
+      customerId: randomUUID(),
+      itemsCount: 1,
       status: OrderStatus.DELIVERED,
       totalMinor: 2000,
       createdAt: new Date(),
