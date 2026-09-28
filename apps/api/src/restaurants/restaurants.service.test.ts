@@ -43,11 +43,14 @@ test("registering a restaurant creates a RESTAURANT-role user and a PENDING rest
   assert.equal(result.status, RestaurantStatus.PENDING);
 });
 
-test("registering a supermarket preserves the store business type", async () => {
+test("public registration always creates a RESTAURANT, even if a SUPERMARKET type gets past validation", async () => {
   const { prisma, service } = createService();
-  await service.register({ ...registerInput, businessType: BusinessType.SUPERMARKET });
+  // The DTO rejects this before the service sees it; this pins the service's own refusal to read
+  // the type from a public request, so the guarantee does not rest on one layer.
+  await service.register({ ...registerInput, businessType: BusinessType.SUPERMARKET } as never);
 
-  assert.equal(prisma.restaurants[0].businessType, BusinessType.SUPERMARKET);
+  assert.equal(prisma.restaurants[0].businessType, BusinessType.RESTAURANT);
+  assert.equal(prisma.restaurants[0].status, RestaurantStatus.PENDING);
 });
 
 test("registering a business makes its owner a BUSINESS_ADMIN member of it", async () => {
@@ -64,14 +67,6 @@ test("registering a business makes its owner a BUSINESS_ADMIN member of it", asy
     roleId: businessAdminRoleId,
     isActive: true
   });
-});
-
-test("registering a supermarket also grants its owner a membership", async () => {
-  const { prisma, service } = createService();
-  await service.register({ ...registerInput, businessType: BusinessType.SUPERMARKET });
-
-  assert.equal(prisma.businessMembers.length, 1);
-  assert.equal(prisma.businessMembers[0].businessId, prisma.restaurants[0].id);
 });
 
 test("registering with a phone that already has an account is rejected", async () => {
@@ -504,6 +499,7 @@ test("admin creates a business with an owner, a membership, and immediate approv
   } as never);
 
   assert.equal(view.status, RestaurantStatus.APPROVED);
+  assert.equal(view.businessType, BusinessType.SUPERMARKET, "the admin path is where a supermarket comes from");
   assert.equal(prisma.restaurants.length, 1);
   assert.ok(prisma.users.some((user) => user.role === UserRole.RESTAURANT), "an owner user is created");
   assert.ok(

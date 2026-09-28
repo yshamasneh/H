@@ -236,20 +236,21 @@ async function createActors(http: Http, prisma: PrismaService) {
   const adminToken = await login(http, local.admin);
   const customerToken = await login(http, local.customer);
 
+  // A supermarket can only be created by a Super Admin: public registration refuses the type.
   const registration = await http
-    .post("/api/v1/restaurants/register")
+    .post("/api/v1/admin/restaurants")
+    .set("Authorization", `Bearer ${adminToken}`)
     .send({
       ownerFullName: "Settle E2E Market Owner",
       countryCode: "+970",
       phoneNumber: local.market,
       password,
-      confirmPassword: password,
-      restaurantName: "Settle E2E MARKET",
+      businessName: "Settle E2E MARKET",
       businessType: "SUPERMARKET",
       addressLine: "Settlement Street, Ramallah"
     })
     .expect(201);
-  const marketId = registration.body.restaurantId as string;
+  const marketId = registration.body.id as string;
   const marketToken = await login(http, local.market);
   await http.patch("/api/v1/restaurant/me").set("Authorization", `Bearer ${marketToken}`).send({ addressLine: "Settlement Street", ...marketLocation }).expect(200);
   await http.post(`/api/v1/admin/restaurants/${marketId}/approve`).set("Authorization", `Bearer ${adminToken}`).expect(201);

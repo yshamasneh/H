@@ -77,7 +77,6 @@ export type RestaurantRegistrationInput = PhoneInput & {
   restaurantName: string;
   addressLine: string;
   description?: string;
-  businessType?: BusinessType;
 };
 
 export type RestaurantRegistrationResult = {

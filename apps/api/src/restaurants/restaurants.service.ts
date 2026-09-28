@@ -36,6 +36,12 @@ const menuItemSearchSimilarityThreshold = 0.3;
 
 type MenuItemSimilarityMatch = { id: string; score: number };
 
+/** What both creation paths need to make an owner account and a business; the type is decided by the caller. */
+type BusinessApplication = Pick<
+  RestaurantRegisterDto,
+  "countryCode" | "phoneNumber" | "ownerFullName" | "password" | "confirmPassword" | "restaurantName" | "addressLine" | "description"
+>;
+
 @Injectable()
 export class RestaurantsService {
   constructor(
@@ -50,7 +56,24 @@ export class RestaurantsService {
     return this.config?.get<boolean>("RESTAURANT_ORDERING_ENABLED") ?? false;
   }
 
+  /**
+   * Public application: anyone may apply, and what they can apply for is a RESTAURANT, always.
+   *
+   * There is one supermarket on this platform (JOVO MARKET) and it is created by a Super Admin
+   * through `adminCreateBusiness`. The business type is therefore never read from this request: the
+   * DTO rejects a body that asks for anything else, and this method would ignore it if it got past.
+   * The application lands PENDING and closed, so nothing about it is visible or orderable until a
+   * Super Admin approves it, and `RESTAURANT_ORDERING_ENABLED` still gates orders after that.
+   */
   async register(input: RestaurantRegisterDto): Promise<{ message: string; restaurantId: string; status: RestaurantStatus }> {
+    return this.createBusinessWithOwner(input, BusinessType.RESTAURANT);
+  }
+
+  /** Owner account, business and membership in one transaction. The caller decides the business type. */
+  private async createBusinessWithOwner(
+    input: BusinessApplication,
+    businessType: BusinessType
+  ): Promise<{ message: string; restaurantId: string; status: RestaurantStatus }> {
     this.assertPasswordsMatch(input.password, input.confirmPassword);
     const phone = normalizePhoneNumber(input.countryCode, input.phoneNumber);
     const ownerFullName = input.ownerFullName.trim().replace(/\s+/g, " ");
@@ -86,7 +109,7 @@ export class RestaurantsService {
           data: {
             ownerUserId: owner.id,
             name: restaurantName,
-            businessType: (input.businessType as BusinessType | undefined) ?? BusinessType.RESTAURANT,
+            businessType,
             description: input.description?.trim() || null,
             phone,
             addressLine: input.addressLine.trim(),
@@ -103,7 +126,7 @@ export class RestaurantsService {
       this.realtime.emitToAdmins("restaurant.pending.created", { restaurantId: restaurant.id, name: restaurant.name });
 
       return {
-        message: `Your ${input.businessType === BusinessType.SUPERMARKET ? "supermarket" : "restaurant"} application was submitted and is awaiting admin approval. Log in with your phone number and password once it is approved.`,
+        message: `Your ${businessType === BusinessType.SUPERMARKET ? "supermarket" : "restaurant"} application was submitted and is awaiting admin approval. Log in with your phone number and password once it is approved.`,
         restaurantId: restaurant.id,
         status: restaurant.status
       };
@@ -118,7 +141,7 @@ export class RestaurantsService {
   /**
    * Creates a business from the Super Admin dashboard, owner account included.
    *
-   * Deliberately delegates to `register` rather than duplicating it: that path already creates the
+   * Deliberately shares `createBusinessWithOwner` with the public `register` rather than duplicating it: that path already creates the
    * owner, the business, and — since 15.1 — the BusinessMember row without which the owner would be
    * locked out of their own portal. A second implementation would be a second place for that bug to
    * come back. The only differences are that an administrator can approve it immediately and that
@@ -128,17 +151,19 @@ export class RestaurantsService {
     adminUserId: string,
     input: AdminCreateBusinessDto
   ): Promise<RestaurantProfileView> {
-    const registration = await this.register({
-      countryCode: input.countryCode,
-      phoneNumber: input.phoneNumber,
-      ownerFullName: input.ownerFullName,
-      password: input.password,
-      confirmPassword: input.password,
-      restaurantName: input.businessName,
-      addressLine: input.addressLine,
-      description: input.description,
-      businessType: input.businessType
-    } as RestaurantRegisterDto);
+    const registration = await this.createBusinessWithOwner(
+      {
+        countryCode: input.countryCode,
+        phoneNumber: input.phoneNumber,
+        ownerFullName: input.ownerFullName,
+        password: input.password,
+        confirmPassword: input.password,
+        restaurantName: input.businessName,
+        addressLine: input.addressLine,
+        description: input.description
+      },
+      (input.businessType as BusinessType | undefined) ?? BusinessType.RESTAURANT
+    );
 
     const created = await this.prisma.$transaction(async (tx) => {
       const business = input.approveImmediately

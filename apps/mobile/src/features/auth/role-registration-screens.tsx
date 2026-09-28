@@ -13,7 +13,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { registerRestaurant, type BusinessType, type RestaurantRegistrationInput } from "../../core/api";
+import { registerRestaurant, type RestaurantRegistrationInput } from "../../core/api";
 import {
   countryCodes,
   normalizePhoneNumber,
@@ -37,7 +37,6 @@ type RegistrationProps = {
 export function RestaurantRegistrationScreen(props: RegistrationProps) {
   const styles = useAuthStyles();
   const { t } = useTranslation(["auth", "common"]);
-  const [businessType, setBusinessType] = useState<BusinessType>("RESTAURANT");
   const [ownerFullName, setOwnerFullName] = useState("");
   const [restaurantName, setRestaurantName] = useState("");
   const [addressLine, setAddressLine] = useState("");
@@ -59,8 +58,7 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
       countryCode,
       phoneNumber,
       password,
-      confirmPassword,
-      businessType
+      confirmPassword
     };
     const validationError = validateCommon(input.ownerFullName, prefill, password, confirmPassword);
     if (validationError) return setError(validationError);
@@ -71,10 +69,7 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
     setLoading(true);
     try {
       await registerRestaurant(input);
-      props.onRegistered(
-        prefill,
-        t(businessType === "SUPERMARKET" ? "restaurantRegistration.successSupermarket" : "restaurantRegistration.successRestaurant")
-      );
+      props.onRegistered(prefill, t("restaurantRegistration.successRestaurant"));
     } catch (requestError) {
       setError(readRegistrationError(requestError));
     } finally {
@@ -84,27 +79,8 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
 
   return (
     <RegistrationLayout title={t("restaurantRegistration.title")} subtitle={t("restaurantRegistration.subtitle")}>
-      <View style={styles.field}>
-        <Text style={styles.label}>{t("restaurantRegistration.businessTypeLabel")}</Text>
-        <View style={styles.businessTypeRow}>
-          <Pressable onPress={() => setBusinessType("RESTAURANT")} style={[styles.businessTypeButton, businessType === "RESTAURANT" && styles.businessTypeSelected]}>
-            <Text style={[styles.businessTypeText, businessType === "RESTAURANT" && styles.businessTypeTextSelected]}>
-              {t("restaurantRegistration.businessTypeRestaurant")}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => setBusinessType("SUPERMARKET")} style={[styles.businessTypeButton, businessType === "SUPERMARKET" && styles.businessTypeSelected]}>
-            <Text style={[styles.businessTypeText, businessType === "SUPERMARKET" && styles.businessTypeTextSelected]}>
-              {t("restaurantRegistration.businessTypeSupermarket")}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
       <Field label={t("restaurantRegistration.ownerFullNameLabel")} value={ownerFullName} onChangeText={setOwnerFullName} />
-      <Field
-        label={t(businessType === "SUPERMARKET" ? "restaurantRegistration.supermarketNameLabel" : "restaurantRegistration.restaurantNameLabel")}
-        value={restaurantName}
-        onChangeText={setRestaurantName}
-      />
+      <Field label={t("restaurantRegistration.restaurantNameLabel")} value={restaurantName} onChangeText={setRestaurantName} />
       <Field label={t("restaurantRegistration.addressLabel")} value={addressLine} onChangeText={setAddressLine} multiline />
       <Field
         label={t("restaurantRegistration.descriptionLabel")}
@@ -126,7 +102,7 @@ export function RestaurantRegistrationScreen(props: RegistrationProps) {
       />
       <ErrorMessage message={error} />
       <PrimaryButton
-        label={t(businessType === "SUPERMARKET" ? "restaurantRegistration.submitSupermarket" : "restaurantRegistration.submitRestaurant")}
+        label={t("restaurantRegistration.submitRestaurant")}
         loading={loading}
         onPress={() => void submit()}
       />
@@ -299,11 +275,6 @@ function createStyles(colors: ThemeColors) {
   multilineInput: { minHeight: 82, paddingTop: spacing[3], textAlignVertical: "top" },
   help: { ...text("label"), color: colors.textMuted, marginBottom: spacing[3], marginTop: -8 },
   countryRow: { flexDirection: "row", gap: spacing[2], marginBottom: spacing[2] },
-  businessTypeRow: { flexDirection: "row", gap: spacing[2] },
-  businessTypeButton: { alignItems: "center", backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.md, borderWidth: 1, flex: 1, paddingVertical: spacing[4] },
-  businessTypeSelected: { backgroundColor: colors.primarySubtle, borderColor: colors.primary },
-  businessTypeText: { ...text("bodySm", "bold"), color: colors.textMuted },
-  businessTypeTextSelected: { color: colors.primaryPressed },
   countryButton: { backgroundColor: colors.surfaceSunk, borderColor: colors.border, borderRadius: radius.sm, borderWidth: 1, paddingHorizontal: spacing[4], paddingVertical: spacing[3] },
   countryButtonSelected: { backgroundColor: colors.primarySubtle, borderColor: colors.primary },
   countryText: { ...text("bodySm", "bold"), color: colors.textMuted },

@@ -20,12 +20,19 @@ export const restaurantStatusValues = ["PENDING", "APPROVED", "REJECTED", "SUSPE
 export type RestaurantStatusValue = (typeof restaurantStatusValues)[number];
 export const businessTypeValues = ["RESTAURANT", "SUPERMARKET"] as const;
 export type BusinessTypeValue = (typeof businessTypeValues)[number];
+/** The only type a public applicant may ask for. */
+export const publicBusinessTypeValues = ["RESTAURANT"] as const;
 
 export class RestaurantRegisterDto extends PhoneDto {
-  @ApiPropertyOptional({ enum: businessTypeValues, default: "RESTAURANT" })
+  /**
+   * Public registration can only ever apply for a restaurant: the platform has one supermarket,
+   * created by a Super Admin (AdminCreateBusinessDto). The field is still accepted, as
+   * "RESTAURANT", so an app build that sends it keeps working; "SUPERMARKET" is a 400.
+   */
+  @ApiPropertyOptional({ enum: publicBusinessTypeValues, default: "RESTAURANT" })
   @IsOptional()
-  @IsIn(businessTypeValues)
-  businessType?: BusinessTypeValue;
+  @IsIn(publicBusinessTypeValues, { message: "Only restaurants can apply through public registration." })
+  businessType?: (typeof publicBusinessTypeValues)[number];
 
   @ApiProperty({ example: "Restaurant Owner" })
   @IsString()

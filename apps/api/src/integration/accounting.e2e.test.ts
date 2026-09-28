@@ -782,21 +782,38 @@ async function registerBusiness(
   adminToken: string,
   input: { ownerFullName: string; phoneNumber: string; restaurantName: string; businessType: string }
 ): Promise<{ id: string; token: string; categoryId: string }> {
-  const registration = await http
-    .post("/api/v1/restaurants/register")
-    .send({
-      ownerFullName: input.ownerFullName,
-      countryCode: "+970",
-      phoneNumber: input.phoneNumber,
-      password,
-      confirmPassword: password,
-      restaurantName: input.restaurantName,
-      businessType: input.businessType,
-      addressLine: "Ledger Integration Street, Ramallah",
-      description: "Created by the accounting end-to-end test."
-    })
-    .expect(201);
-  const id = registration.body.restaurantId as string;
+  // Restaurants apply through the public route; a supermarket can only be created by a Super Admin.
+  const registration =
+    input.businessType === "SUPERMARKET"
+      ? await http
+          .post("/api/v1/admin/restaurants")
+          .set("Authorization", `Bearer ${adminToken}`)
+          .send({
+            ownerFullName: input.ownerFullName,
+            countryCode: "+970",
+            phoneNumber: input.phoneNumber,
+            password,
+            businessName: input.restaurantName,
+            businessType: input.businessType,
+            addressLine: "Ledger Integration Street, Ramallah",
+            description: "Created by the accounting end-to-end test."
+          })
+          .expect(201)
+      : await http
+          .post("/api/v1/restaurants/register")
+          .send({
+            ownerFullName: input.ownerFullName,
+            countryCode: "+970",
+            phoneNumber: input.phoneNumber,
+            password,
+            confirmPassword: password,
+            restaurantName: input.restaurantName,
+            businessType: input.businessType,
+            addressLine: "Ledger Integration Street, Ramallah",
+            description: "Created by the accounting end-to-end test."
+          })
+          .expect(201);
+  const id = (registration.body.restaurantId ?? registration.body.id) as string;
   const token = await login(http, input.phoneNumber);
 
   await http

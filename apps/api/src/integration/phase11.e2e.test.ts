@@ -254,21 +254,22 @@ test(
     assert.equal(delivered.body.status, "DELIVERED");
     assert.equal(delivered.body.delivery.status, "DELIVERED");
 
+    // A supermarket can only be created by a Super Admin: public registration refuses the type.
     const supermarketRegistration = await http
-      .post("/api/v1/restaurants/register")
+      .post("/api/v1/admin/restaurants")
+      .set("Authorization", `Bearer ${adminToken}`)
       .send({
         ownerFullName: "Phase 11 Supermarket Owner",
         countryCode: "+970",
         phoneNumber: "0594000005",
         password,
-        confirmPassword: password,
-        restaurantName: "Phase 11 Fresh Market",
+        businessName: "Phase 11 Fresh Market",
         businessType: "SUPERMARKET",
         addressLine: "Market Integration Street, Ramallah",
         description: "Groceries created by the Phase 11 end-to-end test."
       })
       .expect(201);
-    const supermarketId = supermarketRegistration.body.restaurantId as string;
+    const supermarketId = supermarketRegistration.body.id as string;
     const supermarketToken = await login(http, "0594000005");
 
     await http

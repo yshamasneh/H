@@ -15,7 +15,7 @@ export class RestaurantsController {
 
   @Post("register")
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @ApiOperation({ summary: "Submit a restaurant or supermarket application (creates a store owner account)" })
+  @ApiOperation({ summary: "Apply to register a restaurant (creates a pending restaurant and its owner account; supermarkets are created by a Super Admin only)" })
   register(@Body() input: RestaurantRegisterDto) {
     return this.restaurants.register(input);
   }
