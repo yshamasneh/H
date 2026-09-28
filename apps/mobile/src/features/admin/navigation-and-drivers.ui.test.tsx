@@ -103,7 +103,7 @@ describe("More", () => {
     wrap(<AdminMoreScreen {...props} />);
     expect(screen.getByText("Amal Admin")).toBeTruthy();
     fireEvent.press(screen.getByText("Sign out"));
-    expect(alert).toHaveBeenCalledWith("Sign out?", expect.any(String), expect.any(Array));
+    expect(alert).toHaveBeenCalledWith("Sign out?", expect.any(String), expect.any(Array), expect.anything());
     await waitFor(() => expect(props.onLogout).toHaveBeenCalled());
     alert.mockRestore();
   });

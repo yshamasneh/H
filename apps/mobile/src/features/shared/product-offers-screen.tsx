@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -13,6 +12,7 @@ import {
   View
 } from "react-native";
 import type { MenuCategoryOwner, MenuItemOwner } from "../../core/api";
+import { confirmDestructive } from "../../core/confirm";
 import { formatMinorPlain } from "../../core/money";
 import { PriceDisplay, SaleBadge } from "../../components/sale-price";
 import { RemoteImage } from "../../components/remote-image";
@@ -352,15 +352,14 @@ function OfferEditor(props: {
     }
   }
 
-  function confirmEnd() {
-    Alert.alert(
+  async function confirmEnd() {
+    const confirmed = await confirmDestructive(
       t("admin:productOffers.endTitle"),
       t("admin:productOffers.endBody", { name: item.name, price: formatShekel(item.priceMinor) }),
-      [
-        { text: t("common:cancel"), style: "cancel" },
-        { text: t("admin:productOffers.endConfirm"), style: "destructive", onPress: () => void save(null) }
-      ]
+      t("admin:productOffers.endConfirm"),
+      t("common:cancel")
     );
+    if (confirmed) await save(null);
   }
 
   const fieldError = !parsed.ok && parsed.error !== "empty" ? t(`admin:productOffers.errors.${parsed.error}`) : null;
@@ -454,7 +453,7 @@ function OfferEditor(props: {
                 onPress={() => parsed.ok && void save(parsed.saleMinor)}
               />
               {onOffer ? (
-                <ActionButton disabled={busy} label={t("admin:productOffers.end")} onPress={confirmEnd} variant="danger" />
+                <ActionButton disabled={busy} label={t("admin:productOffers.end")} onPress={() => void confirmEnd()} variant="danger" />
               ) : null}
               <ActionButton disabled={busy} label={t("common:cancel")} onPress={props.onClose} variant="secondary" />
             </View>

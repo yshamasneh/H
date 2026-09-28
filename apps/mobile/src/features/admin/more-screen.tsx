@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { PublicUser } from "../../core/api";
+import { confirmDestructive } from "../../core/confirm";
 import { Icon, disclosureIconName, type IconName } from "../../theme/icon";
 import { useTheme } from "../../theme/theme-context";
 import { radius, spacing, type ThemeColors } from "../../theme/tokens";
@@ -67,18 +68,10 @@ export function AdminMoreScreen(props: {
     }
   ];
 
-  function confirmLogout() {
-    Alert.alert(t("more.logoutTitle"), t("more.logoutBody"), [
-      { text: t("common:cancel"), style: "cancel" },
-      {
-        text: t("common:logout"),
-        style: "destructive",
-        onPress: () => {
-          setLoggingOut(true);
-          void props.onLogout().finally(() => setLoggingOut(false));
-        }
-      }
-    ]);
+  async function confirmLogout() {
+    if (!(await confirmDestructive(t("more.logoutTitle"), t("more.logoutBody"), t("common:logout"), t("common:cancel")))) return;
+    setLoggingOut(true);
+    await props.onLogout().finally(() => setLoggingOut(false));
   }
 
   return (
@@ -93,7 +86,7 @@ export function AdminMoreScreen(props: {
           </Text>
           <Text numberOfLines={1} style={styles.accountMeta}>{`⁦${props.user.phone}⁩`}</Text>
         </View>
-        <ActionButton label={t("common:logout")} loading={loggingOut} onPress={confirmLogout} variant="danger" />
+        <ActionButton label={t("common:logout")} loading={loggingOut} onPress={() => void confirmLogout()} variant="danger" />
       </View>
 
       <View style={styles.group}>

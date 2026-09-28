@@ -112,7 +112,7 @@ test("ending an offer is confirmed, then the product is back at its regular pric
   fireEvent.press(await screen.findByTestId("offer-row-milk"));
   expect(screen.getByTestId("offer-price-input").props.value).toBe("10.00");
   fireEvent.press(screen.getAllByText("End offer")[0]);
-  expect(alert).toHaveBeenCalledWith("End this offer?", "Fresh milk goes back to its regular price of 20.00 ILS.", expect.any(Array));
+  expect(alert).toHaveBeenCalledWith("End this offer?", "Fresh milk goes back to its regular price of 20.00 ILS.", expect.any(Array), expect.anything());
   await waitFor(() => expect(mocked.updateRestaurantMenuItem).toHaveBeenCalledWith("token", "milk", { salePriceMinor: null }));
   const milkRow = await screen.findByTestId("offer-row-milk");
   await waitFor(() => expect(within(milkRow).queryByText("−50%")).toBeNull());
