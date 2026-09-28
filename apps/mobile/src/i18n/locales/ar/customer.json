@@ -181,6 +181,11 @@
     "openBasket": "فتح السلة ({{items}})",
     "alreadyInBasket": "في سلتك {{quantity}} من هذا المنتج",
     "viewBasketShort": "عرض السلة",
-    "allStockInBasket": "كل الكمية المتوفرة في سلتك"
+    "allStockInBasket": "كل الكمية المتوفرة في سلتك",
+    "storeOpen": "مفتوح الآن",
+    "storeClosed": "مغلق الآن",
+    "browseAll": "تصفّح الكل",
+    "recentlyViewed": "شاهدتها مؤخرًا",
+    "buyAgain": "اشترِ مجددًا"
   }
 }

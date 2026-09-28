@@ -181,6 +181,11 @@
     "openBasket": "Open basket ({{items}})",
     "alreadyInBasket": "{{quantity}} already in your basket",
     "viewBasketShort": "View basket",
-    "allStockInBasket": "All available stock is in your basket"
+    "allStockInBasket": "All available stock is in your basket",
+    "storeOpen": "Open now",
+    "storeClosed": "Closed now",
+    "browseAll": "Browse all",
+    "recentlyViewed": "Recently viewed",
+    "buyAgain": "Buy again"
   }
 }

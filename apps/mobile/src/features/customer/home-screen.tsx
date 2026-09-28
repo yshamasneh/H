@@ -15,6 +15,7 @@ import {
   getSupermarketCatalog,
   listActiveRestaurantOffers,
   listMyNotifications,
+  listMyOrders,
   type MenuItemSummary,
   type PublicUser,
   type RestaurantOffer,
@@ -32,6 +33,9 @@ import { forgetMarketStore, resolveMarketStore, type MarketStore } from "./marke
 import { useCustomerTheme, type CustomerTheme } from "./theme";
 import { CartBar, ProductCard, cartBarClearance } from "./shop-kit";
 import { quantityInCart } from "./shop.rules";
+import { kvStore } from "../../core/kv-storage";
+import { buyAgainItems, type BuyAgainItem } from "./discovery.rules";
+import { loadRecentlyViewed, type RecentlyViewedProduct } from "./recently-viewed";
 import { CustomerHomeHeader } from "./home-header";
 import { SeasonalAccent } from "./seasonal-accent";
 
@@ -88,6 +92,10 @@ export function CustomerHomeScreen(props: {
   const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  // Discovery shortcuts from what this customer already did: products opened on this device, and
+  // products from their delivered orders. Both open the product page, which loads the current price.
+  const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedProduct[]>([]);
+  const [buyAgain, setBuyAgain] = useState<BuyAgainItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   async function load(forceStoreRefresh: boolean) {
@@ -114,6 +122,15 @@ export function CustomerHomeScreen(props: {
       if (page) setUnreadCount(page.unreadCount);
     } catch {
       // A failed unread-count fetch just leaves the badge hidden — not worth surfacing an error for.
+    }
+
+    setRecentlyViewed(await loadRecentlyViewed(kvStore, props.user.id));
+    try {
+      const accessToken = await getAccessToken();
+      const orders = accessToken ? await listMyOrders(accessToken, 1, 10) : null;
+      if (orders) setBuyAgain(buyAgainItems(orders.items));
+    } catch {
+      // Without past orders the "buy again" row is simply absent.
     }
   }
 
@@ -159,6 +176,58 @@ export function CustomerHomeScreen(props: {
           </View>
         ) : null}
 
+
+        {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
+
+        {/* Search first: most visits start with "do they have …". Tapping opens the catalogue with
+            the keyboard already up. */}
+        <Pressable
+          accessibilityRole="search"
+          disabled={!store || marketClosed}
+          onPress={() => store && props.onOpenCatalog(store, { focusSearch: true })}
+          style={({ pressed }) => [styles.searchBar, pressed && styles.offerCardPressed]}
+          testID="home-search"
+        >
+          <View style={styles.searchIconSlot}><Icon color={customerTheme.colors.primary} name="search" size="md" /></View>
+          <Text numberOfLines={1} style={styles.searchText}>{t("home.searchProductsPlaceholder")}</Text>
+        </Pressable>
+
+        {/* The store the customer is shopping from and whether it is taking orders right now. */}
+        {store ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={marketClosed}
+            onPress={() => props.onOpenCatalog(store)}
+            style={styles.storeStrip}
+            testID="home-store-strip"
+          >
+            <Icon color={customerTheme.colors.primary} name="store" size="sm" />
+            <Text numberOfLines={1} style={styles.storeStripName}>{storeName}</Text>
+            <View style={[styles.storeStatus, marketClosed ? styles.storeStatusClosed : styles.storeStatusOpen]}>
+              <View style={[styles.storeStatusDot, { backgroundColor: marketClosed ? customerTheme.colors.danger : customerTheme.colors.success }]} />
+              <Text style={[styles.storeStatusText, { color: marketClosed ? customerTheme.colors.danger : customerTheme.colors.success }]}>
+                {marketClosed ? t("shop.storeClosed") : t("shop.storeOpen")}
+              </Text>
+            </View>
+            <View style={styles.storeStripSpacer} />
+            {marketClosed ? null : <Text style={styles.seeAll}>{t("shop.browseAll")}</Text>}
+          </Pressable>
+        ) : null}
+
+        {store === null ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="alertCircle" size="lg" /></View>
+            <Text style={styles.emptyTitle}>{t("home.marketUnavailableTitle")}</Text>
+            <Text style={styles.emptyText}>{t("home.marketUnavailableText")}</Text>
+          </View>
+        ) : marketClosed ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="time" size="lg" /></View>
+            <Text style={styles.emptyTitle}>{t("home.marketClosedTitle")}</Text>
+            <Text style={styles.emptyText}>{t("home.marketClosedText")}</Text>
+          </View>
+        ) : null}
+
         {/* The admin's one featured offer, when there is one: a single full-width call-out ahead
             of the regular offers row, which lists every active offer without this distinction. */}
         {featuredOffer ? (
@@ -182,105 +251,22 @@ export function CustomerHomeScreen(props: {
           </Pressable>
         ) : null}
 
-        {/* Offers sit directly under the identity block: a horizontally scrollable promo row. */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
-        </View>
-        {visibleOffers === undefined ? (
-          <ScrollView
-            contentContainerStyle={styles.offersRowContent}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.offersRow}
-          >
-            <View style={styles.offerSlot}><OfferCardSkeleton /></View>
-            <View style={styles.offerSlot}><OfferCardSkeleton /></View>
-          </ScrollView>
-        ) : visibleOffers.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="star" size="lg" /></View>
-            <Text style={styles.emptyTitle}>{t("home.noOffersTitle")}</Text>
-            <Text style={styles.emptyText}>{t("home.noOffersTextMarket")}</Text>
-          </View>
-        ) : (
-          <ScrollView
-            contentContainerStyle={styles.offersRowContent}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.offersRow}
-          >
-            {visibleOffers.map((offer) => (
-              <Pressable
-                key={offer.id}
-                onPress={() => props.onOpenOffer(offer)}
-                style={({ pressed }) => [styles.offerCard, pressed && styles.offerCardPressed]}
-              >
-                <View style={styles.offerVisual}>
-                  {displayableImageUri(offer.imageUrl) ? (
-                    <RemoteImage resizeMode="cover" uri={offer.imageUrl} style={styles.fullImage} />
-                  ) : offer.type === "FREE_DELIVERY" ? (
-                    <Icon color={customerTheme.colors.primary} name="bicycle" size="xxl" />
-                  ) : (
-                    <Text style={styles.offerPercentFallback}>{offer.discountPercent}%</Text>
-                  )}
-                </View>
-                <View style={styles.offerCopy}>
-                  <Text style={styles.offerRestaurant}>{offer.restaurantName ?? t("home.tasawaqWideOffer")}</Text>
-                  <Text numberOfLines={1} style={styles.offerTitle}>{offer.title}</Text>
-                  {offer.description ? <Text numberOfLines={2} style={styles.offerDescription}>{offer.description}</Text> : null}
-                  <View style={styles.offerDiscountBadge}>
-                    <Text style={styles.offerDiscountBadgeText}>{offerLabel(offer, t)}</Text>
-                  </View>
-                  {offer.endsAt ? (
-                    <Text style={styles.offerExpiry}>{t("home.offerEndsLabel", { date: new Date(offer.endsAt).toLocaleDateString() })}</Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
+        {marketClosed || !store ? null : (
+          <ProductShortcutStrip
+            items={recentlyViewed.filter((entry) => entry.storeId === store.id).map((entry) => ({ productId: entry.id, name: entry.name, imageUrl: entry.imageUrl }))}
+            onOpen={(productId) => props.onOpenProduct(store, productId)}
+            testID="recently-viewed"
+            title={t("shop.recentlyViewed")}
+          />
         )}
-
-        {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
-
-        <Pressable
-          accessibilityRole="search"
-          disabled={!store || marketClosed}
-          onPress={() => store && props.onOpenCatalog(store, { focusSearch: true })}
-          style={styles.searchBar}
-          testID="home-search"
-        >
-          <View style={styles.searchIconSlot}><Icon color={customerTheme.colors.text} name="search" size="md" /></View>
-          <Text style={styles.searchText}>{t("home.searchProductsPlaceholder")}</Text>
-          <View style={styles.filterButton}><Icon color={customerTheme.colors.primary} name="filter" size="sm" /></View>
-        </Pressable>
-
-        <Pressable
-          disabled={!store || marketClosed}
-          onPress={() => store && props.onOpenCatalog(store)}
-          style={styles.marketHero}
-        >
-          <View style={styles.marketIcon}><Text style={styles.marketEmoji}>🛒</Text></View>
-          <View style={styles.marketCopy}>
-            <Text style={styles.marketEyebrow}>{t("home.marketEyebrow")}</Text>
-            <Text style={styles.marketTitle}>{storeName}</Text>
-            <Text style={styles.marketDescription}>{t("home.supermarketDescription")}</Text>
-          </View>
-          <Icon color={onDark.strong} name={disclosureIconName()} size="lg" />
-        </Pressable>
-
-        {store === null ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="alertCircle" size="lg" /></View>
-            <Text style={styles.emptyTitle}>{t("home.marketUnavailableTitle")}</Text>
-            <Text style={styles.emptyText}>{t("home.marketUnavailableText")}</Text>
-          </View>
-        ) : marketClosed ? (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="time" size="lg" /></View>
-            <Text style={styles.emptyTitle}>{t("home.marketClosedTitle")}</Text>
-            <Text style={styles.emptyText}>{t("home.marketClosedText")}</Text>
-          </View>
-        ) : null}
+        {marketClosed || !store ? null : (
+          <ProductShortcutStrip
+            items={buyAgain.filter((entry) => entry.storeId === store.id)}
+            onOpen={(productId) => props.onOpenProduct(store, productId)}
+            testID="buy-again"
+            title={t("shop.buyAgain")}
+          />
+        )}
 
         {marketClosed ? null : store === undefined || (store !== null && catalog === null) ? (
           <>
@@ -323,6 +309,65 @@ export function CustomerHomeScreen(props: {
             </ScrollView>
           </>
         ) : null}
+
+        {/* Offers only take space when there are some; the row simply isn't there otherwise. */}
+        {visibleOffers === undefined ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.offersRowContent}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.offersRow}
+            >
+              <View style={styles.offerSlot}><OfferCardSkeleton /></View>
+              <View style={styles.offerSlot}><OfferCardSkeleton /></View>
+            </ScrollView>
+          </>
+        ) : visibleOffers.length === 0 ? null : (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
+            </View>
+          <ScrollView
+            contentContainerStyle={styles.offersRowContent}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.offersRow}
+          >
+            {visibleOffers.map((offer) => (
+              <Pressable
+                key={offer.id}
+                onPress={() => props.onOpenOffer(offer)}
+                style={({ pressed }) => [styles.offerCard, pressed && styles.offerCardPressed]}
+              >
+                <View style={styles.offerVisual}>
+                  {displayableImageUri(offer.imageUrl) ? (
+                    <RemoteImage resizeMode="cover" uri={offer.imageUrl} style={styles.fullImage} />
+                  ) : offer.type === "FREE_DELIVERY" ? (
+                    <Icon color={customerTheme.colors.primary} name="bicycle" size="xxl" />
+                  ) : (
+                    <Text style={styles.offerPercentFallback}>{offer.discountPercent}%</Text>
+                  )}
+                </View>
+                <View style={styles.offerCopy}>
+                  <Text style={styles.offerRestaurant}>{offer.restaurantName ?? t("home.tasawaqWideOffer")}</Text>
+                  <Text numberOfLines={1} style={styles.offerTitle}>{offer.title}</Text>
+                  {offer.description ? <Text numberOfLines={2} style={styles.offerDescription}>{offer.description}</Text> : null}
+                  <View style={styles.offerDiscountBadge}>
+                    <Text style={styles.offerDiscountBadgeText}>{offerLabel(offer, t)}</Text>
+                  </View>
+                  {offer.endsAt ? (
+                    <Text style={styles.offerExpiry}>{t("home.offerEndsLabel", { date: new Date(offer.endsAt).toLocaleDateString() })}</Text>
+                  ) : null}
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+          </>
+        )}
 
         {marketClosed ? null : (
           <View style={styles.sectionHeader}>
@@ -372,6 +417,45 @@ export function CustomerHomeScreen(props: {
 }
 
 
+/**
+ * A short horizontal row of products the customer already knows (recently viewed, bought before):
+ * picture and name only, one tap to the product page. Renders nothing when there is nothing to show.
+ */
+function ProductShortcutStrip(props: {
+  title: string;
+  items: { productId: string; name: string; imageUrl: string | null }[];
+  onOpen: (productId: string) => void;
+  testID?: string;
+}) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
+  if (props.items.length === 0) return null;
+  return (
+    <View testID={props.testID}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{props.title}</Text>
+      </View>
+      <ScrollView contentContainerStyle={styles.shortcutRow} horizontal showsHorizontalScrollIndicator={false}>
+        {props.items.map((item) => (
+          <Pressable
+            accessibilityLabel={item.name}
+            accessibilityRole="button"
+            key={item.productId}
+            onPress={() => props.onOpen(item.productId)}
+            style={({ pressed }) => [styles.shortcutCard, pressed && styles.offerCardPressed]}
+          >
+            <View style={styles.shortcutImage}>
+              <RemoteImage resizeMode="cover" style={styles.fullImage} uri={item.imageUrl} />
+            </View>
+            <Text numberOfLines={2} style={styles.shortcutName}>{item.name}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 // A restaurant-scoped offer would send the customer into a vertical that is not open yet, so only
 // supermarket-scoped and platform-wide offers are ever shown to a customer — shared with the
 // launch promo overlay so it picks the exact same offer the home screen would have shown.
@@ -405,15 +489,30 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   notice: { ...text("bodySm"), backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.md, color: customerTheme.colors.success, marginTop: spacing[4], padding: spacing[3] },
   searchBar: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", marginTop: spacing[6], minHeight: 56, paddingHorizontal: spacing[4] },
   searchIconSlot: { marginEnd: spacing[3] },
+  storeStrip: {
+    alignItems: "center",
+    backgroundColor: customerTheme.colors.surface,
+    borderColor: customerTheme.colors.border,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing[2],
+    marginTop: spacing[3],
+    minHeight: 48,
+    paddingHorizontal: spacing[4]
+  },
+  storeStripSpacer: { flex: 1 },
+  storeStripName: { ...text("bodySm", "bold"), color: customerTheme.colors.text, flexShrink: 1 },
+  storeStatus: { alignItems: "center", borderRadius: radius.pill, flexDirection: "row", gap: spacing[1], paddingHorizontal: spacing[2], paddingVertical: 2 },
+  storeStatusOpen: { backgroundColor: customerTheme.colors.successSoft },
+  storeStatusClosed: { backgroundColor: colors.errorSubtle },
+  storeStatusDot: { borderRadius: 4, height: 8, width: 8 },
+  storeStatusText: { ...text("label", "bold") },
+  shortcutRow: { gap: spacing[3], paddingEnd: spacing[2] },
+  shortcutCard: { width: 104 },
+  shortcutImage: { aspectRatio: 1, backgroundColor: customerTheme.colors.surfaceMuted, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, overflow: "hidden" },
+  shortcutName: { ...text("caption", "semibold"), color: customerTheme.colors.text, marginTop: spacing[2] },
   searchText: { ...text("bodySm"), color: customerTheme.colors.textMuted, flex: 1 },
-  filterButton: { alignItems: "center", backgroundColor: customerTheme.colors.primarySoft, borderRadius: radius.md, height: 36, justifyContent: "center", width: 36 },
-  marketHero: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.lg, flexDirection: "row", marginTop: spacing[5], minHeight: 112, padding: spacing[4], ...customerTheme.shadow },
-  marketIcon: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, height: 70, justifyContent: "center", width: 70 },
-  marketEmoji: { fontSize: iconSize.xl },
-  marketCopy: { flex: 1, marginStart: spacing[4] },
-  marketEyebrow: { ...text("label", "bold"), color: onDark.medium },
-  marketTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
-  marketDescription: { ...text("caption"), color: onDark.medium, marginTop: spacing[1] },
   featuredBanner: {
     backgroundColor: customerTheme.colors.inverseSurface,
     borderRadius: radius.lg,
