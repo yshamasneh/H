@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -40,7 +40,8 @@ import {
 import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
-import { colors, radius, spacing } from "../../theme/tokens";
+import { radius, spacing, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 import { strongPasswordPattern } from "./auth.rules";
 
@@ -115,6 +116,7 @@ type SignupScreenProps = {
 };
 
 export function SignupScreen(props: SignupScreenProps) {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth", "common"]);
   const [fullName, setFullName] = useState("");
   const [countryCode, setCountryCode] = useState<CountryCode>(props.prefill?.countryCode ?? "+970");
@@ -259,6 +261,7 @@ type OtpScreenProps = {
 };
 
 export function OtpScreen(props: OtpScreenProps) {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth", "common"]);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -351,6 +354,7 @@ export function NewPasswordScreen(props: {
   onSuccess: (message: string) => void;
   onBack: () => void;
 }) {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth", "common"]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -408,6 +412,7 @@ export function HomeScreen(props: {
   onOpenNotifications: () => void;
   onOpenSettings: () => void;
 }) {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth", "common"]);
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -482,9 +487,11 @@ export function HomeScreen(props: {
 }
 
 function AuthLayout(props: { title: string; subtitle: string; children: ReactNode }) {
+  const styles = useAuthStyles();
+  const { colors, isDark } = useTheme();
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle={isDark ? "light-content" : "dark-content"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.brandLockup}>
@@ -506,6 +513,7 @@ function PhoneFields(props: {
   onCountryCodeChange: (value: CountryCode) => void;
   onPhoneNumberChange: (value: string) => void;
 }) {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth"]);
   return (
     <>
@@ -554,6 +562,8 @@ function FormField(props: {
   maxLength?: number;
   textAlign?: "left" | "center" | "right";
 }) {
+  const styles = useAuthStyles();
+  const { colors } = useTheme();
   return (
     <>
       <Text style={styles.label}>{props.label}</Text>
@@ -573,6 +583,8 @@ function FormField(props: {
 }
 
 function PrimaryButton(props: { label: string; loading?: boolean; onPress: () => void }) {
+  const styles = useAuthStyles();
+  const { colors } = useTheme();
   return (
     <Pressable
       disabled={props.loading}
@@ -590,6 +602,8 @@ function SecondaryButton(props: {
   disabled?: boolean;
   onPress: () => void;
 }) {
+  const styles = useAuthStyles();
+  const { colors } = useTheme();
   return (
     <Pressable
       disabled={props.disabled || props.loading}
@@ -609,6 +623,7 @@ function SecondaryButton(props: {
 }
 
 function LinkButton(props: { label: string; onPress: () => void }) {
+  const styles = useAuthStyles();
   return (
     <Pressable onPress={props.onPress} style={styles.linkButton}>
       <Text style={styles.linkText}>{props.label}</Text>
@@ -617,14 +632,17 @@ function LinkButton(props: { label: string; onPress: () => void }) {
 }
 
 function ErrorText({ message }: { message: string | null }) {
+  const styles = useAuthStyles();
   return message ? <Text style={styles.error}>{message}</Text> : null;
 }
 
 function Notice({ text }: { text: string }) {
+  const styles = useAuthStyles();
   return <Text style={styles.notice}>{text}</Text>;
 }
 
 function DeveloperApiLabel() {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth"]);
   return (
     <View style={styles.apiBox}>
@@ -640,7 +658,8 @@ function readRetrySeconds(details: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   flex: { flex: 1 },
   content: { flexGrow: 1, padding: spacing[6], paddingBottom: spacing[9] },
@@ -725,3 +744,9 @@ const styles = StyleSheet.create({
   apiLabel: { ...text("label", "bold"), color: colors.textMuted },
   apiValue: { ...text("caption"), color: colors.textMuted, marginTop: spacing[1] }
 });
+}
+
+function useAuthStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}

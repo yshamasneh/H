@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -29,7 +29,8 @@ import {
 import type { PhonePrefill } from "../../navigation/navigation";
 import i18n from "../../i18n";
 import { readError } from "../../core/errors";
-import { colors, radius, spacing } from "../../theme/tokens";
+import { radius, spacing, type ThemeColors } from "../../theme/tokens";
+import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 import { strongPasswordPattern } from "./auth.rules";
 
@@ -40,6 +41,7 @@ type RegistrationProps = {
 };
 
 export function RestaurantRegistrationScreen(props: RegistrationProps) {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth", "common"]);
   const [businessType, setBusinessType] = useState<BusinessType>("RESTAURANT");
   const [ownerFullName, setOwnerFullName] = useState("");
@@ -196,9 +198,11 @@ export function DriverRegistrationScreen(props: RegistrationProps) {
 }
 
 function RegistrationLayout(props: { title: string; subtitle: string; children: ReactNode }) {
+  const styles = useAuthStyles();
+  const { colors, isDark } = useTheme();
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle={isDark ? "light-content" : "dark-content"} />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.brand}>JOVO</Text>
@@ -218,6 +222,7 @@ function Field(props: {
   secureTextEntry?: boolean;
   multiline?: boolean;
 }) {
+  const styles = useAuthStyles();
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{props.label}</Text>
@@ -239,6 +244,7 @@ function PasswordFields(props: {
   onPasswordChange: (value: string) => void;
   onConfirmPasswordChange: (value: string) => void;
 }) {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth"]);
   return (
     <>
@@ -260,6 +266,8 @@ function PhoneFields(props: {
   onCountryCodeChange: (value: CountryCode) => void;
   onPhoneNumberChange: (value: string) => void;
 }) {
+  const styles = useAuthStyles();
+  const { colors } = useTheme();
   const { t } = useTranslation(["auth"]);
   return (
     <View style={styles.field}>
@@ -288,6 +296,8 @@ function PhoneFields(props: {
 }
 
 function PrimaryButton(props: { label: string; loading: boolean; onPress: () => void }) {
+  const styles = useAuthStyles();
+  const { colors } = useTheme();
   return (
     <Pressable disabled={props.loading} onPress={props.onPress} style={styles.primaryButton}>
       {props.loading ? <ActivityIndicator color={colors.textInverse} /> : <Text style={styles.primaryButtonText}>{props.label}</Text>}
@@ -296,6 +306,7 @@ function PrimaryButton(props: { label: string; loading: boolean; onPress: () => 
 }
 
 function BackButton({ onPress }: { onPress: () => void }) {
+  const styles = useAuthStyles();
   const { t } = useTranslation(["auth"]);
   return (
     <Pressable onPress={onPress} style={styles.backButton}>
@@ -305,6 +316,7 @@ function BackButton({ onPress }: { onPress: () => void }) {
 }
 
 function ErrorMessage({ message }: { message: string | null }) {
+  const styles = useAuthStyles();
   return message ? <Text style={styles.error}>{message}</Text> : null;
 }
 
@@ -334,7 +346,8 @@ function readRegistrationError(error: unknown): string {
   return readError(error);
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   screen: { backgroundColor: colors.surfaceSunk, flex: 1 },
   flex: { flex: 1 },
   content: { alignSelf: "center", maxWidth: 620, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
@@ -363,3 +376,9 @@ const styles = StyleSheet.create({
   backButton: { alignItems: "center", marginTop: spacing[4], padding: spacing[2] },
   backButtonText: { ...text("caption", "bold"), color: colors.textMuted }
 });
+}
+
+function useAuthStyles() {
+  const { colors } = useTheme();
+  return useMemo(() => createStyles(colors), [colors]);
+}

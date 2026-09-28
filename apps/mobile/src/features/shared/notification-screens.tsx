@@ -37,7 +37,7 @@ type NotificationInboxScreenProps = {
 
 export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
   const { t } = useTranslation(["notifications", "common"]);
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [notifications, setNotifications] = useState<NotificationView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export function NotificationInboxScreen(props: NotificationInboxScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={colors.surfaceSunk} barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.surfaceSunk} barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.header}>
         <Pressable accessibilityLabel={t("common:back")} accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
           <Icon name={backIconName()} size="md" />

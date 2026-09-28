@@ -122,7 +122,7 @@ export function SettingsScreen(props: {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={colors.background} barStyle="dark-content" />
+      <StatusBar backgroundColor={colors.background} barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.header}>
         <Pressable accessibilityLabel={t("common:back")} accessibilityRole="button" onPress={props.onBack} style={styles.backButton}>
           <Icon name={backIconName()} size="md" />

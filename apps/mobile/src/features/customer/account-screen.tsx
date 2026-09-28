@@ -51,7 +51,7 @@ export function AccountScreen(props: {
   onProfileUpdated: (user: PublicUser) => void;
 }) {
   const { t } = useTranslation(["customer", "common"]);
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [profile, setProfile] = useState<MyProfile | null>(null);
@@ -260,7 +260,7 @@ export function AccountScreen(props: {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
+      <StatusBar backgroundColor={customerTheme.colors.background} barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.header}>
         <Pressable onPress={props.onBack} style={styles.back}><Icon name={backIconName()} size="md" /></Pressable>
         <Text style={styles.headerTitle}>{t("account.headerTitle")}</Text>

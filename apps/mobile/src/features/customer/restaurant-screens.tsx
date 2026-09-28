@@ -37,7 +37,7 @@ type RestaurantListScreenProps = {
 
 export function RestaurantListScreen(props: RestaurantListScreenProps) {
   const { t } = useTranslation(["customer"]);
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   const [restaurants, setRestaurants] = useState<RestaurantSummary[] | null>(null);
@@ -74,7 +74,7 @@ export function RestaurantListScreen(props: RestaurantListScreenProps) {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar backgroundColor={customerTheme.colors.background} barStyle="dark-content" />
+      <StatusBar backgroundColor={customerTheme.colors.background} barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.pageWidth}>
         <View style={styles.topHeader}>
           <CircleButton label={isRTL() ? "›" : "‹"} onPress={props.onBack} />
