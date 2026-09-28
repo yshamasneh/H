@@ -62,12 +62,15 @@ export type AppScreen =
   | { name: "admin-restaurant-detail"; user: PublicUser; restaurantId: string }
   | { name: "admin-orders"; user: PublicUser }
   // Opened from a customer's order history, Back returns to that customer rather than the order list.
-  | { name: "admin-order-detail"; user: PublicUser; orderId: string; backToCustomerId?: string }
+  | { name: "admin-order-detail"; user: PublicUser; orderId: string; backToCustomerId?: string; backToDriverCashId?: string }
   | { name: "admin-drivers"; user: PublicUser }
   | { name: "admin-users"; user: PublicUser }
   | { name: "admin-customer-detail"; user: PublicUser; userId: string }
   | { name: "admin-audit-log"; user: PublicUser }
-  | { name: "admin-analytics"; user: PublicUser };
+  | { name: "admin-analytics"; user: PublicUser }
+  | { name: "admin-driver-cash"; user: PublicUser }
+  | { name: "admin-driver-cash-detail"; user: PublicUser; driverUserId: string }
+  | { name: "admin-costs"; user: PublicUser };
 
 export const initialScreen: AppScreen = { name: "login" };
 
@@ -325,17 +328,41 @@ export function goToAdminCustomerDetail(
   return { name: "admin-customer-detail", user, userId };
 }
 
-/** Where Back leads from an admin order: the customer it was opened from, else the order list. */
+/** Where Back leads from an admin order: the customer or driver it was opened from, else the order list. */
 export function adminOrderDetailBack(
   screen: Extract<AppScreen, { name: "admin-order-detail" }>
-): Extract<AppScreen, { name: "admin-customer-detail" | "admin-orders" }> {
-  return screen.backToCustomerId
-    ? goToAdminCustomerDetail(screen.user, screen.backToCustomerId)
-    : goToAdminOrders(screen.user);
+): Extract<AppScreen, { name: "admin-customer-detail" | "admin-driver-cash-detail" | "admin-orders" }> {
+  if (screen.backToCustomerId) return goToAdminCustomerDetail(screen.user, screen.backToCustomerId);
+  if (screen.backToDriverCashId) return goToAdminDriverCashDetail(screen.user, screen.backToDriverCashId);
+  return goToAdminOrders(screen.user);
+}
+
+/** An order opened from a driver's cash handover: Back returns to that driver. */
+export function goToAdminOrderFromDriverCash(
+  user: PublicUser,
+  orderId: string,
+  driverUserId: string
+): Extract<AppScreen, { name: "admin-order-detail" }> {
+  return { name: "admin-order-detail", user, orderId, backToDriverCashId: driverUserId };
 }
 
 export function goToAdminAnalytics(user: PublicUser): Extract<AppScreen, { name: "admin-analytics" }> {
   return { name: "admin-analytics", user };
+}
+
+export function goToAdminDriverCash(user: PublicUser): Extract<AppScreen, { name: "admin-driver-cash" }> {
+  return { name: "admin-driver-cash", user };
+}
+
+export function goToAdminDriverCashDetail(
+  user: PublicUser,
+  driverUserId: string
+): Extract<AppScreen, { name: "admin-driver-cash-detail" }> {
+  return { name: "admin-driver-cash-detail", user, driverUserId };
+}
+
+export function goToAdminCosts(user: PublicUser): Extract<AppScreen, { name: "admin-costs" }> {
+  return { name: "admin-costs", user };
 }
 
 export function goToAdminAuditLog(user: PublicUser): Extract<AppScreen, { name: "admin-audit-log" }> {

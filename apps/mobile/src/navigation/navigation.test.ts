@@ -147,3 +147,9 @@ test("an admin order opened from a customer's history goes back to that customer
   assert.deepEqual(adminOrderDetailBack(fromList), { name: "admin-orders", user: admin });
   assert.ok(!("backToCustomerId" in fromList));
 });
+
+test("an order opened from a driver's cash handover goes back to that driver", async () => {
+  const { adminOrderDetailBack, goToAdminDriverCashDetail, goToAdminOrderFromDriverCash } = await import("./navigation");
+  const admin = { id: "a1", fullName: "Admin", phone: "+970590000001", role: "ADMIN" as const };
+  assert.deepEqual(adminOrderDetailBack(goToAdminOrderFromDriverCash(admin, "o1", "d1")), goToAdminDriverCashDetail(admin, "d1"));
+});

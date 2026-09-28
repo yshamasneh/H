@@ -146,7 +146,7 @@ export function Input(props: {
   placeholder: string;
   multiline?: boolean;
   secureTextEntry?: boolean;
-  keyboardType?: "default" | "phone-pad";
+  keyboardType?: "default" | "phone-pad" | "decimal-pad";
   /** "off" for a form that creates someone else's account, so the device never autofills your own login. */
   autoComplete?: "off" | "new-password";
   /** Numbers and codes read left to right even in Arabic. */

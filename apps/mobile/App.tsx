@@ -69,6 +69,10 @@ import {
   authResultToHome,
   forgotRequestToOtp,
   goToAdminAnalytics,
+  goToAdminCosts,
+  goToAdminDriverCash,
+  goToAdminDriverCashDetail,
+  goToAdminOrderFromDriverCash,
   goToAdminAuditLog,
   goToAdminDashboard,
   goToAdminDrivers,
@@ -140,6 +144,8 @@ import { AdminDriversScreen } from "./src/features/admin/drivers-screen";
 import { AdminOrderDetailScreen, AdminOrdersScreen } from "./src/features/admin/orders-screen";
 import { AdminUsersScreen } from "./src/features/admin/users-screen";
 import { AdminAnalyticsScreen } from "./src/features/admin/analytics-screen";
+import { AdminCostApprovalsScreen } from "./src/features/admin/cost-approvals-screen";
+import { AdminDriverCashDetailScreen, AdminDriverCashScreen } from "./src/features/admin/driver-cash-screens";
 import { AdminCustomerDetailScreen } from "./src/features/admin/customer-detail-screen";
 import { AdminAuditLogScreen } from "./src/features/admin/audit-log-screen";
 import { AdminOffersScreen } from "./src/features/admin/offers-screen";
@@ -946,6 +952,23 @@ function TasawaQApp() {
           userId={screen.userId}
         />
       );
+    case "admin-driver-cash":
+      return (
+        <AdminDriverCashScreen
+          onBack={() => setScreen(goToAdminDashboard(screen.user))}
+          onOpenDriver={(driver) => setScreen(goToAdminDriverCashDetail(screen.user, driver.driverUserId))}
+        />
+      );
+    case "admin-driver-cash-detail":
+      return (
+        <AdminDriverCashDetailScreen
+          driverUserId={screen.driverUserId}
+          onBack={() => setScreen(goToAdminDriverCash(screen.user))}
+          onOpenOrder={(orderId) => setScreen(goToAdminOrderFromDriverCash(screen.user, orderId, screen.driverUserId))}
+        />
+      );
+    case "admin-costs":
+      return <AdminCostApprovalsScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "admin-analytics":
       return <AdminAnalyticsScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "admin-audit-log":
