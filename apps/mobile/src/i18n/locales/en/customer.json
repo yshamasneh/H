@@ -48,8 +48,10 @@
     "marketClosedTitle": "The store is closed right now",
     "marketClosedText": "JOVO MARKET is currently closed. Come back during opening hours to place your order.",
     "noOffersTextMarket": "New JOVO MARKET offers will appear here when they are published.",
-    "restaurantsComingSoonTitle": "Restaurants — coming soon",
-    "restaurantsComingSoonText": "We are onboarding local kitchens. Grocery delivery from JOVO MARKET is live now."
+    "catalogFailedTitle": "We couldn't load the store",
+    "catalogFailedText": "Check your connection and try again.",
+    "catalogRetry": "Try again",
+    "restaurantsEntryText": "Order from restaurants near you"
   },
   "offerDetail": {
     "headerTitle": "Offer",

@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { writeAuditLog } from "../common/audit-log.util";
 import type { PlatformSetting } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
@@ -12,7 +13,10 @@ const SINGLETON_ID = "singleton";
 
 @Injectable()
 export class SettingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly config?: ConfigService
+  ) {}
 
   /** The full settings row, creating it with defaults if it has never been written. */
   async get(): Promise<PlatformSettingsView> {
@@ -22,7 +26,12 @@ export class SettingsService {
   /** The narrow view any authenticated app user may read. */
   async getPublic(): Promise<PublicPlatformSettingsView> {
     const setting = await this.load();
-    return { substitutionOptionEnabled: setting.substitutionOptionEnabled };
+    return {
+      substitutionOptionEnabled: setting.substitutionOptionEnabled,
+      // The customer app shows its restaurant entry point only when this is true, so turning
+      // restaurants on later is the one RESTAURANT_ORDERING_ENABLED setting, not an app release.
+      restaurantOrderingEnabled: this.config?.get<boolean>("RESTAURANT_ORDERING_ENABLED") ?? false
+    };
   }
 
   async update(adminUserId: string, input: UpdatePlatformSettingsDto): Promise<PlatformSettingsView> {

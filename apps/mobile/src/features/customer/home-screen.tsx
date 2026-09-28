@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { displayableImageUri, RemoteImage } from "../../components/remote-image";
 import {
+  getPlatformSettings,
   getSupermarketCatalog,
   listActiveRestaurantOffers,
   listMyNotifications,
@@ -65,10 +66,17 @@ type CatalogFilters = { departmentId?: string; search?: string; focusSearch?: bo
  * directly, rather than behind a card you tap into. Everything on this screen
  * is one hop from a product.
  *
- * Restaurant browsing is deferred for this launch. Where restaurants used to
- * be listed there is now a "coming soon" card. The restaurant screens, routes
- * and the entire restaurant domain are untouched and still work for restaurant
- * owners and staff — only the customer's way in is gone.
+ * Reading order, top to bottom: search (it stays docked while scrolling),
+ * offers, departments, then everything else (what the customer already knows,
+ * the store's products). A section that has nothing to show renders nothing at
+ * all, so there are never gaps where an empty section used to be.
+ *
+ * Restaurants are not part of the launch. The entry point is driven by the
+ * server's restaurant gate (`restaurantOrderingEnabled` in the public settings,
+ * i.e. RESTAURANT_ORDERING_ENABLED): off means nothing about restaurants is on
+ * this screen, on means a Restaurants entry appears at the bottom. Turning
+ * restaurants on later is that one setting, not an app release. The restaurant
+ * screens, routes and domain are untouched.
  */
 export function CustomerHomeScreen(props: {
   user: PublicUser;
@@ -82,6 +90,7 @@ export function CustomerHomeScreen(props: {
   onDecrementItem: (productId: string) => void;
   onViewCart: () => void;
   onOpenNotifications: () => void;
+  onOpenRestaurants?: () => void;
 }) {
   const { t } = useTranslation(["customer", "common"]);
   const { colors, isDark } = useTheme();
@@ -90,48 +99,81 @@ export function CustomerHomeScreen(props: {
   // undefined while resolving, null when no supermarket is reachable.
   const [store, setStore] = useState<MarketStore | null | undefined>(undefined);
   const [catalog, setCatalog] = useState<SupermarketCatalog | null>(null);
+  // The store resolved but its catalogue could not be fetched: say so, rather than showing
+  // placeholders forever.
+  const [catalogFailed, setCatalogFailed] = useState(false);
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  // Whether restaurants are open to customers, from the server. Anything but an explicit true (an
+  // older API, a failed fetch) keeps the restaurant entry point hidden.
+  const [restaurantsEnabled, setRestaurantsEnabled] = useState(false);
   // Discovery shortcuts from what this customer already did: products opened on this device, and
   // products from their delivered orders. Both open the product page, which loads the current price.
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedProduct[]>([]);
   const [buyAgain, setBuyAgain] = useState<BuyAgainItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // The independent requests run side by side, so offers, departments and products settle together
+  // instead of each waiting behind the one before it (which made the layout shift in stages).
   async function load(forceStoreRefresh: boolean) {
     if (forceStoreRefresh) forgetMarketStore();
-    try {
+    setCatalogFailed(false);
+
+    const storefront = (async () => {
       const resolved = await resolveMarketStore();
       setStore(resolved);
       // A closed store is resolvable but not shoppable — skip its catalog so the home shows a clear
       // "closed" state rather than products the customer cannot order.
-      setCatalog(resolved && resolved.isOpenNow ? await getSupermarketCatalog(resolved.id, { pageSize: storefrontProductCount }) : null);
-    } catch {
-      setCatalog(null);
-    }
+      if (!resolved || !resolved.isOpenNow) {
+        setCatalog(null);
+        return;
+      }
+      try {
+        setCatalog(await getSupermarketCatalog(resolved.id, { pageSize: storefrontProductCount }));
+      } catch {
+        setCatalog(null);
+        setCatalogFailed(true);
+      }
+    })();
 
-    try {
-      setOffers(await listActiveRestaurantOffers());
-    } catch {
-      setOffers([]);
-    }
+    const offersRequest = (async () => {
+      try {
+        setOffers(await listActiveRestaurantOffers());
+      } catch {
+        setOffers([]);
+      }
+    })();
 
-    try {
+    const accountRequests = (async () => {
       const accessToken = await getAccessToken();
-      const page = accessToken ? await listMyNotifications(accessToken, 1, 1) : null;
-      if (page) setUnreadCount(page.unreadCount);
-    } catch {
-      // A failed unread-count fetch just leaves the badge hidden — not worth surfacing an error for.
-    }
+      if (!accessToken) return;
+      await Promise.all([
+        (async () => {
+          try {
+            setUnreadCount((await listMyNotifications(accessToken, 1, 1)).unreadCount);
+          } catch {
+            // A failed unread-count fetch just leaves the badge hidden — not worth surfacing an error for.
+          }
+        })(),
+        (async () => {
+          try {
+            setRestaurantsEnabled((await getPlatformSettings(accessToken)).restaurantOrderingEnabled === true);
+          } catch {
+            // Unknown means hidden: restaurants only appear when the server says they are open.
+          }
+        })(),
+        (async () => {
+          try {
+            setBuyAgain(buyAgainItems((await listMyOrders(accessToken, 1, 10)).items));
+          } catch {
+            // Without past orders the "buy again" row is simply absent.
+          }
+        })()
+      ]);
+    })();
 
-    setRecentlyViewed(await loadRecentlyViewed(kvStore, props.user.id));
-    try {
-      const accessToken = await getAccessToken();
-      const orders = accessToken ? await listMyOrders(accessToken, 1, 10) : null;
-      if (orders) setBuyAgain(buyAgainItems(orders.items));
-    } catch {
-      // Without past orders the "buy again" row is simply absent.
-    }
+    const recents = loadRecentlyViewed(kvStore, props.user.id).then(setRecentlyViewed);
+    await Promise.all([storefront, offersRequest, accountRequests, recents]).catch(() => undefined);
   }
 
   useEffect(() => {
@@ -148,17 +190,29 @@ export function CustomerHomeScreen(props: {
     setRefreshing(false);
   }
 
+  // Search is the fastest way to a product, so it works the moment the screen is up: if the store
+  // is still resolving, the tap waits for it (a cached lookup) instead of doing nothing.
+  async function openSearch() {
+    const target = store ?? (await resolveMarketStore());
+    if (target && target.isOpenNow) props.onOpenCatalog(target, { focusSearch: true });
+  }
+
   // A restaurant-scoped offer would send the customer into a vertical that is
   // not open yet, so only supermarket-scoped and platform-wide offers are
   // shown. Platform-wide offers apply to the market order anyway.
   const visibleOffers = offers?.filter(isOfferVisibleToCustomer);
-  // The admin picks at most one offer to feature (see OffersService); nothing renders below when
-  // none is active or visible, so the screen just keeps its normal appearance.
+  // The admin picks at most one offer to feature (see OffersService). It leads the Offers section as
+  // a full-width call-out, and is left out of the row below so it is not shown twice.
   const featuredOffer = visibleOffers?.find((offer) => offer.isFeatured);
+  const rowOffers = visibleOffers?.filter((offer) => offer !== featuredOffer);
+  const hasOffers = (visibleOffers?.length ?? 0) > 0;
 
   const storeName = store?.name ?? t("home.marketFallbackName");
   const marketClosed = store != null && !store.isOpenNow;
+  const storeLoading = store === undefined || (store !== null && !marketClosed && catalog === null && !catalogFailed);
   const showCartDock = props.cart !== null && cartItemCount(props.cart) > 0;
+  const showSeasonalPromo = customerTheme.preset !== "normal";
+  const chevron = disclosureIconName();
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
@@ -167,53 +221,39 @@ export function CustomerHomeScreen(props: {
         contentContainerStyle={[styles.content, showCartDock && styles.contentWithCart]}
         refreshControl={<RefreshControl onRefresh={() => void refresh()} refreshing={refreshing} tintColor={customerTheme.colors.primary} />}
         showsVerticalScrollIndicator={false}
+        // Child 1 (the search dock) stays docked. Everything above it is one wrapper so that index is
+        // the same on native, which skips empty children when counting, and on web, which counts them.
+        stickyHeaderIndices={[1]}
       >
-        <CustomerHomeHeader fullName={props.user.fullName} unreadCount={unreadCount} onOpenNotifications={props.onOpenNotifications} />
-        {customerTheme.preset !== "normal" ? (
-          <View style={styles.seasonalPromo}>
-            <SeasonalAccent theme={customerTheme} background={customerTheme.decoration.promo} color={customerTheme.decoration.onPromo} />
-            <Text style={styles.seasonalPromoText}>{t(`seasonal.${customerTheme.preset}`)}</Text>
-          </View>
-        ) : null}
-
-
-        {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
-
-        {/* Search first: most visits start with "do they have …". Tapping opens the catalogue with
-            the keyboard already up. */}
-        <Pressable
-          accessibilityRole="search"
-          disabled={!store || marketClosed}
-          onPress={() => store && props.onOpenCatalog(store, { focusSearch: true })}
-          style={({ pressed }) => [styles.searchBar, pressed && styles.offerCardPressed]}
-          testID="home-search"
-        >
-          <View style={styles.searchIconSlot}><Icon color={customerTheme.colors.primary} name="search" size="md" /></View>
-          <Text numberOfLines={1} style={styles.searchText}>{t("home.searchProductsPlaceholder")}</Text>
-        </Pressable>
-
-        {/* The store the customer is shopping from and whether it is taking orders right now. */}
-        {store ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={marketClosed}
-            onPress={() => props.onOpenCatalog(store)}
-            style={styles.storeStrip}
-            testID="home-store-strip"
-          >
-            <Icon color={customerTheme.colors.primary} name="store" size="sm" />
-            <Text numberOfLines={1} style={styles.storeStripName}>{storeName}</Text>
-            <View style={[styles.storeStatus, marketClosed ? styles.storeStatusClosed : styles.storeStatusOpen]}>
-              <View style={[styles.storeStatusDot, { backgroundColor: marketClosed ? customerTheme.colors.danger : customerTheme.colors.success }]} />
-              <Text style={[styles.storeStatusText, { color: marketClosed ? customerTheme.colors.danger : customerTheme.colors.success }]}>
-                {marketClosed ? t("shop.storeClosed") : t("shop.storeOpen")}
-              </Text>
+        <View>
+          <CustomerHomeHeader fullName={props.user.fullName} unreadCount={unreadCount} onOpenNotifications={props.onOpenNotifications} />
+          {showSeasonalPromo ? (
+            <View style={styles.seasonalPromo}>
+              <SeasonalAccent theme={customerTheme} background={customerTheme.decoration.promo} color={customerTheme.decoration.onPromo} />
+              <Text style={styles.seasonalPromoText}>{t(`seasonal.${customerTheme.preset}`)}</Text>
             </View>
-            <View style={styles.storeStripSpacer} />
-            {marketClosed ? null : <Text style={styles.seeAll}>{t("shop.browseAll")}</Text>}
-          </Pressable>
-        ) : null}
+          ) : null}
+          {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
+        </View>
 
+        {/* 1 · Search. Most visits start with "do they have …", so it comes first and stays docked
+            while the page scrolls. Tapping opens the catalogue with the keyboard already up. */}
+        <View style={styles.searchDock}>
+          <Pressable
+            accessibilityLabel={t("home.searchProductsPlaceholder")}
+            accessibilityRole="search"
+            accessibilityState={{ disabled: store === null || marketClosed }}
+            disabled={store === null || marketClosed}
+            onPress={() => void openSearch()}
+            style={({ pressed }) => [styles.searchBar, pressed && styles.pressed]}
+            testID="home-search"
+          >
+            <Icon color={customerTheme.colors.textMuted} name="search" size="md" />
+            <Text numberOfLines={1} style={styles.searchText}>{t("home.searchProductsPlaceholder")}</Text>
+          </Pressable>
+        </View>
+
+        {/* Why the rest of the page is empty, said right under the search that cannot work. */}
         {store === null ? (
           <View style={styles.emptyCard}>
             <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="alertCircle" size="lg" /></View>
@@ -225,32 +265,144 @@ export function CustomerHomeScreen(props: {
             <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="time" size="lg" /></View>
             <Text style={styles.emptyTitle}>{t("home.marketClosedTitle")}</Text>
             <Text style={styles.emptyText}>{t("home.marketClosedText")}</Text>
+            <View style={[styles.storeStatus, styles.storeStatusClosed, styles.closedStatus]}>
+              <View style={[styles.storeStatusDot, { backgroundColor: customerTheme.colors.danger }]} />
+              <Text style={[styles.storeStatusText, { color: customerTheme.colors.danger }]}>{t("shop.storeClosed")}</Text>
+            </View>
           </View>
         ) : null}
 
-        {/* The admin's one featured offer, when there is one: a single full-width call-out ahead
-            of the regular offers row, which lists every active offer without this distinction. */}
-        {featuredOffer ? (
-          <Pressable
-            onPress={() => props.onOpenOffer(featuredOffer)}
-            style={({ pressed }) => [styles.featuredBanner, pressed && styles.offerCardPressed]}
-          >
-            {displayableImageUri(featuredOffer.imageUrl) ? (
-              <RemoteImage resizeMode="cover" uri={featuredOffer.imageUrl} style={styles.featuredBannerImage} />
-            ) : null}
-            <View style={styles.featuredBannerCopy}>
-              <Text style={styles.featuredBannerEyebrow}>{t("home.featuredOfferEyebrow")}</Text>
-              <Text numberOfLines={1} style={styles.featuredBannerTitle}>{featuredOffer.title}</Text>
-              <View style={styles.featuredBannerRow}>
-                <View style={styles.offerDiscountBadge}>
-                  <Text style={styles.offerDiscountBadgeText}>{offerLabel(featuredOffer, t)}</Text>
-                </View>
-                <Text style={styles.featuredBannerCta}>{t("home.featuredOfferCta")}</Text>
-              </View>
+        {/* 2 · Offers: the featured one as a call-out, then the rest in a row. Nothing at all when
+            there are none, so the departments sit directly under the search. */}
+        {visibleOffers === undefined ? (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
             </View>
-          </Pressable>
+            <ScrollView contentContainerStyle={styles.offersRowContent} horizontal showsHorizontalScrollIndicator={false} style={styles.offersRow}>
+              <View style={styles.offerSlot}><OfferCardSkeleton /></View>
+              <View style={styles.offerSlot}><OfferCardSkeleton /></View>
+            </ScrollView>
+          </View>
+        ) : hasOffers ? (
+          <View testID="home-offers">
+            <View style={styles.sectionHeader}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
+            </View>
+            {featuredOffer ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => props.onOpenOffer(featuredOffer)}
+                style={({ pressed }) => [styles.featuredBanner, pressed && styles.pressed]}
+              >
+                {displayableImageUri(featuredOffer.imageUrl) ? (
+                  <RemoteImage resizeMode="cover" uri={featuredOffer.imageUrl} style={styles.featuredBannerImage} />
+                ) : null}
+                <View style={styles.featuredBannerCopy}>
+                  <Text style={styles.featuredBannerEyebrow}>{t("home.featuredOfferEyebrow")}</Text>
+                  <Text numberOfLines={1} style={styles.featuredBannerTitle}>{featuredOffer.title}</Text>
+                  <View style={styles.featuredBannerRow}>
+                    <View style={styles.offerDiscountBadge}>
+                      <Text style={styles.offerDiscountBadgeText}>{offerLabel(featuredOffer, t)}</Text>
+                    </View>
+                    <Text style={styles.featuredBannerCta}>{t("home.featuredOfferCta")}</Text>
+                  </View>
+                </View>
+              </Pressable>
+            ) : null}
+            {rowOffers && rowOffers.length > 0 ? (
+              <ScrollView
+                contentContainerStyle={styles.offersRowContent}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={[styles.offersRow, featuredOffer && styles.offersRowAfterFeatured]}
+              >
+                {rowOffers.map((offer) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={offer.id}
+                    onPress={() => props.onOpenOffer(offer)}
+                    style={({ pressed }) => [styles.offerCard, pressed && styles.pressed]}
+                  >
+                    <View style={styles.offerVisual}>
+                      {displayableImageUri(offer.imageUrl) ? (
+                        <RemoteImage resizeMode="cover" uri={offer.imageUrl} style={styles.fullImage} />
+                      ) : offer.type === "FREE_DELIVERY" ? (
+                        <Icon color={customerTheme.colors.primary} name="bicycle" size="xxl" />
+                      ) : (
+                        <Text style={styles.offerPercentFallback}>{offer.discountPercent}%</Text>
+                      )}
+                    </View>
+                    <View style={styles.offerCopy}>
+                      <Text style={styles.offerRestaurant}>{offer.restaurantName ?? t("home.tasawaqWideOffer")}</Text>
+                      <Text numberOfLines={1} style={styles.offerTitle}>{offer.title}</Text>
+                      {offer.description ? <Text numberOfLines={2} style={styles.offerDescription}>{offer.description}</Text> : null}
+                      <View style={styles.offerDiscountBadge}>
+                        <Text style={styles.offerDiscountBadgeText}>{offerLabel(offer, t)}</Text>
+                      </View>
+                      {offer.endsAt ? (
+                        <Text style={styles.offerExpiry}>{t("home.offerEndsLabel", { date: new Date(offer.endsAt).toLocaleDateString() })}</Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+          </View>
         ) : null}
 
+        {/* 3 · Departments. */}
+        {marketClosed || store === null ? null : catalogFailed ? (
+          <View style={styles.emptyCard} testID="home-catalog-failed">
+            <View style={styles.emptyCardIcon}><Icon color={customerTheme.colors.textMuted} name="alertCircle" size="lg" /></View>
+            <Text style={styles.emptyTitle}>{t("home.catalogFailedTitle")}</Text>
+            <Text style={styles.emptyText}>{t("home.catalogFailedText")}</Text>
+            <Pressable accessibilityRole="button" onPress={() => void refresh()} style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}>
+              <Text style={styles.retryText}>{t("home.catalogRetry")}</Text>
+            </Pressable>
+          </View>
+        ) : storeLoading ? (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>{t("home.departmentsSectionTitle")}</Text>
+            </View>
+            <DepartmentStripSkeleton />
+          </View>
+        ) : catalog && catalog.departments.length > 0 ? (
+          <View testID="home-departments">
+            <View style={styles.sectionHeader}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>{t("home.departmentsSectionTitle")}</Text>
+              <SeeAll label={t("home.seeAll")} onPress={() => store && props.onOpenCatalog(store)} />
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.departmentStripContent}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.departmentStrip}
+            >
+              {catalog.departments.map((department) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={department.id}
+                  onPress={() => store && props.onOpenCatalog(store, { departmentId: department.id })}
+                  style={({ pressed }) => [styles.departmentCard, pressed && styles.pressed]}
+                >
+                  <Text numberOfLines={2} style={styles.departmentName}>{department.name}</Text>
+                  {/* `total`, not `count`: `count` is i18next's plural
+                      trigger, and this project deliberately avoids anything
+                      that leans on Intl at runtime (no Intl.PluralRules
+                      guarantee on Hermes). A count-neutral string reads
+                      correctly at 1 and at 100 without plural machinery. */}
+                  <Text style={styles.departmentCount}>
+                    {t("home.departmentProductCount", { total: department.productCount })}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {/* 4 · Everything else: what the customer already knows, then the store's products. */}
         {marketClosed || !store ? null : (
           <ProductShortcutStrip
             items={recentlyViewed.filter((entry) => entry.storeId === store.id).map((entry) => ({ productId: entry.id, name: entry.name, imageUrl: entry.imageUrl }))}
@@ -268,116 +420,23 @@ export function CustomerHomeScreen(props: {
           />
         )}
 
-        {marketClosed ? null : store === undefined || (store !== null && catalog === null) ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t("home.departmentsSectionTitle")}</Text>
-            </View>
-            <DepartmentStripSkeleton />
-          </>
-        ) : catalog && catalog.departments.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t("home.departmentsSectionTitle")}</Text>
-              <Pressable onPress={() => store && props.onOpenCatalog(store)}>
-                <Text style={styles.seeAll}>{t("home.seeAll")}</Text>
-              </Pressable>
-            </View>
-            <ScrollView
-              contentContainerStyle={styles.departmentStripContent}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.departmentStrip}
-            >
-              {catalog.departments.map((department) => (
-                <Pressable
-                  key={department.id}
-                  onPress={() => store && props.onOpenCatalog(store, { departmentId: department.id })}
-                  style={styles.departmentCard}
-                >
-                  <Text numberOfLines={2} style={styles.departmentName}>{department.name}</Text>
-                  {/* `total`, not `count`: `count` is i18next's plural
-                      trigger, and this project deliberately avoids anything
-                      that leans on Intl at runtime (no Intl.PluralRules
-                      guarantee on Hermes). A count-neutral string reads
-                      correctly at 1 and at 100 without plural machinery. */}
-                  <Text style={styles.departmentCount}>
-                    {t("home.departmentProductCount", { total: department.productCount })}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </>
-        ) : null}
-
-        {/* Offers only take space when there are some; the row simply isn't there otherwise. */}
-        {visibleOffers === undefined ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
-            </View>
-            <ScrollView
-              contentContainerStyle={styles.offersRowContent}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.offersRow}
-            >
-              <View style={styles.offerSlot}><OfferCardSkeleton /></View>
-              <View style={styles.offerSlot}><OfferCardSkeleton /></View>
-            </ScrollView>
-          </>
-        ) : visibleOffers.length === 0 ? null : (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t("home.offersSectionTitle")}</Text>
-            </View>
-          <ScrollView
-            contentContainerStyle={styles.offersRowContent}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.offersRow}
-          >
-            {visibleOffers.map((offer) => (
-              <Pressable
-                key={offer.id}
-                onPress={() => props.onOpenOffer(offer)}
-                style={({ pressed }) => [styles.offerCard, pressed && styles.offerCardPressed]}
-              >
-                <View style={styles.offerVisual}>
-                  {displayableImageUri(offer.imageUrl) ? (
-                    <RemoteImage resizeMode="cover" uri={offer.imageUrl} style={styles.fullImage} />
-                  ) : offer.type === "FREE_DELIVERY" ? (
-                    <Icon color={customerTheme.colors.primary} name="bicycle" size="xxl" />
-                  ) : (
-                    <Text style={styles.offerPercentFallback}>{offer.discountPercent}%</Text>
-                  )}
-                </View>
-                <View style={styles.offerCopy}>
-                  <Text style={styles.offerRestaurant}>{offer.restaurantName ?? t("home.tasawaqWideOffer")}</Text>
-                  <Text numberOfLines={1} style={styles.offerTitle}>{offer.title}</Text>
-                  {offer.description ? <Text numberOfLines={2} style={styles.offerDescription}>{offer.description}</Text> : null}
-                  <View style={styles.offerDiscountBadge}>
-                    <Text style={styles.offerDiscountBadgeText}>{offerLabel(offer, t)}</Text>
-                  </View>
-                  {offer.endsAt ? (
-                    <Text style={styles.offerExpiry}>{t("home.offerEndsLabel", { date: new Date(offer.endsAt).toLocaleDateString() })}</Text>
-                  ) : null}
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
-          </>
-        )}
-
-        {marketClosed ? null : (
+        {marketClosed || store === null || catalogFailed ? null : (
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t("home.marketProductsSectionTitle")}</Text>
-            <Pressable onPress={() => store && props.onOpenCatalog(store)}>
-              <Text style={styles.seeAll}>{t("home.seeAll")}</Text>
-            </Pressable>
+            <View style={styles.sectionTitleGroup}>
+              <Text accessibilityRole="header" numberOfLines={1} style={[styles.sectionTitle, styles.sectionTitleShrink]}>
+                {t("home.marketProductsSectionTitle")}
+              </Text>
+              {store ? (
+                <View style={[styles.storeStatus, styles.storeStatusOpen]}>
+                  <View style={[styles.storeStatusDot, { backgroundColor: customerTheme.colors.success }]} />
+                  <Text style={[styles.storeStatusText, { color: customerTheme.colors.success }]}>{t("shop.storeOpen")}</Text>
+                </View>
+              ) : null}
+            </View>
+            <SeeAll label={t("shop.browseAll")} onPress={() => store && props.onOpenCatalog(store)} />
           </View>
         )}
-        {marketClosed ? null : store === undefined || (store !== null && catalog === null) ? (
+        {marketClosed || store === null || catalogFailed ? null : storeLoading ? (
           <ProductGridSkeleton artworkHeight={96} count={storefrontProductCount} />
         ) : catalog === null || catalog.products.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -401,18 +460,39 @@ export function CustomerHomeScreen(props: {
           </View>
         )}
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("home.restaurantsSectionTitle")}</Text>
-        </View>
-        <View style={styles.comingSoonCard}>
-          <View style={styles.comingSoonIcon}><Text style={styles.comingSoonEmoji}>🍽️</Text></View>
-          <Text style={styles.comingSoonTitle}>{t("home.restaurantsComingSoonTitle")}</Text>
-          <Text style={styles.comingSoonText}>{t("home.restaurantsComingSoonText")}</Text>
-        </View>
-
+        {/* Restaurants: only when the server has opened them to customers. Off (the launch state)
+            means there is nothing here at all. */}
+        {restaurantsEnabled && props.onOpenRestaurants ? (
+          <View testID="home-restaurants">
+            <View style={styles.sectionHeader}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>{t("home.restaurantsSectionTitle")}</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={props.onOpenRestaurants}
+              style={({ pressed }) => [styles.restaurantsEntry, pressed && styles.pressed]}
+            >
+              <Text style={styles.restaurantsEntryText}>{t("home.restaurantsEntryText")}</Text>
+              <Icon color={customerTheme.colors.textMuted} name={chevron} size="md" />
+            </Pressable>
+          </View>
+        ) : null}
       </ScrollView>
       {showCartDock && props.cart ? <CartBar cart={props.cart} onPress={props.onViewCart} /> : null}
     </SafeAreaView>
+  );
+}
+
+/** A section's "see all" link: neutral text with a chevron, so orange stays for offers and the actions that spend money. */
+function SeeAll(props: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  const customerTheme = useCustomerTheme();
+  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
+  return (
+    <Pressable accessibilityRole="link" hitSlop={spacing[2]} onPress={props.onPress} style={({ pressed }) => [styles.seeAllLink, pressed && styles.pressed]}>
+      <Text style={styles.seeAll}>{props.label}</Text>
+      <Icon color={customerTheme.colors.textMuted} name={disclosureIconName()} size="sm" />
+    </Pressable>
   );
 }
 
@@ -443,7 +523,7 @@ function ProductShortcutStrip(props: {
             accessibilityRole="button"
             key={item.productId}
             onPress={() => props.onOpen(item.productId)}
-            style={({ pressed }) => [styles.shortcutCard, pressed && styles.offerCardPressed]}
+            style={({ pressed }) => [styles.shortcutCard, pressed && styles.pressed]}
           >
             <View style={styles.shortcutImage}>
               <RemoteImage resizeMode="cover" style={styles.fullImage} uri={item.imageUrl} />
@@ -487,22 +567,12 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   seasonalPromo: { backgroundColor: customerTheme.decoration.promo, borderRadius: radius.md, flexDirection: "row", alignItems: "center", gap: spacing[2], padding: spacing[3], marginTop: spacing[3] },
   seasonalPromoText: { ...text("bodySm", "bold"), color: customerTheme.decoration.onPromo, flex: 1 },
   notice: { ...text("bodySm"), backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.md, color: customerTheme.colors.success, marginTop: spacing[4], padding: spacing[3] },
-  searchBar: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", marginTop: spacing[6], minHeight: 56, paddingHorizontal: spacing[4] },
-  searchIconSlot: { marginEnd: spacing[3] },
-  storeStrip: {
-    alignItems: "center",
-    backgroundColor: customerTheme.colors.surface,
-    borderColor: customerTheme.colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: spacing[2],
-    marginTop: spacing[3],
-    minHeight: 48,
-    paddingHorizontal: spacing[4]
-  },
-  storeStripSpacer: { flex: 1 },
-  storeStripName: { ...text("bodySm", "bold"), color: customerTheme.colors.text, flexShrink: 1 },
+  pressed: { opacity: 0.9 },
+  // Docked while scrolling: it bleeds to the screen edges (undoing the content padding) and is
+  // opaque, so product cards do not show through the gutters beside it.
+  searchDock: { backgroundColor: customerTheme.colors.background, marginHorizontal: -spacing[5], paddingBottom: spacing[2], paddingHorizontal: spacing[5], paddingTop: spacing[4] },
+  searchBar: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", gap: spacing[3], minHeight: 56, paddingHorizontal: spacing[4] },
+  closedStatus: { marginTop: spacing[3] },
   storeStatus: { alignItems: "center", borderRadius: radius.pill, flexDirection: "row", gap: spacing[1], paddingHorizontal: spacing[2], paddingVertical: 2 },
   storeStatusOpen: { backgroundColor: customerTheme.colors.successSoft },
   storeStatusClosed: { backgroundColor: colors.errorSubtle },
@@ -516,22 +586,27 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   featuredBanner: {
     backgroundColor: customerTheme.colors.inverseSurface,
     borderRadius: radius.lg,
-    marginTop: spacing[6],
     overflow: "hidden",
     ...customerTheme.shadow
   },
   featuredBannerImage: { height: 140, width: "100%" },
   featuredBannerCopy: { padding: spacing[4] },
-  featuredBannerEyebrow: { ...text("label", "bold"), color: customerTheme.colors.primary },
+  featuredBannerEyebrow: { ...text("label", "bold"), color: onDark.medium },
   featuredBannerTitle: { ...text("h2", "bold"), color: onDark.strong, marginTop: spacing[1] },
   featuredBannerRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[3] },
   featuredBannerCta: { ...text("bodySm", "bold"), color: onDark.medium },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing[4], marginTop: spacing[7] },
   offersRow: { marginBottom: spacing[1] },
+  offersRowAfterFeatured: { marginTop: spacing[4] },
   offersRowContent: { gap: spacing[4], paddingEnd: spacing[2] },
   offerSlot: { width: 320 },
   sectionTitle: { ...text("h2", "bold"), color: customerTheme.colors.text },
-  seeAll: { ...text("caption", "bold"), color: customerTheme.colors.primary },
+  sectionTitleGroup: { alignItems: "center", flexDirection: "row", flexShrink: 1, gap: spacing[3] },
+  sectionTitleShrink: { flexShrink: 1 },
+  seeAllLink: { alignItems: "center", flexDirection: "row", gap: spacing[1], minHeight: 32 },
+  seeAll: { ...text("caption", "bold"), color: customerTheme.colors.text },
+  retryButton: { alignItems: "center", borderColor: customerTheme.colors.border, borderRadius: radius.md, borderWidth: 1, justifyContent: "center", marginTop: spacing[4], minHeight: 44, paddingHorizontal: spacing[5] },
+  retryText: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
   emptyCard: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, marginTop: spacing[4], padding: spacing[6] },
   emptyCardIcon: {
     alignItems: "center",
@@ -559,7 +634,6 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   departmentName: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
   departmentCount: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
   offerCard: { backgroundColor: customerTheme.colors.inverseSurface, borderRadius: radius.lg, flexDirection: "row", minHeight: 150, overflow: "hidden", width: 320, ...customerTheme.shadow },
-  offerCardPressed: { opacity: 0.9 },
   offerVisual: { alignItems: "center", backgroundColor: colors.neutralSubtle, justifyContent: "center", minHeight: 150, width: "38%" },
   fullImage: { height: "100%", width: "100%" },
   offerPercentFallback: { color: customerTheme.colors.primary, fontSize: iconSize.xxxl, fontWeight: "900" },
@@ -572,25 +646,6 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   offerExpiry: { ...text("label"), color: onDark.soft, marginTop: spacing[1] },
   productGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
   productCardSlot: { flexBasis: "46%", flexGrow: 1, maxWidth: "50%" },
-  comingSoonCard: {
-    alignItems: "center",
-    backgroundColor: customerTheme.colors.surface,
-    borderColor: customerTheme.colors.border,
-    borderRadius: radius.lg,
-    borderStyle: "dashed",
-    borderWidth: 1,
-    padding: spacing[6]
-  },
-  comingSoonIcon: {
-    alignItems: "center",
-    backgroundColor: colors.neutralSubtle,
-    borderRadius: radius.pill,
-    height: 64,
-    justifyContent: "center",
-    marginBottom: spacing[3],
-    width: 64
-  },
-  comingSoonEmoji: { fontSize: iconSize.xl },
-  comingSoonTitle: { ...text("body", "bold"), color: customerTheme.colors.text, textAlign: "center" },
-  comingSoonText: { ...text("bodySm"), color: customerTheme.colors.textMuted, marginTop: spacing[2], textAlign: "center" },
+  restaurantsEntry: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", gap: spacing[3], minHeight: 64, paddingHorizontal: spacing[4] },
+  restaurantsEntryText: { ...text("bodySm", "semibold"), color: customerTheme.colors.text, flex: 1 },
 });

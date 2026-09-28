@@ -60,7 +60,7 @@ type LoginScreenProps = {
 export function LoginScreen(props: LoginScreenProps) {
   const { t } = useTranslation(["auth", "common"]);
   const [countryCode, setCountryCode] = useState<CountryCode>(props.prefill?.countryCode ?? "+970");
-  const [phoneNumber, setPhoneNumber] = useState(props.prefill?.phoneNumber ?? "0590000000");
+  const [phoneNumber, setPhoneNumber] = useState(props.prefill?.phoneNumber ?? (__DEV__ ? "0590000000" : ""));
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

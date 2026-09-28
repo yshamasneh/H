@@ -48,8 +48,10 @@
     "marketClosedTitle": "المتجر مغلق حاليًا",
     "marketClosedText": "جوفو ماركت مغلق الآن. عُد لاحقًا خلال ساعات العمل لتقديم طلبك.",
     "noOffersTextMarket": "ستظهر هنا عروض جوفو ماركت الجديدة فور نشرها.",
-    "restaurantsComingSoonTitle": "المطاعم — قريبًا",
-    "restaurantsComingSoonText": "نعمل على انضمام المطاعم المحلية. توصيل البقالة من جوفو ماركت متاح الآن."
+    "catalogFailedTitle": "تعذّر تحميل المتجر",
+    "catalogFailedText": "تحقق من اتصالك ثم حاول مرة أخرى.",
+    "catalogRetry": "إعادة المحاولة",
+    "restaurantsEntryText": "اطلب من المطاعم القريبة منك"
   },
   "offerDetail": {
     "headerTitle": "العرض",

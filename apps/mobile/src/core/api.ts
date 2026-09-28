@@ -488,6 +488,11 @@ export function listLandmarks(accessToken: string): Promise<Landmark[]> {
 export type PublicPlatformSettings = {
   /** When false, the "no substitution" checkout choice is hidden platform-wide. */
   substitutionOptionEnabled: boolean;
+  /**
+   * The server's restaurant launch gate. The customer home shows its restaurant entry only when
+   * this is true; a server that predates the field reads as false (hidden).
+   */
+  restaurantOrderingEnabled?: boolean;
 };
 
 export function getPlatformSettings(accessToken: string): Promise<PublicPlatformSettings> {

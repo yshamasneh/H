@@ -697,6 +697,7 @@ function TasawaQApp() {
               onOpenNotifications={() => setScreen(goToNotifications(user))}
               onOpenOffer={(offer) => setScreen(goToOfferDetail(user, offer))}
               onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(user, store, productId, screen))}
+              onOpenRestaurants={() => setScreen(goToRestaurants(user))}
               onViewCart={() => setScreen(goToCart(user))}
               cart={cart}
               user={user}
