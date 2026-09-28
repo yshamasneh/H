@@ -72,6 +72,10 @@
       "auditLog": {
         "title": "سجل التدقيق",
         "meta": "كل إجراء إداري مسجَّل"
+      },
+      "productOffers": {
+        "title": "عروض المنتجات",
+        "meta": "أسعار العروض والخصومات على منتجات المتاجر"
       }
     },
     "webOnlyNote": "الدفعات للشركاء، والنسب، وقيود التصحيح، والمعالم، وإعدادات المنصة، والإشعارات الجماعية، والخريطة المباشرة متاحة من لوحة الويب."
@@ -462,5 +466,58 @@
     "rejectPlaceholder": "سبب الرفض (يظهر لصاحب المتجر)",
     "confirmApprove": "اعتماد",
     "confirmReject": "رفض"
+  },
+  "productOffers": {
+    "title": "عروض المنتجات",
+    "storeSubtitle": "اكتب سعر العرض ونحسب نسبة الخصم تلقائيًا",
+    "adminSubtitle": "أسعار العروض لمنتجات أي متجر",
+    "loadError": "تعذّر تحميل المنتجات: {{message}}",
+    "noProducts": "لا توجد منتجات في هذا المتجر بعد.",
+    "noStores": "لا توجد متاجر معتمدة بعد.",
+    "readOnly": "يمكنك رؤية العروض، لكن تعديل الأسعار يحتاج صلاحية إدارة الأسعار.",
+    "summary": {
+      "onOffer": "عليها عرض",
+      "biggest": "أكبر خصم",
+      "attention": "تحتاج انتباهًا"
+    },
+    "searchPlaceholder": "ابحث بالاسم أو الرمز أو الباركود أو الماركة أو الفئة",
+    "filterWithTotal": "{{label}} ({{total}})",
+    "filters": {
+      "all": "الكل",
+      "onSale": "عليها عرض",
+      "notOnSale": "بدون عرض",
+      "attention": "تحتاج انتباهًا"
+    },
+    "allCategories": "كل الفئات",
+    "resultCount": "{{shown}} من {{total}} منتج",
+    "emptyOnSale": "لا يوجد منتج عليه عرض بعد. اختر منتجًا لبدء عرض.",
+    "emptySearch": "لا يوجد منتج يطابق البحث.",
+    "clearFilters": "مسح البحث والتصفية",
+    "savesLine": "−{{percent}}% · يوفّر {{amount}}",
+    "attention": {
+      "belowCost": "أقل من التكلفة",
+      "hidden": "مخفي عن الزبائن"
+    },
+    "edit": "تعديل",
+    "addOffer": "إضافة عرض",
+    "end": "إنهاء العرض",
+    "regularPrice": "السعر الأصلي",
+    "offerPriceLabel": "سعر العرض",
+    "customerSaves": "يوفّر الزبون {{amount}} ({{percent}}%)",
+    "errors": {
+      "invalid": "أدخل سعرًا أكبر من صفر، مثل 10 أو 12.50.",
+      "notBelowPrice": "يجب أن يكون سعر العرض أقل من السعر الأصلي.",
+      "regularInvalid": "لا يوجد سعر أصلي صالح لهذا المنتج، لذا لا يمكن وضع عرض عليه."
+    },
+    "quickLabel": "أو اختر نسبة خصم",
+    "previewLabel": "ما سيراه الزبون",
+    "belowCostWarning": "هذا أقل من تكلفة المنتج ({{cost}}). كل بيع سيكون بخسارة.",
+    "saveChange": "حفظ سعر العرض",
+    "startOffer": "بدء العرض",
+    "endTitle": "إنهاء هذا العرض؟",
+    "endBody": "سيعود {{name}} إلى سعره الأصلي {{price}}.",
+    "endConfirm": "إنهاء العرض",
+    "savedNotice": "تم حفظ العرض على {{name}}.",
+    "endedNotice": "انتهى العرض — عاد {{name}} إلى سعره الأصلي."
   }
 }

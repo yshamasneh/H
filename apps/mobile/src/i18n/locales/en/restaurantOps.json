@@ -33,7 +33,8 @@
     "resumeButton": "Resume",
     "moreItems": "and {{count}} more…",
     "viewAllCatalog": "View all",
-    "newOrdersWaiting": "new orders waiting to be accepted — tap to view"
+    "newOrdersWaiting": "new orders waiting to be accepted — tap to view",
+    "quickOffers": "Offers"
   },
   "management": {
     "restaurantWorkspaceTitle": "Restaurant workspace",

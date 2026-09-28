@@ -72,6 +72,10 @@
       "auditLog": {
         "title": "Audit log",
         "meta": "Every recorded administrative action"
+      },
+      "productOffers": {
+        "title": "Product offers",
+        "meta": "Offer prices and discounts on store products"
       }
     },
     "webOnlyNote": "Partner payouts, rates, corrections, landmarks, platform settings, broadcast notifications and the live map are on the web console."
@@ -450,5 +454,58 @@
     "rejectPlaceholder": "Reason for rejecting (shown to the store)",
     "confirmApprove": "Approve",
     "confirmReject": "Reject"
+  },
+  "productOffers": {
+    "title": "Product offers",
+    "storeSubtitle": "Type the offer price — the discount is worked out for you",
+    "adminSubtitle": "Offer prices on any store's products",
+    "loadError": "Could not load the products: {{message}}",
+    "noProducts": "This store has no products yet.",
+    "noStores": "There are no approved stores yet.",
+    "readOnly": "You can see the offers, but changing prices needs the manage-prices permission.",
+    "summary": {
+      "onOffer": "On offer",
+      "biggest": "Biggest discount",
+      "attention": "Need attention"
+    },
+    "searchPlaceholder": "Search by name, SKU, barcode, brand or category",
+    "filterWithTotal": "{{label}} ({{total}})",
+    "filters": {
+      "all": "All",
+      "onSale": "On offer",
+      "notOnSale": "No offer",
+      "attention": "Need attention"
+    },
+    "allCategories": "All categories",
+    "resultCount": "{{shown}} of {{total}} products",
+    "emptyOnSale": "No product is on offer yet. Pick a product to start one.",
+    "emptySearch": "No product matches this search.",
+    "clearFilters": "Clear search and filters",
+    "savesLine": "−{{percent}}% · saves {{amount}}",
+    "attention": {
+      "belowCost": "Below cost",
+      "hidden": "Hidden from customers"
+    },
+    "edit": "Edit",
+    "addOffer": "Add offer",
+    "end": "End offer",
+    "regularPrice": "Regular price",
+    "offerPriceLabel": "Offer price",
+    "customerSaves": "The customer saves {{amount}} ({{percent}}%)",
+    "errors": {
+      "invalid": "Enter a price above zero, like 10 or 12.50.",
+      "notBelowPrice": "The offer price must be lower than the regular price.",
+      "regularInvalid": "This product has no valid regular price, so it cannot go on offer."
+    },
+    "quickLabel": "Or pick a discount",
+    "previewLabel": "What customers will see",
+    "belowCostWarning": "This is below what the product costs ({{cost}}). Every sale will lose money.",
+    "saveChange": "Save offer price",
+    "startOffer": "Start offer",
+    "endTitle": "End this offer?",
+    "endBody": "{{name}} goes back to its regular price of {{price}}.",
+    "endConfirm": "End offer",
+    "savedNotice": "Offer saved for {{name}}.",
+    "endedNotice": "Offer ended — {{name}} is back to its regular price."
   }
 }

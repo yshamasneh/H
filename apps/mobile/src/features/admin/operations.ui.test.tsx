@@ -51,6 +51,7 @@ function dashboardProps() {
     onLogout: jest.fn().mockResolvedValue(undefined),
     onRestaurants: jest.fn(),
     onOffers: jest.fn(),
+    onProductOffers: jest.fn(),
     onOrders: jest.fn(),
     onOpenOrder: jest.fn(),
     onDrivers: jest.fn(),

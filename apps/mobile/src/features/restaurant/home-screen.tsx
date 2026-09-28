@@ -37,6 +37,7 @@ export function RestaurantHomeScreen(props: {
   onManageRestaurant: () => void;
   onEditItem: (itemId: string) => void;
   onOpenStats: () => void;
+  onOpenOffers: () => void;
   onOpenOrder: (orderId: string) => void;
   onOpenNotifications: () => void;
   onOpenSettings: () => void;
@@ -159,6 +160,7 @@ export function RestaurantHomeScreen(props: {
           <View style={styles.quickRow}>
             <QuickAction icon="orders" label={t("dashboard.quickOrders")} onPress={props.onManageOrders} />
             <QuickAction icon="browse" label={t("dashboard.quickCatalog")} onPress={props.onManageRestaurant} />
+            <QuickAction icon="pricetag" label={t("dashboard.quickOffers")} onPress={props.onOpenOffers} />
             <QuickAction icon="home" label={t("dashboard.quickStats")} onPress={props.onOpenStats} />
           </View>
 
@@ -252,7 +254,7 @@ export function RestaurantHomeScreen(props: {
   );
 }
 
-function QuickAction(props: { icon: "orders" | "browse" | "home"; label: string; onPress: () => void }) {
+function QuickAction(props: { icon: "orders" | "browse" | "pricetag" | "home"; label: string; onPress: () => void }) {
   return (
     <Pressable onPress={props.onPress} style={styles.quickAction}>
       <View style={styles.quickIcon}><Icon color={colors.primary} name={props.icon} size="md" /></View>

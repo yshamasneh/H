@@ -1114,6 +1114,8 @@ export function updateRestaurantMenuItem(
     name?: string;
     description?: string;
     priceMinor?: number;
+    /** The store's own offer price; null ends the offer. Needs the manage-prices permission. */
+    salePriceMinor?: number | null;
     costPriceMinor?: number | null;
     imageUrl?: string;
     sku?: string;
@@ -1224,7 +1226,7 @@ export function getAdminDashboard(accessToken: string): Promise<AdminDashboard> 
 
 export function listAdminRestaurants(
   accessToken: string,
-  params: { status?: RestaurantStatusValue; isOpen?: boolean; businessType?: BusinessType } = {}
+  params: { status?: RestaurantStatusValue; isOpen?: boolean; businessType?: BusinessType; page?: number; pageSize?: number } = {}
 ): Promise<Page<AdminRestaurant>> {
   return request(`/api/v1/admin/restaurants${toQuery(params)}`, { accessToken });
 }
@@ -1238,6 +1240,28 @@ export function getAdminRestaurantMenu(
   restaurantId: string
 ): Promise<{ categories: { id: string; name: string; isActive: boolean; items: (MenuItemOwner & { categoryName: string })[] }[] }> {
   return request(`/api/v1/admin/restaurants/${restaurantId}/menu`, { accessToken });
+}
+
+// An administrator managing one store's catalogue: the same routes as /restaurant/me/menu/*, by id.
+export function listAdminStoreMenuCategories(accessToken: string, restaurantId: string): Promise<MenuCategoryOwner[]> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/menu/categories`, { accessToken });
+}
+
+export function listAdminStoreMenuItems(accessToken: string, restaurantId: string): Promise<MenuItemOwner[]> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/menu/items`, { accessToken });
+}
+
+export function updateAdminStoreMenuItem(
+  accessToken: string,
+  restaurantId: string,
+  itemId: string,
+  input: { salePriceMinor?: number | null; priceMinor?: number }
+): Promise<MenuItemOwner> {
+  return request(`/api/v1/admin/restaurants/${restaurantId}/menu/items/${itemId}`, {
+    method: "PATCH",
+    body: input,
+    accessToken
+  });
 }
 
 export function listAdminOffers(accessToken: string): Promise<RestaurantOffer[]> {

@@ -55,6 +55,7 @@ export type AppScreen =
   | { name: "restaurant-orders"; user: PublicUser }
   | { name: "restaurant-management"; user: PublicUser; editItemId?: string }
   | { name: "restaurant-stats"; user: PublicUser }
+  | { name: "restaurant-offers"; user: PublicUser }
   | { name: "restaurant-order-detail"; user: PublicUser; orderId: string }
   | { name: "driver-home"; user: PublicUser }
   | { name: "driver-stats"; user: PublicUser }
@@ -74,7 +75,8 @@ export type AppScreen =
   | { name: "admin-analytics"; user: PublicUser }
   | { name: "admin-driver-cash"; user: PublicUser }
   | { name: "admin-driver-cash-detail"; user: PublicUser; driverUserId: string }
-  | { name: "admin-costs"; user: PublicUser };
+  | { name: "admin-costs"; user: PublicUser }
+  | { name: "admin-product-offers"; user: PublicUser };
 
 export const initialScreen: AppScreen = { name: "login" };
 
@@ -376,6 +378,14 @@ export function goToAdminDriverCashDetail(
   driverUserId: string
 ): Extract<AppScreen, { name: "admin-driver-cash-detail" }> {
   return { name: "admin-driver-cash-detail", user, driverUserId };
+}
+
+export function goToRestaurantOffers(user: PublicUser): Extract<AppScreen, { name: "restaurant-offers" }> {
+  return { name: "restaurant-offers", user };
+}
+
+export function goToAdminProductOffers(user: PublicUser): Extract<AppScreen, { name: "admin-product-offers" }> {
+  return { name: "admin-product-offers", user };
 }
 
 export function goToAdminCosts(user: PublicUser): Extract<AppScreen, { name: "admin-costs" }> {

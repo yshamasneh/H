@@ -47,6 +47,7 @@ export function AdminDashboardScreen(props: {
   onLogout: () => Promise<void>;
   onRestaurants: (filter?: "PENDING") => void;
   onOffers: () => void;
+  onProductOffers: () => void;
   onOrders: (filter?: "PLACED") => void;
   onOpenOrder: (orderId: string) => void;
   onDrivers: (filter?: "PENDING") => void;
@@ -150,6 +151,7 @@ export function AdminDashboardScreen(props: {
       key: "people",
       tools: [
         { key: "users", permission: "MANAGE_USERS", onPress: props.onUsers },
+        { key: "productOffers", permission: "MANAGE_BUSINESSES", onPress: props.onProductOffers },
         { key: "offers", permission: "MANAGE_OFFERS", onPress: props.onOffers }
       ]
     },

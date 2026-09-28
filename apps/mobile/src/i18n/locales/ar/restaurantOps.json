@@ -33,7 +33,8 @@
     "resumeButton": "استئناف",
     "moreItems": "و{{count}} منتج آخر…",
     "viewAllCatalog": "عرض الجميع",
-    "newOrdersWaiting": "طلبات جديدة بانتظار القبول — اضغط للعرض"
+    "newOrdersWaiting": "طلبات جديدة بانتظار القبول — اضغط للعرض",
+    "quickOffers": "العروض"
   },
   "management": {
     "restaurantWorkspaceTitle": "مساحة عمل المطعم",

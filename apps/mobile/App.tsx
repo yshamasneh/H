@@ -73,6 +73,7 @@ import {
   forgotRequestToOtp,
   goToAdminAnalytics,
   goToAdminCosts,
+  goToAdminProductOffers,
   goToAdminDriverCash,
   goToAdminDriverCashDetail,
   goToAdminOrderFromDriverCash,
@@ -100,6 +101,7 @@ import {
   goToOrderDetail,
   goToOrderHistory,
   goToRestaurantManagement,
+  goToRestaurantOffers,
   goToRestaurantStats,
   goToRestaurantMenu,
   goToRestaurantOrderDetail,
@@ -149,6 +151,8 @@ import { AdminOrderDetailScreen, AdminOrdersScreen } from "./src/features/admin/
 import { AdminUsersScreen } from "./src/features/admin/users-screen";
 import { AdminAnalyticsScreen } from "./src/features/admin/analytics-screen";
 import { AdminCostApprovalsScreen } from "./src/features/admin/cost-approvals-screen";
+import { AdminProductOffersScreen } from "./src/features/admin/product-offers-screen";
+import { RestaurantOffersScreen } from "./src/features/restaurant/offers-screen";
 import { AdminDriverCashDetailScreen, AdminDriverCashScreen } from "./src/features/admin/driver-cash-screens";
 import { AdminCustomerDetailScreen } from "./src/features/admin/customer-detail-screen";
 import { AdminAuditLogScreen } from "./src/features/admin/audit-log-screen";
@@ -696,6 +700,7 @@ function TasawaQApp() {
             onManageRestaurant={() => setScreen(goToRestaurantManagement(user))}
             onEditItem={(itemId) => setScreen(goToRestaurantManagement(user, itemId))}
             onOpenStats={() => setScreen(goToRestaurantStats(user))}
+            onOpenOffers={() => setScreen(goToRestaurantOffers(user))}
             onOpenOrder={(orderId) => setScreen(goToRestaurantOrderDetail(user, orderId))}
             onOpenNotifications={() => setScreen(goToNotifications(user))}
             onOpenSettings={() => setScreen(goToSettings(user))}
@@ -893,6 +898,8 @@ function TasawaQApp() {
       );
     case "restaurant-stats":
       return <RestaurantAnalyticsScreen onBack={() => setScreen(homeForUser(screen.user))} />;
+    case "restaurant-offers":
+      return <RestaurantOffersScreen onBack={() => setScreen(homeForUser(screen.user))} />;
     case "restaurant-order-detail":
       return (
         <RestaurantOrderDetailScreen
@@ -931,6 +938,7 @@ function TasawaQApp() {
           onLogout={handleLogout}
           onNotifications={() => setScreen(goToNotifications(screen.user))}
           onOffers={() => setScreen(goToAdminOffers(screen.user))}
+          onProductOffers={() => setScreen(goToAdminProductOffers(screen.user))}
           onOpenOrder={(orderId) => setScreen(goToAdminOrderDetail(screen.user, orderId))}
           onOpenSettings={() => setScreen(goToSettings(screen.user))}
           onOrders={(filter) => setScreen(goToAdminOrders(screen.user, filter))}
@@ -1012,6 +1020,8 @@ function TasawaQApp() {
       );
     case "admin-costs":
       return <AdminCostApprovalsScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
+    case "admin-product-offers":
+      return <AdminProductOffersScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "admin-analytics":
       return <AdminAnalyticsScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "admin-audit-log":

@@ -57,6 +57,7 @@ const registry = {
   shield: { outline: "shield-checkmark-outline" },
   card: { outline: "card-outline", filled: "card" },
   pin: { outline: "pin-outline", filled: "pin" },
+  pricetag: { outline: "pricetag-outline", filled: "pricetag" },
   contrast: { outline: "contrast-outline", filled: "contrast" },
   volumeOn: { outline: "volume-high-outline", filled: "volume-high" },
   volumeOff: { outline: "volume-mute-outline", filled: "volume-mute" },
