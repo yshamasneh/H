@@ -94,7 +94,8 @@
       "notifications": "الإشعارات",
       "businessSettings": "بيانات المتجر",
       "reports": "المبيعات",
-      "analytics": "التحليلات"
+      "analytics": "التحليلات",
+      "liveMap": "الخريطة المباشرة"
     },
     "signedInAs": "تم تسجيل الدخول باسم",
     "signOut": "تسجيل الخروج",
@@ -103,7 +104,14 @@
       "RESTAURANT": "إدارة المطعم",
       "SUPERMARKET": "إدارة السوبرماركت"
     },
-    "navigation": "التنقل"
+    "navigation": "التنقل",
+    "navGroups": {
+      "overview": "نظرة عامة",
+      "operations": "التشغيل",
+      "network": "المتاجر والأشخاص",
+      "finance": "المالية",
+      "system": "النظام"
+    }
   },
   "login": {
     "title": "جوفو للعمليات",
@@ -144,6 +152,25 @@
       "customers": "الزبائن",
       "orders": "إجمالي الطلبات",
       "drivers": "السائقون المعتمدون"
+    },
+    "todayTitle": "اليوم",
+    "attention": {
+      "title": "بحاجة إلى متابعة",
+      "allClear": "لا شيء بانتظارك الآن.",
+      "ordersAwaiting": "طلبات لم يقبلها المتجر بعد",
+      "ordersAwaitingAction": "عرض الطلبات ←",
+      "pendingStores": "متاجر بانتظار الموافقة",
+      "pendingStoresAction": "مراجعة المتاجر ←",
+      "pendingDrivers": "سائقون بانتظار الموافقة",
+      "pendingDriversAction": "مراجعة السائقين ←",
+      "pendingCosts": "مصاريف تشغيلية بانتظار القرار",
+      "pendingCostsAction": "مراجعة المصاريف ←",
+      "driverCash": "نقد لدى السائقين لم يُسلَّم بعد",
+      "driverCashAction": "استلام النقد ←",
+      "ledgerImbalance": "الدفاتر غير متوازنة",
+      "ledgerImbalanceAction": "فتح المحاسبة ←",
+      "costData": "طلبات بسعر تكلفة ناقص",
+      "costDataAction": "فتح المحاسبة ←"
     }
   },
   "restaurants": {

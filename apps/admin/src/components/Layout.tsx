@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth";
@@ -18,21 +18,29 @@ type NavItem = {
   permission?: Permission;
   /** Restricts an item to one vertical, for features only a supermarket has. */
   businessType?: "SUPERMARKET";
+  /** A heading the item sits under in the sidebar. Items without one are listed flat. */
+  group?: "overview" | "operations" | "network" | "finance" | "system";
 };
 
+/**
+ * The control centre, grouped by the job being done rather than listed in the order features were
+ * built: what is happening now, the people and places that make it happen, the money, and the
+ * system itself. Every item keeps the permission that gated it before.
+ */
 const platformNav: NavItem[] = [
-  { to: "/", labelKey: "layout.nav.dashboard", icon: "▦", end: true },
-  { to: "/restaurants", labelKey: "layout.nav.restaurants", icon: "♨", permission: "MANAGE_BUSINESSES" },
-  { to: "/orders", labelKey: "layout.nav.orders", icon: "≡", permission: "VIEW_ALL_ORDERS" },
-  { to: "/analytics", labelKey: "layout.nav.analytics", icon: "▥", permission: "VIEW_ALL_ORDERS" },
-  { to: "/drivers", labelKey: "layout.nav.drivers", icon: "✈", permission: "MANAGE_DRIVERS" },
-  { to: "/users", labelKey: "layout.nav.users", icon: "●", permission: "MANAGE_USERS" },
-  { to: "/offers", labelKey: "layout.nav.offers", icon: "%", permission: "MANAGE_OFFERS" },
-  { to: "/notifications", labelKey: "layout.nav.notifications", icon: "✉", permission: "MANAGE_NOTIFICATIONS" },
-  { to: "/landmarks", labelKey: "layout.nav.landmarks", icon: "⚑", permission: "MANAGE_LANDMARKS" },
-  { to: "/accounting", labelKey: "layout.nav.accounting", icon: "₪", permission: "VIEW_ACCOUNTING" },
-  { to: "/settings", labelKey: "layout.nav.settings", icon: "⚙", permission: "MANAGE_PLATFORM_SETTINGS" },
-  { to: "/audit-log", labelKey: "layout.nav.auditLog", icon: "☷", permission: "VIEW_AUDIT_LOG" }
+  { to: "/", labelKey: "layout.nav.dashboard", icon: "▦", end: true, group: "overview" },
+  { to: "/analytics", labelKey: "layout.nav.analytics", icon: "▥", permission: "VIEW_ALL_ORDERS", group: "overview" },
+  { to: "/orders", labelKey: "layout.nav.orders", icon: "≡", permission: "VIEW_ALL_ORDERS", group: "operations" },
+  { to: "/drivers", labelKey: "layout.nav.drivers", icon: "✈", end: true, permission: "MANAGE_DRIVERS", group: "operations" },
+  { to: "/drivers/live", labelKey: "layout.nav.liveMap", icon: "⌖", permission: "MANAGE_DRIVERS", group: "operations" },
+  { to: "/restaurants", labelKey: "layout.nav.restaurants", icon: "♨", permission: "MANAGE_BUSINESSES", group: "network" },
+  { to: "/users", labelKey: "layout.nav.users", icon: "●", permission: "MANAGE_USERS", group: "network" },
+  { to: "/offers", labelKey: "layout.nav.offers", icon: "%", permission: "MANAGE_OFFERS", group: "network" },
+  { to: "/notifications", labelKey: "layout.nav.notifications", icon: "✉", permission: "MANAGE_NOTIFICATIONS", group: "network" },
+  { to: "/accounting", labelKey: "layout.nav.accounting", icon: "₪", permission: "VIEW_ACCOUNTING", group: "finance" },
+  { to: "/landmarks", labelKey: "layout.nav.landmarks", icon: "⚑", permission: "MANAGE_LANDMARKS", group: "system" },
+  { to: "/settings", labelKey: "layout.nav.settings", icon: "⚙", permission: "MANAGE_PLATFORM_SETTINGS", group: "system" },
+  { to: "/audit-log", labelKey: "layout.nav.auditLog", icon: "☷", permission: "VIEW_AUDIT_LOG", group: "system" }
 ];
 
 const businessNav: NavItem[] = [
@@ -125,17 +133,21 @@ function Shell({ children, isBusinessShell }: { children: ReactNode; isBusinessS
           </div>
         </div>
         {isBusinessShell ? <SoundToggle variant="sidebar" /> : null}
-        {items.map((item) => (
-          <NavLink
-            className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-            end={item.end}
-            key={item.to}
-            to={item.to}
-          >
-            <span className="nav-link-icon">{item.icon}</span>
-            {t(item.labelKey)}
-            {item.to === "/business" ? <NewCountBadge /> : null}
-          </NavLink>
+        {items.map((item, index) => (
+          <Fragment key={item.to}>
+            {item.group && item.group !== items[index - 1]?.group ? (
+              <div className="nav-group-title">{t(`layout.navGroups.${item.group}`)}</div>
+            ) : null}
+            <NavLink
+              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+              end={item.end}
+              to={item.to}
+            >
+              <span className="nav-link-icon">{item.icon}</span>
+              {t(item.labelKey)}
+              {item.to === "/business" ? <NewCountBadge /> : null}
+            </NavLink>
+          </Fragment>
         ))}
         <div className="language-switch" role="group" aria-label={t("layout.language")}>
           {supportedLanguages.map((language) => (

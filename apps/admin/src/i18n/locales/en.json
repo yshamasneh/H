@@ -94,7 +94,8 @@
       "notifications": "Notifications",
       "businessSettings": "Store profile",
       "reports": "Sales",
-      "analytics": "Analytics"
+      "analytics": "Analytics",
+      "liveMap": "Live map"
     },
     "signedInAs": "Signed in as",
     "signOut": "Sign out",
@@ -103,7 +104,14 @@
       "RESTAURANT": "Restaurant operations",
       "SUPERMARKET": "Supermarket operations"
     },
-    "navigation": "Navigation"
+    "navigation": "Navigation",
+    "navGroups": {
+      "overview": "Overview",
+      "operations": "Operations",
+      "network": "Stores & people",
+      "finance": "Finance",
+      "system": "System"
+    }
   },
   "login": {
     "title": "JOVO Ops",
@@ -144,6 +152,25 @@
       "customers": "Customers",
       "orders": "Total orders",
       "drivers": "Approved drivers"
+    },
+    "todayTitle": "Today",
+    "attention": {
+      "title": "Needs attention",
+      "allClear": "Nothing is waiting on you right now.",
+      "ordersAwaiting": "Orders not yet accepted by the store",
+      "ordersAwaitingAction": "View orders →",
+      "pendingStores": "Stores awaiting approval",
+      "pendingStoresAction": "Review stores →",
+      "pendingDrivers": "Drivers awaiting approval",
+      "pendingDriversAction": "Review drivers →",
+      "pendingCosts": "Operating costs awaiting a decision",
+      "pendingCostsAction": "Review costs →",
+      "driverCash": "Cash still held by drivers",
+      "driverCashAction": "Receive cash →",
+      "ledgerImbalance": "The ledger does not balance",
+      "ledgerImbalanceAction": "Open accounting →",
+      "costData": "Orders valued with a missing cost price",
+      "costDataAction": "Open accounting →"
     }
   },
   "restaurants": {
