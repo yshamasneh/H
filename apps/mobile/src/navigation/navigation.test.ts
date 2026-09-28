@@ -153,3 +153,18 @@ test("an order opened from a driver's cash handover goes back to that driver", a
   const admin = { id: "a1", fullName: "Admin", phone: "+970590000001", role: "ADMIN" as const };
   assert.deepEqual(adminOrderDetailBack(goToAdminOrderFromDriverCash(admin, "o1", "d1")), goToAdminDriverCashDetail(admin, "d1"));
 });
+
+test("a product returns to wherever it was opened from, or the catalogue when opened directly", async () => {
+  const { productBackTarget, goToSupermarketCatalog: catalogOf, goToSupermarketProduct: productOf, homeForUser: home } = await import("./navigation");
+  const store = { id: "s1", name: "JOVO MARKET" };
+  const dairyAisle = catalogOf(customer, store, { departmentId: "dairy", search: "milk" });
+  assert.deepEqual(productBackTarget(productOf(customer, store, "p1", dairyAisle)), dairyAisle);
+  assert.deepEqual(productBackTarget(productOf(customer, store, "p1", home(customer))), home(customer));
+  assert.deepEqual(productBackTarget(productOf(customer, store, "p1")), catalogOf(customer, store));
+});
+
+test("the catalogue can be opened ready to type a search", () => {
+  const catalog = goToSupermarketCatalog(customer, { id: "s1", name: "JOVO MARKET" }, { focusSearch: true });
+  assert.equal(catalog.focusSearch, true);
+  assert.equal("focusSearch" in goToSupermarketCatalog(customer, { id: "s1", name: "JOVO MARKET" }), false);
+});

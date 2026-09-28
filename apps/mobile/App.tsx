@@ -56,7 +56,9 @@ import {
   type Cart
 } from "./src/features/customer/cart";
 import { CustomerTabShell, type CustomerTab } from "./src/features/customer/bottom-nav";
+import { kvStore } from "./src/core/kv-storage";
 import { resolveMarketStore } from "./src/features/customer/market";
+import { recordRecentlyViewed } from "./src/features/customer/recently-viewed";
 import {
   CartScreen,
   CheckoutScreen,
@@ -106,6 +108,7 @@ import {
   goToSettings,
   goToSupermarketCatalog,
   goToSupermarketProduct,
+  productBackTarget,
   goToSignup,
   homeForUser,
   initialScreen,
@@ -657,7 +660,7 @@ function TasawaQApp() {
               onOpenCatalog={(store, filters) => setScreen(goToSupermarketCatalog(user, store, filters))}
               onOpenNotifications={() => setScreen(goToNotifications(user))}
               onOpenOffer={(offer) => setScreen(goToOfferDetail(user, offer))}
-              onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(user, store, productId))}
+              onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(user, store, productId, screen))}
               onViewCart={() => setScreen(goToCart(user))}
               cart={cart}
               user={user}
@@ -756,11 +759,12 @@ function TasawaQApp() {
             onBack={() => setScreen(homeForUser(screen.user))}
             onDecrementItem={handleDecrementCartItem}
             onIncrementItem={handleIncrementCartItem}
-            onOpenProduct={(productId) => setScreen(goToSupermarketProduct(
-              screen.user,
-              { id: screen.supermarketId, name: screen.supermarketName },
-              productId
-            ))}
+            focusSearch={screen.focusSearch}
+            onOpenProduct={(productId, filters) => {
+              const store = { id: screen.supermarketId, name: screen.supermarketName };
+              // Back from the product returns to this aisle with the same filters (not re-focused).
+              setScreen(goToSupermarketProduct(screen.user, store, productId, goToSupermarketCatalog(screen.user, store, filters)));
+            }}
             onViewCart={() => setScreen(goToCart(screen.user))}
             supermarketId={screen.supermarketId}
             supermarketName={screen.supermarketName}
@@ -772,11 +776,16 @@ function TasawaQApp() {
         <SupermarketProductScreen
           cart={cart}
           onAddItem={(item, quantity) => handleAddToCart({ id: screen.supermarketId, name: screen.supermarketName }, item, quantity)}
-          onBack={() => setScreen(goToSupermarketCatalog(
-            screen.user,
-            { id: screen.supermarketId, name: screen.supermarketName }
-          ))}
+          onBack={() => setScreen(productBackTarget(screen))}
           onViewCart={() => setScreen(goToCart(screen.user))}
+          onViewed={(product) =>
+            void recordRecentlyViewed(kvStore, screen.user.id, {
+              id: product.id,
+              storeId: screen.supermarketId,
+              name: product.name,
+              imageUrl: product.imageUrl
+            })
+          }
           productId={screen.productId}
           supermarketId={screen.supermarketId}
         />
@@ -787,7 +796,7 @@ function TasawaQApp() {
           offer={screen.offer}
           onBack={() => setScreen(homeForUser(screen.user))}
           onOpenCatalog={(store) => setScreen(goToSupermarketCatalog(screen.user, store))}
-          onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(screen.user, store, productId))}
+          onOpenProduct={(store, productId) => setScreen(goToSupermarketProduct(screen.user, store, productId, screen))}
         />
       );
     case "cart":

@@ -172,6 +172,15 @@
     "onlyLeft": "بقي {{left}} فقط",
     "openProductHint": "يفتح تفاصيل المنتج",
     "cartBarAccessibility": "عرض السلة: {{items}} قطعة، المجموع {{total}}",
-    "savingSoFar": "وفّرت {{amount}}"
+    "savingSoFar": "وفّرت {{amount}}",
+    "clearSearch": "مسح البحث",
+    "resultCount": "عدد المنتجات: {{total}}",
+    "resultsFor": "نتائج «{{query}}»: {{total}}",
+    "resultsIn": "{{department}}: {{total}}",
+    "endOfList": "هذه كل المنتجات",
+    "openBasket": "فتح السلة ({{items}})",
+    "alreadyInBasket": "في سلتك {{quantity}} من هذا المنتج",
+    "viewBasketShort": "عرض السلة",
+    "allStockInBasket": "كل الكمية المتوفرة في سلتك"
   }
 }

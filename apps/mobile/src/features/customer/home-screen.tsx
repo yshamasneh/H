@@ -50,7 +50,7 @@ const onDark = {
 
 const storefrontProductCount = 8;
 
-type CatalogFilters = { departmentId?: string; search?: string };
+type CatalogFilters = { departmentId?: string; search?: string; focusSearch?: boolean };
 
 /**
  * The customer's landing screen *is* JOVO MARKET's storefront.
@@ -243,9 +243,11 @@ export function CustomerHomeScreen(props: {
         {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
 
         <Pressable
+          accessibilityRole="search"
           disabled={!store || marketClosed}
-          onPress={() => store && props.onOpenCatalog(store)}
+          onPress={() => store && props.onOpenCatalog(store, { focusSearch: true })}
           style={styles.searchBar}
+          testID="home-search"
         >
           <View style={styles.searchIconSlot}><Icon color={customerTheme.colors.text} name="search" size="md" /></View>
           <Text style={styles.searchText}>{t("home.searchProductsPlaceholder")}</Text>

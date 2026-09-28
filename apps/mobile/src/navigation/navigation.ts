@@ -29,6 +29,8 @@ export type AppScreen =
       supermarketName: string;
       departmentId?: string;
       search?: string;
+      /** Opened from a search box: the catalogue's search field takes focus straight away. */
+      focusSearch?: boolean;
     }
   | {
       name: "supermarket-product";
@@ -36,6 +38,8 @@ export type AppScreen =
       supermarketId: string;
       supermarketName: string;
       productId: string;
+      /** Where Back leads: the screen the product was opened from (home, an offer, a filtered aisle). */
+      returnTo?: AppScreen;
     }
   // The offer is carried whole (not just an id) the same way "order-confirmation" carries its
   // order: there is no GET-one-offer endpoint, and the caller (the offers list, a notification
@@ -217,7 +221,7 @@ export function goToSettings(user: PublicUser): Extract<AppScreen, { name: "sett
 export function goToSupermarketCatalog(
   user: PublicUser,
   supermarket: Pick<RestaurantSummary, "id" | "name">,
-  filters: { departmentId?: string; search?: string } = {}
+  filters: { departmentId?: string; search?: string; focusSearch?: boolean } = {}
 ): Extract<AppScreen, { name: "supermarket-catalog" }> {
   return {
     name: "supermarket-catalog",
@@ -225,22 +229,35 @@ export function goToSupermarketCatalog(
     supermarketId: supermarket.id,
     supermarketName: supermarket.name,
     departmentId: filters.departmentId,
-    search: filters.search
+    search: filters.search,
+    ...(filters.focusSearch ? { focusSearch: true } : {})
   };
 }
 
 export function goToSupermarketProduct(
   user: PublicUser,
   supermarket: Pick<RestaurantSummary, "id" | "name">,
-  productId: string
+  productId: string,
+  returnTo?: AppScreen
 ): Extract<AppScreen, { name: "supermarket-product" }> {
   return {
     name: "supermarket-product",
     user,
     supermarketId: supermarket.id,
     supermarketName: supermarket.name,
-    productId
+    productId,
+    ...(returnTo ? { returnTo } : {})
   };
+}
+
+/**
+ * Where Back leads from a product: wherever it was opened from, or the store's catalogue when it
+ * was opened directly (a notification, a deep link). A product opened from another product's
+ * screen never chains: the origin is that product's own origin.
+ */
+export function productBackTarget(screen: Extract<AppScreen, { name: "supermarket-product" }>): AppScreen {
+  if (screen.returnTo) return screen.returnTo;
+  return goToSupermarketCatalog(screen.user, { id: screen.supermarketId, name: screen.supermarketName });
 }
 
 export function goToRestaurantManagement(
