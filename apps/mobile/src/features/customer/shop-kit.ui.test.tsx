@@ -97,3 +97,24 @@ test("the cart bar shows item count, exact subtotal and what the sale prices sav
   fireEvent.press(screen.getByTestId("cart-bar"));
   expect(onPress).toHaveBeenCalled();
 });
+
+test("an offer from the store shows the sticker over the picture and both prices under it", () => {
+  renderCard({ priceMinor: 2000, salePriceMinor: 1000, effectivePriceMinor: 1000 }, 0);
+  expect(screen.getByTestId("sale-badge")).toHaveTextContent("Save 50%", { exact: true });
+  expect(screen.getByText("20.00 ILS")).toBeTruthy();
+  expect(screen.getByText("10.00 ILS")).toBeTruthy();
+});
+
+test("no offer, or an offer price that is not lower, shows no sticker and one price", () => {
+  for (const overrides of [
+    { priceMinor: 2000, salePriceMinor: null, effectivePriceMinor: 2000 },
+    { priceMinor: 2000, salePriceMinor: 2000, effectivePriceMinor: 2000 }
+  ]) {
+    const view = render(
+      <ProductCard product={product(overrides)} quantity={0} onAdd={jest.fn()} onDecrement={jest.fn()} onIncrement={jest.fn()} onOpen={jest.fn()} />
+    );
+    expect(view.queryByTestId("sale-badge")).toBeNull();
+    expect(view.queryAllByText(/ILS/)).toHaveLength(1);
+    view.unmount();
+  }
+});

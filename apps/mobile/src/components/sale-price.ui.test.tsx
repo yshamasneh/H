@@ -62,12 +62,44 @@ describe("the sale badge", () => {
     expect(style.right).toBeUndefined();
   });
 
-  test("renders nothing for a product that is not on sale", async () => {
+  test("worked examples: 20 → 10 is 50%, 20 → 15 is 25%, 100 → 70 is 30%", async () => {
+    await language("en");
+    for (const [priceMinor, salePriceMinor, expected] of [
+      [2000, 1000, "Save 50%"],
+      [2000, 1500, "Save 25%"],
+      [10_000, 7000, "Save 30%"]
+    ] as const) {
+      const view = render(<SaleBadge item={{ priceMinor, salePriceMinor }} />);
+      expect(view.getByText(expected)).toBeTruthy();
+      view.unmount();
+    }
+  });
+
+  test("carries only the discount message — no price inside the sticker", async () => {
+    await language("ar");
+    const view = render(<SaleBadge item={{ priceMinor: 2000, salePriceMinor: 1000 }} />);
+    const badge = view.getByTestId("sale-badge");
+    expect(badge).toHaveTextContent("وفّر 50%", { exact: true });
+    expect(view.queryByText(/ILS|₪|20|10\./)).toBeNull();
+  });
+
+  test("ending the offer removes the sticker", async () => {
+    await language("en");
+    const view = render(<SaleBadge item={{ priceMinor: 2000, salePriceMinor: 1000 }} />);
+    expect(view.getByText("Save 50%")).toBeTruthy();
+    view.rerender(<SaleBadge item={{ priceMinor: 2000, salePriceMinor: null }} />);
+    expect(view.toJSON()).toBeNull();
+  });
+
+  test("renders nothing for a product that is not on sale, or whose prices make no sense", async () => {
     await language("en");
     for (const item of [
       { priceMinor: 2000, salePriceMinor: null },
       { priceMinor: 2000 },
-      { priceMinor: 2000, salePriceMinor: 2000 }
+      { priceMinor: 2000, salePriceMinor: 2000 },
+      { priceMinor: 2000, salePriceMinor: 2500 },
+      { priceMinor: 0, salePriceMinor: -100 },
+      { priceMinor: -500, salePriceMinor: -1000 }
     ]) {
       const view = render(<SaleBadge item={item} />);
       expect(view.toJSON()).toBeNull();
@@ -81,6 +113,14 @@ describe("the price display", () => {
     const view = render(<PriceDisplay effectiveMinor={2000} format={format} priceStyle={{ fontSize: 20 }} regularMinor={2000} />);
     expect(view.getByText("20.00 ILS")).toBeTruthy();
     expect(view.queryAllByText(/ILS/)).toHaveLength(1);
+  });
+
+  test("ending the offer goes back to the one regular price", () => {
+    const view = render(<PriceDisplay effectiveMinor={1000} format={format} priceStyle={{ fontSize: 20 }} regularMinor={2000} />);
+    expect(view.queryAllByText(/ILS/)).toHaveLength(2);
+    view.rerender(<PriceDisplay effectiveMinor={2000} format={format} priceStyle={{ fontSize: 20 }} regularMinor={2000} />);
+    expect(view.queryAllByText(/ILS/)).toHaveLength(1);
+    expect(flat(view.getByText("20.00 ILS")).textDecorationLine).toBeUndefined();
   });
 
   test("on sale it strikes the regular price and shows the charged price prominently, in orange", () => {

@@ -44,7 +44,9 @@ export function PriceDisplay(props: PriceProps) {
 
 /**
  * Orange sticker with white text, laid over the corner of a product picture: "Save 50%" / "وفّر 50%".
- * The percentage is derived from the two prices on every render.
+ * It carries only the discount message — the prices themselves sit under the picture, in
+ * PriceDisplay. The percentage is derived from the two prices on every render. A thin white rim and
+ * a soft shadow lift it off any photograph, light or dark.
  *
  * Positioned with the logical `start` edge, so the sticker sits on the leading corner in both
  * languages and the layout mirrors as a whole rather than the badge landing on the wrong side of a
@@ -56,8 +58,11 @@ export function SaleBadge(props: { item: { priceMinor: number; salePriceMinor?: 
   const styles = useMemo(() => createStyles(colors), [colors]);
   if (!isSale(props.item)) return null;
   const percent = salePercentOff(props.item.priceMinor, props.item.salePriceMinor!);
+  // A missing or broken regular price gives no meaningful percentage: show no sticker at all
+  // rather than "Save 0%".
+  if (percent <= 0) return null;
   return (
-    <View pointerEvents="none" style={styles.badge}>
+    <View pointerEvents="none" style={styles.badge} testID="sale-badge">
       <Text style={styles.badgeText}>{t("common:saleBadge", { percent })}</Text>
     </View>
   );
@@ -70,14 +75,21 @@ function createStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     sale: { color: colors.primary },
     badge: {
       backgroundColor: colors.primary,
+      borderColor: "rgba(255,255,255,0.9)",
       borderRadius: radius.pill,
-      paddingHorizontal: spacing[2],
-      paddingVertical: 3,
+      borderWidth: 1.5,
+      elevation: 3,
+      paddingHorizontal: spacing[2] + 2,
+      paddingVertical: 4,
       position: "absolute",
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.18,
+      shadowRadius: 4,
       start: spacing[2],
       top: spacing[2],
       zIndex: 2
     },
-    badgeText: { ...text("label", "bold"), color: colors.textInverse }
+    badgeText: { ...text("label", "heavy"), color: colors.textInverse, letterSpacing: 0.2 }
   });
 }

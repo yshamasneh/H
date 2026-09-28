@@ -29,7 +29,8 @@ if (build.status !== 0) {
       "dist/integration/order-packing.e2e.test.js",
       "dist/integration/menu-search.e2e.test.js",
       "dist/integration/driver-settlement-reset.e2e.test.js",
-      "dist/integration/analytics.e2e.test.js"
+      "dist/integration/analytics.e2e.test.js",
+      "dist/integration/sale-offers.e2e.test.js"
     ],
     {
       cwd: apiDirectory,
