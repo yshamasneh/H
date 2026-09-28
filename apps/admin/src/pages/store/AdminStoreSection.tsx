@@ -89,6 +89,7 @@ function StoreSectionTabs({ isSupermarket }: { isSupermarket: boolean }) {
     { to: basePath, label: t("restaurantDetail.overviewTab"), end: true, show: true },
     { to: `${basePath}/orders`, label: t("layout.nav.liveOrders"), end: false, show: can("VIEW_ORDERS") },
     { to: `${basePath}/inventory`, label: t("layout.nav.inventory"), end: false, show: isSupermarket && can("MANAGE_INVENTORY") },
+    { to: `${basePath}/offers`, label: t("layout.nav.productOffers"), end: false, show: can("MANAGE_PRICES") },
     { to: `${basePath}/reports`, label: t("layout.nav.reports"), end: false, show: can("MANAGE_BUSINESS_SETTINGS") },
     { to: `${basePath}/staff`, label: t("layout.nav.staff"), end: false, show: can("MANAGE_BUSINESS_STAFF") }
   ];

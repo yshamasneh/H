@@ -16,6 +16,8 @@ type NavItem = {
   end?: boolean;
   /** Omitted means every signed-in user of this shell sees it. */
   permission?: Permission;
+  /** Shown when the account holds any one of these (for a page with a tab per permission). */
+  anyPermission?: Permission[];
   /** Restricts an item to one vertical, for features only a supermarket has. */
   businessType?: "SUPERMARKET";
   /** A heading the item sits under in the sidebar. Items without one are listed flat. */
@@ -35,7 +37,7 @@ const platformNav: NavItem[] = [
   { to: "/drivers/live", labelKey: "layout.nav.liveMap", icon: "⌖", permission: "MANAGE_DRIVERS", group: "operations" },
   { to: "/restaurants", labelKey: "layout.nav.restaurants", icon: "♨", permission: "MANAGE_BUSINESSES", group: "network" },
   { to: "/users", labelKey: "layout.nav.users", icon: "●", permission: "MANAGE_USERS", group: "network" },
-  { to: "/offers", labelKey: "layout.nav.offers", icon: "%", permission: "MANAGE_OFFERS", group: "network" },
+  { to: "/offers", labelKey: "layout.nav.offers", icon: "%", anyPermission: ["MANAGE_OFFERS", "MANAGE_BUSINESSES"], group: "network" },
   { to: "/notifications", labelKey: "layout.nav.notifications", icon: "✉", permission: "MANAGE_NOTIFICATIONS", group: "network" },
   { to: "/accounting", labelKey: "layout.nav.accounting", icon: "₪", permission: "VIEW_ACCOUNTING", group: "finance" },
   { to: "/landmarks", labelKey: "layout.nav.landmarks", icon: "⚑", permission: "MANAGE_LANDMARKS", group: "system" },
@@ -46,6 +48,7 @@ const platformNav: NavItem[] = [
 const businessNav: NavItem[] = [
   { to: "/business", labelKey: "layout.nav.liveOrders", icon: "◉", end: true, permission: "VIEW_ORDERS" },
   { to: "/business/catalogue", labelKey: "layout.nav.catalogue", icon: "▤", permission: "MANAGE_PRODUCTS" },
+  { to: "/business/offers", labelKey: "layout.nav.productOffers", icon: "%", permission: "MANAGE_PRICES" },
   {
     to: "/business/inventory",
     labelKey: "layout.nav.inventory",
@@ -92,6 +95,7 @@ function Shell({ children, isBusinessShell }: { children: ReactNode; isBusinessS
   const items = (isBusinessShell ? businessNav : platformNav).filter(
     (item) =>
       (!item.permission || can(item.permission)) &&
+      (!item.anyPermission || item.anyPermission.some((permission) => can(permission))) &&
       (!item.businessType || access?.business?.businessType === item.businessType)
   );
   const brandTitle = isBusinessShell ? (access?.business?.name ?? t("layout.brandTitle")) : t("layout.brandTitle");

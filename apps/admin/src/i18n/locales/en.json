@@ -95,7 +95,8 @@
       "businessSettings": "Store profile",
       "reports": "Sales",
       "analytics": "Analytics",
-      "liveMap": "Live map"
+      "liveMap": "Live map",
+      "productOffers": "Product offers"
     },
     "signedInAs": "Signed in as",
     "signOut": "Sign out",
@@ -1271,5 +1272,74 @@
       "revenue": "Revenue (₪)",
       "inOrders": "Orders"
     }
+  },
+  "saleOffers": {
+    "hubSubtitle": "Product offers at their prices, and platform-wide campaigns",
+    "tabs": {
+      "products": "Product offers",
+      "campaigns": "Campaigns"
+    },
+    "storeTitle": "Product offers",
+    "storeSubtitle": "Type only the offer price; the discount is worked out automatically and shown to customers on the product picture.",
+    "loadError": "Could not load the products.",
+    "noProducts": "This store has no products yet.",
+    "noStores": "There are no approved stores.",
+    "store": "Store",
+    "storeLabel": "Store: {{name}}",
+    "readOnly": "You can view offers only; changing prices needs permission to manage prices and products.",
+    "summary": {
+      "onOffer": "Products on offer",
+      "products": "All products",
+      "attention": "Needs a look",
+      "biggest": "Biggest discount"
+    },
+    "searchPlaceholder": "Search by name, SKU, barcode, brand or category",
+    "category": "Category",
+    "allCategories": "All categories",
+    "filters": {
+      "all": "All",
+      "onSale": "On offer",
+      "notOnSale": "No offer",
+      "attention": "Needs a look"
+    },
+    "resultCount": "Showing {{shown}} of {{total}} products",
+    "emptyOnSale": "No offers are running. Choose “No offer” to put a product on offer.",
+    "emptySearch": "No products match.",
+    "clearFilters": "Clear search and filters",
+    "product": "Product",
+    "regularPrice": "Regular price",
+    "offerPrice": "Offer price",
+    "offerPriceLabel": "Offer price (₪)",
+    "discount": "Discount",
+    "saves": "Saves {{amount}} ₪",
+    "status": {
+      "on": "On offer",
+      "none": "No offer"
+    },
+    "attention": {
+      "belowCost": "Below cost price",
+      "hidden": "Hidden from customers"
+    },
+    "edit": "Edit offer",
+    "addOffer": "Add offer",
+    "end": "End offer",
+    "typePrice": "Type the offer price and the discount appears here.",
+    "customerSaves": "The customer saves {{amount}} ₪",
+    "errors": {
+      "invalid": "Enter a valid price above zero.",
+      "notBelowPrice": "The offer price must be below the regular price ({{price}} ₪).",
+      "regularInvalid": "This product's regular price is not valid, so it cannot go on offer."
+    },
+    "quickLabel": "Quick discount:",
+    "previewLabel": "Customers will see:",
+    "sticker": "Save {{percent}}%",
+    "belowCostWarning": "The offer price is below the cost price ({{cost}} ₪): every sale loses money.",
+    "saveChange": "Save change",
+    "startOffer": "Start offer",
+    "endTitle": "End this offer?",
+    "endBody": "“{{name}}” goes back to its regular price of {{price}} ₪ and the sale sticker disappears for customers.",
+    "endConfirm": "End offer",
+    "savedNotice": "Offer saved on “{{name}}”: {{percent}}% off.",
+    "endedNotice": "The offer on “{{name}}” has ended; it is back to {{price}} ₪."
   }
 }

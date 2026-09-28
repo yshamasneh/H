@@ -26,7 +26,8 @@ import { UsersPage } from "./pages/UsersPage";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage";
 import { AccountingPage } from "./pages/AccountingPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
-import { OffersPage } from "./pages/OffersPage";
+import { OffersHubPage } from "./pages/OffersHubPage";
+import { BusinessOffersPage } from "./pages/business/BusinessOffersPage";
 import { OperatingCostsPage } from "./pages/business/OperatingCostsPage";
 
 export default function App() {
@@ -52,6 +53,7 @@ function BusinessRoutes() {
       <Route element={<LiveOrdersPage />} path="/business" />
       <Route element={<BusinessOrderPage />} path="/business/orders/:orderId" />
       <Route element={<CataloguePage />} path="/business/catalogue" />
+      <Route element={<BusinessOffersPage />} path="/business/offers" />
       <Route element={<InventoryPage />} path="/business/inventory" />
       <Route element={<OperatingCostsPage />} path="/business/operating-costs" />
       <Route element={<BusinessReportsPage />} path="/business/reports" />
@@ -73,6 +75,7 @@ function PlatformRoutes() {
         <Route element={<LiveOrdersPage />} path="orders" />
         <Route element={<BusinessOrderPage />} path="orders/:orderId" />
         <Route element={<InventoryPage />} path="inventory" />
+        <Route element={<BusinessOffersPage />} path="offers" />
         <Route element={<BusinessReportsPage />} path="reports" />
         <Route element={<StaffPage />} path="staff" />
       </Route>
@@ -84,7 +87,7 @@ function PlatformRoutes() {
       <Route element={<UsersPage />} path="/users" />
       <Route element={<CustomerDetailPage />} path="/users/customers/:userId" />
       <Route element={<LandmarksPage />} path="/landmarks" />
-      <Route element={<OffersPage />} path="/offers" />
+      <Route element={<OffersHubPage />} path="/offers" />
       <Route element={<NotificationsPage />} path="/notifications" />
       <Route element={<AccountingPage />} path="/accounting" />
       <Route element={<SettingsPage />} path="/settings" />

@@ -43,7 +43,7 @@ const statusBadge: Record<Status, string> = {
   EXPIRED: "badge-warn"
 };
 
-export function OffersPage() {
+export function OffersPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useTranslation();
   const [offers, setOffers] = useState<OfferView[] | null>(null);
   const [stores, setStores] = useState<RestaurantProfile[]>([]);
@@ -97,7 +97,8 @@ export function OffersPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t("offers.title")}</h1>
+          {/* Under the Offers tabs the page title is the hub's; only the explanation stays. */}
+          {embedded ? null : <h1 className="page-title">{t("offers.title")}</h1>}
           <p className="page-subtitle">{t("offers.subtitle")}</p>
         </div>
         {editing ? null : (

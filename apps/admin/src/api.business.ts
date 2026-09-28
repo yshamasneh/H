@@ -101,6 +101,16 @@ export type LiveOrderQueue = {
  */
 export function createStoreApi(base: string) {
   return {
+    /** The store's product catalogue, for the offers screen (the same calls the catalogue editor uses). */
+    listMenuCategories(): Promise<MenuCategoryOwner[]> {
+      return request(`${base}/menu/categories`);
+    },
+    listMenuItems(): Promise<MenuItemOwner[]> {
+      return request(`${base}/menu/items`);
+    },
+    updateMenuItem(itemId: string, body: Record<string, unknown>): Promise<MenuItemOwner> {
+      return request(`${base}/menu/items/${itemId}`, { method: "PATCH", body });
+    },
     getLiveOrders(): Promise<LiveOrderQueue> {
       return request(`${base}/orders/live`);
     },
