@@ -31,6 +31,7 @@ export function AdminDashboardScreen(props: {
   onDrivers: () => void;
   onUsers: () => void;
   onAuditLog: () => void;
+  onAnalytics: () => void;
   onNotifications: () => void;
   onOpenSettings: () => void;
 }) {
@@ -86,6 +87,7 @@ export function AdminDashboardScreen(props: {
           <Card onPress={props.onOffers}><CardTitle>{t("dashboard.offersTitle")}</CardTitle><Meta>{t("dashboard.offersMeta")}</Meta></Card>
           <Card onPress={props.onOrders}><CardTitle>{t("dashboard.ordersTitle")}</CardTitle><Meta>{t("dashboard.ordersMeta")}</Meta></Card>
           <Card onPress={props.onDrivers}><CardTitle>{t("dashboard.driversTitle")}</CardTitle><Meta>{t("dashboard.driversMeta")}</Meta></Card>
+          <Card onPress={props.onAnalytics}><CardTitle>{t("dashboard.analyticsTitle")}</CardTitle><Meta>{t("dashboard.analyticsMeta")}</Meta></Card>
           <Card onPress={props.onUsers}><CardTitle>{t("dashboard.usersTitle")}</CardTitle><Meta>{t("dashboard.usersMeta")}</Meta></Card>
           <Card onPress={props.onAuditLog}><CardTitle>{t("dashboard.auditLogTitle")}</CardTitle><Meta>{t("dashboard.auditLogMeta")}</Meta></Card>
 

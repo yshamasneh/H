@@ -68,6 +68,7 @@ import {
   accountNotFoundToSignup,
   authResultToHome,
   forgotRequestToOtp,
+  goToAdminAnalytics,
   goToAdminAuditLog,
   goToAdminDashboard,
   goToAdminDrivers,
@@ -138,6 +139,7 @@ import { AdminRestaurantsScreen, AdminRestaurantDetailScreen } from "./src/featu
 import { AdminDriversScreen } from "./src/features/admin/drivers-screen";
 import { AdminOrderDetailScreen, AdminOrdersScreen } from "./src/features/admin/orders-screen";
 import { AdminUsersScreen } from "./src/features/admin/users-screen";
+import { AdminAnalyticsScreen } from "./src/features/admin/analytics-screen";
 import { AdminCustomerDetailScreen } from "./src/features/admin/customer-detail-screen";
 import { AdminAuditLogScreen } from "./src/features/admin/audit-log-screen";
 import { AdminOffersScreen } from "./src/features/admin/offers-screen";
@@ -883,6 +885,7 @@ function TasawaQApp() {
     case "admin-dashboard":
       return (
         <AdminDashboardScreen
+          onAnalytics={() => setScreen(goToAdminAnalytics(screen.user))}
           onAuditLog={() => setScreen(goToAdminAuditLog(screen.user))}
           onDrivers={() => setScreen(goToAdminDrivers(screen.user))}
           onLogout={handleLogout}
@@ -943,6 +946,8 @@ function TasawaQApp() {
           userId={screen.userId}
         />
       );
+    case "admin-analytics":
+      return <AdminAnalyticsScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "admin-audit-log":
       return <AdminAuditLogScreen onBack={() => setScreen(goToAdminDashboard(screen.user))} />;
     case "notifications":

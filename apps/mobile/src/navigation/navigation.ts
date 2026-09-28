@@ -66,7 +66,8 @@ export type AppScreen =
   | { name: "admin-drivers"; user: PublicUser }
   | { name: "admin-users"; user: PublicUser }
   | { name: "admin-customer-detail"; user: PublicUser; userId: string }
-  | { name: "admin-audit-log"; user: PublicUser };
+  | { name: "admin-audit-log"; user: PublicUser }
+  | { name: "admin-analytics"; user: PublicUser };
 
 export const initialScreen: AppScreen = { name: "login" };
 
@@ -331,6 +332,10 @@ export function adminOrderDetailBack(
   return screen.backToCustomerId
     ? goToAdminCustomerDetail(screen.user, screen.backToCustomerId)
     : goToAdminOrders(screen.user);
+}
+
+export function goToAdminAnalytics(user: PublicUser): Extract<AppScreen, { name: "admin-analytics" }> {
+  return { name: "admin-analytics", user };
 }
 
 export function goToAdminAuditLog(user: PublicUser): Extract<AppScreen, { name: "admin-audit-log" }> {
