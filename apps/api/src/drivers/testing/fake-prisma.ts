@@ -10,6 +10,7 @@ type UserRecord = {
   role: UserRole;
   phoneVerifiedAt: Date | null;
   isActive: boolean;
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -156,6 +157,9 @@ export class FakeDriversPrisma {
   readonly notification = {} as any;
   readonly pushToken = {} as any;
   readonly auditLog = {} as any;
+  readonly refreshSession = {} as any;
+  /** Sessions revoked per user, so a password reset can be seen to end them. */
+  readonly revokedSessionsFor: string[] = [];
   readonly financialRateSet = this.accounting.financialRateSet;
   readonly partnerAccount = this.accounting.partnerAccount;
   readonly orderFinancialRecord = this.accounting.orderFinancialRecord;
@@ -187,11 +191,31 @@ export class FakeDriversPrisma {
         role: data.role,
         phoneVerifiedAt: data.phoneVerifiedAt ?? null,
         isActive: data.isActive ?? true,
+        tokenVersion: 0,
         createdAt: now,
         updatedAt: now
       };
       this.users.push(user);
       return user;
+    };
+
+    this.user.update = async ({ where, data }: any) => {
+      const user = this.users.find((candidate) => candidate.id === where.id);
+      if (!user) throw new Error("missing user");
+      if (data.phone !== undefined && this.users.some((other) => other.id !== user.id && other.phone === data.phone)) {
+        throw new Error("duplicate user phone");
+      }
+      if (data.fullName !== undefined) user.fullName = data.fullName;
+      if (data.phone !== undefined) user.phone = data.phone;
+      if (data.passwordHash !== undefined) user.passwordHash = data.passwordHash;
+      if (data.isActive !== undefined) user.isActive = data.isActive;
+      if (data.tokenVersion?.increment !== undefined) user.tokenVersion += data.tokenVersion.increment;
+      user.updatedAt = new Date();
+      return user;
+    };
+    this.refreshSession.updateMany = async ({ where }: any) => {
+      this.revokedSessionsFor.push(where.userId);
+      return { count: 1 };
     };
 
     this.driverProfile.create = async ({ data }: any) => {
@@ -366,6 +390,8 @@ export class FakeDriversPrisma {
       return sliced.map((delivery) => this.hydrateDelivery(delivery));
     };
 
+    this.delivery.findFirst = async (args: any) => (await this.delivery.findMany(args))[0] ?? null;
+
     this.delivery.count = async ({ where }: any) =>
       this.deliveries.filter(
         (delivery) =>
@@ -502,6 +528,7 @@ export class FakeDriversPrisma {
       role: UserRole.DRIVER,
       phoneVerifiedAt: now,
       isActive: true,
+      tokenVersion: 0,
       createdAt: now,
       updatedAt: now,
       ...overrides

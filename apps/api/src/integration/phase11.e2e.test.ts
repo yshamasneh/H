@@ -215,21 +215,12 @@ test(
     }
 
     const driverRegistration = await http
-      .post("/api/v1/drivers/register")
-      .send({
-        fullName: "Phase 11 Driver",
-        countryCode: "+970",
-        phoneNumber: "0594000004",
-        password,
-        confirmPassword: password
-      })
+      .post("/api/v1/admin/drivers")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ fullName: "Phase 11 Driver", countryCode: "+970", phoneNumber: "0594000004", password })
       .expect(201);
     const driverUserId = driverRegistration.body.userId as string;
 
-    await http
-      .post(`/api/v1/admin/drivers/${driverUserId}/approve`)
-      .set("Authorization", `Bearer ${adminToken}`)
-      .expect(201);
     const driverToken = await login(http, "0594000004");
     await http
       .patch("/api/v1/driver/me/status")

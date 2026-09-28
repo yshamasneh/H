@@ -51,8 +51,9 @@ import {
   type PresenceDurations,
   type PresenceReport
 } from "./presence.rules";
-import type { DriverDeliveryStatusAction, DriverRegisterDto } from "./drivers.dto";
+import type { AdminCreateDriverDto, AdminUpdateDriverDto, DriverDeliveryStatusAction } from "./drivers.dto";
 import type {
+  AdminDriverDetailView,
   AdminDriverLocationView,
   AdminDriverView,
   AdminOrderTrackingView,
@@ -77,6 +78,8 @@ const deliveryInclude = { order: { include: { restaurant: true, customer: { sele
 const cashSummaryLineLimit = 100;
 /** Settled periods returned by the driver's History; older ones stay in the ledger and admin views. */
 const handoverHistoryLimit = 50;
+/** Deliveries shown on an admin's driver page; the full history stays in orders and the ledger. */
+const recentDriverDeliveriesLimit = 20;
 
 @Injectable()
 export class DriversService {
@@ -98,54 +101,152 @@ export class DriversService {
     };
   }
 
-  async register(input: DriverRegisterDto): Promise<{ message: string; userId: string }> {
-    this.assertPasswordsMatch(input.password, input.confirmPassword);
+  /**
+   * Creates a driver account on behalf of JOVO. This is the only way a driver account comes into
+   * being — there is no public self-registration. The same User + DriverProfile pair the rest of the
+   * driver system reads, created already APPROVED (the administrator creating it is the approval),
+   * with an audit entry naming who created it.
+   */
+  async adminCreateDriver(adminUserId: string, input: AdminCreateDriverDto): Promise<AdminDriverView> {
     const phone = normalizePhoneNumber(input.countryCode, input.phoneNumber);
-    const fullName = input.fullName.trim().replace(/\s+/g, " ");
-    if (fullName.length < 2) {
-      throw new ApiException(400, "INVALID_FULL_NAME", "Please enter your full name.");
-    }
-
-    const existingUser = await this.prisma.user.findUnique({ where: { phone } });
-    if (existingUser) {
+    const fullName = normalizeFullName(input.fullName);
+    if (await this.prisma.user.findUnique({ where: { phone } })) {
       throw phoneAlreadyRegistered();
     }
-
     const passwordHash = await hashPassword(input.password);
 
     try {
-      const driver = await this.prisma.$transaction(async (transaction) => {
-        const recheckedUser = await transaction.user.findUnique({ where: { phone } });
-        if (recheckedUser) {
-          throw phoneAlreadyRegistered();
-        }
-        const user = await transaction.user.create({
-          data: {
-            fullName,
-            phone,
-            passwordHash,
-            role: UserRole.DRIVER,
-            phoneVerifiedAt: new Date(),
-            isActive: true
-          }
+      const profile = await this.prisma.$transaction(async (tx) => {
+        if (await tx.user.findUnique({ where: { phone } })) throw phoneAlreadyRegistered();
+        const user = await tx.user.create({
+          data: { fullName, phone, passwordHash, role: UserRole.DRIVER, phoneVerifiedAt: new Date(), isActive: true }
         });
-        await transaction.driverProfile.create({
-          data: { userId: user.id, status: DriverApprovalStatus.PENDING, isOnline: false }
+        const created = await tx.driverProfile.create({
+          data: { userId: user.id, status: DriverApprovalStatus.APPROVED, isOnline: false }
         });
-        return user;
+        await writeAuditLog(tx, {
+          actorUserId: adminUserId,
+          action: "DRIVER_CREATED",
+          entityType: "DriverProfile",
+          entityId: user.id,
+          reason: null,
+          metadata: { phone }
+        });
+        return { ...created, user };
       });
-
-      return {
-        message:
-          "Your driver account was created and is awaiting admin approval. Log in with your phone number and password once it is approved.",
-        userId: driver.id
-      };
+      return toAdminView(profile, 0, null, new Date());
     } catch (error) {
-      if (isPrismaCode(error, "P2002")) {
-        throw phoneAlreadyRegistered();
-      }
+      if (isPrismaCode(error, "P2002")) throw phoneAlreadyRegistered();
       throw error;
     }
+  }
+
+  /** Corrects a driver's name or login phone number. */
+  async adminUpdateDriver(adminUserId: string, driverUserId: string, input: AdminUpdateDriverDto): Promise<AdminDriverView> {
+    if ((input.phoneNumber === undefined) !== (input.countryCode === undefined)) {
+      throw new ApiException(400, "PHONE_INCOMPLETE", "Send the country code together with the phone number.");
+    }
+    const existing = await this.requireDriverAccount(driverUserId);
+    const fullName = input.fullName !== undefined ? normalizeFullName(input.fullName) : undefined;
+    const phone =
+      input.phoneNumber !== undefined ? normalizePhoneNumber(input.countryCode!, input.phoneNumber) : undefined;
+    if (phone !== undefined && phone !== existing.user.phone && (await this.prisma.user.findUnique({ where: { phone } }))) {
+      throw phoneAlreadyRegistered();
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({ where: { id: driverUserId }, data: { fullName, phone } });
+        await writeAuditLog(tx, {
+          actorUserId: adminUserId,
+          action: "DRIVER_UPDATED",
+          entityType: "DriverProfile",
+          entityId: driverUserId,
+          reason: null,
+          metadata: {
+            ...(fullName !== undefined && fullName !== existing.user.fullName ? { fromName: existing.user.fullName, toName: fullName } : {}),
+            ...(phone !== undefined && phone !== existing.user.phone ? { fromPhone: existing.user.phone, toPhone: phone } : {})
+          }
+        });
+      });
+    } catch (error) {
+      if (isPrismaCode(error, "P2002")) throw phoneAlreadyRegistered();
+      throw error;
+    }
+    return this.adminDriverView(driverUserId);
+  }
+
+  /**
+   * Sets a new password for a driver who lost theirs. Every existing session ends at once (token
+   * version bumped, refresh sessions revoked), so only someone holding the new password gets in.
+   */
+  async adminSetDriverPassword(adminUserId: string, driverUserId: string, password: string): Promise<{ ok: true }> {
+    await this.requireDriverAccount(driverUserId);
+    const passwordHash = await hashPassword(password);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: driverUserId }, data: { passwordHash, tokenVersion: { increment: 1 } } });
+      await tx.refreshSession.updateMany({ where: { userId: driverUserId, revokedAt: null }, data: { revokedAt: new Date() } });
+      await tx.driverProfile.update({ where: { userId: driverUserId }, data: { isOnline: false } });
+      await writeAuditLog(tx, {
+        actorUserId: adminUserId,
+        action: "DRIVER_PASSWORD_RESET",
+        entityType: "DriverProfile",
+        entityId: driverUserId,
+        reason: null,
+        metadata: {}
+      });
+    });
+    return { ok: true };
+  }
+
+  /** One driver for the admin detail page: the list row plus delivery totals and recent history. */
+  async adminGetDriver(driverUserId: string): Promise<AdminDriverDetailView> {
+    const view = await this.adminDriverView(driverUserId);
+    const profile = await this.requireDriverAccount(driverUserId);
+    const [failedDeliveriesCount, recent] = await Promise.all([
+      this.prisma.delivery.count({ where: { driverId: driverUserId, status: DeliveryStatus.FAILED } }),
+      this.prisma.delivery.findMany({
+        where: { driverId: driverUserId },
+        orderBy: { assignedAt: "desc" },
+        take: recentDriverDeliveriesLimit,
+        include: { order: { include: { restaurant: true } } }
+      })
+    ]);
+    return {
+      ...view,
+      lastLocationAt: profile.lastLocationAt,
+      failedDeliveriesCount,
+      recentDeliveries: recent.map((delivery) => ({
+        deliveryId: delivery.id,
+        orderId: delivery.orderId,
+        status: delivery.status,
+        storeName: delivery.order.restaurant.name,
+        totalMinor: delivery.order.totalMinor,
+        assignedAt: delivery.assignedAt,
+        finishedAt: delivery.deliveredAt ?? delivery.failedAt ?? delivery.cancelledAt
+      }))
+    };
+  }
+
+  private async adminDriverView(driverUserId: string): Promise<AdminDriverView> {
+    const profile = await this.requireDriverAccount(driverUserId);
+    const [completed, active] = await Promise.all([
+      this.prisma.delivery.count({ where: { driverId: driverUserId, status: DeliveryStatus.DELIVERED } }),
+      this.prisma.delivery.findFirst({
+        where: { driverId: driverUserId, status: { in: activeDeliveryStatuses } },
+        select: { id: true }
+      })
+    ]);
+    return toAdminView(profile, completed, active?.id ?? null, new Date());
+  }
+
+  /** A driver account, and only a driver account: MANAGE_DRIVERS never reaches other users. */
+  private async requireDriverAccount(driverUserId: string): Promise<DriverWithUser> {
+    const profile = await this.prisma.driverProfile.findUnique({ where: { userId: driverUserId }, include: { user: true } });
+    if (!profile || profile.user.role !== UserRole.DRIVER) {
+      throw new ApiException(404, "DRIVER_NOT_FOUND", "This driver account does not exist.");
+    }
+    return profile;
   }
 
   async setOnlineStatus(driverUserId: string, isOnline: boolean): Promise<DriverProfileView> {
@@ -933,12 +1034,6 @@ export class DriversService {
     }
     return profile;
   }
-
-  private assertPasswordsMatch(password: string, confirmation: string): void {
-    if (password !== confirmation) {
-      throw new ApiException(400, "PASSWORDS_DO_NOT_MATCH", "The passwords do not match.");
-    }
-  }
 }
 
 /**
@@ -1092,6 +1187,14 @@ function deliveryNotFound(): ApiException {
 
 function invalidDeliveryTransition(from: DeliveryStatus, to: DeliveryStatus): ApiException {
   return new ApiException(409, "DELIVERY_INVALID_TRANSITION", `Delivery cannot move from ${from} to ${to}.`);
+}
+
+function normalizeFullName(input: string): string {
+  const fullName = input.trim().replace(/\s+/g, " ");
+  if (fullName.length < 2) {
+    throw new ApiException(400, "INVALID_FULL_NAME", "Please enter the driver's full name.");
+  }
+  return fullName;
 }
 
 function phoneAlreadyRegistered(): ApiException {

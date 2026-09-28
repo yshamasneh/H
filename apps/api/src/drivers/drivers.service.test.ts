@@ -14,43 +14,103 @@ function createService() {
   return { prisma, realtime, service };
 }
 
-function registerInput(overrides: Record<string, unknown> = {}) {
+function createInput(overrides: Record<string, unknown> = {}) {
   return {
     countryCode: "+970" as const,
     phoneNumber: "0591234567",
-    fullName: "New Driver",
+    fullName: "  New   Driver ",
     password: "Strong@123",
-    confirmPassword: "Strong@123",
     ...overrides
   };
 }
 
-test("registering a driver creates a DRIVER user and an offline driver profile", async () => {
+test("an administrator creates a driver: a DRIVER user with an approved, offline profile, audited", async () => {
   const { prisma, service } = createService();
-  const result = await service.register(registerInput() as never);
+  const admin = randomUUID();
+  const view = await service.adminCreateDriver(admin, createInput() as never);
 
   assert.equal(prisma.users.length, 1);
   assert.equal(prisma.users[0].role, "DRIVER");
+  assert.equal(prisma.users[0].fullName, "New Driver");
+  assert.equal(prisma.users[0].phone, "+970591234567");
+  assert.notEqual(prisma.users[0].passwordHash, "Strong@123", "the password is stored hashed");
   assert.equal(prisma.driverProfiles.length, 1);
+  assert.equal(prisma.driverProfiles[0].status, DriverApprovalStatus.APPROVED);
   assert.equal(prisma.driverProfiles[0].isOnline, false);
-  assert.equal(prisma.driverProfiles[0].userId, result.userId);
+  assert.equal(view.userId, prisma.users[0].id);
+  assert.equal(view.status, "APPROVED");
+  assert.equal(prisma.auditLogs.length, 1);
+  assert.equal(prisma.auditLogs[0].action, "DRIVER_CREATED");
+  assert.equal(prisma.auditLogs[0].actorUserId, admin);
 });
 
-test("registering with a phone that already has an account is rejected", async () => {
-  const { prisma, service } = createService();
-  await service.register(registerInput() as never);
+test("a created driver can go online straight away — the administrator's creation is the approval", async () => {
+  const { service } = createService();
+  const view = await service.adminCreateDriver(randomUUID(), createInput() as never);
+  const profile = await service.setOnlineStatus(view.userId, true);
+  assert.equal(profile.isOnline, true);
+});
 
-  await assert.rejects(service.register(registerInput() as never), hasCode("PHONE_ALREADY_REGISTERED"));
+test("creating a driver with a phone that already has an account is rejected", async () => {
+  const { prisma, service } = createService();
+  await service.adminCreateDriver(randomUUID(), createInput() as never);
+
+  await assert.rejects(service.adminCreateDriver(randomUUID(), createInput() as never), hasCode("PHONE_ALREADY_REGISTERED"));
   assert.equal(prisma.users.length, 1);
 });
 
-test("registering with mismatched passwords is rejected before touching the database", async () => {
+test("an administrator corrects a driver's name and phone; a phone in use elsewhere is refused", async () => {
   const { prisma, service } = createService();
+  const admin = randomUUID();
+  const driver = await service.adminCreateDriver(admin, createInput() as never);
+  const other = prisma.seedDriver({ phone: "+970599999999" });
+
+  const updated = await service.adminUpdateDriver(admin, driver.userId, {
+    fullName: "Renamed Driver",
+    countryCode: "+970",
+    phoneNumber: "0592222222"
+  } as never);
+  assert.equal(updated.fullName, "Renamed Driver");
+  assert.equal(updated.phone, "+970592222222");
+  assert.equal(prisma.auditLogs.at(-1)!.action, "DRIVER_UPDATED");
+
   await assert.rejects(
-    service.register(registerInput({ confirmPassword: "Different@123" }) as never),
-    hasCode("PASSWORDS_DO_NOT_MATCH")
+    service.adminUpdateDriver(admin, driver.userId, { countryCode: "+970", phoneNumber: "0599999999" } as never),
+    hasCode("PHONE_ALREADY_REGISTERED")
   );
-  assert.equal(prisma.users.length, 0);
+  await assert.rejects(
+    service.adminUpdateDriver(admin, driver.userId, { phoneNumber: "0593333333" } as never),
+    hasCode("PHONE_INCOMPLETE")
+  );
+  assert.ok(prisma.users.find((user) => user.id === other.userId));
+});
+
+test("a password set by an administrator ends every session of the driver and takes them offline", async () => {
+  const { prisma, service } = createService();
+  const driver = prisma.seedDriver({ isOnline: true });
+  const before = prisma.users[0].passwordHash;
+
+  await service.adminSetDriverPassword(randomUUID(), driver.userId, "Another@123");
+
+  assert.notEqual(prisma.users[0].passwordHash, before);
+  assert.equal(prisma.users[0].tokenVersion, 1);
+  assert.deepEqual(prisma.revokedSessionsFor, [driver.userId]);
+  assert.equal(prisma.driverProfiles[0].isOnline, false);
+  assert.equal(prisma.auditLogs.at(-1)!.action, "DRIVER_PASSWORD_RESET");
+});
+
+test("driver management only ever reaches driver accounts", async () => {
+  const { prisma, service } = createService();
+  // A profile row pointing at a non-driver user must still be refused.
+  const notADriver = prisma.seedDriver({ role: "ADMIN" as never });
+  for (const attempt of [
+    service.adminUpdateDriver(randomUUID(), notADriver.userId, { fullName: "Hijack" } as never),
+    service.adminSetDriverPassword(randomUUID(), notADriver.userId, "Another@123"),
+    service.adminGetDriver(notADriver.userId),
+    service.adminGetDriver(randomUUID())
+  ]) {
+    await assert.rejects(attempt, hasCode("DRIVER_NOT_FOUND"));
+  }
 });
 
 test("a driver can toggle online status", async () => {
@@ -349,12 +409,12 @@ test("available deliveries only include unclaimed ones, and own deliveries only 
   assert.equal(mine.items[0].id, deliveryA.id);
 });
 
-test("a newly registered driver starts PENDING and cannot go online until approved", async () => {
+test("a driver still PENDING (an application from before admin-created accounts) cannot go online", async () => {
   const { prisma, service } = createService();
-  const result = await service.register(registerInput() as never);
+  const driver = prisma.seedDriver({ status: DriverApprovalStatus.PENDING, isOnline: false });
   assert.equal(prisma.driverProfiles[0].status, DriverApprovalStatus.PENDING);
 
-  await assert.rejects(service.setOnlineStatus(result.userId, true), hasCode("DRIVER_NOT_APPROVED"));
+  await assert.rejects(service.setOnlineStatus(driver.userId, true), hasCode("DRIVER_NOT_APPROVED"));
 });
 
 test("an approved driver can go online", async () => {

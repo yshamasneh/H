@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
-import { PhoneDto, strongPasswordPattern } from "../auth/auth.dto";
+import { PhoneDto, strongPasswordPattern, supportedCountryCodes, type SupportedCountryCode } from "../auth/auth.dto";
 import { driverCashPeriods, type DriverCashPeriod } from "./drivers.types";
 
 export class AdminActionReasonDto {
@@ -12,7 +12,12 @@ export class AdminActionReasonDto {
   reason!: string;
 }
 
-export class DriverRegisterDto extends PhoneDto {
+/**
+ * An administrator creating a driver account. Drivers are never self-registered: the account is
+ * made by JOVO staff holding MANAGE_DRIVERS, who hand the driver their phone number and this
+ * initial password. The driver can change it later through the normal forgot-password flow.
+ */
+export class AdminCreateDriverDto extends PhoneDto {
   @ApiProperty({ example: "Driver Name" })
   @IsString()
   @MinLength(2)
@@ -25,10 +30,38 @@ export class DriverRegisterDto extends PhoneDto {
     message: "Password must be 8-72 characters and include uppercase, lowercase, number, and symbol."
   })
   password!: string;
+}
 
+/** Correcting a driver's name or login phone number. Omitted fields are left as they are. */
+export class AdminUpdateDriverDto {
+  @ApiPropertyOptional({ example: "Driver Name" })
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(100)
+  fullName?: string;
+
+  @ApiPropertyOptional({ enum: supportedCountryCodes, example: "+970" })
+  @IsOptional()
+  @IsIn(supportedCountryCodes)
+  countryCode?: SupportedCountryCode;
+
+  @ApiPropertyOptional({ example: "0591234567" })
+  @IsOptional()
+  @IsString()
+  @MinLength(7)
+  @MaxLength(30)
+  phoneNumber?: string;
+}
+
+/** A new password set by an administrator (e.g. a driver who lost theirs). Ends every session. */
+export class AdminSetDriverPasswordDto {
   @ApiProperty({ example: "Strong@123" })
   @IsString()
-  confirmPassword!: string;
+  @Matches(strongPasswordPattern, {
+    message: "Password must be 8-72 characters and include uppercase, lowercase, number, and symbol."
+  })
+  password!: string;
 }
 
 export class SetDriverOnlineStatusDto {

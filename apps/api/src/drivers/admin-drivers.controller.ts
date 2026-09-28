@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -7,7 +7,7 @@ import { RequirePermission } from "../common/decorators/require-permission.decor
 import { RolesGuard } from "../common/guards/roles.guard";
 import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { UserRole } from "../generated/prisma/client";
-import { AdminActionReasonDto } from "./drivers.dto";
+import { AdminActionReasonDto, AdminCreateDriverDto, AdminSetDriverPasswordDto, AdminUpdateDriverDto } from "./drivers.dto";
 import { DriversService } from "./drivers.service";
 
 @ApiTags("admin")
@@ -35,6 +35,38 @@ export class AdminDriversController {
   @ApiOperation({ summary: "Where the driver on one order is now, with the pickup and destination" })
   trackOrder(@Param("orderId", new ParseUUIDPipe()) orderId: string) {
     return this.drivers.adminGetOrderTracking(orderId);
+  }
+
+  @Post()
+  @ApiOperation({ summary: "Create a driver account (the only way one is created — there is no self-registration)" })
+  create(@Req() request: AuthenticatedRequest, @Body() input: AdminCreateDriverDto) {
+    return this.drivers.adminCreateDriver(request.user.id, input);
+  }
+
+  @Get(":driverUserId")
+  @ApiOperation({ summary: "One driver with delivery totals and recent deliveries" })
+  detail(@Param("driverUserId", new ParseUUIDPipe()) driverUserId: string) {
+    return this.drivers.adminGetDriver(driverUserId);
+  }
+
+  @Patch(":driverUserId")
+  @ApiOperation({ summary: "Correct a driver's name or login phone number" })
+  update(
+    @Req() request: AuthenticatedRequest,
+    @Param("driverUserId", new ParseUUIDPipe()) driverUserId: string,
+    @Body() input: AdminUpdateDriverDto
+  ) {
+    return this.drivers.adminUpdateDriver(request.user.id, driverUserId, input);
+  }
+
+  @Post(":driverUserId/password")
+  @ApiOperation({ summary: "Set a new password for a driver, ending all of the driver's sessions" })
+  setPassword(
+    @Req() request: AuthenticatedRequest,
+    @Param("driverUserId", new ParseUUIDPipe()) driverUserId: string,
+    @Body() input: AdminSetDriverPasswordDto
+  ) {
+    return this.drivers.adminSetDriverPassword(request.user.id, driverUserId, input.password);
   }
 
   @Post(":driverUserId/approve")

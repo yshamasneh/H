@@ -696,11 +696,11 @@ async function createActors(http: Http, prisma: PrismaService) {
 
   async function driver(fullName: string, phone: string, online: boolean, platform: "android" | "ios") {
     const created = await http
-      .post("/api/v1/drivers/register")
-      .send({ fullName, countryCode: "+970", phoneNumber: phone, password, confirmPassword: password })
+      .post("/api/v1/admin/drivers")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ fullName, countryCode: "+970", phoneNumber: phone, password })
       .expect(201);
     const userId = created.body.userId as string;
-    await http.post(`/api/v1/admin/drivers/${userId}/approve`).set("Authorization", `Bearer ${adminToken}`).expect(201);
     const token = await login(http, phone);
     if (online) {
       await http.patch("/api/v1/driver/me/status").set("Authorization", `Bearer ${token}`).send({ isOnline: true }).expect(200);

@@ -738,20 +738,11 @@ async function createActors(http: Http, prisma: PrismaService): Promise<Actors> 
   });
 
   const driverRegistration = await http
-    .post("/api/v1/drivers/register")
-    .send({
-      fullName: "Ledger E2E Driver",
-      countryCode: "+970",
-      phoneNumber: local.driver,
-      password,
-      confirmPassword: password
-    })
+    .post("/api/v1/admin/drivers")
+    .set("Authorization", `Bearer ${adminToken}`)
+    .send({ fullName: "Ledger E2E Driver", countryCode: "+970", phoneNumber: local.driver, password })
     .expect(201);
   const driverUserId = driverRegistration.body.userId as string;
-  await http
-    .post(`/api/v1/admin/drivers/${driverUserId}/approve`)
-    .set("Authorization", `Bearer ${adminToken}`)
-    .expect(201);
   const driverToken = await login(http, local.driver);
   await http
     .patch("/api/v1/driver/me/status")

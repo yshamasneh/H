@@ -38,6 +38,21 @@ export type AdminDriverView = AdminDriverPresence & {
   createdAt: Date;
 };
 
+/** One driver in full, for the admin driver page. */
+export type AdminDriverDetailView = AdminDriverView & {
+  lastLocationAt: Date | null;
+  failedDeliveriesCount: number;
+  recentDeliveries: {
+    deliveryId: string;
+    orderId: string;
+    status: DeliveryStatus;
+    storeName: string;
+    totalMinor: number;
+    assignedAt: Date | null;
+    finishedAt: Date | null;
+  }[];
+};
+
 /** One driver's last reported position, for the admin live map. */
 export type AdminDriverLocationView = AdminDriverPresence & {
   userId: string;
