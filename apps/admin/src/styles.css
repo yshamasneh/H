@@ -1308,3 +1308,66 @@ article.order-ticket:hover { border-color: var(--border); box-shadow: none; }
   .btn-sm { min-height: 44px; padding: var(--space-2) var(--space-4); }
   .pack-anyway { min-height: 44px; }
 }
+
+/* ----------------------------------------------------------------------------
+   Analytics. Every chart is a single series, so one hue carries it: the
+   primary token for bars, and a sequential ramp mixed from it (light to dark,
+   one hue) for the weekday x hour grid. Values and labels stay in text ink.
+   -------------------------------------------------------------------------- */
+.analytics-date { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--fs-caption); color: var(--text-muted); }
+.analytics-summary { font-weight: var(--fw-semibold); color: var(--text); margin: 0 0 var(--space-3); }
+.analytics-chart-title { font-size: var(--fs-body-sm); font-weight: var(--fw-semibold); color: var(--text); margin: var(--space-5) 0 var(--space-2); }
+.analytics-readout { font-size: var(--fs-caption); color: var(--text-muted); min-height: 1.4em; margin-bottom: var(--space-2); }
+.analytics-table-view { margin-top: var(--space-4); }
+.analytics-table-view summary { cursor: pointer; color: var(--primary); font-weight: var(--fw-medium); font-size: var(--fs-body-sm); }
+
+/* Hour-of-day columns: thin bars on one baseline, rounded only at the data end. */
+.chart-columns {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  gap: 2px;
+  align-items: end;
+  border-bottom: 1px solid var(--border);
+}
+.chart-col { display: flex; flex-direction: column; align-items: center; outline: none; cursor: default; }
+.chart-col:focus-visible .chart-col-plot, .chart-col:hover .chart-col-plot { background: var(--surface-sunk); }
+.chart-col-plot { height: 140px; width: 100%; display: flex; align-items: flex-end; justify-content: center; border-radius: 4px 4px 0 0; }
+.chart-col-bar { width: min(100%, 24px); background: var(--primary); border-radius: 4px 4px 0 0; }
+.chart-col-label { font-size: var(--fs-caption); color: var(--text-muted); height: 1.4em; font-variant-numeric: tabular-nums; }
+
+/* Weekday and product bars: horizontal, growing from the start edge (right in Arabic). */
+.hbar-list { display: grid; gap: var(--space-2); max-width: 560px; }
+.hbar-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) 48px; align-items: center; gap: var(--space-3); }
+.hbar-label { font-size: var(--fs-body-sm); color: var(--text); }
+.hbar-value { font-size: var(--fs-body-sm); color: var(--text); text-align: end; }
+.hbar-track { height: 12px; background: var(--surface-sunk); border-radius: 0 4px 4px 0; overflow: hidden; }
+[dir="rtl"] .hbar-track { border-radius: 4px 0 0 4px; }
+.hbar-fill { height: 100%; background: var(--primary); border-radius: 0 4px 4px 0; }
+[dir="rtl"] .hbar-fill { border-radius: 4px 0 0 4px; }
+
+/* Weekday x hour heatmap: one hue, five steps; a 2px surface gap between cells. */
+table.heatmap { border-collapse: separate; border-spacing: 2px; }
+.heatmap th { font-size: var(--fs-caption); font-weight: var(--fw-regular); color: var(--text-muted); padding: 0 var(--space-1); white-space: nowrap; }
+.heatmap th[scope="row"] { text-align: start; padding-inline-end: var(--space-2); }
+.heat-cell { width: 22px; min-width: 22px; height: 22px; border-radius: 4px; display: inline-block; }
+td.heat-cell { display: table-cell; }
+.heat-0 { background: var(--surface-sunk); box-shadow: inset 0 0 0 1px var(--border); }
+.heat-1 { background: color-mix(in srgb, var(--primary) 22%, var(--surface)); }
+.heat-2 { background: color-mix(in srgb, var(--primary) 45%, var(--surface)); }
+.heat-3 { background: color-mix(in srgb, var(--primary) 70%, var(--surface)); }
+.heat-4 { background: var(--primary); }
+.heat-legend { display: flex; align-items: center; gap: var(--space-1); font-size: var(--fs-caption); color: var(--text-muted); margin-top: var(--space-2); }
+.heat-legend .heat-cell { width: 14px; min-width: 14px; height: 14px; }
+
+/* Returning share of all customers with a delivered order. */
+.meter { height: 14px; background: var(--surface-sunk); border-radius: 4px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--border); }
+.meter-fill { height: 100%; background: var(--primary); }
+.meter-legend { display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: var(--fs-caption); color: var(--text-muted); margin-top: var(--space-2); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+.swatch-accent { background: var(--primary); }
+.swatch-track { background: var(--surface-sunk); box-shadow: inset 0 0 0 1px var(--border-strong); }
+
+@media (max-width: 640px) {
+  .chart-col-plot { height: 110px; }
+  .hbar-row { grid-template-columns: 64px minmax(0, 1fr) 40px; }
+}

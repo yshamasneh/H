@@ -93,7 +93,8 @@
       "offers": "Offers",
       "notifications": "Notifications",
       "businessSettings": "Store profile",
-      "reports": "Sales"
+      "reports": "Sales",
+      "analytics": "Analytics"
     },
     "signedInAs": "Signed in as",
     "signOut": "Sign out",
@@ -1140,5 +1141,82 @@
     "noPosition": "This driver has not reported a position yet.",
     "legend": "Blue dot: driver. Green pin: pickup. Orange pin: customer.",
     "loadError": "Could not load the driver's location."
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Best sellers, peak times and returning customers",
+    "loadError": "Could not load analytics.",
+    "presets": {
+      "all": "All time",
+      "today": "Today",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "thisMonth": "This month",
+      "custom": "Custom"
+    },
+    "from": "From",
+    "to": "To",
+    "periodRange": "{{from}} to {{to}}, Hebron time",
+    "periodAll": "Since the beginning",
+    "deliveredOnly": "Delivered orders only",
+    "noOrders": "No delivered orders in this period.",
+    "showTable": "Show the data as a table",
+    "listSeparator": ", ",
+    "weekdays": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "retention": {
+      "title": "Returning customers",
+      "rate": "Returning rate",
+      "rateHint": "Of customers with a delivered order in the period",
+      "returning": "Returning",
+      "returningHint": "Two or more delivered orders · {{orders}} orders",
+      "oneTime": "One-time",
+      "oneTimeHint": "Exactly one delivered order in the period",
+      "customers": "All customers",
+      "customersHint": "{{orders}} delivered orders in the period",
+      "meterLabel": "{{returning}} of {{total}} customers returned ({{rate}})"
+    },
+    "peak": {
+      "title": "Peak order times",
+      "subtitle": "Delivered orders by when they were placed, in Hebron local time (daylight saving included)",
+      "busiestHour": "Busiest hour: {{hours}}",
+      "busiestDay": "Busiest day: {{days}}",
+      "byHour": "By hour of day",
+      "byWeekday": "By weekday",
+      "heatmap": "Weekday × hour",
+      "hoverHint": "Hover a column to see its orders.",
+      "hourReadout": "{{hour}}: {{orders}} orders",
+      "dayReadout": "{{day}}: {{orders}} orders",
+      "cellReadout": "{{day}} {{hour}}: {{orders}} orders",
+      "fewer": "Fewer",
+      "more": "More",
+      "hour": "Hour",
+      "total": "Total"
+    },
+    "products": {
+      "title": "Best-selling products",
+      "subtitle": "Quantity and revenue as actually packed (after re-weighing or substitution). Revenue is the item amount at the price charged, before order discounts and without delivery fees.",
+      "sortBy": {
+        "quantity": "By quantity",
+        "revenue": "By revenue"
+      },
+      "revenueTotal": "Item revenue (₪)",
+      "revenueTotalHint": "Every product sold in the period, exact to the agora",
+      "orders": "Delivered orders",
+      "ordersHint": "Orders containing products sold",
+      "products": "Products sold",
+      "productsHint": "Distinct products",
+      "product": "Product",
+      "quantity": "Quantity sold",
+      "revenue": "Revenue (₪)",
+      "inOrders": "Orders"
+    }
   }
 }

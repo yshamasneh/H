@@ -25,6 +25,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { UsersPage } from "./pages/UsersPage";
 import { CustomerDetailPage } from "./pages/CustomerDetailPage";
 import { AccountingPage } from "./pages/AccountingPage";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { OffersPage } from "./pages/OffersPage";
 import { OperatingCostsPage } from "./pages/business/OperatingCostsPage";
 
@@ -76,6 +77,7 @@ function PlatformRoutes() {
         <Route element={<StaffPage />} path="staff" />
       </Route>
       <Route element={<OrdersPage />} path="/orders" />
+      <Route element={<AnalyticsPage />} path="/analytics" />
       <Route element={<OrderDetailPage />} path="/orders/:orderId" />
       <Route element={<DriversPage />} path="/drivers" />
       <Route element={<LiveDriversPage />} path="/drivers/live" />
