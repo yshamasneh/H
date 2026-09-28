@@ -122,3 +122,22 @@ export function cartSubtotalMinor(cart: Cart): number {
 export function cartItemCount(cart: Cart): number {
   return cart.items.reduce((sum, line) => sum + line.quantity, 0);
 }
+
+/**
+ * Puts a line the customer just removed back where it was, exactly as it was (quantity, price,
+ * substitution choice) — the "Undo" after a removal. If the basket has since been started at a
+ * different store, or the line is already back, the basket is left as it is.
+ */
+export function restoreCartItem(
+  cart: Cart | null,
+  restaurant: CartCandidateRestaurant,
+  line: CartItem,
+  index: number
+): Cart | null {
+  if (!cart) return { restaurantId: restaurant.id, restaurantName: restaurant.name, items: [line] };
+  if (cart.restaurantId !== restaurant.id) return cart;
+  if (cart.items.some((item) => item.menuItemId === line.menuItemId)) return cart;
+  const items = [...cart.items];
+  items.splice(Math.min(Math.max(0, index), items.length), 0, line);
+  return { ...cart, items };
+}

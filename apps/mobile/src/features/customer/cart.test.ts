@@ -112,3 +112,20 @@ test("a full-price line, or one reduced only by an offer, carries no regular pri
   const offerOnly = { ...sandwich, priceMinor: 2000, effectivePriceMinor: 1800, salePriceMinor: null };
   assert.equal(startCart(restaurant, offerOnly).items[0].regularPriceMinor, null, "an offer has its own label");
 });
+
+test("undo puts a removed line back exactly where and how it was", async () => {
+  const { restoreCartItem, removeCartItem } = await import("./cart");
+  const store = { id: "s1", name: "JOVO MARKET" };
+  const labneh = { menuItemId: "labneh", name: "Labneh", priceMinor: 999, quantity: 3, unitLabel: "item", allowSubstitution: false, regularPriceMinor: 1250 };
+  const bread = { menuItemId: "bread", name: "Bread", priceMinor: 425, quantity: 1, unitLabel: "item", allowSubstitution: true };
+  const full = { restaurantId: "s1", restaurantName: "JOVO MARKET", items: [labneh, bread] };
+
+  const afterRemove = removeCartItem(full, "labneh");
+  assert.deepEqual(restoreCartItem(afterRemove, store, labneh, 0), full);
+  // Removing the last line empties the basket; undo brings the basket back.
+  assert.deepEqual(restoreCartItem(null, store, bread, 0), { restaurantId: "s1", restaurantName: "JOVO MARKET", items: [bread] });
+  // Already back, or a different store's basket since: left alone.
+  assert.deepEqual(restoreCartItem(full, store, labneh, 0), full);
+  const other = { restaurantId: "s2", restaurantName: "Other", items: [bread] };
+  assert.deepEqual(restoreCartItem(other, store, labneh, 0), other);
+});

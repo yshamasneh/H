@@ -52,6 +52,7 @@ import {
   removeCartItem,
   setCartItemSubstitution,
   setCartItemQuantity,
+  restoreCartItem,
   startCart,
   type Cart
 } from "./src/features/customer/cart";
@@ -510,16 +511,32 @@ function TasawaQApp() {
   }
 
   function handleDecrementCartItem(menuItemId: string) {
+    const line = cart?.items.find((item) => item.menuItemId === menuItemId);
+    // Taking the last one out is a removal, so it gets the same Undo as the remove button.
+    if (line && line.quantity <= 1) {
+      handleRemoveCartItem(menuItemId);
+      return;
+    }
     setCart((current) => {
       if (!current) return current;
-      const line = current.items.find((item) => item.menuItemId === menuItemId);
-      if (!line) return current;
-      return setCartItemQuantity(current, menuItemId, line.quantity - 1);
+      const currentLine = current.items.find((item) => item.menuItemId === menuItemId);
+      if (!currentLine) return current;
+      return setCartItemQuantity(current, menuItemId, currentLine.quantity - 1);
     });
   }
 
   function handleRemoveCartItem(menuItemId: string) {
+    const snapshot = cart;
+    const index = snapshot ? snapshot.items.findIndex((item) => item.menuItemId === menuItemId) : -1;
     setCart((current) => (current ? removeCartItem(current, menuItemId) : current));
+    if (!snapshot || index < 0) return;
+    // A removal is one tap on a small target, so it can be undone: the line comes back exactly as it was.
+    const line = snapshot.items[index];
+    const store = { id: snapshot.restaurantId, name: snapshot.restaurantName };
+    showToast(t("common:removedFromCartToast", { name: line.name }), {
+      label: t("common:undo"),
+      onPress: () => setCart((current) => restoreCartItem(current, store, line, index))
+    });
   }
 
   function handleToggleCartItemSubstitution(menuItemId: string, allowSubstitution: boolean) {

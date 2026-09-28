@@ -104,5 +104,7 @@
   "locationPermissionRequiredDelivery": "إذن الموقع مطلوب أثناء تنفيذ توصيلة نشطة.",
   "locationUnavailable": "تعذّر تحديد موقعك. حرّك الدبوس على الخريطة أو اكتب عنوانك.",
   "callCustomer": "اتصال بالزبون",
-  "customerLabel": "الزبون"
+  "customerLabel": "الزبون",
+  "removedFromCartToast": "أُزيل {{name}} من السلة",
+  "undo": "تراجع"
 }

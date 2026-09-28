@@ -104,5 +104,7 @@
   "locationPermissionRequiredDelivery": "Location permission is required while you are handling an active delivery.",
   "locationUnavailable": "We couldn't get your location. Move the pin on the map or type your address.",
   "callCustomer": "Call customer",
-  "customerLabel": "Customer"
+  "customerLabel": "Customer",
+  "removedFromCartToast": "{{name}} removed from the basket",
+  "undo": "Undo"
 }
