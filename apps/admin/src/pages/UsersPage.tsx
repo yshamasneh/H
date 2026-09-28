@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link, useSearchParams } from "react-router-dom";
 import { Pager } from "../components/Pager";
 import {
   assignPlatformRole,
@@ -12,14 +13,23 @@ import {
 import { useAuth } from "../auth";
 import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
-
-const roleOptions = ["", "CUSTOMER", "RESTAURANT", "DRIVER", "ADMIN"];
+import { telHref } from "../tel";
+import {
+  customerDetailPath,
+  parseUserSection,
+  staffRoleOptions,
+  userSections,
+  usersListQuery,
+  type UserSection
+} from "../users-sections";
 
 const listPageSize = 20;
 
 export function UsersPage() {
   const { t } = useTranslation();
   const { can, user: currentUser } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section = parseUserSection(searchParams.get("section"));
   const [users, setUsers] = useState<AdminUserView[] | null>(null);
   const [role, setRole] = useState("");
   const [search, setSearch] = useState("");
@@ -37,15 +47,12 @@ export function UsersPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const canManageAdmins = can("MANAGE_ADMINS");
+  // The customer detail shows order history, which the API guards with VIEW_ALL_ORDERS as well.
+  const canViewCustomerOrders = can("VIEW_ALL_ORDERS");
 
   async function load() {
     try {
-      const result = await listAdminUsers({
-        role: role || undefined,
-        search: search || undefined,
-        page,
-        pageSize: listPageSize
-      });
+      const result = await listAdminUsers(usersListQuery(section, { role, search, page, pageSize: listPageSize }));
       setUsers(result.items);
       setTotal(result.total);
       setError(null);
@@ -58,11 +65,19 @@ export function UsersPage() {
     const timeout = setTimeout(() => void load(), 250);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, search, page]);
+  }, [section, role, search, page]);
 
   useEffect(() => {
     setPage(1);
-  }, [role, search]);
+  }, [section, role, search]);
+
+  function selectSection(next: UserSection) {
+    if (next === section) return;
+    setUsers(null);
+    setRole("");
+    setNotice(null);
+    setSearchParams(next === "customers" ? {} : { section: next });
+  }
 
   async function run(action: () => Promise<unknown>) {
     try {
@@ -74,6 +89,22 @@ export function UsersPage() {
     }
   }
 
+  function accessActions(user: AdminUserView) {
+    return user.isActive ? (
+      <button className="btn btn-danger btn-sm" onClick={() => setPendingSuspension(user)} type="button">
+        {t("users.suspend")}
+      </button>
+    ) : (
+      <button
+        className="btn btn-outline btn-sm"
+        onClick={() => void run(() => setUserActive(user.id, true, t("users.restoredReason")))}
+        type="button"
+      >
+        {t("users.restore")}
+      </button>
+    );
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -83,10 +114,25 @@ export function UsersPage() {
         </div>
       </div>
 
-      {error ? <div className="error-banner">{error}</div> : null}
-      {notice ? <div className="empty-state">{notice}</div> : null}
+      <div className="tab-row" role="tablist">
+        {userSections.map((key) => (
+          <button
+            aria-selected={key === section}
+            className={`btn btn-sm ${key === section ? "btn-primary" : "btn-outline"}`}
+            key={key}
+            onClick={() => selectSection(key)}
+            role="tab"
+            type="button"
+          >
+            {t(`users.sections.${key}`)}
+          </button>
+        ))}
+      </div>
 
-      {canManageAdmins ? (
+      {error ? <div className="error-banner">{error}</div> : null}
+      {notice ? <div className="notice-banner">{notice}</div> : null}
+
+      {section === "staff" && canManageAdmins ? (
         <div className="card">
           <h2 className="card-title">{t("users.createAdminTitle")}</h2>
           <div className="filters-row">
@@ -150,14 +196,17 @@ export function UsersPage() {
       ) : null}
 
       <div className="card">
+        <h2 className="card-title">{t(`users.sectionTitles.${section}`)}</h2>
         <div className="filters-row">
-          <select className="select" onChange={(event) => setRole(event.target.value)} value={role}>
-            {roleOptions.map((option) => (
-              <option key={option} value={option}>
-                {option ? t(`role.${option}`) : t("users.allRoles")}
-              </option>
-            ))}
-          </select>
+          {section === "staff" ? (
+            <select className="select" onChange={(event) => setRole(event.target.value)} value={role}>
+              {staffRoleOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option ? t(`role.${option}`) : t("users.allStaffRoles")}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <input
             className="text-input"
             onChange={(event) => setSearch(event.target.value)}
@@ -169,7 +218,53 @@ export function UsersPage() {
         {users === null ? (
           <div className="loading-state">{t("common.loading")}</div>
         ) : users.length === 0 ? (
-          <div className="empty-state">{t("users.empty")}</div>
+          <div className="empty-state">{t(`users.emptySection.${section}`)}</div>
+        ) : section === "customers" ? (
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t("common.name")}</th>
+                  <th>{t("users.registeredPhone")}</th>
+                  <th>{t("common.status")}</th>
+                  <th>{t("users.joined")}</th>
+                  <th>{t("common.actions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id}>
+                    <td>
+                      {canViewCustomerOrders ? (
+                        <Link className="text-link" to={customerDetailPath(user.id)}>
+                          {user.fullName}
+                        </Link>
+                      ) : (
+                        user.fullName
+                      )}
+                    </td>
+                    <td>
+                      <PhoneNumber phone={user.phone} />
+                    </td>
+                    <td>
+                      <StatusBadge status={user.isActive ? "ACTIVE" : "INACTIVE"} />
+                    </td>
+                    <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <div className="row-actions">
+                        {canViewCustomerOrders ? (
+                          <Link className="btn btn-outline btn-sm" to={customerDetailPath(user.id)}>
+                            {t("users.viewCustomer")}
+                          </Link>
+                        ) : null}
+                        {accessActions(user)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="table-scroll">
             <table className="data-table">
@@ -192,7 +287,9 @@ export function UsersPage() {
                         {user.fullName}
                         {isSelf ? ` · ${t("users.you")}` : ""}
                       </td>
-                      <td>{user.phone}</td>
+                      <td>
+                        <PhoneNumber phone={user.phone} />
+                      </td>
                       <td>{t(`role.${user.role}`)}</td>
                       <td>
                         <StatusBadge status={user.isActive ? "ACTIVE" : "INACTIVE"} />
@@ -203,26 +300,8 @@ export function UsersPage() {
                         {isSelf ? (
                           t("common.dash")
                         ) : (
-                          <div className="filters-row" style={{ margin: 0 }}>
-                            {user.isActive ? (
-                              <button
-                                className="btn btn-danger btn-sm"
-                                onClick={() => setPendingSuspension(user)}
-                                type="button"
-                              >
-                                {t("users.suspend")}
-                              </button>
-                            ) : (
-                              <button
-                                className="btn btn-outline btn-sm"
-                                onClick={() =>
-                                  void run(() => setUserActive(user.id, true, t("users.restoredReason")))
-                                }
-                                type="button"
-                              >
-                                {t("users.restore")}
-                              </button>
-                            )}
+                          <div className="row-actions">
+                            {accessActions(user)}
                             {canManageAdmins && user.role === "ADMIN" ? (
                               <button
                                 className="btn btn-outline btn-sm"
@@ -268,4 +347,11 @@ export function UsersPage() {
       ) : null}
     </div>
   );
+}
+
+/** A registered number, kept left-to-right inside Arabic text and dialable where the device can. */
+export function PhoneNumber({ phone }: { phone: string }) {
+  const href = telHref(phone);
+  const number = <bdi className="phone-number" dir="ltr">{phone}</bdi>;
+  return href ? <a className="phone-link" href={href}>{number}</a> : number;
 }

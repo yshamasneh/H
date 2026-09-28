@@ -23,6 +23,7 @@ import { RestaurantsPage } from "./pages/RestaurantsPage";
 import { AdminStoreSection } from "./pages/store/AdminStoreSection";
 import { SettingsPage } from "./pages/SettingsPage";
 import { UsersPage } from "./pages/UsersPage";
+import { CustomerDetailPage } from "./pages/CustomerDetailPage";
 import { AccountingPage } from "./pages/AccountingPage";
 import { OffersPage } from "./pages/OffersPage";
 import { OperatingCostsPage } from "./pages/business/OperatingCostsPage";
@@ -79,6 +80,7 @@ function PlatformRoutes() {
       <Route element={<DriversPage />} path="/drivers" />
       <Route element={<LiveDriversPage />} path="/drivers/live" />
       <Route element={<UsersPage />} path="/users" />
+      <Route element={<CustomerDetailPage />} path="/users/customers/:userId" />
       <Route element={<LandmarksPage />} path="/landmarks" />
       <Route element={<OffersPage />} path="/offers" />
       <Route element={<NotificationsPage />} path="/notifications" />

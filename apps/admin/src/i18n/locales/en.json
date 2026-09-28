@@ -247,13 +247,11 @@
   },
   "users": {
     "title": "Users",
-    "subtitle": "Every account across every role",
+    "subtitle": "Customers and the team, in two separate lists",
     "loadError": "Could not load users.",
-    "allRoles": "All roles",
     "searchPlaceholder": "Search name or phone",
     "role": "Role",
     "joined": "Joined",
-    "empty": "No users match this filter.",
     "createAdminTitle": "Create an administrator",
     "createAdmin": "Create admin",
     "createdNotice": "Administrator created. Give them the password so they can sign in and change it.",
@@ -269,7 +267,41 @@
     "restore": "Restore",
     "restoredReason": "Reactivated by an administrator",
     "makeSuperAdmin": "Make super admin",
-    "removePlatformRole": "Remove platform role"
+    "removePlatformRole": "Remove platform role",
+    "sections": {
+      "customers": "Customers",
+      "staff": "Staff & admins"
+    },
+    "sectionTitles": {
+      "customers": "Customer accounts",
+      "staff": "Staff and administrator accounts"
+    },
+    "allStaffRoles": "All staff roles",
+    "emptySection": {
+      "customers": "No customers match this search.",
+      "staff": "No staff or administrators match this filter."
+    },
+    "registeredPhone": "Registered phone",
+    "viewCustomer": "Customer details"
+  },
+  "customerDetail": {
+    "loadError": "Could not load this customer.",
+    "noPermission": "Viewing a customer's order history needs permission to view all orders.",
+    "registeredOn": "Registered {{date}}",
+    "deliveredOrders": "Completed orders",
+    "deliveredOrdersHint": "Delivered orders only; cancelled, rejected and failed orders are excluded",
+    "totalSpent": "Total spent (₪)",
+    "totalSpentHint": "Sum of completed orders since registration, exact to the agora",
+    "allOrders": "All orders",
+    "firstOrderOn": "First order on {{date}}",
+    "noOrdersYet": "This customer has not placed an order yet.",
+    "historyTitle": "Order history",
+    "historyHint": "Every order, newest first back to the first one. Amounts are exact order totals; the cash collected can be up to 0.99 more because of shekel rounding.",
+    "store": "Store",
+    "items": "Items",
+    "orderTotal": "Order total (₪)",
+    "counted": "In total",
+    "countedYes": "Yes"
   },
   "landmarks": {
     "title": "Landmarks",

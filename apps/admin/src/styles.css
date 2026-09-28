@@ -853,6 +853,20 @@ textarea.text-input { width: 100%; min-height: 80px; resize: vertical; font-fami
 }
 .money-negative { color: var(--error); }
 
+/* A registered phone number: always read left to right, even inside an Arabic row. */
+.phone-number {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+.phone-link { color: var(--primary); }
+.phone-link:hover { color: var(--primary-hover); text-decoration: underline; }
+.phone-link:focus-visible, .text-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.text-link { color: var(--primary); font-weight: var(--fw-medium); }
+.text-link:hover { color: var(--primary-hover); text-decoration: underline; }
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
