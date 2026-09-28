@@ -1363,11 +1363,90 @@ export function reactivateAdminDriver(accessToken: string, userId: string): Prom
   return request(`/api/v1/admin/drivers/${userId}/reactivate`, { method: "POST", accessToken });
 }
 
+/** Customers and staff are listed separately, exactly as on the admin web console. */
+export type AdminUserAudience = "CUSTOMERS" | "STAFF";
+
 export function listAdminUsers(
   accessToken: string,
-  params: { role?: UserRole; search?: string } = {}
+  params: { audience?: AdminUserAudience; role?: UserRole; search?: string; page?: number; pageSize?: number } = {}
 ): Promise<Page<AdminUser>> {
   return request(`/api/v1/admin/users${toQuery(params)}`, { accessToken });
+}
+
+export type AdminCustomerOrderSummary = {
+  id: string;
+  status: OrderStatusValue;
+  /** The order's exact total in agorot — the one amount the customer view uses. */
+  totalMinor: number;
+  createdAt: string;
+  storeName: string;
+  itemsCount: number;
+};
+
+export type AdminCustomerDetail = {
+  customer: AdminUser;
+  /** DELIVERED orders only. */
+  deliveredOrdersCount: number;
+  /**
+   * Sum of `totalMinor` over DELIVERED orders since registration, in agorot. The exact order totals,
+   * never the cash collected after rounding up to a whole shekel.
+   */
+  deliveredSpentMinor: number;
+  ordersCount: number;
+  firstOrderAt: string | null;
+  /** Newest first, back to the first order. */
+  orders: AdminCustomerOrderSummary[];
+};
+
+/** Needs MANAGE_USERS and VIEW_ALL_ORDERS on the server; the order history is order data. */
+export function getAdminCustomerDetail(accessToken: string, userId: string): Promise<AdminCustomerDetail> {
+  return request(`/api/v1/admin/users/${encodeURIComponent(userId)}/customer-detail`, { accessToken });
+}
+
+export function setAdminUserActive(
+  accessToken: string,
+  userId: string,
+  isActive: boolean,
+  reason: string
+): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${encodeURIComponent(userId)}/active`, {
+    method: "PATCH",
+    body: { isActive, reason: reason.trim() },
+    accessToken
+  });
+}
+
+export function createAdminAccount(
+  accessToken: string,
+  body: { fullName: string; countryCode: string; phoneNumber: string; password: string; platformRoleKey?: "SUPER_ADMIN" }
+): Promise<AdminUser> {
+  return request("/api/v1/admin/users/admins", { method: "POST", body, accessToken });
+}
+
+export function assignAdminPlatformRole(
+  accessToken: string,
+  userId: string,
+  platformRoleKey?: "SUPER_ADMIN"
+): Promise<AdminUser> {
+  return request(`/api/v1/admin/users/${encodeURIComponent(userId)}/platform-role`, {
+    method: "PATCH",
+    body: { platformRoleKey },
+    accessToken
+  });
+}
+
+/** What the signed-in account may do. Permissions come from the API, never from the role. */
+export type AdminAccess = {
+  isSuperAdmin: boolean;
+  permissions: string[];
+};
+
+export async function fetchAdminAccess(accessToken: string): Promise<AdminAccess> {
+  const response = await request<{ access?: Partial<AdminAccess> | null }>("/api/v1/auth/me", { accessToken });
+  return {
+    isSuperAdmin: response.access?.isSuperAdmin === true,
+    permissions: Array.isArray(response.access?.permissions) ? response.access!.permissions! : []
+  };
 }
 
 export function listAdminAuditLog(
