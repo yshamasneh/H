@@ -377,8 +377,36 @@ export function reactivateDriver(userId: string): Promise<AdminDriverView> {
   return request(`/api/v1/admin/drivers/${userId}/reactivate`, { method: "POST" });
 }
 
-export function listAdminUsers(params: { role?: string; search?: string; page?: number; pageSize?: number } = {}): Promise<Page<AdminUserView>> {
+export function listAdminUsers(
+  params: { audience?: "CUSTOMERS" | "STAFF"; role?: string; search?: string; page?: number; pageSize?: number } = {}
+): Promise<Page<AdminUserView>> {
   return request(`/api/v1/admin/users${toQuery(params)}`);
+}
+
+export type CustomerOrderSummary = {
+  id: string;
+  status: OrderStatus;
+  /** The order's exact total in agorot — the one amount the customer view uses. */
+  totalMinor: number;
+  createdAt: string;
+  storeName: string;
+  itemsCount: number;
+};
+
+export type CustomerDetail = {
+  customer: AdminUserView;
+  /** DELIVERED orders only. */
+  deliveredOrdersCount: number;
+  /** Sum of the exact totals of DELIVERED orders since registration, in agorot. */
+  deliveredSpentMinor: number;
+  ordersCount: number;
+  firstOrderAt: string | null;
+  /** Newest first, back to the first order. */
+  orders: CustomerOrderSummary[];
+};
+
+export function getCustomerDetail(userId: string): Promise<CustomerDetail> {
+  return request(`/api/v1/admin/users/${encodeURIComponent(userId)}/customer-detail`);
 }
 
 export function listAuditLog(
