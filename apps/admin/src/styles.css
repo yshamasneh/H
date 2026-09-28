@@ -1520,3 +1520,13 @@ td.heat-cell { display: table-cell; }
 .offers-quick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .offers-preview { margin: 0; font-size: var(--fs-body-sm); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .offers-preview-sticker { background: var(--primary); color: var(--text-inverse); font-weight: var(--fw-bold); padding: 3px 10px; border-radius: var(--radius-pill, 999px); }
+
+/* Driver accounts */
+.driver-modal { max-width: 520px; width: 100%; }
+.form-stack { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-3); }
+.driver-phone-row { display: flex; gap: var(--space-2); align-items: center; }
+.driver-phone-row .select { flex: 0 0 auto; width: auto; }
+.driver-phone-row .text-input { flex: 1; min-width: 0; }
+.driver-credentials { background: var(--surface-sunk); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); margin-bottom: var(--space-2); }
+.driver-password { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.1em; letter-spacing: 0.04em; }
+.driver-reset { border-top: 1px solid var(--border); margin-top: var(--space-3); padding-top: var(--space-3); }

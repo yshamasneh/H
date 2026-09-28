@@ -365,6 +365,40 @@ export function listAdminDrivers(): Promise<AdminDriverView[]> {
   return request("/api/v1/admin/drivers");
 }
 
+export type AdminDriverDetail = AdminDriverView & {
+  lastLocationAt: string | null;
+  failedDeliveriesCount: number;
+  recentDeliveries: {
+    deliveryId: string;
+    orderId: string;
+    status: DeliveryStatus;
+    storeName: string;
+    totalMinor: number;
+    assignedAt: string | null;
+    finishedAt: string | null;
+  }[];
+};
+
+/** Driver accounts are created here, by an administrator — there is no public registration. */
+export function createDriver(input: { fullName: string; countryCode: string; phoneNumber: string; password: string }): Promise<AdminDriverView> {
+  return request("/api/v1/admin/drivers", { method: "POST", body: input });
+}
+
+export function getAdminDriver(userId: string): Promise<AdminDriverDetail> {
+  return request(`/api/v1/admin/drivers/${userId}`);
+}
+
+export function updateDriver(
+  userId: string,
+  input: { fullName?: string; countryCode?: string; phoneNumber?: string }
+): Promise<AdminDriverView> {
+  return request(`/api/v1/admin/drivers/${userId}`, { method: "PATCH", body: input });
+}
+
+export function setDriverPassword(userId: string, password: string): Promise<{ ok: true }> {
+  return request(`/api/v1/admin/drivers/${userId}/password`, { method: "POST", body: { password } });
+}
+
 export function approveDriver(userId: string): Promise<AdminDriverView> {
   return request(`/api/v1/admin/drivers/${userId}/approve`, { method: "POST" });
 }

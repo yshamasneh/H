@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { ApiError, approveDriver, listAdminDrivers, reactivateDriver, readApiError, rejectDriver, suspendDriver, type AdminDriverView } from "../api";
+import { approveDriver, listAdminDrivers, reactivateDriver, readApiError, rejectDriver, suspendDriver, type AdminDriverView } from "../api";
+import { CreateDriverModal } from "../components/CreateDriverModal";
 import { ReasonModal } from "../components/ReasonModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { applyOnlineChange, applyPresenceUpdate, connectionState, countConnections } from "../driver-tracking";
+import { driverFilterCounts, driverFilters, selectDrivers, type DriverFilter } from "../drivers-view";
+import { PhoneNumber } from "./UsersPage";
 import { useLiveRefresh, useRealtimeEvent } from "../socket";
 
-function connectionBadge(state: "connected" | "online-app-closed" | "offline"): string {
+export function connectionBadge(state: "connected" | "online-app-closed" | "offline"): string {
   return state === "connected" ? "CONNECTED" : state === "online-app-closed" ? "APP_CLOSED" : "OFFLINE";
 }
 
@@ -35,6 +38,9 @@ export function DriversPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [modal, setModal] = useState<{ driver: AdminDriverView; kind: "reject" | "suspend" } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<DriverFilter>("all");
   // Judged on the admin's own clock, so a driver whose app goes quiet fades from "connected" by themselves.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -74,6 +80,12 @@ export function DriversPage() {
     }
   }
 
+  const counts = useMemo(() => driverFilterCounts(drivers ?? []), [drivers]);
+  const rows = useMemo(() => selectDrivers(drivers ?? [], filter, search), [drivers, filter, search]);
+  // Pending and rejected only exist for applications made before accounts were admin-created; the
+  // tabs appear only while there are any.
+  const visibleFilters = driverFilters.filter((key) => (key !== "pending" && key !== "rejected") || counts[key] > 0 || filter === key);
+
   return (
     <div>
       <div className="page-header">
@@ -81,9 +93,14 @@ export function DriversPage() {
           <h1 className="page-title">{t("drivers.title")}</h1>
           <p className="page-subtitle">{t("drivers.subtitle")}</p>
         </div>
-        <Link className="btn btn-primary" to="/drivers/live">
-          {t("liveDrivers.openMap")}
-        </Link>
+        <div className="btn-row">
+          <Link className="btn btn-outline" to="/drivers/live">
+            {t("liveDrivers.openMap")}
+          </Link>
+          <button className="btn btn-primary" onClick={() => setCreating(true)} type="button">
+            {t("driverAccounts.add")}
+          </button>
+        </div>
       </div>
 
       {error ? <div className="error-banner">{error}</div> : null}
@@ -91,10 +108,43 @@ export function DriversPage() {
       {drivers && drivers.length > 0 ? <ConnectionSummary counts={countConnections(drivers, now)} /> : null}
 
       <div className="card">
+        {drivers && drivers.length > 0 ? (
+          <div className="filters-row">
+            <input
+              aria-label={t("driverAccounts.search")}
+              className="text-input"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("driverAccounts.search")}
+              type="search"
+              value={search}
+            />
+            <div className="tab-row" role="tablist">
+              {visibleFilters.map((key) => (
+                <button
+                  aria-selected={key === filter}
+                  className={`btn btn-sm ${key === filter ? "btn-primary" : "btn-outline"}`}
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  role="tab"
+                  type="button"
+                >
+                  {t(`driverAccounts.filters.${key}`)} ({counts[key]})
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {drivers === null ? (
           <div className="loading-state">{t("common.loading")}</div>
         ) : drivers.length === 0 ? (
-          <div className="empty-state">{t("drivers.empty")}</div>
+          <div className="empty-state">
+            <p>{t("driverAccounts.emptyFirst")}</p>
+            <button className="btn btn-primary" onClick={() => setCreating(true)} type="button">
+              {t("driverAccounts.add")}
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="empty-state">{t("driverAccounts.emptySearch")}</div>
         ) : (
           <table className="data-table">
             <thead>
@@ -109,10 +159,14 @@ export function DriversPage() {
               </tr>
             </thead>
             <tbody>
-              {drivers.map((driver) => (
+              {rows.map((driver) => (
                 <tr key={driver.userId}>
-                  <td>{driver.fullName}</td>
-                  <td>{driver.phone}</td>
+                  <td>
+                    <Link to={`/drivers/${driver.userId}`}>{driver.fullName}</Link>
+                  </td>
+                  <td>
+                    <PhoneNumber phone={driver.phone} />
+                  </td>
                   <td>
                     <StatusBadge status={driver.status} />
                   </td>
@@ -125,6 +179,9 @@ export function DriversPage() {
                   <td>{driver.completedDeliveriesCount}</td>
                   <td>
                     <div className="btn-row">
+                      <Link className="btn btn-outline btn-sm" to={`/drivers/${driver.userId}`}>
+                        {t("driverAccounts.open")}
+                      </Link>
                       {driver.status === "PENDING" ? (
                         <>
                           <button
@@ -173,6 +230,10 @@ export function DriversPage() {
           </table>
         )}
       </div>
+
+      {creating ? (
+        <CreateDriverModal onClose={() => setCreating(false)} onCreated={() => void load()} />
+      ) : null}
 
       {modal ? (
         <ReasonModal
