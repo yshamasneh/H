@@ -163,5 +163,15 @@
     "cart": "السلة",
     "orders": "الطلبات",
     "account": "حسابي"
+  },
+  "shop": {
+    "add": "أضف إلى السلة",
+    "removeFromBasket": "إزالة {{name}} من السلة",
+    "inBasketCount": "{{quantity}} في السلة",
+    "outOfStock": "نفدت الكمية",
+    "onlyLeft": "بقي {{left}} فقط",
+    "openProductHint": "يفتح تفاصيل المنتج",
+    "cartBarAccessibility": "عرض السلة: {{items}} قطعة، المجموع {{total}}",
+    "savingSoFar": "وفّرت {{amount}}"
   }
 }

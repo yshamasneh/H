@@ -163,5 +163,15 @@
     "cart": "Cart",
     "orders": "Orders",
     "account": "Account"
+  },
+  "shop": {
+    "add": "Add to basket",
+    "removeFromBasket": "Remove {{name}} from the basket",
+    "inBasketCount": "{{quantity}} in the basket",
+    "outOfStock": "Out of stock",
+    "onlyLeft": "Only {{left}} left",
+    "openProductHint": "Opens the product details",
+    "cartBarAccessibility": "View basket: {{items}} items, total {{total}}",
+    "savingSoFar": "You're saving {{amount}}"
   }
 }

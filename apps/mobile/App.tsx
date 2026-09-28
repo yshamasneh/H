@@ -652,6 +652,8 @@ function TasawaQApp() {
             <CustomerHomeScreen
               notice={screen.notice}
               onAddItem={(store, item) => handleAddToCart(store, item)}
+              onDecrementItem={handleDecrementCartItem}
+              onIncrementItem={handleIncrementCartItem}
               onOpenCatalog={(store, filters) => setScreen(goToSupermarketCatalog(user, store, filters))}
               onOpenNotifications={() => setScreen(goToNotifications(user))}
               onOpenOffer={(offer) => setScreen(goToOfferDetail(user, offer))}
@@ -752,6 +754,8 @@ function TasawaQApp() {
             initialSearch={screen.search}
             onAddItem={(item) => handleAddToCart({ id: screen.supermarketId, name: screen.supermarketName }, item)}
             onBack={() => setScreen(homeForUser(screen.user))}
+            onDecrementItem={handleDecrementCartItem}
+            onIncrementItem={handleIncrementCartItem}
             onOpenProduct={(productId) => setScreen(goToSupermarketProduct(
               screen.user,
               { id: screen.supermarketId, name: screen.supermarketName },

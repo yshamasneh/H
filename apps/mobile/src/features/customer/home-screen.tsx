@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { displayableImageUri, RemoteImage } from "../../components/remote-image";
-import { PriceDisplay, SaleBadge } from "../../components/sale-price";
 import {
   getSupermarketCatalog,
   listActiveRestaurantOffers,
@@ -28,9 +27,11 @@ import { Icon, disclosureIconName } from "../../theme/icon";
 import { iconSize, radius, spacing, type ThemeColors } from "../../theme/tokens";
 import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
-import { cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
+import { cartItemCount, type Cart } from "./cart";
 import { forgetMarketStore, resolveMarketStore, type MarketStore } from "./market";
 import { useCustomerTheme, type CustomerTheme } from "./theme";
+import { CartBar, ProductCard, cartBarClearance } from "./shop-kit";
+import { quantityInCart } from "./shop.rules";
 import { CustomerHomeHeader } from "./home-header";
 import { SeasonalAccent } from "./seasonal-accent";
 
@@ -73,6 +74,8 @@ export function CustomerHomeScreen(props: {
   onOpenProduct: (store: MarketStore, productId: string) => void;
   onOpenOffer: (offer: RestaurantOffer) => void;
   onAddItem: (store: MarketStore, item: MenuItemSummary) => void;
+  onIncrementItem: (productId: string) => void;
+  onDecrementItem: (productId: string) => void;
   onViewCart: () => void;
   onOpenNotifications: () => void;
 }) {
@@ -337,11 +340,15 @@ export function CustomerHomeScreen(props: {
         ) : (
           <View style={styles.productGrid}>
             {catalog.products.map((product) => (
-              <StorefrontProductCard
+              <ProductCard
                 key={product.id}
                 onAdd={() => store && props.onAddItem(store, product)}
+                onDecrement={() => props.onDecrementItem(product.id)}
+                onIncrement={() => props.onIncrementItem(product.id)}
                 onOpen={() => store && props.onOpenProduct(store, product.id)}
                 product={product}
+                quantity={quantityInCart(props.cart, product.id, store?.id)}
+                style={styles.productCardSlot}
               />
             ))}
           </View>
@@ -357,60 +364,11 @@ export function CustomerHomeScreen(props: {
         </View>
 
       </ScrollView>
-      {showCartDock && props.cart ? (
-        <View style={styles.cartDock}>
-          <Pressable onPress={props.onViewCart} style={styles.cartButton}>
-            <Text style={styles.cartCount}>{cartItemCount(props.cart)}</Text>
-            <Text style={styles.cartLabel}>{t("restaurants.viewBasket")}</Text>
-            <Text style={styles.cartPrice}>{formatPrice(cartSubtotalMinor(props.cart))}</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      {showCartDock && props.cart ? <CartBar cart={props.cart} onPress={props.onViewCart} /> : null}
     </SafeAreaView>
   );
 }
 
-function StorefrontProductCard(props: {
-  product: SupermarketProduct;
-  onAdd: () => void;
-  onOpen: () => void;
-}) {
-  const { t } = useTranslation(["customer"]);
-  const { colors } = useTheme();
-  const customerTheme = useCustomerTheme();
-  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
-  const { product } = props;
-  return (
-    <Pressable onPress={props.onOpen} style={styles.productCard}>
-      <View style={styles.productArtwork}>
-        <RemoteImage resizeMode="cover" uri={product.imageUrl} style={styles.fullImage} />
-        <SaleBadge item={product} />
-      </View>
-      <Text style={styles.productDepartment}>{product.categoryName}</Text>
-      <Text numberOfLines={2} style={styles.productName}>{product.name}</Text>
-      <Text style={styles.productUnit}>{product.unitLabel}</Text>
-      <View style={styles.productPriceRow}>
-        <PriceDisplay
-          effectiveMinor={product.effectivePriceMinor}
-          format={formatPrice}
-          priceStyle={styles.productPrice}
-          regularMinor={product.priceMinor}
-        />
-        <Pressable
-          accessibilityLabel={t("supermarket.addProductAccessibility", { name: product.name })}
-          onPress={(event) => { event.stopPropagation(); props.onAdd(); }}
-          style={styles.addButton}
-        >
-          <Icon color={colors.textInverse} name="add" size="sm" />
-        </Pressable>
-      </View>
-    </Pressable>
-  );
-}
-
-function formatPrice(priceMinor: number): string {
-  return `${(priceMinor / 100).toFixed(2)} ILS`;
-}
 
 // A restaurant-scoped offer would send the customer into a vertical that is not open yet, so only
 // supermarket-scoped and platform-wide offers are ever shown to a customer — shared with the
@@ -439,7 +397,7 @@ export function offerLabel(offer: RestaurantOffer, t: (key: string, options?: Re
 const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
   content: { alignSelf: "center", maxWidth: 900, padding: spacing[5], paddingBottom: spacing[9], width: "100%" },
-  contentWithCart: { paddingBottom: spacing[10] + spacing[8] },
+  contentWithCart: { paddingBottom: cartBarClearance + spacing[4] },
   seasonalPromo: { backgroundColor: customerTheme.decoration.promo, borderRadius: radius.md, flexDirection: "row", alignItems: "center", gap: spacing[2], padding: spacing[3], marginTop: spacing[3] },
   seasonalPromoText: { ...text("bodySm", "bold"), color: customerTheme.decoration.onPromo, flex: 1 },
   notice: { ...text("bodySm"), backgroundColor: customerTheme.colors.successSoft, borderRadius: radius.md, color: customerTheme.colors.success, marginTop: spacing[4], padding: spacing[3] },
@@ -512,40 +470,7 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   offerDiscountBadgeText: { ...text("label", "bold"), color: colors.textInverse },
   offerExpiry: { ...text("label"), color: onDark.soft, marginTop: spacing[1] },
   productGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
-  productCard: {
-    backgroundColor: customerTheme.colors.surface,
-    borderColor: customerTheme.colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    flexGrow: 1,
-    flexBasis: 150,
-    maxWidth: 240,
-    overflow: "hidden",
-    padding: spacing[3]
-  },
-  productArtwork: {
-    alignItems: "center",
-    aspectRatio: 1,
-    backgroundColor: colors.neutralSubtle,
-    borderRadius: radius.md,
-    justifyContent: "center",
-    marginBottom: spacing[3],
-    overflow: "hidden"
-  },
-  productEmoji: { fontSize: iconSize.xxl },
-  productDepartment: { ...text("label", "bold"), color: customerTheme.colors.primary },
-  productName: { ...text("bodySm", "bold"), color: customerTheme.colors.text, marginTop: spacing[1] },
-  productUnit: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
-  productPriceRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing[3] },
-  productPrice: { ...text("bodySm", "bold"), color: customerTheme.colors.text },
-  addButton: {
-    alignItems: "center",
-    backgroundColor: customerTheme.colors.primary,
-    borderRadius: radius.md,
-    height: 32,
-    justifyContent: "center",
-    width: 32
-  },
+  productCardSlot: { flexBasis: "46%", flexGrow: 1, maxWidth: "50%" },
   comingSoonCard: {
     alignItems: "center",
     backgroundColor: customerTheme.colors.surface,
@@ -567,25 +492,4 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   comingSoonEmoji: { fontSize: iconSize.xl },
   comingSoonTitle: { ...text("body", "bold"), color: customerTheme.colors.text, textAlign: "center" },
   comingSoonText: { ...text("bodySm"), color: customerTheme.colors.textMuted, marginTop: spacing[2], textAlign: "center" },
-  cartDock: {
-    backgroundColor: customerTheme.colors.background,
-    borderTopColor: customerTheme.colors.border,
-    borderTopWidth: 1,
-    padding: spacing[4]
-  },
-  cartButton: {
-    alignItems: "center",
-    alignSelf: "center",
-    backgroundColor: customerTheme.colors.primary,
-    borderRadius: radius.lg,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    maxWidth: 900,
-    minHeight: 56,
-    paddingHorizontal: spacing[4],
-    width: "100%"
-  },
-  cartCount: { ...text("bodySm", "bold"), color: colors.textInverse },
-  cartLabel: { ...text("body", "bold"), color: colors.textInverse },
-  cartPrice: { ...text("bodySm", "bold"), color: colors.textInverse }
 });

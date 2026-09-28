@@ -22,7 +22,7 @@ import {
   type SupermarketCatalog,
   type SupermarketProduct
 } from "../../core/api";
-import { cartBelongsToRestaurant, cartItemCount, cartSubtotalMinor, type Cart } from "./cart";
+import { cartBelongsToRestaurant, type Cart } from "./cart";
 import { readError } from "../../core/errors";
 import { ProductDetailSkeleton, ProductGridSkeleton } from "../../components/skeleton";
 import { Icon, backIconName } from "../../theme/icon";
@@ -30,6 +30,8 @@ import { iconSize, radius, spacing, withAlpha, type ThemeColors } from "../../th
 import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 import { useCustomerTheme, type CustomerTheme } from "./theme";
+import { CartBar, ProductCard, cartBarClearance } from "./shop-kit";
+import { formatShekel, quantityInCart } from "./shop.rules";
 
 /** Opens the platform's maps app with directions to the store. Uses the universal Google Maps
  *  directions URL, which iOS and Android both resolve to their installed maps app. */
@@ -53,6 +55,8 @@ export function SupermarketCatalogScreen(props: {
   initialSearch?: string;
   onBack: () => void;
   onAddItem: (item: SupermarketProduct) => void;
+  onIncrementItem: (productId: string) => void;
+  onDecrementItem: (productId: string) => void;
   onOpenProduct: (productId: string) => void;
   onViewCart: () => void;
 }) {
@@ -154,11 +158,19 @@ export function SupermarketCatalogScreen(props: {
           numColumns={2}
           columnWrapperStyle={styles.productRow}
           renderItem={({ item }) => (
-            <ProductCard item={item} onAdd={() => props.onAddItem(item)} onOpen={() => props.onOpenProduct(item.id)} />
+            <ProductCard
+              onAdd={() => props.onAddItem(item)}
+              onDecrement={() => props.onDecrementItem(item.id)}
+              onIncrement={() => props.onIncrementItem(item.id)}
+              onOpen={() => props.onOpenProduct(item.id)}
+              product={item}
+              quantity={quantityInCart(props.cart, item.id, props.supermarketId)}
+              style={styles.productCardSlot}
+            />
           )}
         />
       )}
-      {showCart ? <CartDock cart={props.cart!} onPress={props.onViewCart} /> : null}
+      {showCart ? <CartBar cart={props.cart!} onPress={props.onViewCart} /> : null}
     </SafeAreaView>
   );
 }
@@ -271,45 +283,8 @@ export function SupermarketProductScreen(props: {
           </Pressable>
         </ScrollView>
       )}
-      {showCart ? <CartDock cart={props.cart!} onPress={props.onViewCart} /> : null}
+      {showCart ? <CartBar cart={props.cart!} onPress={props.onViewCart} /> : null}
     </SafeAreaView>
-  );
-}
-
-function ProductCard(props: { item: SupermarketProduct; onAdd: () => void; onOpen: () => void }) {
-  const { t } = useTranslation(["customer"]);
-  const { colors } = useTheme();
-  const customerTheme = useCustomerTheme();
-  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
-  return (
-    <Pressable onPress={props.onOpen} style={({ pressed }) => [styles.productCard, pressed && styles.pressed]}>
-      <View style={styles.productArtwork}>
-        <RemoteImage resizeMode="cover" uri={props.item.imageUrl} style={styles.image} />
-        <SaleBadge item={props.item} />
-      </View>
-      <Text style={styles.productDepartment}>{props.item.categoryName}</Text>
-      {props.item.brand ? <Text numberOfLines={1} style={styles.productBrand}>{props.item.brand}</Text> : null}
-      <Text numberOfLines={2} style={styles.productName}>{props.item.name}</Text>
-      <Text style={styles.productUnit}>{props.item.unitLabel}</Text>
-      {props.item.offer ? (
-        <Text style={styles.offerBadge}>{t("supermarket.offerPercentOnly", { percent: props.item.offer.discountPercent })}</Text>
-      ) : null}
-      <View style={styles.cardPriceRow}>
-        <PriceDisplay
-          effectiveMinor={props.item.effectivePriceMinor}
-          format={formatPrice}
-          priceStyle={styles.productPrice}
-          regularMinor={props.item.priceMinor}
-        />
-        <Pressable
-          accessibilityLabel={t("supermarket.addProductAccessibility", { name: props.item.name })}
-          onPress={(event) => { event.stopPropagation(); props.onAdd(); }}
-          style={styles.addButton}
-        >
-          <Icon color={colors.textInverse} name="add" size="sm" />
-        </Pressable>
-      </View>
-    </Pressable>
   );
 }
 
@@ -318,22 +293,6 @@ function Chip(props: { active: boolean; label: string; onPress: () => void }) {
   const customerTheme = useCustomerTheme();
   const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
   return <Pressable onPress={props.onPress} style={[styles.chip, props.active && styles.chipActive]}><Text style={[styles.chipText, props.active && styles.chipTextActive]}>{props.label}</Text></Pressable>;
-}
-
-function CartDock(props: { cart: Cart; onPress: () => void }) {
-  const { t } = useTranslation(["customer"]);
-  const { colors } = useTheme();
-  const customerTheme = useCustomerTheme();
-  const styles = useMemo(() => createStyles(colors, customerTheme), [colors, customerTheme]);
-  return (
-    <View style={styles.cartDock}>
-      <Pressable onPress={props.onPress} style={styles.cartButton}>
-        <Text style={styles.cartCount}>{cartItemCount(props.cart)}</Text>
-        <Text style={styles.cartLabel}>{t("restaurants.viewBasket")}</Text>
-        <Text style={styles.cartPrice}>{formatPrice(cartSubtotalMinor(props.cart))}</Text>
-      </Pressable>
-    </View>
-  );
 }
 
 function BackButton({ onPress }: { onPress: () => void }) {
@@ -362,7 +321,7 @@ function ErrorState(props: { message: string; onRetry?: () => void }) {
     </View>
   );
 }
-function formatPrice(value: number) { return `${(value / 100).toFixed(2)} ILS`; }
+const formatPrice = formatShekel;
 
 const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },
@@ -374,7 +333,6 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   locationAddress: { ...text("caption"), color: withAlpha(colors.textInverse, 0.85), flexShrink: 1 },
   locationDirections: { ...text("caption", "bold"), color: customerTheme.colors.primary },
   backButton: { alignItems: "center", backgroundColor: withAlpha(colors.textInverse, 0.16), borderRadius: radius.lg, height: 44, justifyContent: "center", width: 44 },
-  backText: { color: colors.textInverse, fontSize: iconSize.xl, marginTop: -4 },
   searchInput: { ...text("bodySm"), color: customerTheme.colors.text, flex: 1, outlineStyle: "none" } as never,
   centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing[7] },
   emptyIcon: {
@@ -409,30 +367,14 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   chipText: { ...text("label", "bold"), color: customerTheme.colors.textMuted },
   chipTextActive: { color: colors.textInverse },
   productGrid: { alignSelf: "center", maxWidth: 900, padding: spacing[3], width: "100%" },
-  productGridWithCart: { paddingBottom: 105 },
+  productGridWithCart: { paddingBottom: cartBarClearance },
+  productCardSlot: { flex: 1, marginBottom: spacing[2], maxWidth: "50%" },
   productRow: { gap: spacing[2] },
-  productCard: { backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flex: 1, marginBottom: spacing[2], maxWidth: "50%", overflow: "hidden", padding: spacing[2] },
-  productArtwork: { alignItems: "center", aspectRatio: 1, backgroundColor: customerTheme.colors.surfaceMuted, borderRadius: radius.md, justifyContent: "center", overflow: "hidden" },
-  productEmoji: { fontSize: iconSize.xxl },
-  productDepartment: { ...text("label", "bold"), color: customerTheme.colors.primary, marginTop: spacing[2] },
-  productBrand: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
-  productName: { ...text("bodySm", "bold"), color: customerTheme.colors.text, marginTop: spacing[1], minHeight: 36 },
-  productUnit: { ...text("label"), color: customerTheme.colors.textMuted, marginTop: spacing[1] },
   offerBadge: { alignSelf: "flex-start", ...text("label", "bold"), backgroundColor: colors.successSubtle, borderRadius: radius.pill, color: colors.success, marginTop: spacing[2], paddingHorizontal: spacing[2], paddingVertical: spacing[1] },
-  cardPriceRow: { alignItems: "center", flexDirection: "row", marginTop: spacing[2] },
-  productPrice: { ...text("caption", "bold"), color: customerTheme.colors.secondary, flex: 1 },
-  addButton: { alignItems: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.md, height: 34, justifyContent: "center", width: 34 },
-  addButtonText: { color: colors.textInverse, fontSize: iconSize.sm, fontWeight: "900" },
-  cartDock: { backgroundColor: withAlpha(customerTheme.colors.background, 0.97), bottom: 0, start: 0, padding: spacing[3], position: "absolute", end: 0 },
-  cartButton: { alignItems: "center", alignSelf: "center", backgroundColor: customerTheme.colors.primary, borderRadius: radius.lg, flexDirection: "row", maxWidth: 870, minHeight: 56, paddingHorizontal: spacing[4], width: "100%" },
-  cartCount: { ...text("caption", "bold"), color: colors.textInverse },
-  cartLabel: { ...text("bodySm", "bold"), color: colors.textInverse, flex: 1, marginStart: spacing[4] },
-  cartPrice: { ...text("caption", "bold"), color: colors.textInverse },
   productDetailHeader: { alignItems: "center", backgroundColor: customerTheme.colors.inverseSurface, flexDirection: "row", padding: spacing[4] },
   productDetailHeaderTitle: { ...text("h3", "bold"), color: colors.textInverse, flex: 1, marginStart: spacing[4] },
   detailContent: { alignSelf: "center", maxWidth: 720, padding: spacing[5], width: "100%" },
   detailArtwork: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderRadius: radius.lg, height: 270, justifyContent: "center", overflow: "hidden" },
-  detailEmoji: { fontSize: iconSize.xxxl + 40 },
   detailDepartment: { ...text("label", "bold"), color: customerTheme.colors.primary, marginTop: spacing[5] },
   detailName: { ...text("display", "bold"), color: customerTheme.colors.text, marginTop: spacing[2] },
   detailBrand: { ...text("body", "bold"), color: customerTheme.colors.secondary, marginTop: spacing[2] },
@@ -456,5 +398,4 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   errorText: { ...text("caption"), color: customerTheme.colors.danger, textAlign: "center" },
   retryButton: { backgroundColor: customerTheme.colors.primary, borderRadius: radius.md, marginTop: spacing[3], paddingHorizontal: spacing[5], paddingVertical: spacing[2] },
   retryText: { ...text("bodySm", "bold"), color: colors.textInverse },
-  pressed: { opacity: 0.75 }
 });
