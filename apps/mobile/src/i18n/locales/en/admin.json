@@ -5,27 +5,76 @@
     "statOrdersToday": "Orders today",
     "statRevenueToday": "Revenue today",
     "statActiveDeliveries": "Active deliveries",
-    "statPendingStores": "Pending stores",
     "statOnlineDrivers": "Online drivers",
     "statNewCustomers": "New customers",
-    "managementSection": "Management",
-    "storesTitle": "Stores",
-    "storesMeta": "Restaurant and supermarket approvals, suspensions, and performance",
-    "offersTitle": "Offers",
-    "offersMeta": "Publish product, order, delivery, and free-delivery campaigns",
-    "ordersTitle": "Orders",
-    "ordersMeta": "Search all orders and apply support cancellations",
-    "driversTitle": "Drivers",
-    "driversMeta": "Approve drivers and manage their operational status",
-    "usersTitle": "Users",
-    "usersMeta": "Search customers and accounts by role",
-    "auditLogTitle": "Audit Log",
-    "auditLogMeta": "Review every recorded administration action",
     "recentActivity": "Recent activity",
     "noActivity": "No order activity yet.",
     "orderStatusLabel": "Order status",
-    "analyticsTitle": "Analytics",
-    "analyticsMeta": "Best sellers, peak times and returning customers"
+    "attentionTitle": "Needs attention",
+    "allClear": "Nothing is waiting on you right now.",
+    "attention": {
+      "ordersAwaiting": "Orders not yet accepted by the store",
+      "ordersAwaitingAction": "View orders",
+      "pendingStores": "Stores awaiting approval",
+      "pendingStoresAction": "Review stores",
+      "pendingDrivers": "Drivers awaiting approval",
+      "pendingDriversAction": "Review drivers",
+      "pendingCosts": "Operating costs awaiting a decision",
+      "pendingCostsAction": "Review costs",
+      "driverCash": "Cash still held by drivers",
+      "driverCashAction": "Receive cash",
+      "ledgerImbalance": "The ledger does not balance",
+      "ledgerImbalanceAction": "Open accounting",
+      "costData": "Orders valued with a missing cost price",
+      "costDataAction": "Open accounting",
+      "onWeb": "Investigate on the web console (Accounting)"
+    },
+    "todayTitle": "Today",
+    "sections": {
+      "operations": "Operations",
+      "approvals": "Approvals",
+      "people": "People & offers",
+      "insights": "Insights"
+    },
+    "tools": {
+      "orders": {
+        "title": "Orders",
+        "meta": "Every order in every status, its detail, and reaching the customer and driver"
+      },
+      "drivers": {
+        "title": "Drivers",
+        "meta": "Approve drivers, see who is on shift, and call them"
+      },
+      "driverCash": {
+        "title": "Driver cash",
+        "meta": "Who holds customers' cash, and receiving it with a receipt"
+      },
+      "stores": {
+        "title": "Stores",
+        "meta": "Approve and suspend stores, and review how they are doing"
+      },
+      "costs": {
+        "title": "Cost approvals",
+        "meta": "Operating costs waiting on your decision"
+      },
+      "users": {
+        "title": "Users",
+        "meta": "Customers and staff in two lists, and each customer's detail"
+      },
+      "offers": {
+        "title": "Offers",
+        "meta": "Publish product, order and delivery campaigns"
+      },
+      "analytics": {
+        "title": "Analytics",
+        "meta": "Best sellers, peak times and returning customers"
+      },
+      "auditLog": {
+        "title": "Audit log",
+        "meta": "Every recorded administrative action"
+      }
+    },
+    "webOnlyNote": "Partner payouts, rates, corrections, landmarks, platform settings, broadcast notifications and the live map are on the web console."
   },
   "restaurants": {
     "title": "Stores",
@@ -67,7 +116,17 @@
     "reasonPlaceholderReject": "Required rejection reason",
     "reasonPlaceholderSuspend": "Required suspension reason",
     "confirmRejectButton": "Confirm rejection",
-    "confirmSuspendButton": "Confirm suspension"
+    "confirmSuspendButton": "Confirm suspension",
+    "filters": {
+      "ALL": "All",
+      "PENDING": "Awaiting approval",
+      "ONLINE": "On shift",
+      "APPROVED": "Approved",
+      "SUSPENDED": "Suspended",
+      "REJECTED": "Rejected"
+    },
+    "cashHeldLabel": "Cash held",
+    "receiveCash": "Receive cash"
   },
   "orders": {
     "title": "Orders",
@@ -81,7 +140,8 @@
     "filterPreparing": "Preparing",
     "filterReady": "Ready",
     "filterDelivered": "Delivered",
-    "filterCancelled": "Cancelled"
+    "filterCancelled": "Cancelled",
+    "loadMore": "Show more ({{shown}} of {{total}})"
   },
   "orderDetail": {
     "notFoundTitle": "Order details",
@@ -93,7 +153,13 @@
     "addressLabel": "Address",
     "statusHistoryTitle": "Status history",
     "cancelReasonPlaceholder": "Required cancellation reason",
-    "cancelButton": "Cancel order"
+    "cancelButton": "Cancel order",
+    "deliveryTitle": "Delivery",
+    "driverLabel": "Driver",
+    "noDriver": "No driver assigned yet.",
+    "assignedAt": "Assigned",
+    "pickedUpAt": "Picked up",
+    "deliveredAt": "Delivered"
   },
   "users": {
     "title": "Users",

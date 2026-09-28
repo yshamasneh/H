@@ -955,6 +955,10 @@ export type AdminDashboard = {
   pendingRestaurantApprovals: number;
   onlineDriversCount: number;
   newCustomerSignupsToday: number;
+  /** Driver applications waiting for a decision (absent on an older API). */
+  pendingDriverApprovals?: number;
+  /** Orders placed and not yet accepted by their store (absent on an older API). */
+  ordersAwaitingAcceptance?: number;
   activityFeed: AdminDashboardActivity[];
 };
 
@@ -1646,6 +1650,18 @@ export function decideAdminOperatingCost(
     body,
     accessToken
   });
+}
+
+/** Who is delivering an order, from the admin tracking endpoint (MANAGE_DRIVERS). Positions are not used here. */
+export type AdminOrderTracking = {
+  orderId: string;
+  deliveryId: string | null;
+  deliveryStatus: string | null;
+  driver: { userId: string; fullName: string; phone: string; isOnline: boolean; appOpen?: boolean } | null;
+};
+
+export function getAdminOrderTracking(accessToken: string, orderId: string): Promise<AdminOrderTracking> {
+  return request(`/api/v1/admin/drivers/tracking/orders/${encodeURIComponent(orderId)}`, { accessToken });
 }
 
 export function listAdminAuditLog(

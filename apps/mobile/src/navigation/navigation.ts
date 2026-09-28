@@ -58,12 +58,12 @@ export type AppScreen =
   | { name: "notifications"; user: PublicUser }
   | { name: "admin-dashboard"; user: PublicUser }
   | { name: "admin-offers"; user: PublicUser }
-  | { name: "admin-restaurants"; user: PublicUser }
+  | { name: "admin-restaurants"; user: PublicUser; filter?: "PENDING" }
   | { name: "admin-restaurant-detail"; user: PublicUser; restaurantId: string }
-  | { name: "admin-orders"; user: PublicUser }
+  | { name: "admin-orders"; user: PublicUser; filter?: "PLACED" }
   // Opened from a customer's order history, Back returns to that customer rather than the order list.
   | { name: "admin-order-detail"; user: PublicUser; orderId: string; backToCustomerId?: string; backToDriverCashId?: string }
-  | { name: "admin-drivers"; user: PublicUser }
+  | { name: "admin-drivers"; user: PublicUser; filter?: "PENDING" }
   | { name: "admin-users"; user: PublicUser }
   | { name: "admin-customer-detail"; user: PublicUser; userId: string }
   | { name: "admin-audit-log"; user: PublicUser }
@@ -288,8 +288,8 @@ export function goToAdminOffers(user: PublicUser): Extract<AppScreen, { name: "a
   return { name: "admin-offers", user };
 }
 
-export function goToAdminRestaurants(user: PublicUser): Extract<AppScreen, { name: "admin-restaurants" }> {
-  return { name: "admin-restaurants", user };
+export function goToAdminRestaurants(user: PublicUser, filter?: "PENDING"): Extract<AppScreen, { name: "admin-restaurants" }> {
+  return filter ? { name: "admin-restaurants", user, filter } : { name: "admin-restaurants", user };
 }
 
 export function goToAdminRestaurantDetail(
@@ -299,8 +299,8 @@ export function goToAdminRestaurantDetail(
   return { name: "admin-restaurant-detail", user, restaurantId };
 }
 
-export function goToAdminOrders(user: PublicUser): Extract<AppScreen, { name: "admin-orders" }> {
-  return { name: "admin-orders", user };
+export function goToAdminOrders(user: PublicUser, filter?: "PLACED"): Extract<AppScreen, { name: "admin-orders" }> {
+  return filter ? { name: "admin-orders", user, filter } : { name: "admin-orders", user };
 }
 
 export function goToAdminOrderDetail(
@@ -313,8 +313,8 @@ export function goToAdminOrderDetail(
     : { name: "admin-order-detail", user, orderId };
 }
 
-export function goToAdminDrivers(user: PublicUser): Extract<AppScreen, { name: "admin-drivers" }> {
-  return { name: "admin-drivers", user };
+export function goToAdminDrivers(user: PublicUser, filter?: "PENDING"): Extract<AppScreen, { name: "admin-drivers" }> {
+  return filter ? { name: "admin-drivers", user, filter } : { name: "admin-drivers", user };
 }
 
 export function goToAdminUsers(user: PublicUser): Extract<AppScreen, { name: "admin-users" }> {

@@ -5,27 +5,76 @@
     "statOrdersToday": "طلبات اليوم",
     "statRevenueToday": "إيرادات اليوم",
     "statActiveDeliveries": "التوصيلات الجارية",
-    "statPendingStores": "متاجر بانتظار الموافقة",
     "statOnlineDrivers": "السائقون المتصلون",
     "statNewCustomers": "عملاء جدد",
-    "managementSection": "الإدارة",
-    "storesTitle": "المتاجر",
-    "storesMeta": "موافقات المطاعم والسوبر ماركت وإيقافها ومراجعة أدائها",
-    "offersTitle": "العروض",
-    "offersMeta": "نشر حملات المنتجات والطلبات والتوصيل والتوصيل المجاني",
-    "ordersTitle": "الطلبات",
-    "ordersMeta": "البحث في جميع الطلبات وتطبيق إلغاءات الدعم",
-    "driversTitle": "السائقون",
-    "driversMeta": "الموافقة على السائقين وإدارة حالتهم التشغيلية",
-    "usersTitle": "المستخدمون",
-    "usersMeta": "البحث عن الزبائن والحسابات حسب الدور",
-    "auditLogTitle": "سجل التدقيق",
-    "auditLogMeta": "مراجعة كل إجراء إداري مسجَّل",
     "recentActivity": "النشاط الأخير",
     "noActivity": "لا يوجد نشاط طلبات بعد.",
     "orderStatusLabel": "حالة الطلب",
-    "analyticsTitle": "التحليلات",
-    "analyticsMeta": "الأكثر مبيعًا وأوقات الذروة والزبائن العائدون"
+    "attentionTitle": "بحاجة إلى متابعة",
+    "allClear": "لا شيء بانتظارك الآن.",
+    "attention": {
+      "ordersAwaiting": "طلبات لم يقبلها المتجر بعد",
+      "ordersAwaitingAction": "عرض الطلبات",
+      "pendingStores": "متاجر بانتظار الموافقة",
+      "pendingStoresAction": "مراجعة المتاجر",
+      "pendingDrivers": "سائقون بانتظار الموافقة",
+      "pendingDriversAction": "مراجعة السائقين",
+      "pendingCosts": "مصاريف تشغيلية بانتظار القرار",
+      "pendingCostsAction": "مراجعة المصاريف",
+      "driverCash": "نقد لدى السائقين لم يُسلَّم بعد",
+      "driverCashAction": "استلام النقد",
+      "ledgerImbalance": "الدفاتر غير متوازنة",
+      "ledgerImbalanceAction": "فتح المحاسبة",
+      "costData": "طلبات بسعر تكلفة ناقص",
+      "costDataAction": "فتح المحاسبة",
+      "onWeb": "يُراجع من لوحة الويب (المحاسبة)"
+    },
+    "todayTitle": "اليوم",
+    "sections": {
+      "operations": "التشغيل",
+      "approvals": "الموافقات",
+      "people": "الأشخاص والعروض",
+      "insights": "التقارير"
+    },
+    "tools": {
+      "orders": {
+        "title": "الطلبات",
+        "meta": "كل الطلبات بكل حالاتها، وتفاصيل كل طلب والتواصل مع الزبون والسائق"
+      },
+      "drivers": {
+        "title": "السائقون",
+        "meta": "الموافقة على السائقين، ومن هو في المناوبة، والاتصال بهم"
+      },
+      "driverCash": {
+        "title": "نقد السائقين",
+        "meta": "من يحمل نقد الزبائن، واستلامه مع إيصال"
+      },
+      "stores": {
+        "title": "المتاجر",
+        "meta": "الموافقة على المتاجر وإيقافها ومراجعة أدائها"
+      },
+      "costs": {
+        "title": "اعتماد المصاريف",
+        "meta": "المصاريف التشغيلية بانتظار قرارك"
+      },
+      "users": {
+        "title": "المستخدمون",
+        "meta": "الزبائن وفريق العمل في قائمتين، وتفاصيل كل زبون"
+      },
+      "offers": {
+        "title": "العروض",
+        "meta": "نشر حملات المنتجات والطلبات والتوصيل"
+      },
+      "analytics": {
+        "title": "التحليلات",
+        "meta": "الأكثر مبيعًا وأوقات الذروة والزبائن العائدون"
+      },
+      "auditLog": {
+        "title": "سجل التدقيق",
+        "meta": "كل إجراء إداري مسجَّل"
+      }
+    },
+    "webOnlyNote": "الدفعات للشركاء، والنسب، وقيود التصحيح، والمعالم، وإعدادات المنصة، والإشعارات الجماعية، والخريطة المباشرة متاحة من لوحة الويب."
   },
   "restaurants": {
     "title": "المتاجر",
@@ -67,7 +116,17 @@
     "reasonPlaceholderReject": "سبب الرفض (مطلوب)",
     "reasonPlaceholderSuspend": "سبب الإيقاف (مطلوب)",
     "confirmRejectButton": "تأكيد الرفض",
-    "confirmSuspendButton": "تأكيد الإيقاف"
+    "confirmSuspendButton": "تأكيد الإيقاف",
+    "filters": {
+      "ALL": "الكل",
+      "PENDING": "بانتظار الموافقة",
+      "ONLINE": "في المناوبة",
+      "APPROVED": "معتمدون",
+      "SUSPENDED": "موقوفون",
+      "REJECTED": "مرفوضون"
+    },
+    "cashHeldLabel": "نقد يحمله",
+    "receiveCash": "استلام النقد"
   },
   "orders": {
     "title": "الطلبات",
@@ -81,7 +140,8 @@
     "filterPreparing": "قيد التحضير",
     "filterReady": "جاهز",
     "filterDelivered": "تم التوصيل",
-    "filterCancelled": "ملغى"
+    "filterCancelled": "ملغى",
+    "loadMore": "عرض المزيد ({{shown}} من {{total}})"
   },
   "orderDetail": {
     "notFoundTitle": "تفاصيل الطلب",
@@ -93,7 +153,13 @@
     "addressLabel": "العنوان",
     "statusHistoryTitle": "سجل الحالة",
     "cancelReasonPlaceholder": "سبب الإلغاء (مطلوب)",
-    "cancelButton": "إلغاء الطلب"
+    "cancelButton": "إلغاء الطلب",
+    "deliveryTitle": "التوصيل",
+    "driverLabel": "السائق",
+    "noDriver": "لم يُعيَّن سائق بعد.",
+    "assignedAt": "عُيِّن",
+    "pickedUpAt": "استُلم من المتجر",
+    "deliveredAt": "سُلِّم"
   },
   "users": {
     "title": "المستخدمون",
