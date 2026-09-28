@@ -443,3 +443,19 @@ test("customer detail refuses staff accounts and unknown ids", async () => {
     );
   }
 });
+
+test("dashboard counts what needs attention: driver applications and orders not yet accepted", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  prisma.seedDriverProfile({ status: "PENDING" as never, isOnline: false });
+  prisma.seedDriverProfile({ status: "PENDING" as never, isOnline: false });
+  prisma.seedDriverProfile({ status: "APPROVED" as never });
+  prisma.seedOrder(restaurant.id, { status: OrderStatus.PLACED });
+  // Placed long ago and still not accepted: it still needs attention.
+  prisma.seedOrder(restaurant.id, { status: OrderStatus.PLACED, createdAt: new Date("2020-01-01T00:00:00Z") });
+  prisma.seedOrder(restaurant.id, { status: OrderStatus.ACCEPTED });
+
+  const dashboard = await service.getDashboard();
+  assert.equal(dashboard.pendingDriverApprovals, 2);
+  assert.equal(dashboard.ordersAwaitingAcceptance, 2);
+});

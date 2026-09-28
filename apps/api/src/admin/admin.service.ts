@@ -46,7 +46,9 @@ export class AdminService {
       customers,
       ordersTotal,
       approvedDrivers,
-      activity
+      activity,
+      pendingDriverApprovals,
+      ordersAwaitingAcceptance
     ] = await Promise.all([
       this.prisma.order.count({ where: { createdAt: { gte: startOfToday } } }),
       // Sum today's revenue in SQL rather than loading every order (M-8). Same filter as
@@ -80,7 +82,10 @@ export class AdminService {
         orderBy: { createdAt: "desc" },
         take: 20,
         include: { order: { include: { restaurant: true } } }
-      })
+      }),
+      this.prisma.driverProfile.count({ where: { status: DriverApprovalStatus.PENDING } }),
+      // Placed and not yet accepted by the store: the orders a customer is waiting on right now.
+      this.prisma.order.count({ where: { status: OrderStatus.PLACED } })
     ]);
 
     const revenueTodayMinor = revenueAggregate._sum.totalMinor ?? 0;
@@ -92,6 +97,8 @@ export class AdminService {
       pendingRestaurantApprovals,
       onlineDriversCount,
       newCustomerSignupsToday,
+      pendingDriverApprovals,
+      ordersAwaitingAcceptance,
       totals: {
         businesses,
         approvedBusinesses,

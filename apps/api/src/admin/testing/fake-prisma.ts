@@ -83,12 +83,11 @@ export class FakeAdminPrisma {
   readonly auditLog = {} as any;
 
   constructor() {
-    this.order.count = async ({ where }: any = {}) =>
-      this.orders.filter((order) => (!where?.createdAt?.gte || order.createdAt >= where.createdAt.gte)).length;
     const orderMatches = (order: OrderRecord, where: any) =>
       (!where?.createdAt?.gte || order.createdAt >= where.createdAt.gte) &&
       inFilter(order.status, where?.status) &&
       inFilter(order.customerId, where?.customerId);
+    this.order.count = async ({ where }: any = {}) => this.orders.filter((order) => orderMatches(order, where)).length;
     this.order.findMany = async ({ where, select, orderBy }: any) => {
       let matches = this.orders.filter((order) => orderMatches(order, where));
       if (orderBy?.createdAt === "desc") {

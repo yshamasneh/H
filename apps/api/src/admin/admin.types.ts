@@ -15,6 +15,10 @@ export type DashboardOverview = {
   pendingRestaurantApprovals: number;
   onlineDriversCount: number;
   newCustomerSignupsToday: number;
+  /** Driver applications waiting for a decision. */
+  pendingDriverApprovals: number;
+  /** Orders placed and not yet accepted by their store, whenever they were placed. */
+  ordersAwaitingAcceptance: number;
   /**
    * All-time counts straight from the tables. The "today" figures above read as zero on a quiet
    * day even when the platform holds a great deal of data, which looks like the dashboard is not
