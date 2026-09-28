@@ -63,7 +63,10 @@ export function StaffPage() {
       <div className="card">
         <h2 className="card-title">{t("staff.addTitle")}</h2>
         <div className="filters-row">
+          {/* This form creates someone else's account: keep the browser from filling in the signed-in
+              user's own saved phone number and password. */}
           <input
+            autoComplete="off"
             className="text-input"
             onChange={(event) => setDraft({ ...draft, fullName: event.target.value })}
             placeholder={t("staff.fullName")}
@@ -77,12 +80,14 @@ export function StaffPage() {
             value={draft.countryCode}
           />
           <input
+            autoComplete="off"
             className="text-input"
             onChange={(event) => setDraft({ ...draft, phoneNumber: event.target.value })}
             placeholder={t("staff.phoneNumber")}
             value={draft.phoneNumber}
           />
           <input
+            autoComplete="new-password"
             className="text-input"
             onChange={(event) => setDraft({ ...draft, password: event.target.value })}
             placeholder={t("staff.initialPassword")}
