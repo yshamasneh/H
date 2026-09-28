@@ -1519,6 +1519,135 @@ export function getAdminCustomerRetention(
   return request(`/api/v1/admin/analytics/customer-retention${toQuery(params)}`, { accessToken });
 }
 
+/**
+ * The accounting endpoints a phone needs: the overview, drivers' cash and receiving it, and the
+ * operating-cost approval queue. Same endpoints and permissions as the admin web console
+ * (VIEW_ACCOUNTING to read, RECEIVE_DRIVER_CASH / APPROVE_OPERATING_COSTS to act). Amounts are agorot.
+ */
+export type AdminAccountingOverview = {
+  orderCount: number;
+  deliveredCount: number;
+  failedCount: number;
+  cashCollectedMinor: number;
+  cashSettledMinor: number;
+  cashOutstandingMinor: number;
+  totalEarnedMinor: number;
+  totalPaidMinor: number;
+  totalOutstandingMinor: number;
+  approvedOperatingCostMinor: number;
+  pendingOperatingCostCount: number;
+  ledgerImbalanceMinor: number;
+  costDataIncompleteCount: number;
+};
+
+export type AdminDriverCash = {
+  driverUserId: string;
+  driverName: string;
+  driverPhone: string;
+  collectedMinor: number;
+  settledMinor: number;
+  outstandingMinor: number;
+  outstandingOrderCount: number;
+  oldestOutstandingAt: string | null;
+  earningsMinor: number;
+  earningsPaidMinor: number;
+};
+
+export type AdminDriverCustodyLine = {
+  custodyId: string;
+  orderId: string;
+  collectedAt: string;
+  expectedAmountMinor: number;
+  collectedAmountMinor: number;
+  settledAmountMinor: number;
+  outstandingMinor: number;
+  status: "OUTSTANDING" | "PARTIALLY_SETTLED" | "SETTLED";
+};
+
+export type AdminCashSettlement = {
+  id: string;
+  driverUserId: string;
+  driverName: string;
+  receivedByName: string;
+  reference: string;
+  mode: string;
+  expectedAmountMinor: number;
+  countedAmountMinor: number;
+  discrepancyMinor: number;
+  discrepancyNote: string | null;
+  note: string | null;
+  settledAt: string;
+  allocations: { custodyId: string; orderId: string; amountMinor: number }[];
+};
+
+export type AdminOperatingCost = {
+  id: string;
+  businessId: string;
+  businessName: string;
+  category: string;
+  description: string;
+  amountMinor: number;
+  incurredOn: string;
+  periodLabel: string | null;
+  isRecurring: boolean;
+  status: "PROPOSED" | "APPROVED" | "REJECTED";
+  proposedByName: string;
+  approverName: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  shares: { payeeKey: string; payeeName: string; amountMinor: number }[];
+};
+
+export function getAdminAccountingOverview(accessToken: string): Promise<AdminAccountingOverview> {
+  return request("/api/v1/admin/accounting/overview", { accessToken });
+}
+
+export function listAdminDriverCash(accessToken: string): Promise<AdminDriverCash[]> {
+  return request("/api/v1/admin/accounting/cash/drivers", { accessToken });
+}
+
+export function listAdminDriverCustody(accessToken: string, driverUserId: string): Promise<AdminDriverCustodyLine[]> {
+  return request(`/api/v1/admin/accounting/cash/drivers/${encodeURIComponent(driverUserId)}`, { accessToken });
+}
+
+export function recordAdminCashSettlement(
+  accessToken: string,
+  body: {
+    driverUserId: string;
+    reference: string;
+    countedAmountMinor: number;
+    custodyIds?: string[];
+    discrepancyNote?: string;
+    note?: string;
+  }
+): Promise<AdminCashSettlement> {
+  return request("/api/v1/admin/accounting/cash/settlements", { method: "POST", body, accessToken });
+}
+
+export function listAdminCashSettlements(accessToken: string, driverUserId?: string): Promise<AdminCashSettlement[]> {
+  return request(`/api/v1/admin/accounting/cash/settlements${toQuery({ driverUserId })}`, { accessToken });
+}
+
+export function listAdminOperatingCosts(
+  accessToken: string,
+  status?: "PROPOSED" | "APPROVED" | "REJECTED"
+): Promise<AdminOperatingCost[]> {
+  return request(`/api/v1/admin/accounting/operating-costs${toQuery({ status })}`, { accessToken });
+}
+
+export function decideAdminOperatingCost(
+  accessToken: string,
+  entryId: string,
+  body: { approve: boolean; note?: string }
+): Promise<AdminOperatingCost> {
+  return request(`/api/v1/admin/accounting/operating-costs/${encodeURIComponent(entryId)}/decision`, {
+    method: "POST",
+    body,
+    accessToken
+  });
+}
+
 export function listAdminAuditLog(
   accessToken: string,
   params: { action?: string; actorUserId?: string; page?: number } = {}

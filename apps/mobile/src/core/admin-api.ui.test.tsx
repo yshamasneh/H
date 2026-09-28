@@ -1,4 +1,13 @@
-import { fetchAdminAccess, getAdminCustomerDetail, listAdminUsers, rejectAdminRestaurant, setAdminUserActive } from "./api";
+import {
+  decideAdminOperatingCost,
+  fetchAdminAccess,
+  getAdminCustomerDetail,
+  listAdminCashSettlements,
+  listAdminUsers,
+  recordAdminCashSettlement,
+  rejectAdminRestaurant,
+  setAdminUserActive
+} from "./api";
 
 test("mobile admin rejection sends the required reason in the API request body", async () => {
   const fetchMock = jest.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -69,6 +78,25 @@ test("the access context is read from /auth/me and defaults to no permissions", 
   fetchMock = mockJson({ user: {} });
   try {
     expect(await fetchAdminAccess("t")).toEqual({ isSuperAdmin: false, permissions: [] });
+  } finally {
+    fetchMock.mockRestore();
+  }
+});
+
+test("receiving driver cash and deciding a cost use the web console's accounting endpoints", async () => {
+  const fetchMock = mockJson({});
+  try {
+    await recordAdminCashSettlement("t", { driverUserId: "d1", reference: "HANDOVER-X", countedAmountMinor: 2000, custodyIds: ["a"] });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/api/v1/admin/accounting/cash/settlements");
+    expect(init).toEqual(expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ driverUserId: "d1", reference: "HANDOVER-X", countedAmountMinor: 2000, custodyIds: ["a"] })
+    }));
+    await listAdminCashSettlements("t", "d1");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/api/v1/admin/accounting/cash/settlements?driverUserId=d1");
+    await decideAdminOperatingCost("t", "cost1", { approve: false, note: "Duplicate" });
+    expect(String(fetchMock.mock.calls[2][0])).toContain("/api/v1/admin/accounting/operating-costs/cost1/decision");
   } finally {
     fetchMock.mockRestore();
   }
