@@ -10,6 +10,7 @@ import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
 import { offerLabel } from "./home-screen";
 import { resolveMarketStore, type MarketStore } from "./market";
+import { formatShekel } from "./shop.rules";
 import { useCustomerTheme, type CustomerTheme } from "./theme";
 
 /**
@@ -121,9 +122,7 @@ export function OfferDetailScreen(props: {
   );
 }
 
-function formatPrice(minor: number): string {
-  return `${(minor / 100).toFixed(2)} ILS`;
-}
+const formatPrice = formatShekel;
 
 const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => StyleSheet.create({
   screen: { backgroundColor: customerTheme.colors.background, flex: 1 },

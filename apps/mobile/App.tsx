@@ -445,7 +445,9 @@ function TasawaQApp() {
         return;
       case "browse": {
         const store = await resolveMarketStore();
+        // Tapping Browse used to do nothing at all when the store could not be reached.
         if (store) setScreen(goToSupermarketCatalog(user, store));
+        else showToast(t("customer:home.marketUnavailableTitle"));
         return;
       }
       case "cart":
