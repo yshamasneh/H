@@ -4,7 +4,10 @@ import { View } from "react-native";
 import i18n from "../../i18n";
 import {
   cancelAdminOrder,
+  fetchAdminAccess,
   getAdminOrder,
+  getAdminOrderTracking,
+  type AdminOrderTracking,
   listAdminOrders,
   type OrderDetail,
   type OrderStatusValue
@@ -26,6 +29,7 @@ import {
   KeyValue,
   LoadingState,
   Meta,
+  PhoneNumber,
   StatusPill,
   useAdminStyles,
   formatDate,
@@ -35,31 +39,74 @@ import {
 
 type OrderFilter = "ALL" | OrderStatusValue;
 
-const filterValues: OrderFilter[] = ["ALL", "PLACED", "PREPARING", "READY_FOR_PICKUP", "DELIVERED", "CANCELLED"];
+// Every status an order can be in, so a failed or rejected order can be found from the phone too.
+const filterValues: OrderFilter[] = [
+  "ALL",
+  "PLACED",
+  "ACCEPTED",
+  "PREPARING",
+  "READY_FOR_PICKUP",
+  "DELIVERED",
+  "DELIVERY_FAILED",
+  "REJECTED",
+  "CANCELLED"
+];
 
-export function AdminOrdersScreen(props: { onBack: () => void; onOpenOrder: (orderId: string) => void }) {
+export function AdminOrdersScreen(props: {
+  onBack: () => void;
+  onOpenOrder: (orderId: string) => void;
+  /** Opens the list already filtered, e.g. from the dashboard's "not yet accepted" item. */
+  initialFilter?: OrderFilter;
+}) {
   const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [orders, setOrders] = useState<OrderDetail[] | null>(null);
-  const [filter, setFilter] = useState<OrderFilter>("ALL");
+  const [filter, setFilter] = useState<OrderFilter>(props.initialFilter ?? "ALL");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const filters = filterValues.map((value) => ({
     value,
     label: value === "ALL" ? t("orders.filterAll") : t(`common:status.${value}`)
   }));
 
-  async function load() {
+  // Reloads every page already shown, so a live update never drops orders the admin scrolled to.
+  async function load(pages = page) {
     try {
-      const page = await listAdminOrders(await requireToken(), filter === "ALL" ? {} : { status: filter });
-      setOrders(page.items);
+      const token = await requireToken();
+      const status = filter === "ALL" ? {} : { status: filter };
+      const results = await Promise.all(
+        Array.from({ length: pages }, (_, index) => listAdminOrders(token, { ...status, page: index + 1 }))
+      );
+      setOrders(results.flatMap((result) => result.items));
+      setTotal(results[0]?.total ?? 0);
       setError(null);
     } catch (requestError) {
       setError(readAdminError(requestError));
     }
   }
 
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const next = page + 1;
+      const result = await listAdminOrders(await requireToken(), { ...(filter === "ALL" ? {} : { status: filter }), page: next });
+      setOrders((current) => [...(current ?? []), ...result.items]);
+      setTotal(result.total);
+      setPage(next);
+    } catch (requestError) {
+      setError(readAdminError(requestError));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   useEffect(() => {
-    void load();
+    setPage(1);
+    setOrders(null);
+    void load(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   useRealtimeEvent("order.created", () => void load());
@@ -89,6 +136,14 @@ export function AdminOrdersScreen(props: { onBack: () => void; onOpenOrder: (ord
           </Card>
         ))
       )}
+      {orders !== null && orders.length < total ? (
+        <ActionButton
+          label={t("orders.loadMore", { shown: orders.length, total })}
+          loading={loadingMore}
+          onPress={() => void loadMore()}
+          variant="secondary"
+        />
+      ) : null}
     </AdminPage>
   );
 }
@@ -97,14 +152,22 @@ export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => v
   const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [order, setOrder] = useState<OrderDetail | null>(null);
+  const [tracking, setTracking] = useState<AdminOrderTracking | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     try {
-      setOrder(await getAdminOrder(await requireToken(), props.orderId));
+      const token = await requireToken();
+      setOrder(await getAdminOrder(token, props.orderId));
       setError(null);
+      // Who is delivering it, for a follow-up call. Only for accounts that manage drivers; a missing
+      // permission or an order with no delivery simply leaves the section without a driver.
+      const access = await fetchAdminAccess(token).catch(() => null);
+      if (access && (access.isSuperAdmin || access.permissions.includes("MANAGE_DRIVERS"))) {
+        setTracking(await getAdminOrderTracking(token, props.orderId).catch(() => null));
+      }
     } catch (requestError) {
       setError(readAdminError(requestError));
     }
@@ -164,6 +227,26 @@ export function AdminOrderDetailScreen(props: { orderId: string; onBack: () => v
               </>
             ) : null}
           </Card>
+
+          {order.delivery || tracking?.driver ? (
+            <Card>
+              <View style={adminStyles.rowBetween}>
+                <CardTitle>{t("orderDetail.deliveryTitle")}</CardTitle>
+                {order.delivery ? <StatusPill status={order.delivery.status} /> : null}
+              </View>
+              {tracking?.driver ? (
+                <>
+                  <KeyValue label={t("orderDetail.driverLabel")} value={tracking.driver.fullName} />
+                  <PhoneNumber phone={tracking.driver.phone} />
+                </>
+              ) : (
+                <Meta>{t("orderDetail.noDriver")}</Meta>
+              )}
+              {order.delivery?.assignedAt ? <KeyValue label={t("orderDetail.assignedAt")} value={formatDate(order.delivery.assignedAt)} /> : null}
+              {order.delivery?.pickedUpAt ? <KeyValue label={t("orderDetail.pickedUpAt")} value={formatDate(order.delivery.pickedUpAt)} /> : null}
+              {order.delivery?.deliveredAt ? <KeyValue label={t("orderDetail.deliveredAt")} value={formatDate(order.delivery.deliveredAt)} /> : null}
+            </Card>
+          ) : null}
 
           <Card>
             <CardTitle>{t("orderDetail.statusHistoryTitle")}</CardTitle>

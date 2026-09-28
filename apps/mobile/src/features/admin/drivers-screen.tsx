@@ -4,6 +4,8 @@ import { View } from "react-native";
 import i18n from "../../i18n";
 import {
   approveAdminDriver,
+  fetchAdminAccess,
+  listAdminDriverCash,
   listAdminDrivers,
   reactivateAdminDriver,
   rejectAdminDriver,
@@ -19,20 +21,47 @@ import {
   CardTitle,
   EmptyState,
   ErrorBanner,
+  FilterChips,
   Input,
   KeyValue,
   LoadingState,
   Meta,
+  PhoneNumber,
   StatusPill,
   useAdminStyles,
   formatDate,
   readAdminError
 } from "./ui";
+import { formatMinorExact } from "./users.rules";
 
-export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
+type DriverFilter = "ALL" | "PENDING" | "ONLINE" | "APPROVED" | "SUSPENDED" | "REJECTED";
+const driverFilters: DriverFilter[] = ["ALL", "PENDING", "ONLINE", "APPROVED", "SUSPENDED", "REJECTED"];
+
+export function matchesDriverFilter(driver: Pick<AdminDriver, "status" | "isOnline">, filter: DriverFilter): boolean {
+  if (filter === "ALL") return true;
+  if (filter === "ONLINE") return driver.status === "APPROVED" && driver.isOnline;
+  return driver.status === filter;
+}
+
+/**
+ * Drivers on the phone: approvals first when there are any, who is on shift, a call away, and
+ * whether they are holding customers' cash (with a way to receive it).
+ */
+export function AdminDriversScreen({
+  onBack,
+  initialFilter,
+  onOpenCash
+}: {
+  onBack: () => void;
+  initialFilter?: DriverFilter;
+  onOpenCash?: (driverUserId: string) => void;
+}) {
   const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [drivers, setDrivers] = useState<AdminDriver[] | null>(null);
+  const [filter, setFilter] = useState<DriverFilter>(initialFilter ?? "ALL");
+  // Cash held per driver, when the account can read the books; otherwise the badge is just absent.
+  const [cashHeld, setCashHeld] = useState<Map<string, number>>(new Map());
   const [reasonAction, setReasonAction] = useState<{ userId: string; kind: "reject" | "suspend" } | null>(null);
   const [reason, setReason] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -40,8 +69,14 @@ export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
 
   async function load() {
     try {
-      setDrivers(await listAdminDrivers(await requireToken()));
+      const token = await requireToken();
+      setDrivers(await listAdminDrivers(token));
       setError(null);
+      const access = await fetchAdminAccess(token).catch(() => null);
+      if (access && (access.isSuperAdmin || access.permissions.includes("VIEW_ACCOUNTING"))) {
+        const cash = await listAdminDriverCash(token).catch(() => []);
+        setCashHeld(new Map(cash.filter((row) => row.outstandingMinor > 0).map((row) => [row.driverUserId, row.outstandingMinor])));
+      }
     } catch (requestError) {
       setError(readAdminError(requestError));
     }
@@ -67,26 +102,42 @@ export function AdminDriversScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <AdminPage onBack={onBack} subtitle={t("drivers.subtitle")} title={t("drivers.title")}>
+      <FilterChips
+        onChange={setFilter}
+        options={driverFilters.map((value) => ({
+          value,
+          label: `${t(`drivers.filters.${value}`)}${drivers ? ` (${drivers.filter((driver) => matchesDriverFilter(driver, value)).length})` : ""}`
+        }))}
+        value={filter}
+      />
       <ErrorBanner message={error} />
       {drivers === null ? (
         <LoadingState />
-      ) : drivers.length === 0 ? (
+      ) : drivers.filter((driver) => matchesDriverFilter(driver, filter)).length === 0 ? (
         <EmptyState message={t("drivers.empty")} />
       ) : (
-        drivers.map((driver) => {
+        drivers.filter((driver) => matchesDriverFilter(driver, filter)).map((driver) => {
           const selected = reasonAction?.userId === driver.userId ? reasonAction : null;
           return (
             <Card key={driver.userId}>
               <View style={adminStyles.rowBetween}>
                 <View style={{ flex: 1 }}>
                   <CardTitle>{driver.fullName}</CardTitle>
-                  <Meta>{driver.phone}</Meta>
+                  <PhoneNumber phone={driver.phone} />
                 </View>
                 <StatusPill status={driver.status} />
               </View>
               <KeyValue label={t("drivers.onlineLabel")} value={driver.isOnline ? t("common:yes") : t("common:no")} />
               <KeyValue label={t("drivers.completedDeliveriesLabel")} value={String(driver.completedDeliveriesCount)} />
               <KeyValue label={t("drivers.createdLabel")} value={formatDate(driver.createdAt)} />
+              {cashHeld.has(driver.userId) ? (
+                <View style={adminStyles.rowBetween}>
+                  <KeyValue label={t("drivers.cashHeldLabel")} value={formatMinorExact(cashHeld.get(driver.userId)!)} />
+                  {onOpenCash ? (
+                    <ActionButton label={t("drivers.receiveCash")} onPress={() => onOpenCash(driver.userId)} variant="secondary" />
+                  ) : null}
+                </View>
+              ) : null}
 
               {selected ? (
                 <View style={adminStyles.reasonBox}>

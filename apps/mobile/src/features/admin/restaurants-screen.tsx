@@ -41,11 +41,13 @@ const filterValues: RestaurantFilter[] = ["ALL", "PENDING", "APPROVED", "SUSPEND
 export function AdminRestaurantsScreen(props: {
   onBack: () => void;
   onOpenRestaurant: (restaurantId: string) => void;
+  /** Opens the list already filtered, e.g. from the dashboard's "awaiting approval" item. */
+  initialFilter?: RestaurantFilter;
 }) {
   const adminStyles = useAdminStyles();
   const { t } = useTranslation(["admin", "common"]);
   const [restaurants, setRestaurants] = useState<AdminRestaurant[] | null>(null);
-  const [filter, setFilter] = useState<RestaurantFilter>("ALL");
+  const [filter, setFilter] = useState<RestaurantFilter>(props.initialFilter ?? "ALL");
   const [error, setError] = useState<string | null>(null);
   const filters = filterValues.map((value) => ({
     value,
