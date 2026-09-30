@@ -16,6 +16,7 @@
     "prisma:migrate": "prisma migrate dev --name customer_phone_auth",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
+    "otp:tweetsms:preflight": "tsx scripts/tweetsms-preflight.ts",
     "bootstrap:admin": "tsx prisma/bootstrap-admin.ts",
     "reconcile:partners": "tsx prisma/reconcile-partner-accounts.ts",
     "import:products": "tsx prisma/import-products.ts",

@@ -401,13 +401,34 @@ export class AuthService {
       });
     });
 
+    // Outside the transaction, and attempted exactly once. A provider call inside the transaction
+    // would hold Serializable locks open across the network, and a retry here is how one customer
+    // receives two codes. A failure to send is a failed request: the caller never gets a success
+    // response for a code that is not on its way.
+    //
+    // The challenge row committed above is the record of this attempt and it is never removed,
+    // whatever the provider answers. It is what the resend cooldown and both daily send budgets
+    // count, so one request is one provider call, bounded the same way whether the gateway accepted
+    // the message, refused it, or never answered. An earlier revision deleted the row when the
+    // gateway looked like it had refused, which quietly made provider calls unbounded: the deleted
+    // row released the cooldown *and* freed its slot in the daily budget, so a caller could loop on
+    // a refusing gateway for as long as it liked. Nothing is deleted here now — and deciding on the
+    // strength of a guessed outcome was the deeper mistake, since we cannot see the gateway's queue
+    // or its billing (see OtpDeliveryOutcome).
     await this.otpProvider.send({ phone, purpose, code });
+
     return {
       phone,
       expiresInSeconds: expirationMinutes * 60,
       resendAvailableInSeconds: resendSeconds,
-      message: "A verification code was created. Check the backend terminal in development."
+      message: this.otpSentMessage()
     };
+  }
+
+  private otpSentMessage(): string {
+    return this.config.get<string>("OTP_PROVIDER", "development") === "development"
+      ? "A verification code was created. Check the backend terminal in development."
+      : "A verification code has been sent to your phone by SMS.";
   }
 
   /**
@@ -418,10 +439,12 @@ export class AuthService {
    * gateway sits behind the webhook that is an unbounded bill: every code is a few agora, the
    * attacker pays nothing, and per-IP throttling does not survive a distributed source.
    *
-   * Both ceilings count challenges *created*, across every purpose, over a rolling 24 hours —
-   * one row is written per code sent, so the row count is the send count. They are cost controls
-   * rather than security controls, and are sized so a real person retrying a signup or a reset
-   * never encounters them.
+   * Both ceilings count challenges *created*, across every purpose, over a rolling 24 hours. One row
+   * is written per provider call, and no row is ever removed, so the row count is the number of times
+   * this platform has asked the gateway to send something — accepted, refused, or unanswered alike.
+   * That is deliberate: a refusal is our inference, not a receipt, so it cannot buy back an attempt.
+   * They are cost controls rather than security controls, and are sized so a real person retrying a
+   * signup or a reset never encounters them.
    */
   private async assertDailySendBudget(
     transaction: Prisma.TransactionClient,

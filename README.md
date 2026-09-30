@@ -135,7 +135,17 @@ With `NODE_ENV=development` and `OTP_PROVIDER=development`, signup and password-
 [DEV OTP] PASSWORD_RESET +970591234567 => 746285
 ```
 
-No SMS or WhatsApp message is sent in development. The code is never returned by the API, stored as plaintext, or logged by the mobile app. Production refuses this provider and uses the authenticated `OTP_PROVIDER=webhook` adapter documented in `.env.production.example`; the operator connects that HTTPS bridge to the approved WhatsApp Business or SMS vendor.
+No SMS or WhatsApp message is sent in development. The code is never returned by the API, stored as plaintext, or logged by the mobile app.
+
+`NODE_ENV=production` refuses this provider outright: it must be either `OTP_PROVIDER=tweetsms`, the TweetSMS (tweetsms.ps) SMS adapter, or `OTP_PROVIDER=webhook`, the vendor-neutral HTTPS bridge an operator connects to their own SMS or WhatsApp Business vendor. Both are documented in `.env.production.example`.
+
+`NODE_ENV` is not the whole story, though. A deployment that runs with `NODE_ENV=development` — as the Azure trial deliberately does — can still select the log-only provider, which means its verification codes reach nothing but the application log. Set **`OTP_REQUIRE_REAL_PROVIDER=true`** on anything deployed to make that combination a boot failure, and `DEPLOYMENT_ENV=trial|production` so the environment identifies itself (Azure App Service is also detected automatically).
+
+For TweetSMS specifically — the settings it needs, what about the gateway is still unverified, and how to spend one message confirming it — read [docs/tweetsms-otp-readiness.md](docs/tweetsms-otp-readiness.md). To check that configuration without sending anything:
+
+```powershell
+npm run otp:tweetsms:preflight --workspace @wasel/api -- +970591234567
+```
 
 ## Run the Android development build
 

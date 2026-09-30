@@ -335,7 +335,9 @@ export function OtpScreen(props: OtpScreenProps) {
         maxLength={6}
         textAlign="center"
       />
-      <Text style={styles.help}>{t("otp.devCodeHelp")}</Text>
+      <Text style={styles.help}>{t("otp.smsHelp")}</Text>
+      {/* The log-only provider exists for local development, so its instructions stay there too. */}
+      {__DEV__ ? <Text style={styles.help}>{t("otp.devCodeHelp")}</Text> : null}
       <ErrorText message={error} />
       <PrimaryButton label={t("otp.verify")} loading={loading} onPress={verify} />
       <SecondaryButton

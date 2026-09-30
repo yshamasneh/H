@@ -44,10 +44,13 @@ jobs:
           presence() { local v; v=$(value "$1"); if [[ -n "$v" ]]; then echo "$1: SET (${#v} chars)"; else echo "$1: NOT SET"; fi; }
           host_of() { local v; v=$(value "$1"); if [[ -n "$v" ]]; then echo "$1: SET -> $(sed -E 's#^(https?://[^/]+).*#\1#' <<< "$v")"; else echo "$1: NOT SET"; fi; }
           echo "== Mode =="
-          for k in NODE_ENV OTP_PROVIDER LOG_LEVEL RESTAURANT_ORDERING_ENABLED; do echo "$k: $(value "$k")"; done
+          for k in NODE_ENV DEPLOYMENT_ENV OTP_PROVIDER OTP_REQUIRE_REAL_PROVIDER LOG_LEVEL RESTAURANT_ORDERING_ENABLED; do echo "$k: $(value "$k")"; done
           echo "== OTP =="
           host_of OTP_WEBHOOK_URL
           presence OTP_WEBHOOK_TOKEN
+          host_of TWEETSMS_BASE_URL
+          presence TWEETSMS_API_KEY
+          for k in TWEETSMS_SENDER TWEETSMS_RECIPIENT_FORMAT TWEETSMS_SEND_OPTIONAL_FIELDS TWEETSMS_TIMEOUT_MS; do echo "$k: $(value "$k")"; done
           echo "== Error tracking =="
           host_of ERROR_TRACKING_WEBHOOK_URL
           presence ERROR_TRACKING_TOKEN
@@ -100,6 +103,12 @@ jobs:
             echo "Last [DEV OTP] timestamp: $(grep -rh '\[DEV OTP\]' logs | grep -oE '20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9:]{8}' | sort | tail -1)"
             echo "error_tracking_delivery_failed lines: $(grep -rh 'error_tracking_delivery_failed' logs | wc -l)"
             echo "OTP_DELIVERY_FAILED lines: $(grep -rh 'OTP_DELIVERY_FAILED' logs | wc -l)"
+            # tweetsms_send lines carry only a masked phone, an HTTP status, a numeric provider code
+            # and a closed-set reason, so the reason/outcome breakdown is safe to print in full.
+            echo "tweetsms_send lines: $(grep -rh 'tweetsms_send' logs | wc -l)"
+            echo "tweetsms_send reason/outcome breakdown:"
+            grep -rh 'tweetsms_send' logs | grep -oE '"(reason|outcome|providerCode)":"?[A-Za-z_0-9-]+' | sort | uniq -c || echo "(none)"
+            echo "otp_development_provider_on_deployed_environment warnings: $(grep -rh 'otp_development_provider_on_deployed_environment' logs | wc -l)"
           else
             echo "Could not download App Service logs."
           fi

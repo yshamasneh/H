@@ -1,3 +1,12 @@
+// Deliberately the contract, not the adapter: this module is also loaded on its own by
+// scripts/release-readiness.mjs through a bare `tsx --eval`, where a NestJS or class-validator
+// decorator anywhere in the import graph would fail to evaluate.
+import {
+  TWEETSMS_DEFAULT_BASE_URL,
+  TWEETSMS_DEFAULT_MESSAGE_TEMPLATE,
+  assertUsableTweetSmsOptions,
+  tweetSmsRecipientFormats
+} from "../auth/tweetsms.contract";
 import { parseAppInsightsConnectionString } from "../observability/app-insights";
 const requiredSecrets = ["JWT_ACCESS_SECRET", "JWT_REFRESH_SECRET", "OTP_HASH_SECRET"] as const;
 const productionPlaceholders = ["replace_with_", "change_me", "changeme", "tasawaq_dev_password"];
@@ -8,7 +17,11 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const environment = { ...input };
   const nodeEnv = readChoice(environment, "NODE_ENV", "development", supportedNodeEnvironments);
   const isProduction = nodeEnv === "production";
-  const otpProvider = readChoice(environment, "OTP_PROVIDER", "development", ["development", "webhook"] as const);
+  const otpProvider = readChoice(environment, "OTP_PROVIDER", "development", [
+    "development",
+    "webhook",
+    "tweetsms"
+  ] as const);
   const databaseUrl = readString(environment, "DATABASE_URL", "");
   const storageAccountName = readString(environment, "AZURE_STORAGE_ACCOUNT_NAME", "");
   const storagePublicContainer = readString(environment, "AZURE_STORAGE_PUBLIC_CONTAINER_NAME", "");
@@ -55,12 +68,36 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const corsOrigin = readString(environment, "CORS_ORIGIN", isProduction ? "" : "*");
   if (isProduction) validateProductionCorsOrigins(corsOrigin);
 
-  if (isProduction && otpProvider !== "webhook") {
-    throw new Error("OTP_PROVIDER=webhook is required when NODE_ENV=production");
+  // NODE_ENV=production must name a provider that actually delivers an SMS. The development provider
+  // only writes the code to the server log, so anyone able to read logs could sign in as anyone.
+  //
+  // This check alone does NOT cover every deployment: the Azure trial deliberately runs with
+  // NODE_ENV=development (see TRIAL_DEPLOY_CHECK.md), so it passes here. `deployed` below is the
+  // broader signal, and OTP_REQUIRE_REAL_PROVIDER is what turns it into a refusal.
+  if (isProduction && otpProvider === "development") {
+    throw new Error("OTP_PROVIDER=tweetsms (or webhook) is required when NODE_ENV=production");
+  }
+
+  const deploymentEnv = readChoice(environment, "DEPLOYMENT_ENV", isProduction ? "production" : "local", [
+    "local",
+    "trial",
+    "production"
+  ] as const);
+  const deployed = isDeployedEnvironment(environment, deploymentEnv, isProduction);
+  environment.DEPLOYMENT_ENV = deploymentEnv;
+  environment.IS_DEPLOYED = deployed;
+  environment.OTP_REQUIRE_REAL_PROVIDER = readBoolean(environment, "OTP_REQUIRE_REAL_PROVIDER", false);
+  if (deployed && otpProvider === "development" && environment.OTP_REQUIRE_REAL_PROVIDER === true) {
+    throw new Error(
+      "OTP_PROVIDER=development is refused on a deployed environment while OTP_REQUIRE_REAL_PROVIDER=true"
+    );
   }
   if (otpProvider === "webhook") {
     environment.OTP_WEBHOOK_URL = readHttpsUrl(environment, "OTP_WEBHOOK_URL", isProduction);
     environment.OTP_WEBHOOK_TOKEN = readSecret(environment, "OTP_WEBHOOK_TOKEN", isProduction);
+  }
+  if (otpProvider === "tweetsms") {
+    applyTweetSmsConfiguration(environment, isProduction);
   }
 
   const errorTrackingUrl = readString(environment, "ERROR_TRACKING_WEBHOOK_URL", "");
@@ -185,6 +222,93 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     throw new Error("UPLOAD_SAS_TTL_SECONDS cannot exceed 300");
   }
   return environment;
+}
+
+/**
+ * Whether this process is running somewhere other people can reach.
+ *
+ * NODE_ENV is not a reliable answer to that question in this project. The Azure trial runs the
+ * production container image with `NODE_ENV=development` set as an App Service application setting,
+ * on purpose, so that the relaxed CORS and HTTP settings a trial needs are accepted — which means a
+ * guard written as `NODE_ENV === "production"` does not cover the trial at all.
+ *
+ * So three signals are combined, and any one of them is enough:
+ *  - `DEPLOYMENT_ENV` set to `trial` or `production`: the operator saying so explicitly.
+ *  - `WEBSITE_SITE_NAME` / `WEBSITE_INSTANCE_ID`: injected into every container Azure App Service
+ *    runs, so a deployment there is detected whether or not anyone remembered to set the above.
+ *  - `NODE_ENV=production`.
+ */
+export function isDeployedEnvironment(
+  input: Record<string, unknown>,
+  deploymentEnv: string,
+  isProduction: boolean
+): boolean {
+  if (isProduction || deploymentEnv !== "local") return true;
+  return Boolean(
+    readString(input, "WEBSITE_SITE_NAME", "") || readString(input, "WEBSITE_INSTANCE_ID", "")
+  );
+}
+
+/**
+ * TweetSMS is the first provider whose credentials live in this process, so its configuration is
+ * checked at boot with the very same assertion the adapter runs on itself — an unusable sender or an
+ * oversized template stops the process instead of surfacing later as a failed signup.
+ */
+function applyTweetSmsConfiguration(environment: Record<string, unknown>, isProduction: boolean): void {
+  // HTTPS is required whatever NODE_ENV says, because the API key travels in the request body.
+  const baseUrl = readString(environment, "TWEETSMS_BASE_URL", TWEETSMS_DEFAULT_BASE_URL);
+  environment.TWEETSMS_BASE_URL = readHttpsUrl({ TWEETSMS_BASE_URL: baseUrl }, "TWEETSMS_BASE_URL", true);
+
+  // Not readSecret: the provider issues this key and chooses its length, so a 32-character floor
+  // would reject a legitimate credential.
+  const apiKey = readString(environment, "TWEETSMS_API_KEY", "");
+  if (apiKey.length < 8) {
+    throw new Error("TWEETSMS_API_KEY is required and must contain at least 8 characters");
+  }
+  if (isProduction && containsProductionPlaceholder(apiKey)) {
+    throw new Error("TWEETSMS_API_KEY contains a placeholder and cannot be used in production");
+  }
+  environment.TWEETSMS_API_KEY = apiKey;
+
+  const sender = readString(environment, "TWEETSMS_SENDER", "");
+  if (!/^[A-Za-z0-9][A-Za-z0-9 ._-]{0,19}$/.test(sender)) {
+    throw new Error(
+      "TWEETSMS_SENDER must be the sender name approved by TweetSMS: 1-20 characters, starting with a letter or digit"
+    );
+  }
+  if (isProduction && containsProductionPlaceholder(sender)) {
+    throw new Error("TWEETSMS_SENDER contains a placeholder and cannot be used in production");
+  }
+  environment.TWEETSMS_SENDER = sender;
+
+  const recipientFormat = readChoice(
+    environment,
+    "TWEETSMS_RECIPIENT_FORMAT",
+    "digits",
+    tweetSmsRecipientFormats
+  );
+  const messageTemplate = readString(
+    environment,
+    "TWEETSMS_MESSAGE_TEMPLATE",
+    TWEETSMS_DEFAULT_MESSAGE_TEMPLATE
+  );
+  const timeoutMs = readPositiveInteger(environment, "TWEETSMS_TIMEOUT_MS", 8_000);
+  const includeOptionalFields = readBoolean(environment, "TWEETSMS_SEND_OPTIONAL_FIELDS", false);
+
+  assertUsableTweetSmsOptions({
+    baseUrl: environment.TWEETSMS_BASE_URL as string,
+    apiKey,
+    sender,
+    timeoutMs,
+    recipientFormat,
+    messageTemplate,
+    includeOptionalFields
+  });
+
+  environment.TWEETSMS_RECIPIENT_FORMAT = recipientFormat;
+  environment.TWEETSMS_MESSAGE_TEMPLATE = messageTemplate;
+  environment.TWEETSMS_TIMEOUT_MS = timeoutMs;
+  environment.TWEETSMS_SEND_OPTIONAL_FIELDS = includeOptionalFields;
 }
 
 function readSecret(input: Record<string, unknown>, key: string, production: boolean): string {

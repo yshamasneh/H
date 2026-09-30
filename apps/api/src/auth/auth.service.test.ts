@@ -7,7 +7,7 @@ import { OtpPurpose, UserRole } from "../generated/prisma/client";
 import { AuthorizationService } from "../common/authorization/authorization.service";
 import { AuthService } from "./auth.service";
 import { hashPassword } from "./crypto.util";
-import type { OtpDelivery, OtpProvider } from "./otp.provider";
+import { OtpDeliveryError, type OtpDelivery, type OtpProvider } from "./otp.provider";
 import { FakePrisma } from "./testing/fake-prisma";
 
 const signupInput = {
@@ -34,9 +34,27 @@ class CapturingOtpProvider implements OtpProvider {
   }
 }
 
+/** A gateway that never accepts anything, for the delivery-failure paths. */
+class FailingOtpProvider implements OtpProvider {
+  attempts = 0;
+  constructor(private readonly error: Error) {}
+  async send(): Promise<void> {
+    this.attempts += 1;
+    throw this.error;
+  }
+}
+
 function createContext(configOverrides: Record<string, unknown> = {}) {
   const prisma = new FakePrisma();
   const otp = new CapturingOtpProvider();
+  return { prisma, otp, auth: createAuthService(prisma, otp, configOverrides) };
+}
+
+function createAuthService(
+  prisma: FakePrisma,
+  otp: OtpProvider,
+  configOverrides: Record<string, unknown> = {}
+): AuthService {
   const config = new ConfigService({
     OTP_HASH_SECRET: "otp-test-secret-that-is-longer-than-thirty-two-characters",
     JWT_ACCESS_SECRET: "access-test-secret-that-is-longer-than-thirty-two-characters",
@@ -50,8 +68,7 @@ function createContext(configOverrides: Record<string, unknown> = {}) {
     ...configOverrides
   });
   const authorization = new AuthorizationService(prisma as never);
-  const auth = new AuthService(prisma as never, config, new JwtService(), authorization, otp);
-  return { prisma, otp, auth };
+  return new AuthService(prisma as never, config, new JwtService(), authorization, otp);
 }
 
 async function seedCustomer(prisma: FakePrisma, password = "Test@12345", phone = "+970590000000") {
@@ -403,7 +420,11 @@ test("a password reset bumps tokenVersion and revokes every live session (TC-025
 
 /** Clears the per-phone cooldown so a test can exercise the daily ceiling behind it. */
 function clearCooldown(context: ReturnType<typeof createContext>): void {
-  for (const challenge of context.prisma.challenges) {
+  clearCooldownOn(context.prisma);
+}
+
+function clearCooldownOn(prisma: FakePrisma): void {
+  for (const challenge of prisma.challenges) {
     challenge.resendAvailableAt = new Date(Date.now() - 1);
   }
 }
@@ -484,6 +505,171 @@ test("the ceilings sit high enough that an ordinary retry never meets them", asy
     clearCooldown(context);
   }
   assert.equal(context.otp.deliveries.length, 5, "five retries in a row is unremarkable");
+});
+
+/*
+ * Delivery failures.
+ *
+ * A code the gateway did not take is not a code: none of these requests may answer with a success
+ * body, none may create an account, and none may send twice. And whatever the provider says about
+ * why it failed, the attempt stays counted — the resend cooldown and both daily send budgets bound
+ * provider calls identically, because a refusal is our inference and not a receipt.
+ */
+
+test("a refused send fails the request and still costs the attempt", async () => {
+  const prisma = new FakePrisma();
+  const otp = new FailingOtpProvider(new OtpDeliveryError("REFUSED", "AUTH_REJECTED", "-110"));
+  const auth = createAuthService(prisma, otp);
+
+  await assert.rejects(auth.requestCustomerSignupCode(signupInput), hasCode("OTP_DELIVERY_FAILED"));
+  assert.equal(otp.attempts, 1, "no automatic retry: a second POST is a second message");
+  assert.equal(prisma.users.length, 0, "a failed send never creates an account");
+  assert.equal(
+    prisma.challenges.length,
+    1,
+    "the attempt is recorded even though the gateway said it refused: we cannot see its billing"
+  );
+
+  // The cooldown stands. Releasing it on a refusal is what previously made provider calls unbounded.
+  await assert.rejects(auth.requestCustomerSignupCode(signupInput), hasCode("OTP_RESEND_COOLDOWN"));
+  assert.equal(otp.attempts, 1, "the cooldown is enforced before the provider is called again");
+});
+
+test("an unconfirmed send failure keeps the cooldown, so one code is never sent twice", async () => {
+  const prisma = new FakePrisma();
+  const otp = new FailingOtpProvider(new OtpDeliveryError("UNCONFIRMED", "TIMEOUT"));
+  const auth = createAuthService(prisma, otp);
+
+  await assert.rejects(auth.requestCustomerSignupCode(signupInput), hasCode("OTP_DELIVERY_FAILED"));
+  assert.equal(prisma.users.length, 0);
+  assert.equal(prisma.challenges.length, 1, "the message may already be on its way");
+
+  await assert.rejects(auth.requestCustomerSignupCode(signupInput), hasCode("OTP_RESEND_COOLDOWN"));
+  assert.equal(otp.attempts, 1);
+});
+
+test("repeated refusals are bounded by the per-number daily budget, not by the gateway", async () => {
+  // The scenario this guards: a wrong API key, or an attacker pointing at a gateway that rejects
+  // everything. Each request costs one provider call, and the ceiling has to be reached.
+  const prisma = new FakePrisma();
+  const otp = new FailingOtpProvider(new OtpDeliveryError("REFUSED", "AUTH_REJECTED", "-110"));
+  const auth = createAuthService(prisma, otp, { OTP_MAX_PER_PHONE_PER_DAY: 3 });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await assert.rejects(auth.requestCustomerSignupCode(signupInput), hasCode("OTP_DELIVERY_FAILED"));
+    clearCooldownOn(prisma);
+  }
+  assert.equal(otp.attempts, 3);
+
+  // The fourth request never reaches the gateway at all.
+  await assert.rejects(auth.requestCustomerSignupCode(signupInput), hasCode("OTP_DAILY_LIMIT_REACHED"));
+  assert.equal(otp.attempts, 3, "refused attempts count: the ceiling holds without a single send");
+  assert.equal(prisma.users.length, 0);
+});
+
+test("repeated refusals across many numbers are bounded by the platform ceiling", async () => {
+  const prisma = new FakePrisma();
+  const otp = new FailingOtpProvider(new OtpDeliveryError("REFUSED", "AUTH_REJECTED", "-110"));
+  const auth = createAuthService(prisma, otp, {
+    OTP_MAX_PER_PHONE_PER_DAY: 50,
+    OTP_MAX_GLOBAL_PER_DAY: 2
+  });
+
+  await assert.rejects(
+    auth.requestCustomerSignupCode({ ...signupInput, phoneNumber: "0591111111" }),
+    hasCode("OTP_DELIVERY_FAILED")
+  );
+  await assert.rejects(
+    auth.requestCustomerSignupCode({ ...signupInput, phoneNumber: "0592222222" }),
+    hasCode("OTP_DELIVERY_FAILED")
+  );
+  await assert.rejects(
+    auth.requestCustomerSignupCode({ ...signupInput, phoneNumber: "0593333333" }),
+    hasCode("OTP_TEMPORARILY_UNAVAILABLE")
+  );
+  assert.equal(otp.attempts, 2, "a distributed source cannot loop on a refusing gateway either");
+});
+
+test("concurrent requests for one number produce exactly one provider call", async () => {
+  const prisma = new FakePrisma();
+  const otp = new CapturingOtpProvider();
+  const auth = createAuthService(prisma, otp);
+
+  const results = await Promise.allSettled([
+    auth.requestCustomerSignupCode(signupInput),
+    auth.requestCustomerSignupCode(signupInput),
+    auth.requestCustomerSignupCode(signupInput)
+  ]);
+
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  for (const result of results.filter((entry) => entry.status === "rejected")) {
+    assert.ok(hasCode("OTP_RESEND_COOLDOWN")((result as PromiseRejectedResult).reason));
+  }
+  assert.equal(otp.deliveries.length, 1, "one code, one message, whatever the client does");
+  assert.equal(prisma.challenges.length, 1);
+});
+
+test("concurrent requests against a refusing gateway also make exactly one call", async () => {
+  const prisma = new FakePrisma();
+  const otp = new FailingOtpProvider(new OtpDeliveryError("REFUSED", "AUTH_REJECTED", "-110"));
+  const auth = createAuthService(prisma, otp);
+
+  const results = await Promise.allSettled([
+    auth.requestCustomerSignupCode(signupInput),
+    auth.requestCustomerSignupCode(signupInput)
+  ]);
+
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 0);
+  assert.equal(otp.attempts, 1, "the loser of the race is stopped by the cooldown, not by the gateway");
+  assert.equal(prisma.challenges.length, 1);
+});
+
+test("a password-reset code that could not be sent fails the request too", async () => {
+  const prisma = new FakePrisma();
+  const otp = new FailingOtpProvider(new OtpDeliveryError("REFUSED", "AUTH_REJECTED", "-110"));
+  const auth = createAuthService(prisma, otp);
+  prisma.users.push({
+    id: "user-reset",
+    fullName: "Existing Customer",
+    phone: "+970591234567",
+    email: null,
+    passwordHash: await hashPassword("Existing@123"),
+    role: UserRole.CUSTOMER,
+    platformRoleId: null,
+    phoneVerifiedAt: new Date(),
+    isActive: true,
+    tokenVersion: 0
+  } as never);
+
+  await assert.rejects(
+    auth.requestPasswordResetCode({ countryCode: "+970", phoneNumber: "0591234567" }),
+    hasCode("OTP_DELIVERY_FAILED")
+  );
+  assert.equal(prisma.challenges.length, 1);
+});
+
+test("an unexpected provider error still fails the request, and keeps the cooldown", async () => {
+  const prisma = new FakePrisma();
+  const otp = new FailingOtpProvider(new Error("provider client blew up"));
+  const auth = createAuthService(prisma, otp);
+
+  await assert.rejects(auth.requestCustomerSignupCode(signupInput), /provider client blew up/);
+  assert.equal(prisma.users.length, 0);
+  assert.equal(prisma.challenges.length, 1);
+});
+
+test("a code that was never delivered still cannot be verified or guessed", async () => {
+  // A failed send leaves a real challenge row, so it must behave like any other unusable challenge.
+  const prisma = new FakePrisma();
+  const otp = new FailingOtpProvider(new OtpDeliveryError("UNCONFIRMED", "TIMEOUT"));
+  const auth = createAuthService(prisma, otp);
+
+  await assert.rejects(auth.requestCustomerSignupCode(signupInput), hasCode("OTP_DELIVERY_FAILED"));
+  await assert.rejects(
+    auth.verifyCustomerSignupCode({ countryCode: "+970", phoneNumber: "0591234567", code: "000000" }),
+    hasCode("OTP_INVALID")
+  );
+  assert.equal(prisma.users.length, 0);
 });
 
 async function seedUser(context: ReturnType<typeof createContext>, phoneNumber: string): Promise<void> {
