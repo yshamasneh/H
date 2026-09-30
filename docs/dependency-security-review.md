@@ -37,3 +37,40 @@ The direct high nodes remaining after remediation are `expo` and `prisma`; they 
 - `npm audit --omit=dev` improved from 36 to 25 affected package nodes and still exits non-zero because the two explicitly unresolved advisory roots remain.
 
 This review is dependency triage, not a claim of production readiness. Future Expo/Metro and Prisma upgrades must rerun the full compatibility and database test matrix.
+
+---
+
+## Addendum — 2026-09-30: three advisories published after the last green build
+
+Scope: `npm audit --omit=dev` at the monorepo root, unchanged code.
+
+These three high advisories were published on **2026-09-29 at ~23:45 UTC**, hours after the previous
+`Release gates` run passed on the same `package-lock.json`. Nothing in the repository changed to cause
+them; the advisory database did. The production gate went from `4 high` to `6 high` and began failing.
+
+| Advisory | Dependency path / workspace | Baseline | Resolution | Production reachability |
+| --- | --- | --- | --- | --- |
+| GHSA-2gc4-cqfq-p2gv — Socket.IO: Engine.IO protocol revision mismatch DoS | `@wasel/api > socket.io@4.8.3 > engine.io` | `engine.io@6.6.9` (vulnerable range `6.6.0 - 6.6.9`) | Updated within the declared `~6.6.0` range to `6.6.11`; affected path is gone. First patched version is `6.6.10`. | **Request-runtime reachable.** Engine.IO is the transport under the realtime gateway that serves driver tracking and order updates, so this one is genuinely on a request path rather than in build tooling. Fixed promptly for that reason. |
+| GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p — brace-expansion: DoS via uncontrolled recursion on nested brace groups / in `parseCommaParts` | Two independent lines: `glob`/`minimatch` under `@expo/fingerprint` and `glob`, and `minimatch@3` under `react-native`, `@react-native/codegen`, `rimraf`, `test-exclude`, `create-jest`, `fork-ts-checker-webpack-plugin` | `brace-expansion@5.0.9` and `@1.1.18` | Updated within declared ranges to `5.0.12` and `1.1.21`; affected paths are gone. The already-resolved `2.1.7` instance was never in a vulnerable range. | Build and test tooling. Glob patterns come from repository configuration, not from request input, so there is no request path where an attacker supplies the brace expression. |
+
+Both fixes are patch-level moves **inside the ranges the existing manifests already declare**, so no
+`package.json` was edited, no override was added, and no framework major changed. The lockfile diff is
+exactly ten package entries (`+30 / -31` lines). Nothing was added to the accepted-advisory list in
+`scripts/check-production-audit.mjs`: the gate passes because the vulnerable versions are gone.
+
+After this round `npm audit --omit=dev` reports **0 critical, 4 high, 19 moderate**, and
+`security:audit:production` exits 0. The four remaining high package nodes are the two advisory roots
+already accepted above — `image-size` via Expo/Metro and `deepmerge-ts` via Prisma tooling — which
+still require an upstream major and are unchanged by this round.
+
+### Verification
+
+- `prisma:validate`, `lint`, `typecheck` across all three workspaces: passed.
+- Unit tests: `@wasel/admin` 143/143, `@wasel/api` 678 passed with 11 database-gated skips,
+  `@wasel/mobile` 263 unit + 194 UI. No failures.
+- `security:scan` passed (5284 tracked files); `git diff --check` clean.
+- `npm run build` for all three workspaces, including the unsigned Expo web/Android/iOS export: passed.
+- `check:native-config` passed; Expo Doctor remained `17/17` on Expo SDK 54 — the check that exercises
+  the `@expo/fingerprint` path where the updated `brace-expansion@5.0.12` now sits.
+- The PostgreSQL-backed E2E gate was not run locally (no local Postgres available) and was left to CI,
+  which is also where the Engine.IO change is exercised against the realtime paths.
