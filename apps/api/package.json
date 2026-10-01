@@ -27,7 +27,7 @@
     "@nestjs/platform-socket.io": "^11.1.28",
     "@nestjs/swagger": "11.4.5",
     "@nestjs/throttler": "^6.5.0",
-    "@nestjs/websockets": "^11.1.28",
+    "@nestjs/websockets": "^12.1.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "argon2": "^0.45.1",
