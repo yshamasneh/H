@@ -291,3 +291,61 @@ test("image storage is complete, named safely, and bounded to five-minute/five-m
     /cannot exceed 5242880/
   );
 });
+
+const s3Storage = {
+  IMAGE_STORAGE_DRIVER: "s3",
+  S3_ENDPOINT: "https://account.r2.cloudflarestorage.com",
+  S3_ACCESS_KEY_ID: "access-key-id",
+  S3_SECRET_ACCESS_KEY: "secret-access-key",
+  S3_UPLOAD_BUCKET: "jovo-image-uploads",
+  S3_PUBLIC_BUCKET: "jovo-images",
+  S3_PUBLIC_BASE_URL: "https://images.example.com"
+};
+
+const productionIntegrations = {
+  NODE_ENV: "production",
+  CORS_ORIGIN: "https://admin.example.com",
+  OTP_PROVIDER: "webhook",
+  OTP_WEBHOOK_URL: "https://messaging.example.com/otp",
+  OTP_WEBHOOK_TOKEN: "otp-delivery-token-that-is-at-least-32-characters",
+  ERROR_TRACKING_WEBHOOK_URL: "https://errors.example.com/events",
+  ERROR_TRACKING_TOKEN: "error-tracking-token-that-is-at-least-32-characters",
+  MONITORING_TOKEN: "monitoring-token-that-is-at-least-32-characters"
+};
+
+test("the image storage driver defaults to Azure and accepts a complete S3-compatible configuration", () => {
+  assert.equal(validateEnvironment(base).IMAGE_STORAGE_DRIVER, "azure");
+  const result = validateEnvironment({ ...base, ...s3Storage, S3_FORCE_PATH_STYLE: "true" });
+  assert.equal(result.IMAGE_STORAGE_DRIVER, "s3");
+  assert.equal(result.S3_REGION, "auto");
+  assert.equal(result.S3_FORCE_PATH_STYLE, true);
+  assert.equal(result.S3_PUBLIC_BASE_URL, "https://images.example.com/");
+  assert.throws(() => validateEnvironment({ ...base, IMAGE_STORAGE_DRIVER: "gcs" }), /Unsupported IMAGE_STORAGE_DRIVER/);
+});
+
+test("S3 storage is all-or-nothing, uses two buckets, and serves from a permanent HTTPS address", () => {
+  // Unconfigured is fine outside production: uploads answer 503 until credentials are added.
+  assert.doesNotThrow(() => validateEnvironment({ ...base, IMAGE_STORAGE_DRIVER: "s3" }));
+  assert.throws(() => validateEnvironment({ ...base, IMAGE_STORAGE_DRIVER: "s3", S3_ENDPOINT: s3Storage.S3_ENDPOINT }), /must be configured together/);
+  assert.throws(() => validateEnvironment({ ...base, ...s3Storage, S3_PUBLIC_BUCKET: s3Storage.S3_UPLOAD_BUCKET }), /must be different buckets/);
+  assert.throws(() => validateEnvironment({ ...base, ...s3Storage, S3_UPLOAD_BUCKET: "Bad_Bucket" }), /valid bucket name/);
+  assert.throws(() => validateEnvironment({ ...base, ...s3Storage, S3_ENDPOINT: "http://minio.internal:9000" }), /HTTPS/);
+  assert.throws(() => validateEnvironment({ ...base, ...s3Storage, S3_PUBLIC_BASE_URL: "http://images.example.com" }), /HTTPS/);
+  assert.throws(
+    () => validateEnvironment({ ...base, ...s3Storage, S3_PUBLIC_BASE_URL: "https://images.example.com/?X-Amz-Signature=abc" }),
+    /no query/
+  );
+});
+
+test("production requires storage for the selected driver only", () => {
+  assert.doesNotThrow(() => validateEnvironment({ ...base, ...productionIntegrations, ...s3Storage }));
+  assert.doesNotThrow(() => validateEnvironment({ ...base, ...productionIntegrations, ...imageStorage }));
+  assert.throws(
+    () => validateEnvironment({ ...base, ...productionIntegrations, ...imageStorage, IMAGE_STORAGE_DRIVER: "s3" }),
+    /S3 image storage configuration is required in production/
+  );
+  assert.throws(
+    () => validateEnvironment({ ...base, ...productionIntegrations }),
+    /Azure image storage configuration is required in production/
+  );
+});

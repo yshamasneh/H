@@ -103,6 +103,8 @@ async function discoverPostgresContainer() {
  * single running postgres container.
  */
 export async function postgresRunner(tool) {
+  const configuredImage = process.env.PG_DOCKER_IMAGE;
+  if (configuredImage) return imageRunner(configuredImage);
   const configuredContainer = argumentValue("container") ?? process.env.PG_DOCKER_CONTAINER;
   if (configuredContainer) return dockerRunner(configuredContainer, "PG_DOCKER_CONTAINER");
 
@@ -131,6 +133,34 @@ function localRunner() {
     exec: (tool, args, environment) => run(localToolName(tool), args, environment),
     async withFile(_direction, localPath, body) {
       return body(localPath);
+    }
+  };
+}
+
+/**
+ * PG_DOCKER_IMAGE (e.g. postgres:18): run each tool in a throwaway container of that image, against
+ * the host in the database URL. This is how a remote database (Railway, docs/railway-setup.md) is
+ * dumped from a machine with no PostgreSQL client installed; pick an image whose major version is
+ * at least the server's, which pg_dump requires. The file travels through a mounted directory.
+ */
+function imageRunner(image) {
+  let mount = null;
+  return {
+    describe: `PostgreSQL client tools from a throwaway "${image}" container`,
+    connectionArgs: (connection) => connection.args,
+    exec(tool, args, environment = process.env) {
+      const forwarded = ["PGPASSWORD", "PGSSLMODE"]
+        .filter((name) => environment[name] !== undefined)
+        .flatMap((name) => ["-e", name]);
+      return run("docker", ["run", "--rm", ...forwarded, ...(mount ? ["-v", `${mount}:/work`] : []), image, tool, ...args], environment);
+    },
+    async withFile(_direction, localPath, body) {
+      mount = path.dirname(path.resolve(localPath));
+      try {
+        return await body(`/work/${path.basename(localPath)}`);
+      } finally {
+        mount = null;
+      }
     }
   };
 }

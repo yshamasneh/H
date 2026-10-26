@@ -6,7 +6,7 @@ import { ApiException } from "../common/api.exception";
 import { UserRole } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
-import { BlobImageStorageService } from "./blob-image-storage.service";
+import { ImageStorage } from "./image-storage";
 import { imagePrefix, ManagedImageUrlService } from "./managed-image-url.service";
 import { allowedImageContentTypes, type AllowedImageContentType, type ImagePurpose, type ImageUploadTicket, type UploadAuthorization } from "./uploads.types";
 
@@ -21,7 +21,7 @@ export class UploadsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authorization: AuthorizationService,
-    private readonly storage: BlobImageStorageService,
+    private readonly storage: ImageStorage,
     private readonly managedUrls: ManagedImageUrlService,
     private readonly config: ConfigService
   ) {}
@@ -42,13 +42,13 @@ export class UploadsService {
     const folder = purposeFolder(target.purpose);
     const uploadId = `pending/${user.id}/${scope}/${folder}/${randomUUID()}.${extension}`;
     const expiresAt = new Date(Date.now() + this.sasTtlSeconds * 1000);
-    const uploadUrl = await this.storage.createUploadUrl(uploadId, expiresAt);
+    const uploadUrl = await this.storage.createUploadUrl(uploadId, expiresAt, input.contentType);
     return {
       ...target,
       uploadId,
       uploadUrl,
       expiresAt: expiresAt.toISOString(),
-      headers: { "x-ms-blob-type": "BlockBlob", "Content-Type": input.contentType }
+      headers: this.storage.uploadHeaders(input.contentType)
     };
   }
 

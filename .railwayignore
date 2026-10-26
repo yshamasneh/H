@@ -1,0 +1,24 @@
+# What `railway up` must never upload (see docs/railway-setup.md). The API image only needs the
+# root package files, apps/api, the admin/mobile package.json files (npm ci reads the workspaces)
+# and deploy/railway/Dockerfile.
+.git
+.env
+.env.*
+!.env.example
+!.env.production.example
+secrets/
+backups/
+logs/
+node_modules/
+**/node_modules/
+**/dist/
+**/.expo/
+coverage/
+products/
+image/
+load-tests/
+JOVO-header-Claude-package/
+apps/mobile/*
+!apps/mobile/package.json
+apps/admin/*
+!apps/admin/package.json

@@ -35,6 +35,7 @@ class FakeStorage {
     this.created.push(blobName);
     return `https://upload.invalid/${blobName}?sig=SECRET_SAS`;
   }
+  uploadHeaders(contentType: string) { return { "x-ms-blob-type": "BlockBlob", "Content-Type": contentType }; }
   async properties() { return this.props; }
   async firstBytes() { return this.bytes; }
   async publish(staging: string, final: string, type: string) { this.published.push({ staging, final, type }); }

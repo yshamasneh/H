@@ -37,9 +37,12 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
       "AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_PUBLIC_CONTAINER_NAME, and AZURE_STORAGE_UPLOAD_CONTAINER_NAME must be configured together"
     );
   }
-  if (isProduction && !storageValues.every(Boolean)) {
+  const imageStorageDriver = readChoice(environment, "IMAGE_STORAGE_DRIVER", "azure", ["azure", "s3"] as const);
+  environment.IMAGE_STORAGE_DRIVER = imageStorageDriver;
+  if (isProduction && imageStorageDriver === "azure" && !storageValues.every(Boolean)) {
     throw new Error("Azure image storage configuration is required in production");
   }
+  applyS3StorageConfiguration(environment, isProduction && imageStorageDriver === "s3");
   if (storageAccountName && !/^[a-z0-9]{3,24}$/.test(storageAccountName)) {
     throw new Error("AZURE_STORAGE_ACCOUNT_NAME must be a valid Storage Account name");
   }
@@ -309,6 +312,54 @@ function applyTweetSmsConfiguration(environment: Record<string, unknown>, isProd
   environment.TWEETSMS_MESSAGE_TEMPLATE = messageTemplate;
   environment.TWEETSMS_TIMEOUT_MS = timeoutMs;
   environment.TWEETSMS_SEND_OPTIONAL_FIELDS = includeOptionalFields;
+}
+
+const s3StorageKeys = [
+  "S3_ENDPOINT",
+  "S3_ACCESS_KEY_ID",
+  "S3_SECRET_ACCESS_KEY",
+  "S3_UPLOAD_BUCKET",
+  "S3_PUBLIC_BUCKET",
+  "S3_PUBLIC_BASE_URL"
+] as const;
+
+/**
+ * S3-compatible image storage (IMAGE_STORAGE_DRIVER=s3; uploads/s3-image-storage.service.ts).
+ * Like the Azure settings, the group is all-or-nothing: partly configured storage fails at boot,
+ * unconfigured storage leaves uploads answering 503 until it is set, except in production.
+ *
+ * S3_PUBLIC_BASE_URL is what every stored imageUrl starts with, so it has to be a permanent,
+ * unsigned HTTPS address: the image URL rules (common/image-url.util.ts) refuse signed links.
+ */
+function applyS3StorageConfiguration(environment: Record<string, unknown>, required: boolean): void {
+  const values = s3StorageKeys.map((key) => readString(environment, key, ""));
+  if (values.some(Boolean) && !values.every(Boolean)) {
+    throw new Error(`${s3StorageKeys.join(", ")} must be configured together`);
+  }
+  if (required && !values.every(Boolean)) {
+    throw new Error("S3 image storage configuration is required in production when IMAGE_STORAGE_DRIVER=s3");
+  }
+  environment.S3_REGION = readString(environment, "S3_REGION", "auto");
+  environment.S3_FORCE_PATH_STYLE = readBoolean(environment, "S3_FORCE_PATH_STYLE", false);
+  if (!values.every(Boolean)) return;
+
+  environment.S3_ENDPOINT = readHttpsUrl(environment, "S3_ENDPOINT", true);
+  for (const key of ["S3_UPLOAD_BUCKET", "S3_PUBLIC_BUCKET"] as const) {
+    const bucket = readString(environment, key, "");
+    if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)) throw new Error(`${key} must be a valid bucket name`);
+    environment[key] = bucket;
+  }
+  if (environment.S3_UPLOAD_BUCKET === environment.S3_PUBLIC_BUCKET) {
+    // Unvalidated uploads must never be reachable at a public address.
+    throw new Error("S3_UPLOAD_BUCKET and S3_PUBLIC_BUCKET must be different buckets");
+  }
+  const publicBase = new URL(readHttpsUrl(environment, "S3_PUBLIC_BASE_URL", true));
+  if (publicBase.search || publicBase.hash || publicBase.username || publicBase.password) {
+    throw new Error("S3_PUBLIC_BASE_URL must be a plain HTTPS address with no query, fragment or credentials");
+  }
+  environment.S3_PUBLIC_BASE_URL = publicBase.toString();
+  environment.S3_ACCESS_KEY_ID = readString(environment, "S3_ACCESS_KEY_ID", "");
+  environment.S3_SECRET_ACCESS_KEY = readString(environment, "S3_SECRET_ACCESS_KEY", "");
 }
 
 function readSecret(input: Record<string, unknown>, key: string, production: boolean): string {

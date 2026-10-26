@@ -48,3 +48,44 @@ describe("ManagedImageUrlService", () => {
     assert.doesNotThrow(() => service.assertAllowedChange({ purpose: "PRODUCT", restaurantId, nextUrl: null }));
   });
 });
+
+describe("ManagedImageUrlService with the S3 driver", () => {
+  const s3 = (publicBase: string) => new ManagedImageUrlService(new ConfigService({
+    IMAGE_STORAGE_DRIVER: "s3",
+    S3_PUBLIC_BASE_URL: publicBase,
+    // Present but ignored: the selected driver decides where published images live.
+    AZURE_STORAGE_ACCOUNT_NAME: "jovoimages",
+    AZURE_STORAGE_PUBLIC_CONTAINER_NAME: "product-images"
+  }));
+  const blobName = `restaurants/${restaurantId}/products/file name.webp`;
+
+  it("builds permanent URLs under S3_PUBLIC_BASE_URL and reads them back", () => {
+    for (const base of ["https://images.jovops.com", "https://images.jovops.com/", "https://cdn.example.com/jovo/"]) {
+      const service = s3(base);
+      const url = service.publicUrl(blobName);
+      assert.ok(url.startsWith(base.replace(/\/?$/, "/")));
+      assert.ok(url.endsWith("/file%20name.webp"));
+      assert.equal(service.blobNameFromUrl(url), blobName);
+      assert.equal(service.assertOwnedUrl(url, "PRODUCT", restaurantId), blobName);
+    }
+  });
+
+  it("does not claim Azure URLs, other hosts, other prefixes or signed links", () => {
+    const service = s3("https://cdn.example.com/jovo/");
+    for (const url of [
+      `https://jovoimages.blob.core.windows.net/product-images/${blobName}`,
+      `https://other.example.com/jovo/${blobName}`,
+      `https://cdn.example.com/other/${blobName}`,
+      `http://cdn.example.com/jovo/${blobName}`,
+      `https://cdn.example.com/jovo/${blobName}?X-Amz-Signature=abc`
+    ]) {
+      assert.equal(service.blobNameFromUrl(url), null, url);
+    }
+  });
+
+  it("reports unconfigured storage instead of inventing a URL", () => {
+    const service = new ManagedImageUrlService(new ConfigService({ IMAGE_STORAGE_DRIVER: "s3" }));
+    assert.equal(service.isConfigured(), false);
+    assert.throws(() => service.publicUrl(blobName), (error: unknown) => error instanceof ApiException && error.getStatus() === 503);
+  });
+});

@@ -9,12 +9,15 @@ import {
   type BlockBlobClient
 } from "@azure/storage-blob";
 import { ApiException } from "../common/api.exception";
+import { ImageStorage, publishedImageCacheControl } from "./image-storage";
 
 @Injectable()
-export class BlobImageStorageService {
+export class BlobImageStorageService extends ImageStorage {
   private serviceClient?: BlobServiceClient;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService) {
+    super();
+  }
 
   async createUploadUrl(blobName: string, expiresAt: Date): Promise<string> {
     const now = new Date();
@@ -33,6 +36,10 @@ export class BlobImageStorageService {
       this.accountName
     ).toString();
     return `${this.uploadBlob(blobName).url}?${sas}`;
+  }
+
+  uploadHeaders(contentType: string): Record<string, string> {
+    return { "x-ms-blob-type": "BlockBlob", "Content-Type": contentType };
   }
 
   async properties(blobName: string): Promise<{ exists: boolean; contentLength: number; contentType: string | null }> {
@@ -64,7 +71,7 @@ export class BlobImageStorageService {
       await target.deleteIfExists();
       throw new ApiException(502, "IMAGE_COPY_FAILED", "The uploaded image could not be published.");
     }
-    await target.setHTTPHeaders({ blobContentType: contentType, blobCacheControl: "public, max-age=31536000, immutable" });
+    await target.setHTTPHeaders({ blobContentType: contentType, blobCacheControl: publishedImageCacheControl });
     await this.deleteStaging(stagingBlobName);
   }
 
