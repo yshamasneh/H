@@ -66,6 +66,16 @@ export class RestaurantsService {
    * Super Admin approves it, and `RESTAURANT_ORDERING_ENABLED` still gates orders after that.
    */
   async register(input: RestaurantRegisterDto): Promise<{ message: string; restaurantId: string; status: RestaurantStatus }> {
+    // Self-registration marks the owner's phone verified without sending a code, so on a deployed
+    // environment it stays closed until PUBLIC_RESTAURANT_REGISTRATION_ENABLED is set. Absent
+    // configuration means closed, not open.
+    if (this.config?.get<boolean>("PUBLIC_RESTAURANT_REGISTRATION_ENABLED") !== true) {
+      throw new ApiException(
+        403,
+        "RESTAURANT_REGISTRATION_CLOSED",
+        "Restaurant registration is not open yet. Please contact JOVO to register your business."
+      );
+    }
     return this.createBusinessWithOwner(input, BusinessType.RESTAURANT);
   }
 

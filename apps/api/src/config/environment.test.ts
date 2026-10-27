@@ -349,3 +349,28 @@ test("production requires storage for the selected driver only", () => {
     /Azure image storage configuration is required in production/
   );
 });
+
+test("restaurant self-registration and Swagger are on for local development only", () => {
+  const local = validateEnvironment(base);
+  assert.equal(local.PUBLIC_RESTAURANT_REGISTRATION_ENABLED, true);
+  assert.equal(local.SWAGGER_ENABLED, true);
+
+  // Deployed in any way (an explicit trial, Azure App Service's own variables, or production): closed.
+  for (const deployedSignal of [{ DEPLOYMENT_ENV: "trial" }, { WEBSITE_SITE_NAME: "jovo-market-api" }]) {
+    const deployed = validateEnvironment({ ...base, ...deployedSignal });
+    assert.equal(deployed.PUBLIC_RESTAURANT_REGISTRATION_ENABLED, false);
+    assert.equal(deployed.SWAGGER_ENABLED, false);
+  }
+  const production = validateEnvironment({ ...base, ...productionIntegrations, ...imageStorage });
+  assert.equal(production.PUBLIC_RESTAURANT_REGISTRATION_ENABLED, false);
+  assert.equal(production.SWAGGER_ENABLED, false);
+
+  // An operator can open them deliberately, except Swagger in production.
+  const opened = validateEnvironment({ ...base, DEPLOYMENT_ENV: "trial", PUBLIC_RESTAURANT_REGISTRATION_ENABLED: "true", SWAGGER_ENABLED: "true" });
+  assert.equal(opened.PUBLIC_RESTAURANT_REGISTRATION_ENABLED, true);
+  assert.equal(opened.SWAGGER_ENABLED, true);
+  assert.throws(
+    () => validateEnvironment({ ...base, ...productionIntegrations, ...imageStorage, SWAGGER_ENABLED: "true" }),
+    /SWAGGER_ENABLED cannot be true/
+  );
+});

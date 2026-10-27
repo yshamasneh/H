@@ -6,6 +6,7 @@ import { ApiException } from "../common/api.exception";
 import { OtpPurpose, UserRole } from "../generated/prisma/client";
 import { AuthorizationService } from "../common/authorization/authorization.service";
 import { AuthService } from "./auth.service";
+import { LoginAttemptLimiter } from "./login-attempt-limiter";
 import { hashPassword } from "./crypto.util";
 import { OtpDeliveryError, type OtpDelivery, type OtpProvider } from "./otp.provider";
 import { FakePrisma } from "./testing/fake-prisma";
@@ -245,6 +246,34 @@ test("rejects an incorrect login password with a generic error", async () => {
     context.auth.login({ countryCode: "+970", phoneNumber: "0590000000", password: "Wrong@123" }),
     hasCode("INVALID_CREDENTIALS")
   );
+});
+
+test("repeated wrong passwords from one IP back that IP off, even for the right password, without blocking another IP", async () => {
+  const prisma = new FakePrisma();
+  const otp = new CapturingOtpProvider();
+  const config = new ConfigService({
+    OTP_HASH_SECRET: "otp-test-secret-that-is-longer-than-thirty-two-characters",
+    JWT_ACCESS_SECRET: "access-test-secret-that-is-longer-than-thirty-two-characters",
+    JWT_REFRESH_SECRET: "refresh-test-secret-that-is-longer-than-thirty-two-characters",
+    JWT_ACCESS_EXPIRATION_SECONDS: 900,
+    JWT_REFRESH_EXPIRATION_DAYS: 30
+  });
+  const auth = new AuthService(
+    prisma as never,
+    config,
+    new JwtService(),
+    new AuthorizationService(prisma as never),
+    otp,
+    new LoginAttemptLimiter({ sleep: async () => {} })
+  );
+  await seedCustomer(prisma);
+  const credentials = { countryCode: "+970" as const, phoneNumber: "0590000000" };
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await assert.rejects(auth.login({ ...credentials, password: "Wrong@123" }, "6.6.6.6"), hasCode("INVALID_CREDENTIALS"));
+  }
+  await assert.rejects(auth.login({ ...credentials, password: "Test@12345" }, "6.6.6.6"), hasCode("LOGIN_TEMPORARILY_BLOCKED"));
+  const fromOwnNetwork = await auth.login({ ...credentials, password: "Test@12345" }, "2.2.2.2");
+  assert.equal(fromOwnNetwork.user.phone, "+970590000000");
 });
 
 test("starts password reset only for an existing account", async () => {

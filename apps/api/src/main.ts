@@ -65,7 +65,7 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new AllExceptionsFilter(app.get(ErrorReporterService)));
 
-  if (!isProduction) {
+  if (config.get<boolean>("SWAGGER_ENABLED", false) === true) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle("TasawaQ API")
       .setDescription("TasawaQ local development API")

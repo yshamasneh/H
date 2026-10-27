@@ -78,7 +78,21 @@ Mode: the same non-production mode as the Azure trial (`NODE_ENV=development`, s
 | `RAILWAY_DOCKERFILE_PATH` | `deploy/railway/Dockerfile` |
 | `GIT_SHA` | the commit being deployed; reported by `/health` as `commit` |
 
-Left at their defaults: `RESTAURANT_ORDERING_ENABLED=false`, `REQUIRE_HTTPS=false` (Railway already
+Left at their defaults, and closed on purpose until there is a reason to open them:
+
+- `PUBLIC_RESTAURANT_REGISTRATION_ENABLED` (default `false` on any deployed environment):
+  `POST /api/v1/restaurants/register` answers `403 RESTAURANT_REGISTRATION_CLOSED`. Self-registration
+  creates an owner account marked phone-verified without sending any code, so it stays closed at
+  least until TweetSMS works. Stores are created by a Super Admin from the dashboard meanwhile.
+- `SWAGGER_ENABLED` (default `false` on any deployed environment, refused with `NODE_ENV=production`):
+  `/api/docs` is not served.
+
+"Deployed" is `DEPLOYMENT_ENV=trial|production`, Azure App Service's own variables, or
+`NODE_ENV=production` (`isDeployedEnvironment`, config/environment.ts). Both flags are open by default
+only on a developer machine. **The Azure trial counts as deployed too**: after its next deploy from
+GitHub it also closes both, unless the two variables are set to `true` in its App Service settings.
+
+Also left at their defaults: `RESTAURANT_ORDERING_ENABLED=false`, `REQUIRE_HTTPS=false` (Railway already
 redirects HTTP to HTTPS), the rate-limit, pool, OTP, push and delivery-fee settings.
 
 **Not set yet:**
@@ -104,6 +118,19 @@ To set a secret without it reaching your shell history or the terminal:
 node -e "process.stdout.write(require('crypto').randomBytes(48).toString('base64url'))" \
   | railway variable set NAME --stdin --service api --skip-deploys >/dev/null
 ```
+
+### Login protection
+
+`POST /api/v1/auth/login` is throttled per IP (10 a minute), and per account by
+`auth/login-attempt-limiter.ts`:
+
+- the same phone from the same IP: 5 free failures, then that IP waits 1 s, 2 s, 4 s... up to
+  15 minutes before it may try that phone again (`429 LOGIN_TEMPORARILY_BLOCKED`, `retryAfterSeconds`);
+- the same phone from many IPs: after 10 failures every attempt is answered more slowly (up to 4 s),
+  but still answered, so the real owner, on their own connection, is never locked out.
+
+Counters forget a phone 15 minutes after its last failure and reset on a successful login. They live
+in the API's memory, which is correct for the single replica this service runs.
 
 ## Redeploy
 
@@ -189,54 +216,89 @@ Today `products/products_image_mapping.csv` maps 130 of the 4,236 files in `prod
 **Railway's own backups are not available on this plan.** Railway's API answers *"Manual backups
 and backup schedules are only available for Pro workspaces"*. Even on Pro they are kept with the
 volume and can only be restored into the same project, and Railway Buckets have no backups at
-all. So the off-site backup below is the only backup.
+all. So JOVO's backups are its own, and live outside Railway and outside any laptop.
 
-`scripts/offsite-backup.mjs` (daily):
+### Daily backup: the `backup` cron service
 
-1. dumps the database through the Postgres TCP proxy with `pg_dump` (custom format, SHA-256
-   sidecar, `BACKUP_RETENTION_DAYS` pruning, default 14) into `<BACKUP_DIRECTORY>/database`;
-2. re-reads the new archive with `pg_restore --list`;
-3. if `BACKUP_S3_*` is set, mirrors the public image bucket into `<BACKUP_DIRECTORY>/images`
-   (new and changed objects only; nothing local is ever deleted).
+Code: `deploy/railway/backup/` (its own image and lockfile, not part of the npm workspaces).
 
-`pg_dump` must be version 18 or newer. Without a local install, set `PG_DOCKER_IMAGE=postgres:18`
-and the tools run in a throwaway container (Docker Desktop must be running).
+1. It runs once a day on a Railway cron schedule (UTC), inside project jovo, and exits.
+2. It connects over Railway's **private network** to `${{Postgres.RAILWAY_PRIVATE_DOMAIN}}` as the
+   role `jovo_backup`. That role is read-only (`pg_read_all_data`, `default_transaction_read_only`,
+   no write grants, not a superuser, at most 3 connections).
+3. It counts every table's rows and dumps the database from **the same snapshot** (`pg_dump
+   --snapshot`), so the counts describe exactly what is in the dump.
+4. Dump and manifest (counts, size, SHA-256, versions) are both encrypted with the **age public
+   key** in `BACKUP_AGE_RECIPIENTS`. The private key stays with the owner, offline. Neither Railway
+   nor the bucket can read a backup.
+5. Both files are uploaded under new names, `jovo/YYYY/MM/jovo-<timestamp>.dump.age` and
+   `.manifest.json.age`, to an **external** S3-compatible bucket. The key used can only write to that
+   one bucket.
+6. healthchecks.io is pinged at start, on success (with a short summary) and on failure (with
+   the reason, credentials redacted). A missed day alerts by email.
 
-The URL is assembled from the Postgres service's variables:
-`postgresql://PGUSER:PGPASSWORD@RAILWAY_TCP_PROXY_DOMAIN:RAILWAY_TCP_PROXY_PORT/PGDATABASE?sslmode=require`.
-Keep it in a file only you can read, outside the repository, never in Git.
+Retention is **30 days**, enforced by the bucket's own lifecycle rule. The backup key cannot delete,
+so a stolen key cannot wipe the history either.
 
-Example daily task on this Windows PC (Task Scheduler, 03:00, run whether logged on or not), with
-`C:\JovoBackups\backup.env` holding `BACKUP_DATABASE_URL=...`, `BACKUP_DIRECTORY=D:\JovoBackups`,
-`PG_DOCKER_IMAGE=postgres:18` and, once a bucket exists, the `BACKUP_S3_*` values:
+Variables on the `backup` service:
 
-```powershell
-$action = New-ScheduledTaskAction -Execute "node.exe" `
-  -Argument "--env-file=C:\JovoBackups\backup.env C:\Users\hp\H\scripts\offsite-backup.mjs" `
-  -WorkingDirectory "C:\Users\hp\H"
-Register-ScheduledTask -TaskName "JOVO off-site backup" -Action $action `
-  -Trigger (New-ScheduledTaskTrigger -Daily -At 3am)
-```
+| Variable | Value | Who sets it |
+|---|---|---|
+| `BACKUP_PGHOST` | `${{Postgres.RAILWAY_PRIVATE_DOMAIN}}` | set by script |
+| `BACKUP_PGPORT` | `5432` | set by script |
+| `BACKUP_PGDATABASE` | `${{Postgres.PGDATABASE}}` | set by script |
+| `BACKUP_PGUSER` | `jovo_backup` | set by script |
+| `BACKUP_PGPASSWORD` | random, set by `create-backup-role.mjs` straight into Railway | set by script, never shown |
+| `BACKUP_AGE_RECIPIENTS` | the owner's age **public** key (`age1...`) | set from the owner's public key |
+| `BACKUP_S3_ENDPOINT`, `BACKUP_S3_REGION`, `BACKUP_S3_BUCKET` | the backup bucket | set from names the owner gives |
+| `BACKUP_S3_ACCESS_KEY_ID`, `BACKUP_S3_SECRET_ACCESS_KEY` | the write-only key | **the owner, in the dashboard** |
+| `BACKUP_HEALTHCHECK_URL` | the healthchecks.io ping URL | the owner, in the dashboard (the URL is a credential of sorts) |
 
-Copy `BACKUP_DIRECTORY` somewhere that is not this PC (an external disk, or an encrypted copy in
-cloud storage): the dumps contain customers' phone numbers and addresses.
-
-### Restore (tested 2026-10-26)
+Create or rotate the role (it prints nothing secret):
 
 ```bash
-RESTORE_DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/TARGET_DB PG_DOCKER_IMAGE=postgres:18 \
-  node scripts/restore-database.mjs --file=D:/JovoBackups/database/tasawaq-<timestamp>.dump --confirm-restore=TARGET_DB
+node deploy/railway/backup/create-backup-role.mjs
 ```
 
-The restore refuses to run unless `--confirm-restore` names the target database. It only reads
-`RESTORE_DATABASE_URL`, never `DATABASE_URL`. Tested by dumping the Railway database through the
-TCP proxy and restoring into a scratch `postgres:18` container: all 40 migrations, 41 tables, the
-`pg_trgm` extension, `jovo_normalize_arabic_text` and the 9 immutability triggers came back,
-`prisma migrate status` reported the schema up to date, and the API image started against the
-copy with `/health/ready` reporting `database: connected`.
+Deploy the job: `railway up deploy/railway/backup --path-as-root --service backup --ci`.
 
-To restore Railway itself: restore into a new database first, check it, then point
-`DATABASE_URL` at it or restore into the Railway database during a maintenance window.
+### Restore and restore test
+
+Both run on the owner's machine, in the backup image, with a bucket key that can **read**
+(not the backup service's write-only key) and the age identity file. Build once:
+`docker build -t jovo-backup deploy/railway/backup`.
+
+```bash
+# Prove the newest backup restores: wipes and refills a scratch database, compares every table's count.
+docker run --rm -v C:/path/to/age-keys:/keys:ro --env-file read-key.env \
+  -e RESTORE_TEST_DATABASE_URL=postgresql://postgres:PASSWORD@host.docker.internal:5434/restore_scratch \
+  jovo-backup node restore-test.mjs --identity=/keys/jovo-backup.agekey
+
+# A real restore (destructive for the target, needs --confirm-restore=<db name>).
+docker run --rm -v C:/path/to/age-keys:/keys:ro --env-file read-key.env \
+  -e RESTORE_DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DB \
+  jovo-backup node restore.mjs --identity=/keys/jovo-backup.agekey --confirm-restore=DB [--key=jovo/2026/10/...dump.age]
+```
+
+`read-key.env` holds `BACKUP_S3_ENDPOINT`, `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID` and
+`BACKUP_S3_SECRET_ACCESS_KEY` for a **read** key. Keep it next to the age identity, never in Git.
+Run the restore test at least monthly, and after any schema-changing release.
+
+Rehearsed locally on 2026-10-27 against throwaway services:
+- **Backup:** ran as the read-only role (it can read; an insert or delete is refused even after it turns read-only off) and sent both pings.
+- **Restore test:** passed for two different backups, with every count matching, and failed correctly on a tampered manifest (`Landmark: expected 37, restored 36`).
+- **Failure path:** a wrong password produced a `/fail` ping that did not contain the password.
+
+### The Postgres TCP proxy
+
+`mainline.proxy.rlwy.net:30633` exposes PostgreSQL to the internet, password-protected and with
+TLS. It exists only so a machine outside Railway could take dumps. Once the cron service has
+completed a scheduled run, it is no longer needed and should be closed:
+`railway tcp-proxy delete <id> --yes`. Then `create-backup-role.mjs` needs `ADMIN_DATABASE_URL`
+or a temporary proxy to rotate the password.
+
+`scripts/offsite-backup.mjs` (a laptop-run dump through the proxy) stays in the repository as a
+manual fallback. It needs the proxy.
 
 ## Cost
 

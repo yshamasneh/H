@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
@@ -29,6 +29,7 @@ import {
   verifyPassword
 } from "./crypto.util";
 import { normalizePhoneNumber } from "./phone.util";
+import { LoginAttemptLimiter } from "./login-attempt-limiter";
 import { OTP_PROVIDER, type OtpProvider } from "./otp.provider";
 
 type OtpRequestResult = {
@@ -50,7 +51,8 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly jwt: JwtService,
     private readonly authorization: AuthorizationService,
-    @Inject(OTP_PROVIDER) private readonly otpProvider: OtpProvider
+    @Inject(OTP_PROVIDER) private readonly otpProvider: OtpProvider,
+    @Optional() private readonly loginAttempts: LoginAttemptLimiter = new LoginAttemptLimiter()
   ) {}
 
   async requestCustomerSignupCode(input: CustomerSignupRequestDto): Promise<OtpRequestResult> {
@@ -139,12 +141,15 @@ export class AuthService {
     return this.createSession(result.value);
   }
 
-  async login(input: LoginDto): Promise<AuthResult> {
+  async login(input: LoginDto, clientIp = "unknown"): Promise<AuthResult> {
     const phone = normalizePhoneNumber(input.countryCode, input.phoneNumber);
+    await this.loginAttempts.beforeAttempt(phone, clientIp);
     const user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user || !(await verifyPassword(user.passwordHash, input.password))) {
+      this.loginAttempts.recordFailure(phone, clientIp);
       throw new ApiException(401, "INVALID_CREDENTIALS", "Invalid phone number or password.");
     }
+    this.loginAttempts.recordSuccess(phone, clientIp);
     if (!user.isActive) {
       throw new ApiException(403, "ACCOUNT_INACTIVE", "This account is inactive.");
     }

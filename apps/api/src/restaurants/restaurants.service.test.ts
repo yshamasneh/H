@@ -24,7 +24,7 @@ function createService() {
   // This file exercises restaurant registration/moderation/listing logic itself, not the
   // RESTAURANT_ORDERING_ENABLED launch gate (see restaurants.public-gate.test.ts for that), so
   // the flag is turned on explicitly here rather than relying on its real (off) default.
-  const config = new ConfigService({ RESTAURANT_ORDERING_ENABLED: true });
+  const config = new ConfigService({ RESTAURANT_ORDERING_ENABLED: true, PUBLIC_RESTAURANT_REGISTRATION_ENABLED: true });
   const service = new RestaurantsService(prisma as never, realtime as never, config);
   return { prisma, realtime, service };
 }
@@ -41,6 +41,19 @@ test("registering a restaurant creates a RESTAURANT-role user and a PENDING rest
   assert.equal(prisma.restaurants[0].isOpen, false);
   assert.equal(prisma.restaurants[0].ownerUserId, prisma.users[0].id);
   assert.equal(result.status, RestaurantStatus.PENDING);
+});
+
+test("public registration is closed unless PUBLIC_RESTAURANT_REGISTRATION_ENABLED is true", async () => {
+  for (const settings of [{}, { PUBLIC_RESTAURANT_REGISTRATION_ENABLED: false }]) {
+    const prisma = new FakeRestaurantPrisma();
+    const service = new RestaurantsService(prisma as never, new FakeRealtimeGateway() as never, new ConfigService(settings));
+    await assert.rejects(service.register(registerInput), hasCode("RESTAURANT_REGISTRATION_CLOSED"));
+    assert.equal(prisma.users.length, 0);
+    assert.equal(prisma.restaurants.length, 0);
+  }
+  // Without any configuration at all (the service constructed bare) it is closed too.
+  const bare = new RestaurantsService(new FakeRestaurantPrisma() as never, new FakeRealtimeGateway() as never);
+  await assert.rejects(bare.register(registerInput), hasCode("RESTAURANT_REGISTRATION_CLOSED"));
 });
 
 test("public registration always creates a RESTAURANT, even if a SUPERMARKET type gets past validation", async () => {

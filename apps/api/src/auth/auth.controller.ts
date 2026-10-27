@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
+import type { Request } from "express";
 import {
   CustomerSignupRequestDto,
   LoginDto,
@@ -34,8 +35,9 @@ export class AuthController {
   @Post("login")
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Log in with phone number and password" })
-  login(@Body() input: LoginDto) {
-    return this.auth.login(input);
+  login(@Body() input: LoginDto, @Req() request: Request) {
+    // request.ip honours TRUST_PROXY, so behind Railway's edge it is the client's address.
+    return this.auth.login(input, request.ip ?? "unknown");
   }
 
   @Post("refresh")

@@ -90,6 +90,19 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   environment.DEPLOYMENT_ENV = deploymentEnv;
   environment.IS_DEPLOYED = deployed;
   environment.OTP_REQUIRE_REAL_PROVIDER = readBoolean(environment, "OTP_REQUIRE_REAL_PROVIDER", false);
+  // Public surfaces that are on by default only on a developer's own machine. Self-registration
+  // creates an owner account without any SMS check (restaurants.service.ts), and Swagger publishes
+  // the whole route map, so anything reachable from the internet starts with both closed; an
+  // operator opens them deliberately.
+  environment.PUBLIC_RESTAURANT_REGISTRATION_ENABLED = readBoolean(
+    environment,
+    "PUBLIC_RESTAURANT_REGISTRATION_ENABLED",
+    !deployed
+  );
+  environment.SWAGGER_ENABLED = readBoolean(environment, "SWAGGER_ENABLED", !deployed);
+  if (isProduction && environment.SWAGGER_ENABLED === true) {
+    throw new Error("SWAGGER_ENABLED cannot be true when NODE_ENV=production");
+  }
   if (deployed && otpProvider === "development" && environment.OTP_REQUIRE_REAL_PROVIDER === true) {
     throw new Error(
       "OTP_PROVIDER=development is refused on a deployed environment while OTP_REQUIRE_REAL_PROVIDER=true"
