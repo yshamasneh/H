@@ -18,6 +18,10 @@ export function backupS3Client(environment = process.env) {
     endpoint: requiredEnv("BACKUP_S3_ENDPOINT", environment),
     region: environment.BACKUP_S3_REGION?.trim() || "auto",
     forcePathStyle: environment.BACKUP_S3_FORCE_PATH_STYLE === "true",
+    // The SDK's default extra CRC32 checksums are not accepted by every S3-compatible provider
+    // (Backblaze B2, older MinIO); send them only where an operation requires one.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
     credentials: {
       accessKeyId: requiredEnv("BACKUP_S3_ACCESS_KEY_ID", environment),
       secretAccessKey: requiredEnv("BACKUP_S3_SECRET_ACCESS_KEY", environment)
