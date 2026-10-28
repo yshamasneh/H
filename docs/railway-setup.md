@@ -28,8 +28,9 @@ two push workers against the same queue.
 | Environment | production | `63a25f97-26b6-4a56-8eb4-940b8ac8fbb1` |
 | Service | Postgres (template image `ghcr.io/railwayapp-templates/postgres-ssl:18`) | `580900c3-2d26-442b-bbff-e77969e2f913` |
 | Volume | postgres-volume, mounted at `/var/lib/postgresql/data` | `204efa04-0648-412a-ad7a-0092d6f33345` |
-| TCP proxy | Postgres, `mainline.proxy.rlwy.net:30633` → 5432 (for off-site backups) | `fc1559ef-c777-4a0d-8f7f-eb2204bf1fa6` |
+| TCP proxy | none. The old public proxy (`fc1559ef-…`) was deleted on 2026-10-27, so Postgres is private-network only | — |
 | Service | api (empty service, deployed with `railway up`) | `323885ea-08a0-4c9d-a56f-394e052e62be` |
+| Service | backup (cron `0 1 * * *` UTC, restart policy never, deployed with `railway up`) | `c868533d-a775-48b7-bea1-a33d7478f1fd` |
 | Domain | `api-production-7ac7.up.railway.app` → port 3000 | generated |
 | Custom domain | `api.jovops.com` → port 3000 | `b5710c26-a512-41ac-9bbc-dfb6587a9e79` |
 
@@ -260,7 +261,26 @@ Create or rotate the role (it prints nothing secret):
 node deploy/railway/backup/create-backup-role.mjs
 ```
 
-Deploy the job: `railway up deploy/railway/backup --path-as-root --service backup --ci`.
+Deploy the job: `railway up deploy/railway/backup --path-as-root --service backup --ci`. Its
+service settings are `dockerfilePath: Dockerfile`, `restartPolicyType: NEVER` and `cronSchedule:
+"0 1 * * *"` (set with `serviceInstanceUpdate`). A deploy does not start a run while a schedule
+is set. To run one now, use the dashboard's *Run now*, or
+`railway api 'mutation { deploymentInstanceExecutionCreate(input: { serviceInstanceId: "<id>" }) }'`.
+
+Live since 2026-10-27, with the bucket on **Backblaze B2** (`eu-central-003`, private, lifecycle
+`jovo/` hide after 30 days and delete 1 day later) and the check `jovo-db-backup` on
+healthchecks.io. Each run logs one summary line and whether each ping was delivered, never the
+ping URL:
+
+```
+healthcheck start ping delivered
+ok jovo/2026/10/jovo-2026-10-27T21-47-28-487Z.dump.age tables=41 rows=49 users=0 restaurants=0 orders=0 bytes=173476 seconds=7
+healthcheck success ping delivered
+```
+
+The `users=` / `restaurants=` / `orders=` counts let you check the database's state from the logs
+alone, now that it has no public endpoint. B2 shows a keyID (25 hex characters) and an
+applicationKey (31 characters, starting with `K`). The keyID goes in `BACKUP_S3_ACCESS_KEY_ID`.
 
 ### Restore and restore test
 
@@ -291,14 +311,18 @@ Rehearsed locally on 2026-10-27 against throwaway services:
 
 ### The Postgres TCP proxy
 
-`mainline.proxy.rlwy.net:30633` exposes PostgreSQL to the internet, password-protected and with
-TLS. It exists only so a machine outside Railway could take dumps. Once the cron service has
-completed a scheduled run, it is no longer needed and should be closed:
-`railway tcp-proxy delete <id> --yes`. Then `create-backup-role.mjs` needs `ADMIN_DATABASE_URL`
-or a temporary proxy to rotate the password.
+**Closed on 2026-10-27**, after the cron service had completed a scheduled run over the private
+network with both pings delivered. The API was healthy afterwards, and the old address
+(`mainline.proxy.rlwy.net:30633`) no longer reaches PostgreSQL.
 
-`scripts/offsite-backup.mjs` (a laptop-run dump through the proxy) stays in the repository as a
-manual fallback. It needs the proxy.
+To rotate the backup role's password, or for any other admin task from outside Railway, open a
+temporary proxy and close it again afterwards:
+`railway tcp-proxy create --service Postgres --port 5432`, then
+`node deploy/railway/backup/create-backup-role.mjs`, then
+`railway tcp-proxy delete <id> --service Postgres --yes`.
+
+`scripts/offsite-backup.mjs` (a laptop-run dump) stays in the repository as a manual fallback. It
+also needs a temporary proxy.
 
 ## Cost
 

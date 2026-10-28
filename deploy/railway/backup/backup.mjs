@@ -30,18 +30,23 @@ import {
 
 const healthcheckUrl = process.env.BACKUP_HEALTHCHECK_URL?.trim() || "";
 const startedAt = new Date();
-await ping(healthcheckUrl, "start");
+// Whether each healthchecks.io ping was accepted goes to the log (never the URL, which is a secret).
+const pinged = async (outcome, body) => {
+  if (!healthcheckUrl) return;
+  console.log(`healthcheck ${outcome} ping ${(await ping(healthcheckUrl, outcome, body)) ? "delivered" : "NOT delivered"}`);
+};
+await pinged("start");
 const workDirectory = await mkdtemp(path.join(tmpdir(), "jovo-backup-"));
 
 try {
   const summary = await backup(workDirectory);
-  const message = `ok ${summary.dumpKey} tables=${summary.tables} rows=${summary.rows} bytes=${summary.encryptedBytes} seconds=${summary.seconds}`;
+  const message = `ok ${summary.dumpKey} tables=${summary.tables} rows=${summary.rows} users=${summary.users} restaurants=${summary.restaurants} orders=${summary.orders} bytes=${summary.encryptedBytes} seconds=${summary.seconds}`;
   console.log(message);
-  await ping(healthcheckUrl, "success", message);
+  await pinged("success", message);
 } catch (error) {
   const message = redact(error instanceof Error ? error.message : String(error));
   console.error(`Backup failed: ${message}`);
-  await ping(healthcheckUrl, "fail", message);
+  await pinged("fail", message);
   process.exitCode = 1;
 } finally {
   await rm(workDirectory, { recursive: true, force: true });
@@ -123,6 +128,10 @@ async function backup(directory) {
     dumpKey: keys.dump,
     tables: Object.keys(manifest.tables).length,
     rows: manifest.totalRows,
+    // Business-level counts for the log, so an operator can see the database's state without access.
+    users: manifest.tables.User ?? "n/a",
+    restaurants: manifest.tables.Restaurant ?? "n/a",
+    orders: manifest.tables.Order ?? "n/a",
     encryptedBytes: await fileSize(encryptedDump),
     seconds: Math.round((Date.now() - startedAt.getTime()) / 1000)
   };

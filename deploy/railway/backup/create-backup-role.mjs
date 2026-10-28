@@ -41,6 +41,8 @@ async function main() {
   const adminUrl = process.env.ADMIN_DATABASE_URL || (await adminUrlFromRailway());
   const database = decodeURIComponent(new URL(adminUrl).pathname.replace(/^\//, ""));
   const password = randomBytes(36).toString("base64url");
+  // TLS without certificate checks: Railway's proxy presents a self-signed chain. An sslmode in the
+  // URL would override this object, so the URL carries none.
   const client = new pg.Client({ connectionString: adminUrl, ssl: { rejectUnauthorized: false } });
   await client.connect();
   try {
@@ -59,12 +61,16 @@ async function adminUrlFromRailway() {
   for (const key of ["PGUSER", "PGPASSWORD", "PGDATABASE", "RAILWAY_TCP_PROXY_DOMAIN", "RAILWAY_TCP_PROXY_PORT"]) {
     if (!variables[key]) throw new Error(`The Postgres service has no ${key}; is the TCP proxy still enabled? Set ADMIN_DATABASE_URL instead.`);
   }
-  return `postgresql://${encodeURIComponent(variables.PGUSER)}:${encodeURIComponent(variables.PGPASSWORD)}@${variables.RAILWAY_TCP_PROXY_DOMAIN}:${variables.RAILWAY_TCP_PROXY_PORT}/${variables.PGDATABASE}?sslmode=require`;
+  return `postgresql://${encodeURIComponent(variables.PGUSER)}:${encodeURIComponent(variables.PGPASSWORD)}@${variables.RAILWAY_TCP_PROXY_DOMAIN}:${variables.RAILWAY_TCP_PROXY_PORT}/${variables.PGDATABASE}`;
 }
+
+// On Windows the npm-installed CLI is a .cmd shim, which Node can only start through a shell. The
+// arguments here are fixed strings from this file, never user input.
+const railwayNeedsShell = process.platform === "win32";
 
 function captureRailway(args) {
   return new Promise((resolve, reject) => {
-    const child = spawn("railway", args, { stdio: ["ignore", "pipe", "ignore"], shell: false });
+    const child = spawn("railway", args, { stdio: ["ignore", "pipe", "ignore"], shell: railwayNeedsShell });
     let stdout = "";
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
@@ -76,7 +82,7 @@ function captureRailway(args) {
 
 function pipeToRailway(args, input) {
   return new Promise((resolve, reject) => {
-    const child = spawn("railway", args, { stdio: ["pipe", "ignore", "ignore"], shell: false });
+    const child = spawn("railway", args, { stdio: ["pipe", "ignore", "ignore"], shell: railwayNeedsShell });
     child.once("error", reject);
     child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`railway ${args.slice(0, 3).join(" ")} failed (exit ${code}).`))));
     child.stdin.end(input);
