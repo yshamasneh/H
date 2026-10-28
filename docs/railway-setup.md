@@ -24,7 +24,7 @@ two push workers against the same queue.
 
 | Resource | Name | ID |
 |---|---|---|
-| Project | jovo | `0156eafa-a6d9-4c11-b780-0e75ffae87db` |
+| Project | jovo, all services in **EU West, Amsterdam (`europe-west4-drams3a`)** since 2026-10-28 | `0156eafa-a6d9-4c11-b780-0e75ffae87db` |
 | Environment | production | `63a25f97-26b6-4a56-8eb4-940b8ac8fbb1` |
 | Service | Postgres (template image `ghcr.io/railwayapp-templates/postgres-ssl:18`) | `580900c3-2d26-442b-bbff-e77969e2f913` |
 | Volume | postgres-volume, mounted at `/var/lib/postgresql/data` | `204efa04-0648-412a-ad7a-0092d6f33345` |
@@ -308,6 +308,26 @@ Rehearsed locally on 2026-10-27 against throwaway services:
 - **Backup:** ran as the read-only role (it can read; an insert or delete is refused even after it turns read-only off) and sent both pings.
 - **Restore test:** passed for two different backups, with every count matching, and failed correctly on a tampered manifest (`Landmark: expected 37, restored 36`).
 - **Failure path:** a wrong password produced a `/fail` ping that did not contain the password.
+
+First restore test against the real bucket: on 2026-10-28 it restored the 01:04 UTC scheduled
+backup on the owner's machine, with all 41 tables and 49 rows matching. The restored per-table
+counts also matched the live database exactly.
+
+### Moving region
+
+On 2026-10-28 every service moved from US West (`sfo`) to Amsterdam, after a fresh backup and a
+check that the database was empty. Each move was two steps:
+
+1. `serviceInstanceUpdate` with `multiRegionConfig: {"europe-west4-drams3a": {"numReplicas": 1}, "sfo": null}`.
+2. `serviceInstanceRedeploy`. The setting does nothing until a deploy.
+
+Results:
+- **Postgres:** the 157 MB volume took about 1.5 minutes to migrate, and the API answered 503 for under a minute.
+- **API:** the swap happened after its health check passed, with no downtime.
+- **Unchanged:** the domain, DNS records and private hostname. Migrations showed "No pending migrations".
+
+To roll back, run the same two steps with the regions swapped, or restore a backup into a new
+Postgres service.
 
 ### The Postgres TCP proxy
 
