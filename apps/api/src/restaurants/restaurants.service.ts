@@ -412,7 +412,7 @@ export class RestaurantsService {
       this.prisma.menuCategory.findMany({
         where: { restaurantId, isActive: true },
         orderBy: { sortOrder: "asc" },
-        include: { items: { where: { isAvailable: true }, orderBy: [{ displayPriority: "desc" }, { name: "asc" }] } }
+        include: { items: { where: { isAvailable: true, reviewStatus: "APPROVED" }, orderBy: [{ displayPriority: "desc" }, { name: "asc" }] } }
       }),
       this.prisma.offer.findMany({
         where: {
@@ -524,6 +524,8 @@ export class RestaurantsService {
     const where: Prisma.MenuItemWhereInput = {
       restaurantId: supermarketId,
       isAvailable: true,
+      // Run 3: a product awaiting editorial review is never shown or searchable for customers.
+      reviewStatus: "APPROVED",
       // A supermarket product with no recorded cost price cannot be sold: calculateOrderQuote
       // fail-closes on it (ORDER_ITEM_COST_PRICE_MISSING) to avoid misallocating the margin.
       // Hide it from browse so it never appears orderable and then fails silently at cart-add.
@@ -556,6 +558,7 @@ export class RestaurantsService {
         where: {
           restaurantId: supermarketId,
           isAvailable: true,
+          reviewStatus: "APPROVED",
           costPriceMinor: { not: null },
           categoryId: { in: departmentIds },
           OR: [{ stockQuantity: null }, { stockQuantity: { gt: 0 } }]
@@ -604,6 +607,7 @@ export class RestaurantsService {
         id: productId,
         restaurantId: supermarketId,
         isAvailable: true,
+        reviewStatus: "APPROVED",
         // Same fail-closed guard as the catalog: an item with no cost price is not orderable,
         // so a direct link to its detail page must 404 rather than offer an un-cartable product.
         costPriceMinor: { not: null },
@@ -714,7 +718,9 @@ export class RestaurantsService {
           barcode: item.barcode,
           reorderLevel: item.reorderLevel,
           displayPriority: item.displayPriority,
-          isAvailable: item.isAvailable
+          isAvailable: item.isAvailable,
+          reviewStatus: item.reviewStatus ?? "APPROVED",
+          reviewedAt: item.reviewedAt ?? null
         }))
       }))
     };

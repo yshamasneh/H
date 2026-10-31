@@ -79,6 +79,9 @@ export type MenuCategoryOwnerView = {
 export type MenuItemOwnerView = Omit<MenuItemPublicView, "effectivePriceMinor" | "offer"> & {
   categoryId: string;
   isAvailable: boolean;
+  /** Run 3: PENDING_REVIEW products are hidden from customers until approved. */
+  reviewStatus: "PENDING_REVIEW" | "APPROVED";
+  reviewedAt: Date | null;
   /** What the store paid per unit. Owner/admin-only — never present on any customer-facing view. */
   costPriceMinor: number | null;
 };

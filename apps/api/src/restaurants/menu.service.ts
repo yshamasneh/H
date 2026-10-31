@@ -436,6 +436,9 @@ function toItemView(item: MenuItem): MenuItemOwnerView {
     barcode: item.barcode,
     reorderLevel: item.reorderLevel,
     displayPriority: item.displayPriority,
-    isAvailable: item.isAvailable
+    isAvailable: item.isAvailable,
+    // Run 3: staff and admins see the editorial state; fakes without the column read as APPROVED.
+    reviewStatus: item.reviewStatus ?? "APPROVED",
+    reviewedAt: item.reviewedAt ?? null
   };
 }

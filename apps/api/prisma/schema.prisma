@@ -595,6 +595,11 @@ model MenuCategory {
   @@index([restaurantId, sortOrder])
 }
 
+enum MenuItemReviewStatus {
+  PENDING_REVIEW
+  APPROVED
+}
+
 model MenuItem {
   id                     String                  @id @default(uuid()) @db.Uuid
   restaurantId           String                  @db.Uuid
@@ -620,6 +625,13 @@ model MenuItem {
   /// changes an existing product's position relative to other unprioritized ones.
   displayPriority        Int                     @default(0)
   isAvailable            Boolean                 @default(true)
+  /// Editorial approval, separate from isAvailable (run 3, task 1). PENDING_REVIEW products are
+  /// never shown, searched or sold to customers; staff and admins still see and edit them. Every
+  /// row that existed before the migration is APPROVED, so nothing customer-visible changed.
+  reviewStatus           MenuItemReviewStatus    @default(APPROVED)
+  reviewedAt             DateTime?
+  /// The approving user's id (no foreign key, so anonymising a user never blocks it).
+  reviewedByUserId       String?                 @db.Uuid
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   restaurant             Restaurant              @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -635,6 +647,7 @@ model MenuItem {
   @@index([restaurantId, isAvailable])
   @@index([categoryId])
   @@index([restaurantId, isFeatured, isAvailable])
+  @@index([restaurantId, reviewStatus])
 }
 
 model Order {

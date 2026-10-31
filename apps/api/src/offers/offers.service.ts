@@ -38,6 +38,8 @@ export class OffersService {
               { restaurant: { status: "APPROVED", isOpen: true } }
             ]
           },
+          // Run 3: an offer on a product awaiting editorial review is not shown to customers.
+          { OR: [{ menuItemId: null }, { menuItem: { reviewStatus: "APPROVED" } }] },
           // Platform-wide offers (restaurantId: null) and supermarket offers stay visible even
           // while the restaurant vertical's launch gate is closed; only RESTAURANT-scoped offers
           // are hidden, matching the same RESTAURANT_ORDERING_ENABLED flag as browsing/ordering.

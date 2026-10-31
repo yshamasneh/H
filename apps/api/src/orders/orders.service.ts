@@ -426,6 +426,7 @@ export class OrdersService {
             id: input.replacementMenuItemId,
             restaurantId: restaurant.id,
             isAvailable: true,
+            reviewStatus: "APPROVED",
             category: { isActive: true }
           }
         });
@@ -1007,7 +1008,8 @@ export class OrdersService {
     }
     for (const line of input.items) {
       const menuItem = menuItemById.get(line.menuItemId);
-      if (!menuItem || !menuItem.isAvailable) {
+      // Run 3: a product awaiting editorial review cannot be ordered, whatever its availability.
+      if (!menuItem || !menuItem.isAvailable || menuItem.reviewStatus === "PENDING_REVIEW") {
         throw new ApiException(
           409,
           "ORDER_ITEM_UNAVAILABLE",
