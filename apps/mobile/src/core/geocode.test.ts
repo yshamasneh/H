@@ -32,36 +32,47 @@ test("cache key ignores sub-metre noise but separates languages", () => {
   assert.notEqual(a, geocodeCacheKey({ latitude: 31.838041, longitude: 35.140471 }, "en"));
 });
 
-const okFetch = (body: unknown, seen: string[] = []): FetchLike => async (url) => {
-  seen.push(url);
+const access = (token: string | null = "token") => ({ apiBaseUrl: "https://api.example.test", getAccessToken: async () => token });
+
+const okFetch = (body: unknown, seen: Array<{ url: string; headers?: Record<string, string> }> = []): FetchLike => async (url, init) => {
+  seen.push({ url, headers: init?.headers });
   return { ok: true, json: async () => body };
 };
 
-test("requests the reverse endpoint with the point and language, then serves repeats from cache", async () => {
-  const seen: string[] = [];
-  const fetchImpl = okFetch({ address: { road: "Main Street", city: "Ramallah" } }, seen);
+test("asks the JOVO API (never the map provider) with the point, language and token, then serves repeats from cache", async () => {
+  const seen: Array<{ url: string; headers?: Record<string, string> }> = [];
+  const fetchImpl = okFetch({ address: "Main Street, Ramallah" }, seen);
   const point = { latitude: 31.9, longitude: 35.2 };
-  assert.equal(await reverseGeocodeOnline(point, "en", fetchImpl), "Main Street, Ramallah");
-  assert.equal(await reverseGeocodeOnline(point, "en", fetchImpl), "Main Street, Ramallah");
+  assert.equal(await reverseGeocodeOnline(point, "en", access(), fetchImpl), "Main Street, Ramallah");
+  assert.equal(await reverseGeocodeOnline(point, "en", access(), fetchImpl), "Main Street, Ramallah");
   assert.equal(seen.length, 1);
-  const url = new URL(seen[0]);
-  assert.equal(url.searchParams.get("lat"), "31.9");
-  assert.equal(url.searchParams.get("lon"), "35.2");
-  assert.equal(url.searchParams.get("accept-language"), "en");
-  assert.equal(url.searchParams.get("format"), "jsonv2");
+  const url = new URL(seen[0].url);
+  assert.equal(url.origin + url.pathname, "https://api.example.test/api/v1/geocode/reverse");
+  assert.equal(url.searchParams.get("lat"), "31.900000");
+  assert.equal(url.searchParams.get("lon"), "35.200000");
+  assert.equal(url.searchParams.get("lang"), "en");
+  assert.equal(seen[0].headers?.Authorization, "Bearer token");
+  assert.ok(!seen[0].url.includes("nominatim"));
 });
 
-test("a network failure or bad status resolves to null instead of throwing", async () => {
+test("without a session no request is made and the result is null", async () => {
+  const seen: Array<{ url: string }> = [];
+  assert.equal(await reverseGeocodeOnline({ latitude: 31.4, longitude: 35.4 }, "ar", access(null), okFetch({ address: "x" }, seen)), null);
+  assert.equal(seen.length, 0);
+});
+
+test("a network failure, bad status or empty answer resolves to null instead of throwing", async () => {
   const point = { latitude: 31.1, longitude: 35.1 };
   const failing: FetchLike = async () => { throw new Error("offline"); };
-  assert.equal(await reverseGeocodeOnline(point, "ar", failing), null);
+  assert.equal(await reverseGeocodeOnline(point, "ar", access(), failing), null);
   const notOk: FetchLike = async () => ({ ok: false, json: async () => ({}) });
-  assert.equal(await reverseGeocodeOnline({ latitude: 31.2, longitude: 35.1 }, "ar", notOk), null);
+  assert.equal(await reverseGeocodeOnline({ latitude: 31.2, longitude: 35.1 }, "ar", access(), notOk), null);
+  assert.equal(await reverseGeocodeOnline({ latitude: 31.25, longitude: 35.1 }, "ar", access(), okFetch({ address: null })), null);
 });
 
 test("a failed lookup is not cached, so a later retry can succeed", async () => {
   const point = { latitude: 31.3, longitude: 35.3 };
   const failing: FetchLike = async () => { throw new Error("offline"); };
-  assert.equal(await reverseGeocodeOnline(point, "en", failing), null);
-  assert.equal(await reverseGeocodeOnline(point, "en", okFetch({ address: { road: "Retry Rd" } })), "Retry Rd");
+  assert.equal(await reverseGeocodeOnline(point, "en", access(), failing), null);
+  assert.equal(await reverseGeocodeOnline(point, "en", access(), okFetch({ address: "Retry Rd" })), "Retry Rd");
 });

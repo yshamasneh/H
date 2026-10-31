@@ -16,6 +16,7 @@ import { MapDot } from "./map-pin";
 import { landmarkMarkerColor, landmarkVisibilityMinZoom, routeLineColor, type LocationMapProps, type MapCoordinate } from "./location-map.types";
 import { radius, spacing, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/theme-context";
+import { mapTileSources } from "../core/map-tiles";
 
 // Initial camera zoom; also the starting value for zoom-based landmark gating.
 const initialZoom = 14;
@@ -37,20 +38,20 @@ export const isInteractiveMapAvailable = true;
 // label overlay. Keeping the identical tile URLs means Android looks the same as
 // web/iOS instead of introducing a fourth visual style. The `{z}/{y}/{x}` token
 // order is Esri's (level/row/col); MapLibre substitutes the named tokens.
-const esriImageryTiles =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const esriLabelsTiles =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+// Store audit M3: the tile source is configuration (src/core/map-tiles.ts); the defaults are the
+// Esri layers.
+const esriImageryTiles = mapTileSources.baseUrl;
+const esriLabelsTiles = mapTileSources.labelsUrl;
 
 const esriRasterStyle: StyleSpecification = {
   version: 8,
   sources: {
-    "esri-imagery": { type: "raster", tiles: [esriImageryTiles], tileSize: 256, attribution: "Tiles © Esri" },
-    "esri-labels": { type: "raster", tiles: [esriLabelsTiles], tileSize: 256 }
+    "esri-imagery": { type: "raster", tiles: [esriImageryTiles], tileSize: 256, attribution: mapTileSources.attribution },
+    ...(esriLabelsTiles ? { "esri-labels": { type: "raster" as const, tiles: [esriLabelsTiles], tileSize: 256 } } : {})
   },
   layers: [
     { id: "esri-imagery", type: "raster", source: "esri-imagery" },
-    { id: "esri-labels", type: "raster", source: "esri-labels" }
+    ...(esriLabelsTiles ? [{ id: "esri-labels", type: "raster" as const, source: "esri-labels" }] : [])
   ]
 };
 

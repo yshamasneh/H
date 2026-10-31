@@ -232,3 +232,26 @@ This run does not touch `products/`. The licence-audit template is `docs/release
 6. With no delivery, put JOVO in the background for 5 minutes: `lastLocationAt` must not change.
 7. Revoke background permission in system settings during a delivery: tracking continues only while JOVO is on screen, and the app explains how to re-enable it.
 8. Record the screen for steps 2–4 (≤ 30 s) for the Play background-location video.
+
+<a id="m3-run2"></a>
+## M3 / M4 — run 2 implementation
+
+**M4 reverse geocoding (FIXED in code).**
+
+- New authenticated endpoint `GET /api/v1/geocode/reverse?lat&lon&lang=ar|en` → `{ address: string | null }` (`apps/api/src/geocoding/*`). It needs a signed-in user (no new public route), is covered by the global rate limiter, keeps an in-memory cache (≈1 m rounding, per language, 7 days, 5 000 entries), paces upstream calls to one per second for the whole API, and never stores or logs coordinates.
+- Provider by configuration, no app release needed: `GEOCODER_ENABLED`, `GEOCODER_REVERSE_URL` (default `https://nominatim.openstreetmap.org/reverse`), `GEOCODER_USER_AGENT`. **With `GEOCODER_USER_AGENT` empty no request is sent** and the app falls back to typing the address. Owner: set it on Railway to something like `JOVO-API/1.0 ([[PLACEHOLDER: contact email]])` (P21).
+- The app (`apps/mobile/src/core/geocode.ts`) now calls only the API, with the session token; with no session (guest) it returns null. Native devices still try the platform geocoder first. `EXPO_PUBLIC_GEOCODER_URL` is no longer read and can be deleted from EAS.
+- Public Nominatim's policy allows light use only. If address lookups grow, point `GEOCODER_REVERSE_URL` at a self-hosted Nominatim or a commercial Nominatim-compatible service; nothing in the app changes.
+- Tests: `geocoding.service.test.ts` (5), mobile `geocode.test.ts` (9), the route is asserted 401 without a token in `guest-browsing.e2e.test.ts`.
+
+**M3 map tiles (configurable; provider decision still open).**
+
+- One place now defines tiles: `apps/mobile/src/core/map-tiles.ts` (Android MapLibre and web Leaflet). Defaults are unchanged (Esri World Imagery + Boundaries & Places). A build can switch with EAS variables `EXPO_PUBLIC_MAP_TILE_URL`, `EXPO_PUBLIC_MAP_LABELS_TILE_URL` (`none` = no overlay), `EXPO_PUBLIC_MAP_TILE_ATTRIBUTION`. HTTPS templates only. Tiles are a build-time setting (an app update or OTA update is needed to change them).
+- iOS uses Apple Maps through `react-native-maps` (no tile URL; covered by Apple's terms).
+- The admin web (`apps/admin/src/components/TrackingMap.tsx`, `LeafletPicker.tsx`) still hard-codes Esri; it is an internal tool and was not changed.
+- Licensed options to choose from (check each provider's current terms and pricing yourself; none was signed up for or configured here):
+  1. **Esri with an ArcGIS Location Platform account** — keep the same imagery, legitimately, with the attribution Esri requires. Needs an API key in the URL (restrict it to the app).
+  2. **MapTiler Cloud** or **Stadia Maps** — OpenStreetMap-based raster/vector tiles with an app-restricted key; attribution "© OpenStreetMap contributors" plus the provider's.
+  3. **Self-hosted OpenStreetMap tiles** (e.g. a Protomaps/OpenMapTiles extract for the West Bank served from your own storage/CDN) — no third-party key, only OSM attribution; most work to run.
+  - **Not an option:** `tile.openstreetmap.org` (the OSM Foundation tile usage policy does not allow it as an app's production tile source).
+- Until a licensed source is configured, M3 stays an open store-review and legal risk (owner decision D10).

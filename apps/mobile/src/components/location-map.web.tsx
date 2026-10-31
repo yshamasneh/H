@@ -6,6 +6,7 @@ import { boundsForCoordinates, followZoom } from "./location-map.camera";
 import { landmarkMarkerColor, landmarkVisibilityMinZoom, routeLineColor, type LocationMapProps } from "./location-map.types";
 import { radius, spacing, type ThemeColors } from "../theme/tokens";
 import { useTheme } from "../theme/theme-context";
+import { mapTileSources } from "../core/map-tiles";
 
 // The web map is Leaflet over OpenStreetMap-style Esri tiles, rendered directly into the page
 // (no iframe, no CDN). Leaflet used to be loaded from unpkg inside a srcDoc iframe, but a
@@ -134,14 +135,17 @@ export function LocationMap(props: LocationMapProps) {
     void loadLeaflet().then((L) => {
       if (cancelled || !containerRef.current || mapRef.current) return;
       const map = L.map(containerRef.current).setView([props.coordinate.latitude, props.coordinate.longitude], 15);
-      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      // Store audit M3: tile source from configuration (src/core/map-tiles.ts), Esri by default.
+      L.tileLayer(mapTileSources.baseUrl, {
         maxZoom: 19,
-        attribution: "Tiles &copy; Esri"
+        attribution: mapTileSources.attribution
       }).addTo(map);
-      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 19,
-        pane: "overlayPane"
-      }).addTo(map);
+      if (mapTileSources.labelsUrl) {
+        L.tileLayer(mapTileSources.labelsUrl, {
+          maxZoom: 19,
+          pane: "overlayPane"
+        }).addTo(map);
+      }
 
       if (onChangeRef.current) {
         // An explicit icon, not Leaflet's own default marker: the default icon's PNG is referenced

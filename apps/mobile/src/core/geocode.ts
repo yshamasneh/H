@@ -1,8 +1,12 @@
 // Reverse geocoding that works on every platform. expo-location's own reverseGeocodeAsync is not
-// implemented on web (it throws "Geocoder service is not available"), and on Android it depends on
-// Google Play services being present, so the app used to show a pin with no readable address on the
-// web build and on some devices. This module asks an OpenStreetMap Nominatim endpoint instead, and
-// is the fallback the native path uses when the platform geocoder yields nothing.
+// implemented on web, and on Android it depends on Google Play services, so this module is the
+// fallback when the platform geocoder yields nothing.
+//
+// Store audit M4 (run 2): the app no longer calls Nominatim itself. It asks the JOVO API
+// (GET /api/v1/geocode/reverse), which sends the identifying User-Agent, caches, paces to the
+// provider's limit, and reads the provider from server configuration, so the provider can change
+// without an app release. Signed-in users only: with no token the result is null and the person
+// types the address.
 //
 // The pure pieces (formatting, cache key) live here with no native imports so they run under the
 // plain node test runner.
@@ -17,12 +21,12 @@ export type NominatimReverseResponse = {
   error?: string;
 };
 
-const defaultEndpoint = "https://nominatim.openstreetmap.org/reverse";
-
-/** The endpoint can be pointed at a self-hosted Nominatim without a code change. */
-export function geocoderEndpoint(): string {
-  return process.env.EXPO_PUBLIC_GEOCODER_URL?.trim() || defaultEndpoint;
+/** The API's reverse-geocoding endpoint for a given API base URL. */
+export function geocoderEndpoint(apiBaseUrl: string): string {
+  return `${apiBaseUrl.replace(/\/+$/, "")}/api/v1/geocode/reverse`;
 }
+
+export type GeocoderAccess = { apiBaseUrl: string; getAccessToken: () => Promise<string | null> };
 
 /** Two points that round to the same key are the same door for delivery purposes (~1 m). */
 export function geocodeCacheKey(point: GeocodePoint, language: string): string {
@@ -59,9 +63,9 @@ export function formatNominatimAddress(result: NominatimReverseResponse): string
 
 const cache = new Map<string, string>();
 const cacheLimit = 200;
-// Nominatim's usage policy allows about one request per second per client. A pin that is dragged
-// repeatedly must queue behind that rather than get the client blocked.
-const minimumGapMs = 1100;
+// The server paces the provider; the app only spaces its own requests so a dragged pin does not
+// flood the API.
+const minimumGapMs = 300;
 let lastRequestAt = 0;
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -74,7 +78,15 @@ export type FetchLike = (url: string, init?: { signal?: AbortSignal; headers?: R
   json(): Promise<unknown>;
 }>;
 
-async function request(point: GeocodePoint, language: string, fetchImpl: FetchLike, timeoutMs: number): Promise<string | null> {
+async function request(
+  point: GeocodePoint,
+  language: string,
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+  access: GeocoderAccess
+): Promise<string | null> {
+  const accessToken = await access.getAccessToken();
+  if (!accessToken) return null;
   const wait = lastRequestAt + minimumGapMs - Date.now();
   if (wait > 0) await sleep(wait);
   lastRequestAt = Date.now();
@@ -83,19 +95,17 @@ async function request(point: GeocodePoint, language: string, fetchImpl: FetchLi
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const query = new URLSearchParams({
-      format: "jsonv2",
-      lat: String(point.latitude),
-      lon: String(point.longitude),
-      zoom: "18",
-      addressdetails: "1",
-      "accept-language": language
+      lat: point.latitude.toFixed(6),
+      lon: point.longitude.toFixed(6),
+      lang: language === "en" ? "en" : "ar"
     });
-    const response = await fetchImpl(`${geocoderEndpoint()}?${query.toString()}`, {
+    const response = await fetchImpl(`${geocoderEndpoint(access.apiBaseUrl)}?${query.toString()}`, {
       signal: controller.signal,
-      headers: { Accept: "application/json" }
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` }
     });
     if (!response.ok) return null;
-    return formatNominatimAddress((await response.json()) as NominatimReverseResponse);
+    const body = (await response.json()) as { address?: unknown };
+    return typeof body?.address === "string" && body.address.trim() ? body.address.trim() : null;
   } finally {
     clearTimeout(timer);
   }
@@ -109,13 +119,14 @@ async function request(point: GeocodePoint, language: string, fetchImpl: FetchLi
 export async function reverseGeocodeOnline(
   point: GeocodePoint,
   language: string,
+  access: GeocoderAccess,
   fetchImpl: FetchLike = (url, init) => fetch(url, init) as ReturnType<FetchLike>,
   timeoutMs = 7_000
 ): Promise<string | null> {
   const key = geocodeCacheKey(point, language);
   const cached = cache.get(key);
   if (cached) return cached;
-  const run = queue.then(() => request(point, language, fetchImpl, timeoutMs)).catch(() => null);
+  const run = queue.then(() => request(point, language, fetchImpl, timeoutMs, access)).catch(() => null);
   queue = run;
   const address = await run;
   if (address) {

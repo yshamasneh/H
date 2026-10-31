@@ -100,6 +100,7 @@ test("guests browse the catalogue; account endpoints stay protected", { skip: !r
       ["get", "/api/v1/notifications/me"],
       ["get", "/api/v1/settings"],
       ["get", "/api/v1/landmarks"],
+      ["get", "/api/v1/geocode/reverse?lat=31.9&lon=35.2"],
       ["delete", "/api/v1/users/me"]
     ];
     for (const [method, path] of protectedRoutes) {

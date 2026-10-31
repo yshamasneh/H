@@ -6,7 +6,9 @@
 declare const process: {
   env: {
     EXPO_PUBLIC_API_URL?: string;
-    EXPO_PUBLIC_GEOCODER_URL?: string;
+    EXPO_PUBLIC_MAP_TILE_URL?: string;
+    EXPO_PUBLIC_MAP_LABELS_TILE_URL?: string;
+    EXPO_PUBLIC_MAP_TILE_ATTRIBUTION?: string;
     EXPO_PUBLIC_CUSTOMER_THEME?: string;
     EXPO_PUBLIC_CUSTOMER_THEME_PREVIEW?: string;
   };

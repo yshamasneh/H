@@ -1,7 +1,9 @@
 import * as Location from "expo-location";
 import { Platform } from "react-native";
 import i18n from "../i18n";
+import { apiBaseUrl } from "./api";
 import { reverseGeocodeOnline } from "./geocode";
+import { getAccessToken } from "./session";
 import { shouldDeliverFix, type Fix } from "./position-throttle";
 
 export type CurrentCoordinates = {
@@ -105,7 +107,7 @@ export async function reverseGeocode(coordinates: CurrentCoordinates): Promise<s
   } catch {
     // Unsupported on web and unavailable without Play services on some Android devices: fall through.
   }
-  return reverseGeocodeOnline(coordinates, i18n.language?.startsWith("en") ? "en" : "ar");
+  return reverseGeocodeOnline(coordinates, i18n.language?.startsWith("en") ? "en" : "ar", { apiBaseUrl, getAccessToken });
 }
 
 /** What a running position watch hands back: call `remove()` to stop it. */
