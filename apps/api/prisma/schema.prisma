@@ -632,6 +632,11 @@ model MenuItem {
   reviewedAt             DateTime?
   /// The approving user's id (no foreign key, so anonymising a user never blocks it).
   reviewedByUserId       String?                 @db.Uuid
+  /// Run 3, task 3: the catalogue importer's stable per-product source id, and a hash of the
+  /// fields it last wrote. A differing hash on re-import means someone edited the product by hand,
+  /// and the importer then leaves it alone.
+  importSourceId         String?
+  importChecksum         String?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   restaurant             Restaurant              @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -644,6 +649,7 @@ model MenuItem {
 
   @@unique([restaurantId, sku])
   @@unique([restaurantId, barcode])
+  @@unique([restaurantId, importSourceId])
   @@index([restaurantId, isAvailable])
   @@index([categoryId])
   @@index([restaurantId, isFeatured, isAvailable])
