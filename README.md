@@ -294,8 +294,8 @@ Operational and release material:
 - `docs/security-review.md` — findings, controls, and accepted/external risks.
 - `docs/operations-runbook.md` — deploy, monitoring, backup/restore, rollback, and incident procedures.
 - `docs/launch-checklist.md` — technical, four-role, legal, closed-test, and go/no-go gates.
-- `docs/privacy-policy.md` and `docs/terms-of-service.md` — Arabic operator-review drafts.
-- `docs/store-listing.md` — Arabic/English metadata, privacy declarations, review-account guidance, and visual-asset inventory.
+- `docs/store/privacy-policy.md` and `docs/store/terms-of-service.md` — JOVO privacy policy and terms (Arabic and English, with owner placeholders); static pages in `docs/store/site/`.
+- `docs/store/store-listing.md` — JOVO MARKET listing; `docs/release-readiness/` — store remediation tracker, owner actions and checklists.
 
 The code/configuration portion of Phase 8 is complete. Public launch still requires operator-owned DNS/TLS, selected provider endpoints, legal identity/sign-off, store accounts, release signing, screenshots from staging, and recorded Android closed-test/TestFlight approval; those cannot be manufactured safely from repository code.
 

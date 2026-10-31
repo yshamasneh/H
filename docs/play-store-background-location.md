@@ -15,7 +15,7 @@ to fill in yourself.
 | iOS `UIBackgroundModes: location` and the "Always" usage descriptions | `app.json` (`expo-location` plugin) | Yes (generated at `eas build`) |
 | Prominent in-app disclosure **before** the system permission prompt, with Continue / Not now | `components/background-location-disclosure.tsx`, `features/driver/use-background-location.tsx` | Yes (English + Arabic) |
 | Tracking only during an active delivery; stops on completion, cancellation, logout | `core/tracking/*` (tested) | Yes |
-| Privacy policy wording | `docs/privacy-policy.md` | Draft updated; **you must publish it** at a public HTTPS URL |
+| Privacy policy wording | `docs/store/privacy-policy.md` | Draft updated; **you must publish it** at a public HTTPS URL |
 | Play Console: Data safety form | Play Console | **You** (answers below) |
 | Play Console: Location permissions declaration + video | Play Console | **You** (text below, video you record) |
 | Play Console: Foreground service permissions declaration + video | Play Console | **You** |
@@ -105,7 +105,7 @@ the review server for the duration of review, and make sure the demo store has m
 
 ### 5. Privacy policy
 
-`docs/privacy-policy.md` (Arabic draft) now describes driver location. Play requires the policy to be
+`docs/store/privacy-policy.md` (Arabic draft) now describes driver location. Play requires the policy to be
 reachable at a public URL, to mention this collection, and to be linked in the store listing. Consider an
 English version for reviewers. It still needs the operator identity and contact before publication.
 
