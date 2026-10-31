@@ -1,0 +1,2 @@
+image_file,sku,product_name,source_type,source_url_or_supplier,licence_or_permission,evidence_location,has_watermark_or_third_party_logo,reviewed_by,review_date,decision,notes
+product-0001.webp,JOVO-0001,(example row - replace),supplier_media_kit,[[PLACEHOLDER: supplier]],[[PLACEHOLDER: permission]],[[PLACEHOLDER: email or folder]],no,[[PLACEHOLDER: name]],[[PLACEHOLDER: date]],keep,

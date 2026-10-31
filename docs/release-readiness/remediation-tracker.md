@@ -1,8 +1,70 @@
 # Store remediation tracker — run 1
 
-Source audit: `C:\Users\hp\jovo-store-audit.md` (2026-10-31). Branch: `store-remediation-1`.
-Status values: FIXED / VERIFIED / BLOCKED / ANALYZED-ONLY / NOT APPLICABLE / IN PROGRESS.
+- **Source audit:** `C:\Users\hp\jovo-store-audit.md` (2026-10-31).
+- **Branch:** `store-remediation-1`, from `agent/phase-15-and-jovo-brand` at `23e9045`.
+- **Your uncommitted change** in `apps/mobile/src/features/driver/screens.tsx` was left untouched and is in no commit.
 
-| ID | Status |
-|---|---|
-| B1–B8, H1–H8, M1–M8, L1–L8 | IN PROGRESS — this file is rewritten with full detail at the end of the run |
+**Status values**
+
+- **FIXED:** code or config changed, with tests.
+- **VERIFIED:** re-checked and already correct, or no change needed.
+- **BLOCKED:** needs an external account or input.
+- **ANALYZED-ONLY:** designed or documented, not implemented.
+- **NOT APPLICABLE**
+
+**Test evidence for every FIXED row** (commands in `final-readiness-report.md`)
+
+- Mobile: typecheck OK; 283/283 unit; 206/206 UI; native-config OK.
+- API: typecheck OK; 725 passed, 0 failed, 12 skipped (DB-only) in the unit run; 82/82 e2e on a throwaway PostgreSQL 17.
+
+## BLOCKER
+
+| ID | Original finding | Verified status today | Root cause | Solution | Files changed | Tests | Remaining risk | Final |
+|---|---|---|---|---|---|---|---|---|
+| B1 | No public privacy policy; draft says TasawaQ and restaurants | CONFIRMED: `docs/privacy-policy.md:1` said "TasawaQ"; `jovops.com` still unreachable on 2026-10-31 | Legal docs never rewritten for JOVO | New JOVO privacy policy, terms, delete-account and support pages in Arabic and English, built from the real data inventory and real processors. Script-free static pages generated. Old drafts became pointers. | `docs/store/{privacy-policy,terms-of-service,delete-account,support}.md`, `docs/store/site/*.html`, `docs/privacy-policy.md`, `docs/terms-of-service.md`, `README.md` | Static check: no `<script>`; links verified | 21 placeholders, legal review, hosting | **FIXED** (docs); hosting **BLOCKED** (owner) |
+| B2 | No privacy or terms link in the app | CONFIRMED (no link anywhere) | — | One constant (`legal-links.ts`). Links on Login, Signup (with an "I agree" line) and Settings for all roles. | `apps/mobile/src/core/legal-links.ts`, `src/components/legal-links.tsx`, `features/auth/screens.tsx`, `features/shared/settings-screen.tsx`, `i18n/locales/{en,ar}/common.json`, `customer.json` | `screens.ui.test.tsx` (3 new), `settings-screen.ui.test.tsx` (4 role cases) | The pages must be live before submission | **FIXED** |
+| B3 | No web deletion URL and no support URL | CONFIRMED | — | `delete-account` and `support` pages; in-app text pointing to `jovops.com/delete-account`; Settings rows for support and web deletion | `docs/store/delete-account.md`, `support.md`, `site/*`; `customer.json` `account.deleteWebHelper`; `legal-links.tsx` | Settings UI tests | Mailbox and hosting | **FIXED** (content); **BLOCKED** (hosting) |
+| B4 | Listing is TasawaQ restaurant copy | CONFIRMED | — | New JOVO MARKET listing (Arabic primary), supermarket only, cash on delivery, delivery-area placeholder, the driver background-location sentence, a screenshot list | `docs/store/store-listing.md`, `docs/store-listing.md` (pointer) | n/a | Screenshots, feature graphic | **FIXED** (text) |
+| B5 | Production API URL pipeline unsafe (ngrok in `.env.production`; EAS unknown) | CONFIRMED: local `.env.production` still contains ngrok (count only). EAS values UNVERIFIED (no access). | `.env*` is gitignored, so EAS uses its own environment; any local `export`/`update` reads `.env.production`. | (1) `api-url.ts`: release native bundles must use exactly `https://api.jovops.com`, and every release bundle refuses HTTP, ngrok, localhost and private hosts. (2) `check-release-env.cjs` runs as `eas-build-pre-install` and fails a production-profile build with any other URL. **Why production shows 56dcff4:** the four later commits touch only `deploy/railway/backup/*` and `docs/railway-setup.md`, so no API code changed and no API rebuild happened. **Compatibility:** see `final-readiness-report.md` §6. | `apps/mobile/src/core/api-url.ts` (+test), `core/api.ts`, `scripts/check-release-env.cjs`, `package.json` | `api-url.test.ts` (4); script exercised: fails when unset, passes with the production URL | The owner must set the EAS variable | **FIXED** (guards); EAS value **BLOCKED** (owner) |
+| B6 | No reviewer access | CONFIRMED (no demo accounts) | — | Plan: account specs, review notes (English and Arabic), test-order handling, back-off options. No accounts were created and no limiter change was made. | `docs/release-readiness/reviewer-access-guide.md` | n/a | Accounts must exist before submission | **ANALYZED-ONLY** (plan); creation **BLOCKED** |
+| B7 | Play declarations, video, data safety | CONFIRMED (not done) | — | Background-location and foreground-service justification text, video script, Data safety and Apple labels (corrected: email optional, no crash data) | `docs/store/play-console-declarations.md`, `docs/store/data-safety-and-app-privacy.md` | n/a | Video and console entry | **FIXED** (material); console **BLOCKED** |
+| B8 | Apple enrollment pending; no iOS build | CONFIRMED (no `ios/`) | Account | iOS config prepared (privacy manifest, locales, strings) | — | iOS build not run | No iOS build has ever existed | **BLOCKED** |
+
+## HIGH
+
+| ID | Original finding | Verified status today | Root cause | Solution | Files changed | Tests | Remaining risk | Final |
+|---|---|---|---|---|---|---|---|---|
+| H1 | Deletion only for customers; copy says "deactivated" | CONFIRMED. **Also found:** every self-service deletion (customers included) fails with 500, because `User_phone_e164_check` rejects `deleted-<id>`. Proven on a migrated PostgreSQL. | Constraint written before deletion existed; roles not designed | Drivers: immediate anonymisation (position, shift state, push tokens and sessions cleared), or **scheduled** (202 + date) while a delivery, cash custody or earnings balance is open; an hourly sweep completes it. Store staff: immediate, memberships deactivated. Owner and admin: refused with specific codes. Copy no longer says "deactivate". New migrations: the `AccountDeletionRequest` table, and a CHECK that allows `deleted-<own id>` only on inactive rows. Orders, cash and earnings are never written. | `apps/api/src/users/{users.service,users.controller,users.module,account-deletion.rules,account-deletion-sweep.service}.ts`, `testing/fake-prisma.ts`, `prisma/schema.prisma`, 2 new migrations, `scripts/run-api-e2e.mjs`; mobile `core/api.ts`, `features/shared/{settings-screen,account-deletion.rules}.tsx/ts`, `App.tsx`, locales | `account-deletion.test.ts` (8, incl. active delivery, unsettled cash, unpaid earnings, sweep), `users.service.test.ts` (updated), **`account-deletion.e2e.test.ts` (6 on PostgreSQL)**, mobile `settings-screen.ui.test.tsx`, `account-deletion.rules.test.ts` | The API must be deployed with both migrations. Admin anonymisation by a second admin is not built (suspension exists). There is no store-ownership transfer tool. | **FIXED** |
+| H2 | Login wall before browsing (Apple) | CONFIRMED (`navigation.ts:92`) | — | Analysis: the catalogue endpoints are already public; only `/settings` and `/landmarks` need a token. App-only change, about 1.5–2 days. | `technical-analyses.md#h2` | Test list written | Apple 5.1.1(v) rejection risk stays | **ANALYZED-ONLY** |
+| H3 | No Firebase / FCM | CONFIRMED | — | Owner steps, Gradle and EAS changes, test plan | `technical-analyses.md#h3` | — | Android push is not working until done | **ANALYZED-ONLY** / **BLOCKED** (credentials) |
+| H4 | Background-location approval risk | Implementation CONFIRMED sound | — | Official Android docs plus the **installed expo-location 19.0.8 source** show that a location foreground service started while the app is visible needs no background permission. The JOVO JS layer currently insists on it. Device test written. `ACCESS_BACKGROUND_LOCATION` kept, as instructed. | `technical-analyses.md#h4` | Device test defined, not run | Play manual review | **ANALYZED-ONLY** |
+| H5 | "Development API" label in release | CONFIRMED | Rendered unconditionally | Only when `__DEV__` | `features/auth/screens.tsx` | `screens.ui.test.tsx` "never renders in a release bundle" | — | **FIXED** |
+| H6 | Tobacco exclusion only by data | CONFIRMED (no code guard). The repo seed (130 rows): 0 BLOCKED, 0 REVIEW after refinement. Production UNVERIFIED (not queried). | — | Arabic and English whole-word classifier (Arabic normalisation, prefix stripping, alcohol-free → REVIEW, harmless-phrase list). 422 on product and category create, rename and import; REVIEW items saved hidden with `restrictedReview.matches`. An offline report script for live exports. Live products not touched. | `apps/api/src/catalogue/*`, `restaurants/menu.service.ts`, `prisma/import-products.ts`, `scripts/restricted-catalogue-report.ts`, mobile `errors.json` | `restricted-products.rules.test.ts` (7), `restricted-catalogue-report.test.ts` (4), `menu.service.test.ts` (+3) | The live catalogue must be cleaned by Khaldoun | **FIXED** (guard); data **BLOCKED** (owner) |
+| H7 | Role-gated features undocumented; dormant restaurant vertical | CONFIRMED. The earlier "restaurant signup visible" was already fixed in the UI, but the screens remained. | — | Removed restaurant list, menu and registration screens and routes, the dead client, and the server-flag restaurant entry on home. Staff, role and admin strings say "store". A guard test fails on any restaurant copy in the user-facing namespaces. API untouched. Roles documented in the review notes. | `App.tsx`, `navigation/navigation.ts`, `features/customer/home-screen.tsx`, `features/auth/screens.tsx`, deleted `features/auth/role-registration-screens.tsx` and `features/customer/restaurant-screens.tsx`, `core/api.ts`, locales | `home-screen.ui.test.tsx` (2 rewritten), `navigation.test.ts`, `no-restaurant-copy.test.ts` (16) | The admin namespace keeps the accurate "Restaurant" business-type label (internal tool) | **FIXED** |
+| H8 | Location strings inaccurate; English only; driver location sent without delivery | CONFIRMED: `driver/screens.tsx` `refreshLocation()` reports a position on home open, refresh and going online, with no delivery | — | That file holds your uncommitted change, so the **behaviour was kept and the disclosure was made to match it**. Driver disclosure "when" rewritten (disclosure version bumped to 2, so drivers re-consent). New iOS strings (customer pin and driver dispatch), Arabic and English via `expo.locales`. `ACCESS_BACKGROUND_LOCATION` kept. | `app.json`, `native-locales/{ar,en}.json`, `core/tracking/location-consent.ts`, `locales/{en,ar}/driver.json`, `scripts/check-native-config.cjs` | `check-native-config` (asserts keys in both languages); tracking tests | Option to stop the no-delivery report later (D3) | **FIXED** |
+
+## MEDIUM
+
+| ID | Original finding | Verified status | Solution | Files | Tests | Final |
+|---|---|---|---|---|---|---|
+| M1 | OTA launch wait 30 s | CONFIRMED | `fallbackToCacheTimeout: 0`; manifest `EXPO_UPDATES_LAUNCH_WAIT_MS=0` | `app.json`, `android/app/src/main/AndroidManifest.xml`, `check-native-config.cjs` | native-config asserts 0 | **FIXED** |
+| M2 | No crash reporting | CONFIRMED | Sentry recommended; steps and privacy impact | `technical-analyses.md#m2` | — | **ANALYZED-ONLY** |
+| M3 | Esri tiles without licence | CONFIRMED (Android **and web**) | Options and recommendation | `technical-analyses.md#m3` | — | **ANALYZED-ONLY** |
+| M4 | Nominatim without a User-Agent | CONFIRMED | Server proxy design (cache, 1 request per second, identifying UA) | `technical-analyses.md#m4` | — | **ANALYZED-ONLY** |
+| M5 | Image provenance unknown | CONFIRMED (no source metadata) | Licence-audit CSV template; `products/` untouched | `image-licence-audit-template.csv` | — | **ANALYZED-ONLY** |
+| M6 | No privacy manifest | CONFIRMED | `ios.privacyManifests` with the union of every dependency's declared required-reason API (UserDefaults, FileTimestamp, SystemBootTime, DiskSpace) and tracking false | `app.json`, `check-native-config.cjs` | native-config asserts; `expo config` resolves it | **FIXED** (iOS build unverified) |
+| M7 | Reviewer orders hit the real store | LIKELY | Handling procedure; optional server flag proposed, not built | `reviewer-access-guide.md` §3 | — | **ANALYZED-ONLY** |
+| M8 | Login back-off could lock a reviewer | CONFIRMED (5 free failures, doubling to 15 min) | Options; limiter not changed | `reviewer-access-guide.md` §4 | — | **ANALYZED-ONLY** |
+
+## LOW
+
+| ID | Original finding | Verified status | Solution | Final |
+|---|---|---|---|---|
+| L1 | Unused `expo-camera` | CONFIRMED (never imported) | Removed from `apps/mobile/package.json` only; the native-config check asserts its absence. **The owner must run `npm install` to update the lockfile.** | **FIXED** (lockfile pending) |
+| L2 | Health shows `tasawaq-api` and the commit | CONFIRMED | `service: "jovo-api"`; `commit` only when `HEALTH_EXPOSE_COMMIT=true`. The trial workflow compares `.commit`, so set the variable there. The internal structured-logger and error-reporter service names still say `tasawaq-api` (log continuity; not public). | **FIXED** |
+| L3 | Internal storage keys use old brands | CONFIRMED, not user-visible | No change: renaming would sign everyone out | **VERIFIED** (no change) |
+| L4 | Push asked right after login without an explainer | CONFIRMED | Documented only (D12) | **ANALYZED-ONLY** |
+| L5 | Merged manifest permissions unverified | UNVERIFIED: the local release build could not run (empty NDK folder) | Check the first AAB with `bundletool dump manifest` | **BLOCKED** |
+| L6 | Stale "coming soon" comment | CONFIRMED stale | The comment was removed with the restaurant routes (H7); `home-screen.ui.test.tsx` asserts no "coming soon" | **FIXED** |
+| L7 | `missingProducts.jpg` placeholder | Not referenced by the app (`grep`); it lives in `products/` (out of scope) | Khaldoun: make sure no live product uses it | **VERIFIED** (no change) |
+| L8 | `debug.keystore` committed; release signing via EAS | CONFIRMED standard debug key; release `signingConfig` absent, so EAS or Play App Signing is used | No change | **VERIFIED** |
