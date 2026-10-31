@@ -20,7 +20,8 @@ import {
   type PublicUser,
   type RestaurantOffer,
   type SupermarketCatalog,
-  type SupermarketProduct
+  type SupermarketProduct,
+  getSupermarketDeliveryArea
 } from "../../core/api";
 import { getAccessToken } from "../../core/session";
 import { DepartmentStripSkeleton, OfferCardSkeleton, ProductGridSkeleton } from "../../components/skeleton";
@@ -38,6 +39,7 @@ import { buyAgainItems, type BuyAgainItem } from "./discovery.rules";
 import { loadRecentlyViewed, type RecentlyViewedProduct } from "./recently-viewed";
 import { CustomerHomeHeader } from "./home-header";
 import { SeasonalAccent } from "./seasonal-accent";
+import { isGuestUser } from "../../navigation/navigation";
 
 /* On the dark hero/offer panels below (customerTheme.colors.secondary, which
    resolves to the same near-black as surfaceInverse), text hierarchy uses
@@ -100,6 +102,7 @@ export function CustomerHomeScreen(props: {
   const [catalogFailed, setCatalogFailed] = useState(false);
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [deliveryAreaKm, setDeliveryAreaKm] = useState<number | null>(null);
   // Discovery shortcuts from what this customer already did: products opened on this device, and
   // products from their delivered orders. Both open the product page, which loads the current price.
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedProduct[]>([]);
@@ -115,6 +118,12 @@ export function CustomerHomeScreen(props: {
     const storefront = (async () => {
       const resolved = await resolveMarketStore();
       setStore(resolved);
+      // Store audit H2: a guest sees how far the store delivers before signing up. Best effort only.
+      if (resolved && isGuestUser(props.user)) {
+        void getSupermarketDeliveryArea(resolved.id)
+          .then((area) => setDeliveryAreaKm(Math.round(area.maximumDistanceMeters / 100) / 10))
+          .catch(() => setDeliveryAreaKm(null));
+      }
       // A closed store is resolvable but not shoppable — skip its catalog so the home shows a clear
       // "closed" state rather than products the customer cannot order.
       if (!resolved || !resolved.isOpenNow) {
@@ -220,6 +229,11 @@ export function CustomerHomeScreen(props: {
             </View>
           ) : null}
           {props.notice ? <Text style={styles.notice}>{props.notice}</Text> : null}
+          {deliveryAreaKm !== null ? (
+            <Text accessibilityRole="text" style={styles.notice} testID="guest-delivery-area">
+              {t("customer:home.guestDeliveryArea", { km: deliveryAreaKm })}
+            </Text>
+          ) : null}
         </View>
 
         {/* 1 · Search. Most visits start with "do they have …", so it comes first and stays docked

@@ -45,7 +45,8 @@
     "noOffersTextMarket": "New JOVO MARKET offers will appear here when they are published.",
     "catalogFailedTitle": "We couldn't load the store",
     "catalogFailedText": "Check your connection and try again.",
-    "catalogRetry": "Try again"
+    "catalogRetry": "Try again",
+    "guestDeliveryArea": "This store delivers up to {{km}} km from the shop. Sign in when you are ready to order."
   },
   "offerDetail": {
     "headerTitle": "Offer",

@@ -562,6 +562,11 @@ export function listSupermarkets(page = 1, pageSize = 20, includeClosed = false)
   return request(`/api/v1/supermarkets?page=${page}&pageSize=${pageSize}${includeClosed ? "&includeClosed=true" : ""}`);
 }
 
+/** Store audit H2: public, how far the store delivers (no token needed). */
+export function getSupermarketDeliveryArea(supermarketId: string): Promise<{ maximumDistanceMeters: number; addressLine: string }> {
+  return request(`/api/v1/supermarkets/${supermarketId}/delivery-area`);
+}
+
 export function getSupermarketStatus(supermarketId: string): Promise<{ isOpenNow: boolean }> {
   return request(`/api/v1/supermarkets/${supermarketId}/status`);
 }

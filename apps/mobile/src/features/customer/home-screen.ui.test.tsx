@@ -10,6 +10,7 @@ jest.mock("../../core/api", () => ({
   listMyNotifications: jest.fn(),
   listMyOrders: jest.fn(),
   getPlatformSettings: jest.fn(),
+  getSupermarketDeliveryArea: jest.fn().mockResolvedValue({ maximumDistanceMeters: 7500, addressLine: "Main St" }),
   ApiError: class ApiError extends Error {}
 }));
 jest.mock("../../core/session", () => ({ getAccessToken: jest.fn().mockResolvedValue("token") }));
@@ -255,4 +256,11 @@ test("store audit H2: a guest sees the public catalogue and no account endpoint 
   expect(mocked.listMyNotifications).not.toHaveBeenCalled();
   expect(mocked.listMyOrders).not.toHaveBeenCalled();
   expect(screen.queryByText("Buy again")).toBeNull();
+  expect(await screen.findByTestId("guest-delivery-area")).toHaveTextContent(/7\.5 km/);
+});
+
+test("store audit H2: a signed-in customer does not get the guest delivery-area line", async () => {
+  render(<CustomerHomeScreen {...props()} />);
+  expect(await screen.findByText("Open now")).toBeTruthy();
+  expect(screen.queryByTestId("guest-delivery-area")).toBeNull();
 });

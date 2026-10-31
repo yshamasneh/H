@@ -168,3 +168,4 @@ All are **additions**; no existing guard, rate limit or permission was changed.
    npm run prod:selfcheck --workspace @wasel/api
    ```
    It prints only variable **names** that are missing and whether `NODE_ENV=production` would boot (validator message with every value redacted); exit 0 = ready. A deployed API that is not yet in production mode also logs one `production_selfcheck` warning at startup with the missing names. No values are ever printed.
+6. **Mobile polish (task 6).** Accessibility: login links and settings rows/buttons now expose `accessibilityRole="button"` (and busy/disabled state); both settings switches have screen-reader labels. Guest home shows "delivers up to N km" from the public delivery-area route (Arabic/English; hidden on error). Open L items: L1 (run `npm install` yourself, lockfile) and L5 (needs the first AAB). No auth change.

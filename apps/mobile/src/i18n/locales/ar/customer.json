@@ -45,7 +45,8 @@
     "noOffersTextMarket": "ستظهر هنا عروض جوفو ماركت الجديدة فور نشرها.",
     "catalogFailedTitle": "تعذّر تحميل المتجر",
     "catalogFailedText": "تحقق من اتصالك ثم حاول مرة أخرى.",
-    "catalogRetry": "إعادة المحاولة"
+    "catalogRetry": "إعادة المحاولة",
+    "guestDeliveryArea": "يوصل المتجر حتى {{km}} كم من موقعه. سجّل الدخول عندما تكون جاهزًا للطلب."
   },
   "offerDetail": {
     "headerTitle": "العرض",

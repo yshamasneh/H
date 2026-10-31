@@ -167,7 +167,7 @@ export function SettingsScreen(props: {
           <Text style={styles.signedInValue}>{props.user.fullName}</Text>
           <Text style={[styles.signedInPhone, styles.ltrText]}>{props.user.phone}</Text>
           {props.onManageAccount ? (
-            <Pressable onPress={props.onManageAccount} style={styles.linkRow}>
+            <Pressable accessibilityRole="button" onPress={props.onManageAccount} style={styles.linkRow}>
               <Text style={styles.linkRowText}>{t("settings.manageAccountRow")}</Text>
               <Icon color={colors.textMuted} name={disclosureIconName()} size="sm" />
             </Pressable>
@@ -185,6 +185,7 @@ export function SettingsScreen(props: {
               <Text style={styles.toggleHelper}>{t("settings.darkModeHelper")}</Text>
             </View>
             <Switch
+              accessibilityLabel={t("settings.darkModeLabel")}
               onValueChange={(value) => setMode(value ? "dark" : "light")}
               thumbColor={colors.surface}
               trackColor={{ false: colors.neutralSubtle, true: colors.primary }}
@@ -203,6 +204,7 @@ export function SettingsScreen(props: {
               <ActivityIndicator color={colors.primary} />
             ) : (
               <Switch
+                accessibilityLabel={t("settings.pushNotificationsLabel")}
                 onValueChange={() => void togglePush()}
                 thumbColor={colors.surface}
                 trackColor={{ false: colors.neutralSubtle, true: colors.primary }}
@@ -238,7 +240,7 @@ export function SettingsScreen(props: {
               </Text>
             ) : null}
             {deleteError ? <Text style={styles.deleteError}>{deleteError}</Text> : null}
-            <Pressable accessibilityRole="button" disabled={deleting} onPress={() => void removeAccount()} style={styles.deleteButton}>
+            <Pressable accessibilityRole="button" accessibilityState={{ disabled: deleting, busy: deleting }} disabled={deleting} onPress={() => void removeAccount()} style={styles.deleteButton}>
               {deleting ? (
                 <ActivityIndicator color={colors.error} />
               ) : (
@@ -255,7 +257,7 @@ export function SettingsScreen(props: {
 
         {/* Customers sign out from their Account tab; every other role signs out here. */}
         {isCustomer && showDelete ? null : (
-          <Pressable disabled={loggingOut} onPress={() => void confirmLogout()} style={styles.logoutButton}>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: loggingOut, busy: loggingOut }} disabled={loggingOut} onPress={() => void confirmLogout()} style={styles.logoutButton}>
             {loggingOut ? (
               <ActivityIndicator color={colors.error} />
             ) : (

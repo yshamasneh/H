@@ -629,7 +629,7 @@ function SecondaryButton(props: {
 function LinkButton(props: { label: string; onPress: () => void }) {
   const styles = useAuthStyles();
   return (
-    <Pressable onPress={props.onPress} style={styles.linkButton}>
+    <Pressable accessibilityRole="button" hitSlop={8} onPress={props.onPress} style={styles.linkButton}>
       <Text style={styles.linkText}>{props.label}</Text>
     </Pressable>
   );
