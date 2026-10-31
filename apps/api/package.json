@@ -23,7 +23,8 @@
     "import:product-images": "tsx prisma/import-product-images.ts",
     "upload:catalogue-images": "tsx prisma/upload-catalogue-images.ts",
     "prisma:validate": "prisma validate",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prod:selfcheck": "tsx scripts/production-selfcheck.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1149.0",

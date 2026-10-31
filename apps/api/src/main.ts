@@ -8,6 +8,7 @@ import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 import { ApiException } from "./common/api.exception";
 import { corsAllowedMethods } from "./common/cors-methods";
 import { ConfiguredSocketIoAdapter } from "./config/socket-io.adapter";
+import { productionSelfCheck } from "./config/production-selfcheck";
 import { ErrorReporterService } from "./observability/error-reporter.service";
 import { MetricsService } from "./observability/metrics.service";
 import { createRequestMiddleware } from "./observability/request.middleware";
@@ -18,6 +19,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { logger });
   const config = app.get(ConfigService);
   const isProduction = config.get<string>("NODE_ENV") === "production";
+  // Run 3, task 5: a deployed environment that is not yet NODE_ENV=production says, by name only,
+  // what is still missing before the switch. Never values; never fatal.
+  if (!isProduction && config.get<boolean>("IS_DEPLOYED", false) === true) {
+    const check = productionSelfCheck(process.env as Record<string, unknown>);
+    logger.warn(JSON.stringify({ event: "production_selfcheck", missing: check.missing, ready: check.readyForProduction }));
+  }
   const corsOrigin = config.get<string>("CORS_ORIGIN", "*");
   const allowedOrigins = corsOrigin === "*" ? true : corsOrigin.split(",").map((origin) => origin.trim());
   const express = app.getHttpAdapter().getInstance();

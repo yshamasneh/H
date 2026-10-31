@@ -329,7 +329,7 @@ function applyTweetSmsConfiguration(environment: Record<string, unknown>, isProd
   environment.TWEETSMS_SEND_OPTIONAL_FIELDS = includeOptionalFields;
 }
 
-const s3StorageKeys = [
+export const s3StorageKeys = [
   "S3_ENDPOINT",
   "S3_ACCESS_KEY_ID",
   "S3_SECRET_ACCESS_KEY",
