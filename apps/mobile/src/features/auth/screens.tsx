@@ -37,6 +37,7 @@ import {
   normalizePhoneNumber,
   type CountryCode
 } from "../../core/phone";
+import { LegalLinksRow, SignupConsentText } from "../../components/legal-links";
 import { readError } from "../../core/errors";
 import { getAccessToken } from "../../core/session";
 import { useRealtimeEvent } from "../../core/socket";
@@ -103,7 +104,9 @@ export function LoginScreen(props: LoginScreenProps) {
       <LinkButton label={t("login.createAccount")} onPress={() => props.onSignup(prefill)} />
       <LinkButton label={t("login.forgotPassword")} onPress={() => props.onForgotPassword(prefill)} />
       <DriverNote />
-      <DeveloperApiLabel />
+      <LegalLinksRow />
+      {/* The API address is a developer aid: store (release) builds never show it (store audit H5). */}
+      {__DEV__ ? <DeveloperApiLabel /> : null}
     </AuthLayout>
   );
 }
@@ -184,6 +187,7 @@ export function SignupScreen(props: SignupScreenProps) {
       />
       <ErrorText message={error} />
       <PrimaryButton label={t("signup.submit")} loading={loading} onPress={submit} />
+      <SignupConsentText />
       {phoneExists ? (
         <View style={styles.inlineActions}>
           <SecondaryButton label={t("signup.goToLogin")} onPress={() => props.onLogin(prefill)} />

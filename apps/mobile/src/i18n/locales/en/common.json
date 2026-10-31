@@ -106,5 +106,15 @@
   "callCustomer": "Call customer",
   "customerLabel": "Customer",
   "removedFromCartToast": "{{name}} removed from the basket",
-  "undo": "Undo"
+  "undo": "Undo",
+  "legal": {
+    "privacyPolicy": "Privacy Policy",
+    "terms": "Terms of Use",
+    "support": "Help & support",
+    "deleteOnWeb": "Delete account on the web",
+    "signupConsentBefore": "By creating an account, I agree to the ",
+    "signupConsentAnd": " and the ",
+    "signupConsentAfter": ".",
+    "openFailed": "Couldn't open the page. Visit {{url}} in your browser."
+  }
 }

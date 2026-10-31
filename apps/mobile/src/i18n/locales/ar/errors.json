@@ -112,5 +112,7 @@
   "INVALID_MONITORING_TOKEN": "تم رفض الوصول.",
   "HTTP_ERROR": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
   "HTTPS_REQUIRED": "يلزم وجود اتصال آمن.",
-  "INTERNAL_SERVER_ERROR": "حدث خطأ من جانبنا. يرجى المحاولة مرة أخرى."
+  "INTERNAL_SERVER_ERROR": "حدث خطأ من جانبنا. يرجى المحاولة مرة أخرى.",
+  "BUSINESS_OWNER_DELETION_REQUIRES_ADMIN": "هذا حساب مالك المتجر. يجب أن ينقل مسؤول JOVO ملكية المتجر قبل حذفه.",
+  "ADMIN_DELETION_REQUIRES_SECOND_ADMIN": "يُغلق حساب المسؤول بواسطة مسؤول آخر."
 }

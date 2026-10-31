@@ -87,3 +87,42 @@ test("drivers are told their account comes from JOVO; there is no driver sign-up
   expect(screen.getByText(i18n.t("auth:login.driverNote"))).toBeTruthy();
   expect(screen.queryByText(/Register Driver|تسجيل كسائق/)).toBeNull();
 });
+
+// --- Store audit B2 / H5 -------------------------------------------------------------------------
+
+test("the login screen links to the privacy policy and terms, and opens the JOVO pages", async () => {
+  const { Linking } = require("react-native");
+  const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+  renderLogin();
+  await act(async () => {
+    fireEvent.press(screen.getByText(i18n.t("common:legal.privacyPolicy")));
+  });
+  await act(async () => {
+    fireEvent.press(screen.getByText(i18n.t("common:legal.terms")));
+  });
+  expect(openURL).toHaveBeenNthCalledWith(1, "https://jovops.com/privacy");
+  expect(openURL).toHaveBeenNthCalledWith(2, "https://jovops.com/terms");
+  openURL.mockRestore();
+});
+
+test("the signup screen states that creating an account accepts the terms and privacy policy", () => {
+  const { SignupScreen } = require("./screens");
+  render(<SignupScreen onForgotPassword={jest.fn()} onLogin={jest.fn()} onOtpRequested={jest.fn()} />);
+  expect(screen.getByText(i18n.t("common:legal.terms"))).toBeTruthy();
+  expect(screen.getByText(i18n.t("common:legal.privacyPolicy"))).toBeTruthy();
+});
+
+test("the developer API label never renders in a release (non-__DEV__) bundle", () => {
+  const globals = globalThis as unknown as { __DEV__: boolean };
+  const original = globals.__DEV__;
+  try {
+    globals.__DEV__ = false;
+    renderLogin();
+    expect(screen.queryByText(i18n.t("auth:login.developerApiLabel"))).toBeNull();
+    expect(screen.queryByText("http://localhost:3000")).toBeNull();
+  } finally {
+    globals.__DEV__ = original;
+  }
+  renderLogin();
+  expect(screen.getAllByText(i18n.t("auth:login.developerApiLabel")).length).toBeGreaterThan(0);
+});

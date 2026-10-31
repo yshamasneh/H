@@ -87,12 +87,17 @@
     "notificationsDisabledNotice": "تم إيقاف الإشعارات على هذا الجهاز.",
     "notificationsEnabledNotice": "تم تفعيل إشعارات الطلبات.",
     "deleteAccountTitle": "حذف الحساب",
-    "deleteAccountHelper": "تُحفظ سجلات الطلبات المطلوبة قانونياً بعد إزالة بيانات الحساب الشخصية.",
+    "deleteAccountHelper": "يُحذف اسمك ورقم هاتفك وعناوينك المحفوظة ورموز الإشعارات وجلسات الدخول. سجلات الطلبات والنقد التي يلزمنا القانون بحفظها تبقى بدون اسمك أو رقم هاتفك.",
     "deleteAccountButton": "حذف حسابي",
     "deleteAddressConfirm": "حذف عنوان {{label}}؟",
-    "deleteAccountConfirm": "سيتم تعطيل الحساب وإخفاء بياناته نهائياً. هل تريد المتابعة؟",
+    "deleteAccountConfirm": "سيتم حذف حسابك وبياناتك الشخصية نهائياً، ولا يمكن التراجع عن ذلك. هل تريد المتابعة؟",
     "confirmDialogTitle": "تأكيد",
-    "continueButton": "متابعة"
+    "continueButton": "متابعة",
+    "deleteScheduledTitle": "تمت جدولة الحذف",
+    "deleteScheduledBody": "سيُحذف حسابك بتاريخ {{date}} بعد تسوية التوصيلات النشطة وتسليم النقد. يمكنك متابعة استخدام التطبيق حتى ذلك الحين لإنهائها.",
+    "deleteScheduledStatus": "الحذف مجدول بتاريخ {{date}}.",
+    "deleteAdminNote": "يُغلق حساب المسؤول بواسطة مسؤول آخر من شاشة المستخدمين.",
+    "deleteWebHelper": "يمكنك أيضاً طلب الحذف عبر الموقع: jovops.com/delete-account"
   },
   "restaurants": {
     "availableRestaurants": "المطاعم المتاحة",
@@ -157,7 +162,8 @@
     "versionLabel": "إصدار التطبيق",
     "logoutButton": "تسجيل الخروج",
     "logoutConfirmTitle": "تسجيل الخروج؟",
-    "logoutConfirmBody": "ستحتاج إلى تسجيل الدخول مرة أخرى لتقديم الطلبات."
+    "logoutConfirmBody": "ستحتاج إلى تسجيل الدخول مرة أخرى لتقديم الطلبات.",
+    "legalSectionTitle": "القانونية والدعم"
   },
   "nav": {
     "home": "الرئيسية",

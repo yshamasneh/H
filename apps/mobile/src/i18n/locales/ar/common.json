@@ -106,5 +106,15 @@
   "callCustomer": "اتصال بالزبون",
   "customerLabel": "الزبون",
   "removedFromCartToast": "أُزيل {{name}} من السلة",
-  "undo": "تراجع"
+  "undo": "تراجع",
+  "legal": {
+    "privacyPolicy": "سياسة الخصوصية",
+    "terms": "شروط الاستخدام",
+    "support": "المساعدة والدعم",
+    "deleteOnWeb": "حذف الحساب عبر الموقع",
+    "signupConsentBefore": "بإنشاء الحساب أوافق على ",
+    "signupConsentAnd": " و",
+    "signupConsentAfter": ".",
+    "openFailed": "تعذّر فتح الصفحة. يمكنك زيارة {{url}} من المتصفح."
+  }
 }

@@ -87,12 +87,17 @@
     "notificationsDisabledNotice": "Notifications disabled on this device.",
     "notificationsEnabledNotice": "Order notifications enabled.",
     "deleteAccountTitle": "Delete account",
-    "deleteAccountHelper": "Legally required order records are retained after your personal account data is removed.",
+    "deleteAccountHelper": "Your name, phone number, saved addresses, notification tokens and sign-in sessions are deleted. Order and cash records that we must keep by law are retained without your name or phone number.",
     "deleteAccountButton": "Delete my account",
     "deleteAddressConfirm": "Delete the address \"{{label}}\"?",
-    "deleteAccountConfirm": "Your account will be deactivated and its data permanently hidden. Continue?",
+    "deleteAccountConfirm": "Your account and personal data will be permanently deleted. This can't be undone. Continue?",
     "confirmDialogTitle": "Confirm",
-    "continueButton": "Continue"
+    "continueButton": "Continue",
+    "deleteScheduledTitle": "Deletion scheduled",
+    "deleteScheduledBody": "Your account will be deleted on {{date}}, after your active deliveries and cash handovers are settled. You can keep using the app until then to finish them.",
+    "deleteScheduledStatus": "Deletion scheduled for {{date}}.",
+    "deleteAdminNote": "Administrator accounts are closed by another administrator from the Users screen.",
+    "deleteWebHelper": "You can also request deletion on the web at jovops.com/delete-account."
   },
   "restaurants": {
     "availableRestaurants": "Available restaurants",
@@ -157,7 +162,8 @@
     "versionLabel": "App version",
     "logoutButton": "Log out",
     "logoutConfirmTitle": "Log out?",
-    "logoutConfirmBody": "You will need to log in again to place orders."
+    "logoutConfirmBody": "You will need to log in again to place orders.",
+    "legalSectionTitle": "Legal & support"
   },
   "nav": {
     "home": "Home",
