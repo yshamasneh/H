@@ -120,5 +120,14 @@
   "guest": {
     "signInRequired": "Sign in or create an account to continue. Your cart is kept.",
     "browsingNotice": "You are browsing as a guest. Sign in when you are ready to order."
+  },
+  "pushExplainer": {
+    "title": "Turn on notifications?",
+    "bodyCustomer": "JOVO uses notifications only to tell you about your orders: accepted, on the way, delivered, or a product that needs your decision.",
+    "bodyDriver": "JOVO uses notifications to alert you when a delivery is available and when your current delivery changes. You can turn them off in Settings.",
+    "bodyStore": "JOVO uses notifications to alert the store when a new order arrives and when an order changes.",
+    "continue": "Continue",
+    "notNow": "Not now",
+    "declined": "Notifications were not turned on. You can turn them on later in Settings."
   }
 }

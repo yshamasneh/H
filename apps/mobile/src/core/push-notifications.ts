@@ -2,9 +2,10 @@ import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import i18n from "../i18n";
 import { ensureDeliveryAlertChannel, ensureStoreOrderChannel } from "./push-channels";
+import { planPushPermission } from "./push-permission.rules";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -33,7 +34,12 @@ export async function getPushToken(role?: string): Promise<string> {
     if (role === "RESTAURANT") await ensureStoreOrderChannel();
   }
   const existing = await Notifications.getPermissionsAsync();
-  const permission = existing.granted ? existing : await Notifications.requestPermissionsAsync();
+  const plan = planPushPermission(existing);
+  if (plan === "denied") throw new Error(i18n.t("common:pushPermissionDenied"));
+  if (plan === "explain-then-ask" && !(await explainNotifications(role))) {
+    throw new Error(i18n.t("common:pushExplainer.declined"));
+  }
+  const permission = plan === "granted" ? existing : await Notifications.requestPermissionsAsync();
   if (!permission.granted) throw new Error(i18n.t("common:pushPermissionDenied"));
 
   const projectId = Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
@@ -42,6 +48,26 @@ export async function getPushToken(role?: string): Promise<string> {
   }
   const result = await Notifications.getExpoPushTokenAsync({ projectId });
   return result.data;
+}
+
+/** Store audit L4: JOVO's own explanation before the system prompt. Resolves true on "Continue". */
+function explainNotifications(role?: string): Promise<boolean> {
+  const body = role === "DRIVER"
+    ? i18n.t("common:pushExplainer.bodyDriver")
+    : role === "RESTAURANT"
+      ? i18n.t("common:pushExplainer.bodyStore")
+      : i18n.t("common:pushExplainer.bodyCustomer");
+  return new Promise((resolve) => {
+    Alert.alert(
+      i18n.t("common:pushExplainer.title"),
+      body,
+      [
+        { text: i18n.t("common:pushExplainer.notNow"), style: "cancel", onPress: () => resolve(false) },
+        { text: i18n.t("common:pushExplainer.continue"), onPress: () => resolve(true) }
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) }
+    );
+  });
 }
 
 const pushTokenKey = "tasawaq.push-token";
