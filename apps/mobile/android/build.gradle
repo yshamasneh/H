@@ -9,6 +9,12 @@ buildscript {
     classpath('com.android.tools.build:gradle')
     classpath('com.facebook.react:react-native-gradle-plugin')
     classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+    // Store audit H3: the Google Services plugin is only put on the classpath when
+    // app/google-services.json exists (scripts/install-google-services.cjs), so a build without
+    // Firebase is byte-for-byte the build it was before.
+    if (new File(rootDir, 'app/google-services.json').exists()) {
+      classpath('com.google.gms:google-services:4.4.2')
+    }
   }
 }
 

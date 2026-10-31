@@ -181,6 +181,13 @@ for (const language of ["ar", "en"]) {
 // Store audit L1: the camera module was never used; the image picker provides the camera prompt.
 assert.equal(mobilePackage.dependencies["expo-camera"], undefined, "expo-camera must not be a dependency");
 
+// Store audit H3: the Google Services plugin is wired, but only when google-services.json exists, so
+// a build without Firebase credentials still succeeds.
+const rootGradle = read("android/build.gradle");
+assert.match(rootGradle, /if \(new File\(rootDir, 'app\/google-services\.json'\)\.exists\(\)\) \{\s*classpath\('com\.google\.gms:google-services:/);
+assert.match(gradle, /if \(file\("google-services\.json"\)\.exists\(\)\) \{\s*apply plugin: "com\.google\.gms\.google-services"/);
+assert.match(mobilePackage.scripts["eas-build-pre-install"], /install-google-services\.cjs/);
+
 for (const requiredAsset of [
   "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp",
   "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp",

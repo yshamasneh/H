@@ -1,6 +1,11 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+// Store audit H3: FCM for Android push, applied only when Firebase is configured (see
+// scripts/install-google-services.cjs). Without the file the build is unchanged.
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 

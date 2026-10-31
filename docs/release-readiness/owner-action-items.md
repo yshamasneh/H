@@ -131,3 +131,13 @@ All are **additions**; no existing guard, rate limit or permission was changed.
    - Still protected (asserted 401 without a token in `guest-browsing.e2e.test.ts`): `/users/me` (GET, DELETE), `/users/me/addresses`, `/orders`, `/orders/quote`, `/orders/me`, `/notifications/me`, `/settings`, `/landmarks`.
    - Mobile: "Browse without an account" on the login screen opens the store as a guest (no token held). One navigation gate (`guardGuestNavigation`) turns checkout, orders, account, settings and notifications into the sign-in screen; checkout comes back to the kept cart after sign-in. Signed-in sessions and the cart are unchanged.
    - Not done: the app does not yet display the new delivery-area answer on the guest home (the API is ready; one UI line). Delivery-area text in the listing still needs P7/P8.
+3. **Android push (H3) — repository is now ready; only your Firebase steps remain.** No credentials were created or committed.
+   1. Firebase console → add an Android app with package `com.jovo.app` → download `google-services.json` (public client identifiers; still keep it out of chat logs).
+   2. Store it as an EAS **file** variable for the profiles that need push:
+      ```
+      eas env:create --environment production --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret
+      ```
+      Repeat with `--environment preview` for the closed-test build if that profile is used.
+   3. Firebase → Project settings → Service accounts → Generate new private key; upload it with `eas credentials` → Android → production → Google Service Account → FCM V1. Never commit this key.
+   4. Build. `eas-build-pre-install` now runs `scripts/install-google-services.cjs`, which validates the file is for `com.jovo.app` and copies it to `android/app/google-services.json` (git-ignored). Gradle applies `com.google.gms.google-services` 4.4.2 **only when that file exists**, so builds without the variable behave exactly as before.
+   5. Run the device test plan in `technical-analyses.md#h3`. UNVERIFIED here: no Android SDK or Gradle build could run in the cloud container.

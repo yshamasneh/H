@@ -10,7 +10,7 @@
     "android:prebuild": "expo prebuild --platform android",
     "check:native-config": "node scripts/check-native-config.cjs",
     "check:release-env": "node scripts/check-release-env.cjs",
-    "eas-build-pre-install": "node scripts/check-release-env.cjs",
+    "eas-build-pre-install": "node scripts/check-release-env.cjs && node scripts/install-google-services.cjs",
     "ios": "expo run:ios",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
