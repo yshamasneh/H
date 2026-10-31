@@ -116,5 +116,9 @@
     "signupConsentAnd": " and the ",
     "signupConsentAfter": ".",
     "openFailed": "Couldn't open the page. Visit {{url}} in your browser."
+  },
+  "guest": {
+    "signInRequired": "Sign in or create an account to continue. Your cart is kept.",
+    "browsingNotice": "You are browsing as a guest. Sign in when you are ready to order."
   }
 }

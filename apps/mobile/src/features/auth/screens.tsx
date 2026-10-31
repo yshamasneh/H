@@ -55,6 +55,8 @@ type LoginScreenProps = {
   onAuthenticated: (result: AuthResult) => Promise<void>;
   onSignup: (prefill: PhonePrefill) => void;
   onForgotPassword: (prefill: PhonePrefill) => void;
+  /** Store audit H2: browse the catalogue without an account. Omitted, no guest entry is shown. */
+  onBrowseAsGuest?: () => void;
 };
 
 export function LoginScreen(props: LoginScreenProps) {
@@ -102,6 +104,7 @@ export function LoginScreen(props: LoginScreenProps) {
       <PrimaryButton label={t("login.submit")} loading={loading} onPress={submit} />
       <LinkButton label={t("login.createAccount")} onPress={() => props.onSignup(prefill)} />
       <LinkButton label={t("login.forgotPassword")} onPress={() => props.onForgotPassword(prefill)} />
+      {props.onBrowseAsGuest ? <LinkButton label={t("login.browseAsGuest")} onPress={props.onBrowseAsGuest} /> : null}
       <DriverNote />
       <LegalLinksRow />
       {/* The API address is a developer aid: store (release) builds never show it (store audit H5). */}

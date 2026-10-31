@@ -125,3 +125,15 @@ test("the developer API label never renders in a release (non-__DEV__) bundle", 
   renderLogin();
   expect(screen.getAllByText(i18n.t("auth:login.developerApiLabel")).length).toBeGreaterThan(0);
 });
+
+test("store audit H2: the login screen offers browsing without an account", () => {
+  const onBrowseAsGuest = jest.fn();
+  render(<LoginScreen onAuthenticated={jest.fn()} onSignup={jest.fn()} onForgotPassword={jest.fn()} onBrowseAsGuest={onBrowseAsGuest} />);
+  fireEvent.press(screen.getByText(i18n.t("auth:login.browseAsGuest")));
+  expect(onBrowseAsGuest).toHaveBeenCalledTimes(1);
+});
+
+test("store audit H2: no guest entry is rendered when the caller does not offer it", () => {
+  renderLogin();
+  expect(screen.queryByText(i18n.t("auth:login.browseAsGuest"))).toBeNull();
+});

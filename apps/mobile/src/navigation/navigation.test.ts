@@ -166,3 +166,35 @@ test("admin tools go back to where they were opened: Home for an attention item,
     driverUserId: "d1"
   });
 });
+
+test("guest browsing (H2): the read-only catalogue screens stay open for a guest", async () => {
+  const { guardGuestNavigation, goToGuestHome, guestUser } = await import("./navigation");
+  const store = { id: "store-1", name: "JOVO MARKET" };
+  for (const screen of [
+    goToGuestHome(),
+    goToSupermarketCatalog(guestUser, store),
+    goToSupermarketProduct(guestUser, store, "product-1"),
+    { name: "cart" as const, user: guestUser }
+  ]) {
+    assert.deepEqual(guardGuestNavigation(screen), screen);
+  }
+});
+
+test("guest browsing (H2): every account screen sends a guest to sign-in, checkout returns to the cart", async () => {
+  const { guardGuestNavigation, guestUser } = await import("./navigation");
+  const accountScreens = ["checkout", "order-history", "account", "settings", "notifications", "driver-home", "admin-dashboard", "restaurant-orders"] as const;
+  for (const name of accountScreens) {
+    const guarded = guardGuestNavigation({ name, user: guestUser } as never, "sign in");
+    assert.equal(guarded.name, "login", name);
+    assert.equal(guarded.name === "login" && guarded.notice, "sign in");
+    assert.equal(guarded.name === "login" && guarded.afterLogin, name === "checkout" ? "cart" : undefined);
+  }
+});
+
+test("guest browsing (H2): a signed-in customer is never redirected", async () => {
+  const { guardGuestNavigation } = await import("./navigation");
+  const user = { id: "u1", fullName: "Customer", phone: "+970591234567", role: "CUSTOMER" as const };
+  for (const name of ["checkout", "order-history", "account", "settings", "notifications"] as const) {
+    assert.equal(guardGuestNavigation({ name, user } as never).name, name);
+  }
+});

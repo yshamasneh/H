@@ -113,6 +113,8 @@ import {
   goToSignup,
   homeForUser,
   initialScreen,
+  guardGuestNavigation,
+  goToGuestHome,
   orderToConfirmation,
   resetOtpToNewPassword,
   signupRequestToOtp,
@@ -224,7 +226,10 @@ function TasawaQApp() {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { fontsReady, fontError } = useAppFonts();
-  const [screen, setScreen] = useState<AppScreen>(initialScreen);
+  const [screen, setScreenState] = useState<AppScreen>(initialScreen);
+  // Store audit H2: every navigation passes the guest gate, so a guest can never reach a screen
+  // that needs an account (checkout, orders, account, notifications); they get sign-in instead.
+  const setScreen = (next: AppScreen) => setScreenState(guardGuestNavigation(next, t("common:guest.signInRequired")));
   const [isBooting, setIsBooting] = useState(true);
   const [minSplashElapsed, setMinSplashElapsed] = useState(false);
   // The one admin-featured offer, fetched once at boot for the launch promo overlay below —
@@ -412,10 +417,13 @@ function TasawaQApp() {
   }, [screen.name]);
 
   async function handleAuthenticated(result: AuthResult, notice?: string) {
+    // A guest who was sent here from checkout goes back to their (kept) cart.
+    const returnToCart = screen.name === "login" && screen.afterLogin === "cart" && result.user.role === "CUSTOMER";
     await saveTokens(result);
     await reconcilePushForAuthenticatedUser(result.user).catch(() => undefined);
     const destination = authResultToHome(result);
-    setScreen(destination.name === "home" ? { ...destination, notice } : destination);
+    if (returnToCart) setScreen(goToCart(result.user));
+    else setScreen(destination.name === "home" ? { ...destination, notice } : destination);
     const activeAccessToken = await getAccessToken();
     await notificationNavigator.setSession(
       activeAccessToken ? { accessToken: activeAccessToken, user: result.user } : null
@@ -617,6 +625,7 @@ function TasawaQApp() {
         <LoginScreen
           notice={screen.notice}
           onAuthenticated={handleAuthenticated}
+          onBrowseAsGuest={() => setScreen({ ...goToGuestHome(), notice: t("common:guest.browsingNotice") })}
           onForgotPassword={(prefill) => setScreen({ name: "forgot-password", prefill })}
           onSignup={(prefill) => setScreen(goToSignup(prefill))}
           prefill={screen.prefill}

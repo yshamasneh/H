@@ -20,6 +20,12 @@ export class SupermarketsController {
     return this.restaurants.getSupermarketStatus(supermarketId);
   }
 
+  @Get(":supermarketId/delivery-area")
+  @ApiOperation({ summary: "Public: how far this store delivers (store audit H2, guest browsing)" })
+  deliveryArea(@Param("supermarketId", new ParseUUIDPipe()) supermarketId: string) {
+    return this.restaurants.getSupermarketDeliveryArea(supermarketId);
+  }
+
   @Get(":supermarketId/catalog")
   @ApiOperation({ summary: "Browse and search a supermarket catalog by department" })
   catalog(

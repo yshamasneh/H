@@ -4,7 +4,13 @@ import type { CountryCode } from "../core/phone";
 export type PhonePrefill = { countryCode: CountryCode; phoneNumber: string };
 
 export type AppScreen =
-  | { name: "login"; prefill?: PhonePrefill; notice?: string }
+  | {
+      name: "login";
+      prefill?: PhonePrefill;
+      notice?: string;
+      /** Store audit H2: a guest who was asked to sign in at checkout comes back to the cart. */
+      afterLogin?: "cart";
+    }
   | { name: "signup"; prefill?: PhonePrefill }
   | { name: "forgot-password"; prefill?: PhonePrefill }
   | {
@@ -87,6 +93,34 @@ export type AppScreen =
   | { name: "admin-product-offers"; user: PublicUser };
 
 export const initialScreen: AppScreen = { name: "login" };
+
+/**
+ * Store audit H2 (Apple 5.1.1(v)): browsing without an account. A guest is a CUSTOMER-shaped
+ * placeholder that never holds a token: only the public catalogue endpoints are called for it, and
+ * every screen that needs an account is redirected to sign-in by guardGuestNavigation.
+ */
+export const guestUserId = "guest";
+export const guestUser: PublicUser = { id: guestUserId, fullName: "", phone: "", role: "CUSTOMER" };
+
+export function isGuestUser(user: PublicUser | null | undefined): boolean {
+  return user?.id === guestUserId;
+}
+
+/** Screens a guest may open: the read-only catalogue and the device-local cart. */
+const guestScreens = new Set<AppScreen["name"]>(["home", "supermarket-catalog", "supermarket-product", "offer-detail", "cart"]);
+
+export function goToGuestHome(): Extract<AppScreen, { name: "home" }> {
+  return { name: "home", user: guestUser };
+}
+
+/**
+ * The one gate for guest navigation: any screen outside the read-only set that would be opened for
+ * the guest placeholder becomes the sign-in screen instead. Checkout returns to the cart afterwards.
+ */
+export function guardGuestNavigation(next: AppScreen, signInNotice?: string): AppScreen {
+  if (!("user" in next) || !isGuestUser(next.user) || guestScreens.has(next.name)) return next;
+  return { name: "login", notice: signInNotice, afterLogin: next.name === "checkout" ? "cart" : undefined };
+}
 
 export function goToSignup(prefill?: PhonePrefill): Extract<AppScreen, { name: "signup" }> {
   return { name: "signup", prefill };

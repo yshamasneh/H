@@ -1,3 +1,4 @@
+import { defaultDeliveryPricing } from "../orders/pricing";
 import { Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { hashPassword } from "../auth/crypto.util";
@@ -465,6 +466,20 @@ export class RestaurantsService {
   async getSupermarketStatus(supermarketId: string): Promise<{ isOpenNow: boolean }> {
     const supermarket = await this.requireApprovedRestaurant(supermarketId, BusinessType.SUPERMARKET);
     return { isOpenNow: supermarket.isOpen && isWithinWeeklyHours(supermarket.opensAt, supermarket.closesAt, new Date()) };
+  }
+
+  /**
+   * Store audit H2: what a guest needs to know before signing up, read-only and public. It reports
+   * the same maximum distance the order quote enforces (read from the same setting, not a new
+   * rule); the delivery fee itself is only ever quoted for a signed-in customer's address.
+   */
+  async getSupermarketDeliveryArea(supermarketId: string): Promise<{ maximumDistanceMeters: number; addressLine: string }> {
+    const supermarket = await this.requireApprovedRestaurant(supermarketId, BusinessType.SUPERMARKET);
+    const configured = Number(this.config?.get<number>("DELIVERY_MAX_DISTANCE_METERS"));
+    return {
+      maximumDistanceMeters: Number.isFinite(configured) && configured > 0 ? configured : defaultDeliveryPricing.maximumDistanceMeters,
+      addressLine: supermarket.addressLine
+    };
   }
 
   async getSupermarketCatalog(

@@ -244,3 +244,15 @@ test("in Arabic the same order holds and the restaurant entry stays hidden", asy
     });
   }
 });
+
+test("store audit H2: a guest sees the public catalogue and no account endpoint is called", async () => {
+  const { getAccessToken } = jest.requireMock("../../core/session") as { getAccessToken: jest.Mock };
+  getAccessToken.mockResolvedValueOnce(null);
+  const { guestUser } = jest.requireActual("../../navigation/navigation") as typeof import("../../navigation/navigation");
+  render(<CustomerHomeScreen {...props()} user={guestUser} />);
+  expect(await screen.findByText("Open now")).toBeTruthy();
+  expect(mocked.getSupermarketCatalog).toHaveBeenCalled();
+  expect(mocked.listMyNotifications).not.toHaveBeenCalled();
+  expect(mocked.listMyOrders).not.toHaveBeenCalled();
+  expect(screen.queryByText("Buy again")).toBeNull();
+});
