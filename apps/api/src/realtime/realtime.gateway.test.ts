@@ -122,3 +122,22 @@ test("a revoked session is rejected even with a structurally valid token", async
 
   assert.equal(socket._isDisconnected(), true);
 });
+
+test("disconnectUser ends every socket in the user's room and never throws", () => {
+  const gateway = createGateway({});
+  const calls: string[] = [];
+  gateway.server = { in: (room: string) => ({ disconnectSockets: (close: boolean) => calls.push(`${room}:${close}`) }) } as never;
+  gateway.disconnectUser("u1");
+  assert.deepEqual(calls, ["user:u1:true"]);
+  gateway.server = { in: () => { throw new Error("adapter down"); } } as never;
+  assert.doesNotThrow(() => gateway.disconnectUser("u1"));
+});
+
+test("disconnectSession ends only the sockets opened with that session", async () => {
+  const gateway = createGateway({});
+  const ended: string[] = [];
+  const socket = (id: string, sessionId: string) => ({ data: { user: { id: "u1", role: UserRole.CUSTOMER, sessionId } }, disconnect: () => ended.push(id) });
+  gateway.server = { in: () => ({ fetchSockets: async () => [socket("a", "s1"), socket("b", "s2")] }) } as never;
+  await gateway.disconnectSession("u1", "s1");
+  assert.deepEqual(ended, ["a"]);
+});

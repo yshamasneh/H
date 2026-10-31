@@ -116,3 +116,12 @@ All are **additions**; no existing guard, rate limit or permission was changed.
 - A scheduled deletion shows the date *on or after which* it completes. If blockers remain on that date, it stays pending and the sweep logs a warning for operations.
 - The public health `commit` field is hidden by default instead of deleted, so the trial deploy check can be kept with one environment variable.
 - The legal pages are hosted at clean URLs under `https://jovops.com/`; the app links to those exact URLs (`apps/mobile/src/core/legal-links.ts`).
+
+## F. Run 2 (`store-remediation-2`): auth, authorization and public-route changes for your review
+
+1. **WebSocket disconnect (security S5, was D9).** After the database commit, the API now ends live Socket.IO connections:
+   - admin suspension (`PATCH /admin/users/:id/active` with `isActive:false`) and platform-role change: all of that user's sockets;
+   - self-service deletion (`DELETE /users/me` returning 204) and the scheduled-deletion sweep when it anonymises: all sockets;
+   - password reset (`POST /auth/reset-password`): all sockets;
+   - sign-out (`POST /auth/logout`): **only the sockets opened with that session** (other devices stay connected).
+   No guard, token rule or rate limit changed; a disconnect failure is logged and never fails the HTTP request. Files: `apps/api/src/realtime/realtime.gateway.ts`, `admin/admin.service.ts`, `users/users.service.ts`, `auth/auth.service.ts`. Known gap: a socket that finishes its handshake in the few milliseconds between the commit and the disconnect call can stay open until its next reconnect; its HTTP calls are already refused.

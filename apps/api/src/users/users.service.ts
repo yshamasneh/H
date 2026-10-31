@@ -5,6 +5,7 @@ import { ApiException } from "../common/api.exception";
 import { activeDeliveryStatuses } from "../drivers/delivery.rules";
 import { CashCustodyStatus, Prisma, UserRole } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeGateway } from "../realtime/realtime.gateway";
 import {
   anonymisedIdentity,
   defaultDeletionScheduleDays,
@@ -19,7 +20,8 @@ import type { CreateAddressDto, RegisterPushTokenDto, UpdateAddressDto, UpdateMy
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly config?: ConfigService
+    @Optional() private readonly config?: ConfigService,
+    @Optional() private readonly realtime?: RealtimeGateway
   ) {}
 
   async getProfile(userId: string) {
@@ -150,6 +152,13 @@ export class UsersService {
    * Orders, deliveries, cash custody, settlements and earnings are never modified or deleted.
    */
   async deleteMyAccount(userId: string): Promise<AccountDeletionOutcome> {
+    const outcome = await this.deleteMyAccountInTransaction(userId);
+    // After the commit, so a reconnecting socket is refused by the committed state (security S5).
+    if (outcome.status === "DELETED") this.realtime?.disconnectUser(userId);
+    return outcome;
+  }
+
+  private async deleteMyAccountInTransaction(userId: string): Promise<AccountDeletionOutcome> {
     const user = await this.requireUser(userId);
     switch (user.role) {
       case UserRole.CUSTOMER:
@@ -178,7 +187,8 @@ export class UsersService {
    * nothing to do). Used by AccountDeletionSweepService.
    */
   async completeScheduledDeletion(userId: string, now = new Date()): Promise<DeletionBlocker[]> {
-    return this.prisma.$transaction(
+    let anonymised = false;
+    const blockers = await this.prisma.$transaction(
       async (tx) => {
         const request = await tx.accountDeletionRequest.findUnique({ where: { userId } });
         if (!request || request.status !== "PENDING" || request.scheduledFor.getTime() > now.getTime()) return [];
@@ -194,10 +204,13 @@ export class UsersService {
         }
         await this.anonymise(tx, userId, "ACCOUNT_DELETED", user.role, { scheduled: true });
         await tx.accountDeletionRequest.update({ where: { userId }, data: { status: "COMPLETED", completedAt: now, blockers: [] } });
+        anonymised = true;
         return [];
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
     );
+    if (anonymised) this.realtime?.disconnectUser(userId);
+    return blockers;
   }
 
   /** The person's pending deletion, if any, so the app can show the date. */

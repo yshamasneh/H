@@ -13,6 +13,7 @@ import { AuthorizationService } from "../common/authorization/authorization.serv
 import { allPermissions } from "../common/authorization/permissions";
 import { ApiException } from "../common/api.exception";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeGateway } from "../realtime/realtime.gateway";
 import {
   CustomerSignupRequestDto,
   LoginDto,
@@ -52,7 +53,8 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly authorization: AuthorizationService,
     @Inject(OTP_PROVIDER) private readonly otpProvider: OtpProvider,
-    @Optional() private readonly loginAttempts: LoginAttemptLimiter = new LoginAttemptLimiter()
+    @Optional() private readonly loginAttempts: LoginAttemptLimiter = new LoginAttemptLimiter(),
+    @Optional() private readonly realtime?: RealtimeGateway
   ) {}
 
   async requestCustomerSignupCode(input: CustomerSignupRequestDto): Promise<OtpRequestResult> {
@@ -210,6 +212,8 @@ export class AuthService {
       where: { id: user.sessionId, userId: user.id, revokedAt: null },
       data: { revokedAt: new Date() }
     });
+    // Only this device's sockets: signing out on one phone must not end the others.
+    await this.realtime?.disconnectSession(user.id, user.sessionId);
     return { message: "You have been logged out." };
   }
 
@@ -309,7 +313,7 @@ export class AuthService {
     const tokenHash = hashOpaqueToken(input.resetToken);
     const now = new Date();
 
-    await this.serializableTransaction(async (transaction) => {
+    const resetUserId = await this.serializableTransaction(async (transaction) => {
       const resetToken = await transaction.passwordResetToken.findUnique({
         where: { tokenHash },
         include: { user: true }
@@ -343,7 +347,9 @@ export class AuthService {
         where: { userId: resetToken.userId, revokedAt: null },
         data: { revokedAt: now }
       });
+      return resetToken.userId;
     });
+    this.realtime?.disconnectUser(resetUserId);
 
     return {
       message: "Your password has been reset successfully. You can now log in with your new password."

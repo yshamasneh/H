@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Optional } from "@nestjs/common";
 import { hashPassword } from "../auth/crypto.util";
 import { normalizePhoneNumber } from "../auth/phone.util";
 import { writeAuditLog } from "../common/audit-log.util";
@@ -13,6 +13,7 @@ import {
   UserRole
 } from "../generated/prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { RealtimeGateway } from "../realtime/realtime.gateway";
 import type {
   AdminAuditLogQueryDto,
   AdminUsersQueryDto,
@@ -25,7 +26,10 @@ import type { AdminUserView, AuditLogEntryView, CustomerDetailView, DashboardOve
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly realtime?: RealtimeGateway
+  ) {}
 
   async getDashboard(): Promise<DashboardOverview> {
     const startOfToday = new Date();
@@ -297,6 +301,9 @@ export class AdminService {
       });
       return next;
     });
+    // After the commit: a suspended user's open sockets stop receiving order and location events
+    // (security S5). Reconnects are refused because the sessions above are revoked.
+    if (!input.isActive) this.realtime?.disconnectUser(userId);
     return toAdminUserView(updated);
   }
 
@@ -342,6 +349,8 @@ export class AdminService {
       });
       return next;
     });
+    // The token version changed, so open sockets would keep the old permissions; end them.
+    this.realtime?.disconnectUser(userId);
     return toAdminUserView(updated);
   }
 
