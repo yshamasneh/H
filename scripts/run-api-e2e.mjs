@@ -37,7 +37,8 @@ if (build.status !== 0) {
       "dist/integration/realtime-disconnect.e2e.test.js",
       "dist/integration/account-deletion-obligations.e2e.test.js",
       "dist/integration/guest-browsing.e2e.test.js",
-      "dist/integration/demo-accounts.e2e.test.js"
+      "dist/integration/demo-accounts.e2e.test.js",
+      "dist/integration/delivery-claim-race.e2e.test.js"
     ],
     {
       cwd: apiDirectory,

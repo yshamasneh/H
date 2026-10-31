@@ -48,7 +48,7 @@ Owners: **Mohammad** (owner, accounts, decisions), **Khaldoun** (store operation
 | R27 | Security S10: parse `OFFER_ACTIVATION_WORKER_ENABLED` as a boolean. | Claude Code | 30 min | owner OK | — |
 | R28 | Admin web: a "demo account" toggle on the user page (API exists). | Codex / Claude Code | 2 h | — | — |
 | R29 | Show the new delivery-area answer on the guest home (API exists). | Claude Code | 1–2 h | P8 | iOS (nice to have) |
-| R30 | Financial F1–F3 tests and the concurrent-accept e2e (report-only items; tests are additive). | Claude Code | 0.5 day | — | — |
+| R30 | Financial F1–F3 tests (the concurrent-accept e2e was added in run 2). | Claude Code | 0.5 day | — | — |
 | R31 | Analytics: exclude demo orders from counts (F9; owner decision). | Claude Code | 2 h | decision | — |
 | R32 | Driver location D3 option (one-shot report only when online or delivering) if the owner wants a narrower disclosure. | Claude Code | 2 h | decision | — |
 | R33 | Restaurant vertical API endpoints still exist behind flags; removing them is out of launch scope. | — | — | — | — |

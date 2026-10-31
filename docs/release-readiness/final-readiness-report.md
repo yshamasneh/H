@@ -38,7 +38,7 @@ Code side: **PARTIALLY READY.** Every repository-fixable item in the run-2 task 
 |---|---|
 | API typecheck (`tsc --noEmit`) | OK |
 | API unit (`npm test` in `apps/api`) | 736 pass, 0 fail, 16 skipped (database-only suites, run below) |
-| API e2e (`npm run test:e2e`, all 17 files) | **103 / 103 passed** (82 before this run + 21 new) |
+| API e2e (`npm run test:e2e`, all 17 files) | **103 / 103 passed** (82 before this run + 21 new); afterwards `delivery-claim-race.e2e` (18th file) passed 3/3 runs on its own |
 | Mobile typecheck | OK |
 | Mobile unit (`npm run test:unit`) | 295 / 295 |
 | Mobile UI (`jest`) | 209 / 209 |
