@@ -1,5 +1,6 @@
 import { Injectable, Optional } from "@nestjs/common";
 import { ApiException } from "../common/api.exception";
+import { classifyRestricted, type RestrictedClassification } from "../catalogue/restricted-products.rules";
 import { assertValidSalePrice } from "./sale-price";
 import { assertAllowedImageUrl } from "../common/image-url.util";
 import { BusinessType, type MenuCategory, type MenuItem } from "../generated/prisma/client";
@@ -30,6 +31,7 @@ export class MenuService {
 
   async createCategory(restaurantId: string, input: CreateMenuCategoryDto): Promise<MenuCategoryOwnerView> {
     const name = input.name.trim();
+    const screening = screenOrRefuse("RESTRICTED_CATEGORY", name);
     await this.assertCategoryNameAvailable(restaurantId, name);
     // An owner who does not care about ordering gets the next free slot, so two
     // categories never silently share a position; an explicit value is honoured
@@ -37,9 +39,10 @@ export class MenuService {
     const sortOrder = input.sortOrder ?? (await this.nextCategorySortOrder(restaurantId));
     await this.assertCategorySortOrderAvailable(restaurantId, sortOrder);
     const category = await this.prisma.menuCategory.create({
-      data: { restaurantId, name, sortOrder }
+      // An ambiguous name is saved hidden until a person reviews it (store audit H6).
+      data: { restaurantId, name, sortOrder, ...(screening.verdict === "REVIEW" ? { isActive: false } : {}) }
     });
-    return toCategoryView(category);
+    return withReview(toCategoryView(category), screening);
   }
 
   async updateCategory(
@@ -48,6 +51,8 @@ export class MenuService {
     input: UpdateMenuCategoryDto
   ): Promise<MenuCategoryOwnerView> {
     const category = await this.requireOwnCategory(restaurantId, categoryId);
+    const screening =
+      input.name !== undefined ? screenOrRefuse("RESTRICTED_CATEGORY", input.name.trim()) : allowed;
     if (input.name !== undefined) {
       await this.assertCategoryNameAvailable(restaurantId, input.name.trim(), category.id);
     }
@@ -59,10 +64,10 @@ export class MenuService {
       data: {
         name: input.name?.trim(),
         sortOrder: input.sortOrder,
-        isActive: input.isActive
+        isActive: screening.verdict === "REVIEW" ? false : input.isActive
       }
     });
-    return toCategoryView(updated);
+    return withReview(toCategoryView(updated), screening);
   }
 
   async listItems(restaurantId: string): Promise<MenuItemOwnerView[]> {
@@ -74,6 +79,7 @@ export class MenuService {
   }
 
   async createItem(restaurantId: string, input: CreateMenuItemDto): Promise<MenuItemOwnerView> {
+    const screening = screenOrRefuse("RESTRICTED_PRODUCT", input.name, input.brand, input.description);
     await this.requireOwnCategory(restaurantId, input.categoryId);
     await this.assertSkuAvailable(restaurantId, input.sku);
     await this.assertBarcodeAvailable(restaurantId, input.barcode);
@@ -104,10 +110,12 @@ export class MenuService {
         isVariableWeight: input.isVariableWeight ?? false,
         barcode: input.barcode?.trim() || null,
         reorderLevel: input.reorderLevel ?? null,
-        displayPriority: input.displayPriority ?? 0
+        displayPriority: input.displayPriority ?? 0,
+        // An ambiguous product is saved but hidden from customers until a person reviews it.
+        ...(screening.verdict === "REVIEW" ? { isAvailable: false } : {})
       }
     });
-    return toItemView(item);
+    return withReview(toItemView(item), screening);
   }
 
   async updateItem(
@@ -117,6 +125,17 @@ export class MenuService {
     capabilities: { canManagePrices: boolean }
   ): Promise<MenuItemOwnerView> {
     const item = await this.requireOwnItem(restaurantId, itemId);
+    // Only an edit to the customer-visible text is screened, against the text as it will be stored;
+    // an unrelated edit (price, stock) never changes an existing product's state.
+    const changesText = input.name !== undefined || input.brand !== undefined || input.description !== undefined;
+    const screening = changesText
+      ? screenOrRefuse(
+          "RESTRICTED_PRODUCT",
+          input.name ?? item.name,
+          input.brand !== undefined ? input.brand : item.brand,
+          input.description !== undefined ? input.description : item.description
+        )
+      : allowed;
     assertAllowedImageUrl({
       previousUrl: item.imageUrl,
       nextUrl: input.imageUrl,
@@ -174,10 +193,11 @@ export class MenuService {
         isVariableWeight: input.isVariableWeight,
         barcode: input.barcode !== undefined ? input.barcode.trim() || null : undefined,
         reorderLevel: input.reorderLevel,
-        displayPriority: input.displayPriority
+        displayPriority: input.displayPriority,
+        ...(screening.verdict === "REVIEW" ? { isAvailable: false } : {})
       }
     });
-    return toItemView(updated);
+    return withReview(toItemView(updated), screening);
   }
 
   /**
@@ -349,6 +369,32 @@ function assertSupermarketCostPrice(costPriceMinor: number | null | undefined): 
       "Enter what this product costs the store. A supermarket product without a cost price cannot be priced or paid out correctly."
     );
   }
+}
+
+const allowed: RestrictedClassification = { verdict: "ALLOWED", matches: [] };
+
+/**
+ * Store audit H6: tobacco, nicotine, vaping and alcohol are refused outright (422); an ambiguous name
+ * is accepted but saved hidden, and the response says which words need a person's review.
+ */
+function screenOrRefuse(
+  code: "RESTRICTED_PRODUCT" | "RESTRICTED_CATEGORY",
+  ...fields: Array<string | null | undefined>
+): RestrictedClassification {
+  const screening = classifyRestricted(...fields);
+  if (screening.verdict === "BLOCKED") {
+    throw new ApiException(
+      422,
+      code,
+      "Tobacco, nicotine, vaping and alcohol products cannot be sold on JOVO.",
+      { matches: screening.matches }
+    );
+  }
+  return screening;
+}
+
+function withReview<T extends object>(view: T, screening: RestrictedClassification): T & { restrictedReview?: { matches: string[] } } {
+  return screening.verdict === "REVIEW" ? { ...view, restrictedReview: { matches: screening.matches } } : view;
 }
 
 function toCategoryView(category: MenuCategory): MenuCategoryOwnerView {

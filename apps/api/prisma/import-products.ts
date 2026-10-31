@@ -27,6 +27,7 @@ import dotenv from "dotenv";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { BusinessType, PrismaClient, type Prisma } from "../src/generated/prisma/client";
 import { checkImageUrl, imageUrlProblemMessage } from "../src/common/image-url.util";
+import { classifyRestricted } from "../src/catalogue/restricted-products.rules";
 
 dotenv.config({ path: "../../.env" });
 
@@ -91,6 +92,8 @@ type ParsedRow = {
   salePriceMinor: number | null;
   /** True when the file has a salePrice column, so a blank cell means "end the sale". */
   saleSpecified: boolean;
+  /** Ambiguous restricted-product words (store audit H6): imported hidden for a person to review. */
+  needsReview: string[] | null;
 };
 
 type RowError = { line: number; sku: string; errors: string[] };
@@ -128,6 +131,11 @@ async function main(): Promise<void> {
   }
 
   console.log(`Validated ${rows.length} row(s), 0 errors.`);
+  const forReview = rows.filter((row) => row.needsReview !== null);
+  if (forReview.length > 0) {
+    console.log(`${forReview.length} row(s) need a manual review before they are shown (new ones are imported hidden):`);
+    for (const row of forReview) console.log(`  line ${row.line} (sku ${row.sku}): ${row.name} — matched ${row.needsReview!.join(", ")}`);
+  }
   if (args.dryRun) {
     console.log("Dry run: no changes were made.");
     return;
@@ -253,12 +261,20 @@ function validateRows(header: string[], dataLines: string[][]): { rows: ParsedRo
       else seenBarcodes.set(barcode, line);
     }
 
+    // Store audit H6: tobacco, nicotine, vaping and alcohol are refused (the whole import stops, as
+    // for any invalid row); an ambiguous row is imported hidden and listed for manual review.
+    const screening = classifyRestricted(name, brand, description, category);
+    if (screening.verdict === "BLOCKED") {
+      rowErrors.push(`restricted product (tobacco/nicotine/vaping/alcohol), matched: ${screening.matches.join(", ")} — remove it from the file`);
+    }
+
     if (rowErrors.length > 0) {
       errors.push({ line, sku: sku || "(missing)", errors: rowErrors });
       return;
     }
 
     rows.push({
+      needsReview: screening.verdict === "REVIEW" ? screening.matches : null,
       line,
       sku,
       name,
@@ -358,7 +374,8 @@ async function importRows(
             isVariableWeight: row.isVariableWeight,
             isFeatured: row.isFeatured,
             reorderLevel: row.reorderLevel,
-            isAvailable: true
+            // A new ambiguous product starts hidden; an existing product's availability is never changed here.
+            isAvailable: row.needsReview === null
           },
           update: {
             categoryId,

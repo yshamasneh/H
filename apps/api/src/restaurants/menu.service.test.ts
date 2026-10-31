@@ -382,3 +382,50 @@ test("a supermarket product's cost may be corrected but never cleared", async ()
 function hasCode(code: string): (error: unknown) => boolean {
   return (error) => error instanceof ApiException && (error.getResponse() as { code?: string }).code === code;
 }
+
+// --- Store audit H6: restricted products ---------------------------------------------------------
+
+test("tobacco, nicotine, vaping and alcohol products and categories are refused with 422", async () => {
+  const { menu, prisma } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Snacks" });
+  await assert.rejects(
+    menu.createItem("restaurant-a", { categoryId: category.id, name: "Marlboro Gold 20", priceMinor: 2500 }),
+    hasCode("RESTRICTED_PRODUCT")
+  );
+  await assert.rejects(
+    menu.createItem("restaurant-a", { categoryId: category.id, name: "Mint pods", brand: "Juul", priceMinor: 2500 }),
+    hasCode("RESTRICTED_PRODUCT")
+  );
+  await assert.rejects(menu.createCategory("restaurant-a", { name: "سجائر ومعسل" }), hasCode("RESTRICTED_CATEGORY"));
+  await assert.rejects(menu.updateCategory("restaurant-a", category.id, { name: "Wine & Beer" }), hasCode("RESTRICTED_CATEGORY"));
+  const item = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Ginger biscuits", priceMinor: 900 });
+  await assert.rejects(
+    menu.updateItem("restaurant-a", item.id, { name: "Vodka 70cl" }, { canManagePrices: true }),
+    hasCode("RESTRICTED_PRODUCT")
+  );
+  assert.equal(prisma.menuItems.filter((entry) => /marlboro|vodka/i.test(entry.name)).length, 0, "nothing restricted was stored");
+});
+
+test("an ambiguous product or category is saved hidden for manual review, with the reason", async () => {
+  const { menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Drinks" });
+  const malt = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Barbican non-alcoholic malt drink", priceMinor: 600 });
+  assert.equal(malt.isAvailable, false);
+  assert.deepEqual((malt as { restrictedReview?: { matches: string[] } }).restrictedReview?.matches, ["alcoholic", "malt"]);
+
+  const hookah = await menu.createCategory("restaurant-a", { name: "فحم أرجيلة" });
+  assert.equal(hookah.isActive, false);
+
+  // A person reviewing it can still make it available; that decision is theirs.
+  const reviewed = await menu.setItemAvailability("restaurant-a", malt.id, true);
+  assert.equal(reviewed.isAvailable, true);
+});
+
+test("an edit that does not touch the product's text never re-screens or hides an existing product", async () => {
+  const { menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Cleaning" });
+  const item = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Hand gel", priceMinor: 900 });
+  const repriced = await menu.updateItem("restaurant-a", item.id, { priceMinor: 950 }, { canManagePrices: true });
+  assert.equal(repriced.isAvailable, true);
+  assert.equal("restrictedReview" in repriced, false);
+});

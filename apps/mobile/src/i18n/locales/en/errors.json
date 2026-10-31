@@ -114,5 +114,7 @@
   "HTTPS_REQUIRED": "A secure connection is required.",
   "INTERNAL_SERVER_ERROR": "Something went wrong on our end. Please try again.",
   "BUSINESS_OWNER_DELETION_REQUIRES_ADMIN": "This is the store owner's account. A JOVO administrator must transfer the store before it can be deleted.",
-  "ADMIN_DELETION_REQUIRES_SECOND_ADMIN": "Administrator accounts are closed by another administrator."
+  "ADMIN_DELETION_REQUIRES_SECOND_ADMIN": "Administrator accounts are closed by another administrator.",
+  "RESTRICTED_PRODUCT": "Tobacco, nicotine, vaping and alcohol products can't be sold on JOVO.",
+  "RESTRICTED_CATEGORY": "Tobacco, nicotine, vaping and alcohol categories can't be added to JOVO."
 }

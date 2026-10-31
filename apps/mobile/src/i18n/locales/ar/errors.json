@@ -114,5 +114,7 @@
   "HTTPS_REQUIRED": "يلزم وجود اتصال آمن.",
   "INTERNAL_SERVER_ERROR": "حدث خطأ من جانبنا. يرجى المحاولة مرة أخرى.",
   "BUSINESS_OWNER_DELETION_REQUIRES_ADMIN": "هذا حساب مالك المتجر. يجب أن ينقل مسؤول JOVO ملكية المتجر قبل حذفه.",
-  "ADMIN_DELETION_REQUIRES_SECOND_ADMIN": "يُغلق حساب المسؤول بواسطة مسؤول آخر."
+  "ADMIN_DELETION_REQUIRES_SECOND_ADMIN": "يُغلق حساب المسؤول بواسطة مسؤول آخر.",
+  "RESTRICTED_PRODUCT": "لا يمكن بيع منتجات التبغ والنيكوتين والسجائر الإلكترونية والكحول على JOVO.",
+  "RESTRICTED_CATEGORY": "لا يمكن إضافة أقسام التبغ والنيكوتين والسجائر الإلكترونية والكحول إلى JOVO."
 }
