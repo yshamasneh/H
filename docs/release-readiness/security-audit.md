@@ -1,6 +1,6 @@
 # Security audit — run 2 (`store-remediation-2`, report-only except where stated)
 
-**Method.** Code reading on `store-remediation-2` at the commits listed in `cloud-run-log.md`, plus: API unit suite (728 pass / 0 fail / 16 DB-only skips) and the PostgreSQL e2e suite run against a throwaway local PostgreSQL 16 (see the log for the final count). No production system, cloud account or credential was used. Run 1's findings follow below, with their status updated here.
+**Method.** Code reading on `store-remediation-2` at the commits listed in `cloud-run-log.md`, plus: API unit suite (736 pass / 0 fail / 16 DB-only skips at the end of the run) and the PostgreSQL e2e suite run against a throwaway local PostgreSQL 16 (see the log for the final count). No production system, cloud account or credential was used. Run 1's findings follow below, with their status updated here.
 
 ## Status changes since run 1
 

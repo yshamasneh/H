@@ -1,4 +1,4 @@
-# Store remediation tracker — run 1
+# Store remediation tracker — run 1 (run 2 status: see final-readiness-report.md and cloud-run-log.md)
 
 - **Source audit:** `C:\Users\hp\jovo-store-audit.md` (2026-10-31).
 - **Branch:** `store-remediation-1`, from `agent/phase-15-and-jovo-brand` at `23e9045`.

@@ -2,7 +2,7 @@
 
 **Rule kept:** no formula, percentage, fee, commission, earning or settlement rule was changed. `apps/api/src/accounting/**`, `orders/pricing.ts` and the settlement code were not edited.
 
-**Evidence base (run 2):** API unit suite 728 pass / 0 fail; PostgreSQL 16 e2e suite **103/103 passed** (`npm run test:e2e`, throwaway local database), including `accounting.e2e`, `order-idempotency.e2e`, `driver-settlement-reset.e2e`, `order-packing.e2e`, `sale-offers.e2e` and the new `account-deletion-obligations.e2e` and `demo-accounts.e2e`. `scripts/check-financial-integrity.mjs` was executed **against that local test database only** (clean; it holds almost no data after the suites clean up, so this proves the script runs, not that production is clean). Production was not queried.
+**Evidence base (run 2):** API unit suite 736 pass / 0 fail (final run); PostgreSQL 16 e2e suite **103/103 passed** (`npm run test:e2e`, throwaway local database), including `accounting.e2e`, `order-idempotency.e2e`, `driver-settlement-reset.e2e`, `order-packing.e2e`, `sale-offers.e2e` and the new `account-deletion-obligations.e2e` and `demo-accounts.e2e`. `scripts/check-financial-integrity.mjs` was executed **against that local test database only** (clean; it holds almost no data after the suites clean up, so this proves the script runs, not that production is clean). Production was not queried.
 
 ## Run-2 code that sits next to money (all read-only towards financial rows)
 
