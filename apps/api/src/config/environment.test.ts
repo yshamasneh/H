@@ -374,3 +374,15 @@ test("restaurant self-registration and Swagger are on for local development only
     /SWAGGER_ENABLED cannot be true/
   );
 });
+
+test("security S11: NODE_ENV=production refuses the log-only development OTP provider at boot", () => {
+  assert.throws(
+    () => validateEnvironment({ ...productionWithoutTracking, OTP_PROVIDER: "development" }),
+    /OTP_PROVIDER=tweetsms \(or webhook\) is required when NODE_ENV=production/
+  );
+});
+
+test("security S10: OFFER_ACTIVATION_WORKER_ENABLED=\"false\" really disables the worker (parsed as a boolean)", () => {
+  assert.equal(validateEnvironment({ ...base, OFFER_ACTIVATION_WORKER_ENABLED: "false" }).OFFER_ACTIVATION_WORKER_ENABLED, false);
+  assert.equal(validateEnvironment({ ...base }).OFFER_ACTIVATION_WORKER_ENABLED, true);
+});

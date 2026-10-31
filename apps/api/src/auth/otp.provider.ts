@@ -58,8 +58,21 @@ export function maskPhoneForLogs(phone: string): string {
 export class DevelopmentOtpProvider implements OtpProvider {
   private readonly logger = new Logger("DevelopmentOtpProvider");
 
+  /**
+   * Security S11 (run 3): on a production deployment the code and the full phone number are never
+   * written to the log, even if this provider was left configured there. The phone is always
+   * masked; the code is only printed on a developer's machine or a trial deployment.
+   */
+  constructor(private readonly options: { productionDeployment?: boolean } = {}) {}
+
   async send(delivery: OtpDelivery): Promise<void> {
-    this.logger.log(`[DEV OTP] ${delivery.purpose} ${delivery.phone} => ${delivery.code}`);
+    if (this.options.productionDeployment) {
+      this.logger.warn(
+        `[DEV OTP] ${delivery.purpose} ${maskPhoneForLogs(delivery.phone)} => code withheld on a production deployment; configure OTP_PROVIDER=tweetsms`
+      );
+      return;
+    }
+    this.logger.log(`[DEV OTP] ${delivery.purpose} ${maskPhoneForLogs(delivery.phone)} => ${delivery.code}`);
   }
 }
 

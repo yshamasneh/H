@@ -74,8 +74,21 @@ export function createOtpProvider(config: ConfigService): OtpProvider {
         })
       );
     }
-    return new DevelopmentOtpProvider();
+    return new DevelopmentOtpProvider({ productionDeployment: isProductionDeployment(config) });
   }
 
   throw new Error(`Unsupported OTP provider "${provider}"`);
+}
+
+/**
+ * Security S11: a deployment counts as production for log redaction when it says so
+ * (DEPLOYMENT_ENV=production) or when Railway names its environment "production"
+ * (RAILWAY_ENVIRONMENT_NAME, set by Railway itself). NODE_ENV=production never reaches here: the
+ * development provider is refused at boot for it.
+ */
+export function isProductionDeployment(config: { get<T>(key: string, fallback?: T): T | undefined }): boolean {
+  return (
+    config.get<string>("DEPLOYMENT_ENV", "local") === "production" ||
+    String(config.get<string>("RAILWAY_ENVIRONMENT_NAME", "") ?? "").toLowerCase() === "production"
+  );
 }

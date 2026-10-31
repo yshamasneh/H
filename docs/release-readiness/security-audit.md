@@ -1,3 +1,31 @@
+# Security audit — run 3 additions
+
+## Fixed in run 3 (no authentication or authorization behaviour changed)
+
+| ID | Fix | Evidence | Tests (run here) |
+|---|---|---|---|
+| S11 (code side) | (a) Boot refusal of the development OTP provider under `NODE_ENV=production` already existed in two places and is now pinned by a test. (b) **New:** the development provider never writes the code on a production deployment (`DEPLOYMENT_ENV=production`, or Railway's own `RAILWAY_ENVIRONMENT_NAME=production`), and never writes a full phone number anywhere (masked `+970***567`). | `apps/api/src/auth/otp.provider.ts` `DevelopmentOtpProvider`; `auth/otp.provider.factory.ts` `isProductionDeployment`; `config/environment.ts:80-82` | `otp.provider.factory.test.ts` (code withheld + phone masked on both signals; code still visible locally), `environment.test.ts` (boot refusal) |
+| S10 | `OFFER_ACTIVATION_WORKER_ENABLED` is parsed as a boolean like the other worker switches. | `config/environment.ts` next to `PUSH_WORKER_ENABLED` | `environment.test.ts` |
+
+**Operational consequence of S11(b), read before deploying:** if production still runs `OTP_PROVIDER=development` and Railway names the environment `production` (or `DEPLOYMENT_ENV=production` is set), sign-up and password-reset codes will **no longer appear anywhere**. Configure TweetSMS first (owner-action-items G.4).
+
+**Environment variables the owner must set for production** (names only): `OTP_PROVIDER=tweetsms`, `TWEETSMS_API_KEY`, `TWEETSMS_SENDER` (and any other `TWEETSMS_*` the preflight asks for), `OTP_REQUIRE_REAL_PROVIDER=true`, `DEPLOYMENT_ENV=production`, then `NODE_ENV=production` together with `CORS_ORIGIN`, `ERROR_TRACKING_WEBHOOK_URL` (+ `ERROR_TRACKING_TOKEN`), `MONITORING_TOKEN`, the image-storage variables, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `OTP_HASH_SECRET` (distinct), `DATABASE_URL`. The startup self-check (`npm run prod:selfcheck`, task 5) lists any that are missing without printing values.
+
+## Patch plans (not applied: they change authorization or need a decision)
+
+**S6 — available deliveries visible to a driver whose approval was withdrawn.**
+- Patch: in `DriversService.listAvailableDeliveries(driverUserId)` call `requireOwnProfile(driverUserId)` and throw 403 `DRIVER_NOT_APPROVED` unless `status === APPROVED`; return `[]` when `!isOnline`. In `toDeliveryView` for unassigned deliveries, replace `deliveryAddressLine` with the area only and round coordinates to 3 decimals until `driverId === caller`.
+- Tests to add: e2e — PENDING/REJECTED/SUSPENDED driver → 403; approved offline → `[]`; approved online → list without the street line; after accept → full address. Unit — `toDeliveryView` redaction.
+- Risk: the driver app shows the address before accepting today; the UI must show the area instead (`apps/mobile/src/features/driver/screens.tsx`).
+
+**S7 — login back-off in memory.** Patch: a `LoginAttempt` table (`phone`, `ipHash`, `failures`, `blockedUntil`) behind the same `LoginAttemptLimiter` interface, thresholds unchanged. Tests: the existing limiter tests run against both stores; an e2e with two app instances sharing the database. Needed only when the API runs more than one replica.
+
+**S8 — order address snapshots kept forever.** Patch (after the owner fixes P10): a daily job that, for orders older than the retention period, sets `deliveryAddressLine` to the area name, rounds `deliveryLatitude/Longitude` to 2 decimals and clears `customerNote`, never touching amounts. Tests: unit for the selection window; e2e proving financial rows and totals are unchanged.
+
+**S12 — admin web on the old API / CORS.** Owner configuration only (R10, R11).
+
+---
+
 # Security audit — run 2 (`store-remediation-2`, report-only except where stated)
 
 **Method.** Code reading on `store-remediation-2` at the commits listed in `cloud-run-log.md`, plus: API unit suite (736 pass / 0 fail / 16 DB-only skips at the end of the run) and the PostgreSQL e2e suite run against a throwaway local PostgreSQL 16 (see the log for the final count). No production system, cloud account or credential was used. Run 1's findings follow below, with their status updated here.

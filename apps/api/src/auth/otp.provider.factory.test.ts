@@ -98,3 +98,32 @@ test("on a deployed environment the development provider warns, and is refused w
     /OTP_REQUIRE_REAL_PROVIDER/
   );
 });
+
+test("security S11: on a production deployment the development provider never logs the code or the full phone", async () => {
+  const { Logger } = await import("@nestjs/common");
+  const lines: string[] = [];
+  const original = { log: Logger.prototype.log, warn: Logger.prototype.warn };
+  Logger.prototype.log = function (message: unknown) { lines.push(String(message)); };
+  Logger.prototype.warn = function (message: unknown) { lines.push(String(message)); };
+  try {
+    for (const settings of [
+      { OTP_PROVIDER: "development", DEPLOYMENT_ENV: "production", IS_DEPLOYED: true },
+      { OTP_PROVIDER: "development", RAILWAY_ENVIRONMENT_NAME: "production", IS_DEPLOYED: true }
+    ]) {
+      lines.length = 0;
+      await factory(settings)().send({ phone: "+970591234567", code: "482913", purpose: "SIGNUP" } as never);
+      const output = lines.join("\n");
+      assert.ok(!output.includes("482913"), "the code is withheld");
+      assert.ok(!output.includes("+970591234567"), "the phone is masked");
+      assert.match(output, /withheld/);
+    }
+    lines.length = 0;
+    await factory({ OTP_PROVIDER: "development" })().send({ phone: "+970591234567", code: "482913", purpose: "SIGNUP" } as never);
+    assert.ok(lines.join("\n").includes("482913"), "a developer's machine still sees the code");
+    assert.ok(!lines.join("\n").includes("+970591234567"), "but never the full phone");
+  } finally {
+    Logger.prototype.log = original.log;
+    Logger.prototype.warn = original.warn;
+  }
+});
+
