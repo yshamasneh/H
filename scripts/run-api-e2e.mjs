@@ -34,7 +34,8 @@ if (build.status !== 0) {
       "dist/integration/driver-accounts.e2e.test.js",
       "dist/integration/registration-policy.e2e.test.js",
       "dist/integration/account-deletion.e2e.test.js",
-      "dist/integration/realtime-disconnect.e2e.test.js"
+      "dist/integration/realtime-disconnect.e2e.test.js",
+      "dist/integration/account-deletion-obligations.e2e.test.js"
     ],
     {
       cwd: apiDirectory,
