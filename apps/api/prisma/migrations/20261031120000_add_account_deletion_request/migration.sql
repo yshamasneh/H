@@ -24,4 +24,3 @@ CREATE INDEX "AccountDeletionRequest_status_scheduledFor_idx" ON "AccountDeletio
 
 -- AddForeignKey
 ALTER TABLE "AccountDeletionRequest" ADD CONSTRAINT "AccountDeletionRequest_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
