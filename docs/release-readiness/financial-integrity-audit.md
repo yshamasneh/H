@@ -1,4 +1,39 @@
-# Financial integrity audit — store remediation run 1 (report-only)
+# Financial integrity audit — run 2 (`store-remediation-2`, report-only)
+
+**Rule kept:** no formula, percentage, fee, commission, earning or settlement rule was changed. `apps/api/src/accounting/**`, `orders/pricing.ts` and the settlement code were not edited.
+
+**Evidence base (run 2):** API unit suite 728 pass / 0 fail; PostgreSQL 16 e2e suite **103/103 passed** (`npm run test:e2e`, throwaway local database), including `accounting.e2e`, `order-idempotency.e2e`, `driver-settlement-reset.e2e`, `order-packing.e2e`, `sale-offers.e2e` and the new `account-deletion-obligations.e2e` and `demo-accounts.e2e`. `scripts/check-financial-integrity.mjs` was executed **against that local test database only** (clean; it holds almost no data after the suites clean up, so this proves the script runs, not that production is clean). Production was not queried.
+
+## Run-2 code that sits next to money (all read-only towards financial rows)
+
+| Change | Financial effect | Evidence |
+|---|---|---|
+| Demo orders (`Order.isDemo`) | `PATCH /driver/me/deliveries/:id/status` refuses DELIVERED and FAILED for a demo order **before** any financial code runs, so no `OrderFinancialRecord`, `DriverCashCustody` or `PartnerEarning` can be written for it. Real orders: unchanged code path. | `drivers/drivers.service.ts` `updateDeliveryStatus` guard; `integration/demo-accounts.e2e.test.ts` asserts 0 financial rows and 0 custody rows for the demo order. |
+| Guest delivery-area route | Reads `DELIVERY_MAX_DISTANCE_METERS` with the same fallback the quote uses (`defaultDeliveryPricing.maximumDistanceMeters`); exposes no fee. | `restaurants/restaurants.service.ts` `getSupermarketDeliveryArea`; `orders/orders.service.ts:1218` |
+| Driver deletion tests | Insert fixed-amount custody/earning rows in a test database only; verify they survive deletion unchanged and still link to the anonymised driver. | `integration/account-deletion-obligations.e2e.test.ts` |
+
+## Findings status
+
+- **F1, F2, F3 (LOW)**: still open, unchanged (see run 1 below). Proposed tests stand.
+- **F4–F7 (INFO)**: re-verified by the e2e run above.
+- **F8**: deletion now also covered on PostgreSQL with real custody/earnings rows (6/6).
+
+## New observations (run 2)
+
+| ID | Severity | Observation | Evidence | Proposed test (no change made) |
+|---|---|---|---|---|
+| F9 | LOW | **Analytics and dashboards count demo orders.** `Order.isDemo` is not filtered in revenue/order counts. Demo orders never complete, so they cannot reach revenue, but they appear in "orders today" and cancellation rates. | `admin/admin.service.ts` `getDashboard`; `analytics/*` | Analytics e2e: a cancelled demo order is excluded from counts once a filter is added (owner decision). |
+| F10 | LOW | **A demo delivery left in ON_THE_WAY keeps the demo driver "busy"** (blocks claiming the next demo order and their own deletion) until an admin cancels the order. No money impact. | `drivers/dispatch.util.ts` busy check; `users/users.service.ts` `readDriverBlockers` | Procedure in `reviewer-access-guide.md` §3 (admin cancels after review). |
+| F11 | INFO | **Order totals are always server-computed**; the client's `expectedTotalMinor` is only compared (409 on mismatch). Re-verified by `orders.service.test.ts` "order totals match server-computed subtotal, fees, and total" and `order-idempotency.e2e`. | `orders/orders.service.ts:105-120` | — |
+| F12 | INFO | **Order and delivery transitions are compare-and-set** (`updateMany` with the expected current status, `count !== 1` → 409), so two concurrent actors cannot both move the same order. Delivery claim is the same pattern (`DELIVERY_ALREADY_CLAIMED`). | `orders/orders.service.ts` around `changed.count !== 1`; `drivers/drivers.service.ts` `acceptDelivery` | Concurrency e2e (two simultaneous accepts → exactly one 201) — covered by `driver-tracking.e2e` claim tests. |
+
+## Still not run
+
+`npm run check:financial` against **production** (owner, read-only, documented in the script header).
+
+---
+
+# Financial integrity audit — store remediation run 1 (report-only, kept for history)
 
 **Rule:** financial code is read-only in this run. No formula, percentage, fee, commission or settlement rule was changed.
 
