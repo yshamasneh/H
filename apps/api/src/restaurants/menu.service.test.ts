@@ -429,3 +429,42 @@ test("an edit that does not touch the product's text never re-screens or hides a
   assert.equal(repriced.isAvailable, true);
   assert.equal("restrictedReview" in repriced, false);
 });
+
+test("store audit H6 run 2: a legacy restricted product or category cannot be switched back on", async () => {
+  const { menu, prisma } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Snacks" });
+  const item = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Ginger biscuits", priceMinor: 900 });
+  // Simulate rows written before the guard existed: renamed directly in storage and hidden.
+  const stored = prisma.menuItems.find((entry) => entry.id === item.id)!;
+  stored.name = "Marlboro Red";
+  stored.isAvailable = false;
+  await assert.rejects(menu.setItemAvailability("restaurant-a", item.id, true), hasCode("RESTRICTED_PRODUCT"));
+  assert.equal(stored.isAvailable, false);
+  // Hiding is never blocked.
+  stored.isAvailable = true;
+  await menu.setItemAvailability("restaurant-a", item.id, false);
+  assert.equal(stored.isAvailable, false);
+
+  const storedCategory = prisma.menuCategories.find((entry) => entry.id === category.id)!;
+  storedCategory.name = "Beer";
+  storedCategory.isActive = false;
+  await assert.rejects(menu.updateCategory("restaurant-a", category.id, { isActive: true }), hasCode("RESTRICTED_CATEGORY"));
+  await menu.updateCategory("restaurant-a", category.id, { isActive: false });
+});
+
+test("store audit H6 run 2: an allowed or review product can still be switched on", async () => {
+  const { menu } = createServices();
+  const category = await menu.createCategory("restaurant-a", { name: "Drinks" });
+  const juice = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Orange juice", priceMinor: 600 });
+  await menu.setItemAvailability("restaurant-a", juice.id, false);
+  assert.equal((await menu.setItemAvailability("restaurant-a", juice.id, true)).isAvailable, true);
+  const malt = await menu.createItem("restaurant-a", { categoryId: category.id, name: "Barbican non-alcoholic malt drink", priceMinor: 600 });
+  assert.equal((await menu.setItemAvailability("restaurant-a", malt.id, true)).isAvailable, true);
+});
+
+test("store audit H6 run 2: switching a review-classified category on is the manual review and is kept", async () => {
+  const { menu } = createServices();
+  const hookah = await menu.createCategory("restaurant-a", { name: "فحم أرجيلة" });
+  assert.equal(hookah.isActive, false);
+  assert.equal((await menu.updateCategory("restaurant-a", hookah.id, { isActive: true })).isActive, true);
+});

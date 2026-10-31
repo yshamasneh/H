@@ -51,8 +51,14 @@ export class MenuService {
     input: UpdateMenuCategoryDto
   ): Promise<MenuCategoryOwnerView> {
     const category = await this.requireOwnCategory(restaurantId, categoryId);
+    // Re-showing a category is screened too (store audit H6, run 2): a legacy category named for a
+    // restricted product could otherwise be made visible again without being renamed.
     const screening =
-      input.name !== undefined ? screenOrRefuse("RESTRICTED_CATEGORY", input.name.trim()) : allowed;
+      input.name !== undefined
+        ? screenOrRefuse("RESTRICTED_CATEGORY", input.name.trim())
+        : input.isActive === true
+          ? refuseBlockedOnly("RESTRICTED_CATEGORY", category.name)
+          : allowed;
     if (input.name !== undefined) {
       await this.assertCategoryNameAvailable(restaurantId, input.name.trim(), category.id);
     }
@@ -240,6 +246,10 @@ export class MenuService {
 
   async setItemAvailability(restaurantId: string, itemId: string, isAvailable: boolean): Promise<MenuItemOwnerView> {
     const item = await this.requireOwnItem(restaurantId, itemId);
+    // Store audit H6, run 2: making a product visible is screened against its stored text, so a
+    // legacy tobacco/alcohol row cannot be switched back on. Hiding is never blocked, and an
+    // ambiguous (REVIEW) product may be switched on: that switch is the manual review (decision D5).
+    if (isAvailable) screenOrRefuse("RESTRICTED_PRODUCT", item.name, item.brand, item.description);
     const updated = await this.prisma.menuItem.update({ where: { id: item.id }, data: { isAvailable } });
     return toItemView(updated);
   }
@@ -391,6 +401,12 @@ function screenOrRefuse(
     );
   }
   return screening;
+}
+
+/** Refuses a BLOCKED name but lets a REVIEW one through unchanged: switching it on is the manual review (D5). */
+function refuseBlockedOnly(code: "RESTRICTED_PRODUCT" | "RESTRICTED_CATEGORY", ...fields: Array<string | null | undefined>): RestrictedClassification {
+  screenOrRefuse(code, ...fields);
+  return allowed;
 }
 
 function withReview<T extends object>(view: T, screening: RestrictedClassification): T & { restrictedReview?: { matches: string[] } } {
