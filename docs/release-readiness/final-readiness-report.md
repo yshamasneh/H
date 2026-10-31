@@ -1,4 +1,51 @@
-# Final readiness report — cloud run 2
+# Final readiness report — cloud run 3
+
+- **Date:** 2026-11-02. **Branch:** `store-remediation-2` (pushed after every task). Per-task evidence: `cloud-run-log.md`; open items and the ordered owner checklist: `remaining-work.md`; changes needing your review: `owner-action-items.md` §G.
+- Nothing was deployed, built for upload or published; no cloud account, production system or secret was used.
+
+## Verdict per store (run 3)
+
+| Store | Verdict | What is missing |
+|---|---|---|
+| Google Play closed test | **NOT READY** | Outside the repository: deploy the API with 5 additive migrations (R1) after switching OTP to TweetSMS (R2 — S11: production writes OTP codes to the log today); EAS variables and Firebase (R5, R7); lockfile (R24); legal pages hosted and P1–P21 filled (R8, R22); demo accounts (R20); first AAB + device tests (R34, R35); live catalogue cleaned and approved (R23). |
+| Google Play production | **NOT READY** | All of the above, plus account verification and the closed-test period (R18), admin web on the new API and CORS (R10, R11), licensed map tiles (R25), S6 decision (R26). |
+| Apple App Store | **NOT READY** | Apple enrollment and a first iOS build have never happened (R19); plus the shared items above. |
+
+Code side: **PARTIALLY READY** — every run-3 task was implemented and tested where it could run here; the remaining code items need an owner decision (S6, R36) or are small (R39).
+
+## Run 3 — done
+
+| # | Item | Tests run here |
+|---|---|---|
+| 1 | Product review state (`PENDING_REVIEW`/`APPROVED`, additive migration, default APPROVED); hidden from catalogue, search, product page, public offers, quote/order, substitutions | `product-review.e2e` (with task 2: 4/4) |
+| 2 | Admin product review: list with status filter and pending counter, name/SKU/barcode search, bulk approve (restricted refused, audited); admin web page with edit of name, description, brand, category, price, image | e2e above; admin unit +4 |
+| 3 | Catalogue importer: dry-run default, stable source ids, string barcodes, exact prices, PENDING_REVIEW, restricted and conflict reports, hand-edit protection, image hash check, logs, safe retry, localhost-only unless `--production --confirm`; guide | unit 6/6; `catalogue-import.e2e` 5/5 |
+| 4 | S11: OTP codes and full phones never logged on a production deployment; boot refusal pinned; S10 fixed; S6/S7/S8 patch plans | unit (factory + environment) |
+| 5 | Production self-check (`npm run prod:selfcheck`, names only) + startup warning | unit 3/3; CLI exercised |
+| 6 | Mobile a11y roles/labels on touched screens; guest delivery-area line | mobile UI +1 |
+| 7 | Production build guard pinned by tests; `eas-and-build-steps.md` | `check-release-env.test.cjs` 3/3 |
+| 8 | `docs/store/PLACEHOLDERS.md` (0 unmapped), `docs/store/review-notes.md` (AR/EN), Data safety re-check | docs |
+| 9 | Order lifecycle + idempotency e2e | `order-lifecycle.e2e` 4/4 (twice) |
+
+## Tests actually run at the end of run 3 (local PostgreSQL 16)
+
+| Suite | Result |
+|---|---|
+| API typecheck | OK |
+| API unit | 748 pass, 0 fail, 20 skipped (database-only suites, run below) |
+| API e2e (`npm run test:e2e`, 21 files) | **120 / 120 passed** |
+| Mobile typecheck | OK |
+| Mobile unit / UI | 295 / 295; 210 / 210 |
+| Mobile scripts (native config; release-env guard + google-services tests) | OK; 6 / 6 |
+| Admin typecheck / unit | OK; 147 / 147 |
+
+## Not run (and why)
+
+Any EAS/Gradle/Xcode build or upload, bundletool, device tests (location, push, RTL, screen reader), the admin page in a browser, any production query or import, a real TweetSMS or Nominatim call — no SDKs, devices, credentials or production access here, by rule.
+
+---
+
+# Final readiness report — cloud run 2 (kept for history)
 
 - **Date:** 2026-11-01.
 - **Branch:** `store-remediation-2` (pushed after every task), on top of run 1 (`d2612b9`). Per-task evidence: `cloud-run-log.md`. Open items with owners: `remaining-work.md`. Owner actions: `owner-action-items.md` (section F lists every auth, authorization and public-route change of this run).
