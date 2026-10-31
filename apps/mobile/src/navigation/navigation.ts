@@ -6,7 +6,6 @@ export type PhonePrefill = { countryCode: CountryCode; phoneNumber: string };
 export type AppScreen =
   | { name: "login"; prefill?: PhonePrefill; notice?: string }
   | { name: "signup"; prefill?: PhonePrefill }
-  | { name: "restaurant-signup"; prefill?: PhonePrefill }
   | { name: "forgot-password"; prefill?: PhonePrefill }
   | {
       name: "otp";
@@ -19,8 +18,6 @@ export type AppScreen =
     }
   | { name: "new-password"; resetToken: string }
   | { name: "home"; user: PublicUser; notice?: string }
-  | { name: "restaurants"; user: PublicUser }
-  | { name: "restaurant-menu"; user: PublicUser; restaurantId: string; restaurantName: string }
   | {
       name: "supermarket-catalog";
       user: PublicUser;
@@ -95,12 +92,6 @@ export function goToSignup(prefill?: PhonePrefill): Extract<AppScreen, { name: "
   return { name: "signup", prefill };
 }
 
-export function goToRestaurantSignup(
-  prefill?: PhonePrefill
-): Extract<AppScreen, { name: "restaurant-signup" }> {
-  return { name: "restaurant-signup", prefill };
-}
-
 export function goToLogin(prefill?: PhonePrefill, notice?: string): Extract<AppScreen, { name: "login" }> {
   return { name: "login", prefill, notice };
 }
@@ -148,26 +139,6 @@ export function resetOtpToNewPassword(
 
 export function authResultToHome(result: AuthResult): AppScreen {
   return homeForUser(result.user);
-}
-
-/**
- * Customer-facing restaurant browsing is deferred for the JOVO MARKET-only
- * launch: nothing in the customer flow calls this or `goToRestaurantMenu` any
- * more, and the home screen shows a "coming soon" card where restaurants used
- * to be. Both routes, their screens and the whole restaurant domain are kept
- * intact so re-enabling browsing is a matter of restoring the entry points —
- * and so the restaurant *business* side (orders, workspace, staff) is
- * completely untouched.
- */
-export function goToRestaurants(user: PublicUser): Extract<AppScreen, { name: "restaurants" }> {
-  return { name: "restaurants", user };
-}
-
-export function goToRestaurantMenu(
-  user: PublicUser,
-  restaurant: Pick<RestaurantSummary, "id" | "name">
-): Extract<AppScreen, { name: "restaurant-menu" }> {
-  return { name: "restaurant-menu", user, restaurantId: restaurant.id, restaurantName: restaurant.name };
 }
 
 export function homeForUser(user: PublicUser): AppScreen {

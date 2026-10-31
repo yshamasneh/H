@@ -108,7 +108,7 @@
     "rejectReasonRequired": "Enter a rejection reason before rejecting this store.",
     "rejectButton": "Confirm rejection",
     "suspendReasonPlaceholder": "Required suspension reason",
-    "suspendButton": "Suspend restaurant"
+    "suspendButton": "Suspend store"
   },
   "drivers": {
     "title": "Drivers",
@@ -277,7 +277,7 @@
   "auditLog": {
     "title": "Audit Log",
     "subtitle": "Recorded administrator actions and reasons",
-    "filterPlaceholder": "Action, e.g. RESTAURANT_SUSPENDED",
+    "filterPlaceholder": "Action, e.g. ORDER_STATUS_CHANGED",
     "filterButton": "Filter",
     "empty": "No audit entries match this filter.",
     "administratorLabel": "Administrator",
@@ -298,7 +298,7 @@
     "storeScopeLabel": "Store scope",
     "allStores": "All stores",
     "marketLabel": "Market",
-    "restaurantLabel": "Restaurant",
+    "restaurantLabel": "Store",
     "selectedLabel": "Selected: {{name}}",
     "globalDeliveryPromo": "Global delivery promotion",
     "productLabel": "Product",
@@ -327,7 +327,7 @@
     "pauseButton": "Pause",
     "activateButton": "Activate",
     "enterTitleError": "Enter an offer title.",
-    "selectRestaurantError": "Select a restaurant for this offer.",
+    "selectRestaurantError": "Select a store for this offer.",
     "selectProductError": "Select the product receiving the offer."
   },
   "analytics": {

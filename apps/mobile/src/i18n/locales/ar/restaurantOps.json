@@ -37,7 +37,7 @@
     "quickOffers": "العروض"
   },
   "management": {
-    "restaurantWorkspaceTitle": "مساحة عمل المطعم",
+    "restaurantWorkspaceTitle": "مساحة عمل المتجر",
     "supermarketWorkspaceTitle": "مساحة عمل السوبر ماركت",
     "restaurantWorkspaceSubtitle": "الملف التعريفي والتصنيفات وعناصر القائمة",
     "supermarketWorkspaceSubtitle": "الملف التعريفي والأقسام ومخزون المنتجات",
@@ -58,7 +58,7 @@
     "acceptingOrders": "يستقبل الطلبات",
     "closedState": "مغلق",
     "pendingApprovalNote": "يمكنك تجهيز الملف التعريفي والقائمة الآن. يظهر المتجر للزبائن بعد الموافقة فقط.",
-    "restaurantNameLabel": "اسم المطعم",
+    "restaurantNameLabel": "اسم المتجر",
     "supermarketNameLabel": "اسم السوبر ماركت",
     "descriptionLabel": "الوصف",
     "addressLabel": "العنوان",
@@ -215,7 +215,7 @@
     "deliveryAddressLabel": "عنوان التوصيل",
     "addressLine": "{{label}} - {{address}}",
     "statusHistoryTitle": "سجل الحالة",
-    "noFurtherAction": "لا حاجة لأي إجراء إضافي من مطعمك لهذا الطلب.",
+    "noFurtherAction": "لا حاجة لأي إجراء إضافي من متجرك لهذا الطلب.",
     "fulfillmentProposalStatus": "اقتراح التجهيز: {{status}}",
     "proposedLineTotal": "إجمالي العنصر المقترح: {{amount}}",
     "reviseFulfillment": "مراجعة التجهيز",

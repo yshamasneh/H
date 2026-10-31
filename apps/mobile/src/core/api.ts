@@ -71,21 +71,6 @@ export type PhoneInput = {
   phoneNumber: string;
 };
 
-export type RestaurantRegistrationInput = PhoneInput & {
-  ownerFullName: string;
-  password: string;
-  confirmPassword: string;
-  restaurantName: string;
-  addressLine: string;
-  description?: string;
-};
-
-export type RestaurantRegistrationResult = {
-  message: string;
-  restaurantId: string;
-  status: RestaurantStatusValue;
-};
-
 export type VerifyOtpInput = PhoneInput & { code: string };
 
 export type RestaurantSummary = {
@@ -530,10 +515,6 @@ export function resetPassword(input: {
   confirmPassword: string;
 }): Promise<{ message: string }> {
   return request("/api/v1/auth/password/reset", { method: "POST", body: input });
-}
-
-export function registerRestaurant(input: RestaurantRegistrationInput): Promise<RestaurantRegistrationResult> {
-  return request("/api/v1/restaurants/register", { method: "POST", body: input });
 }
 
 export function listRestaurants(page = 1, pageSize = 20): Promise<Page<RestaurantSummary>> {

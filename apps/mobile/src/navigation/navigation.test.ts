@@ -5,9 +5,6 @@ import {
   authResultToHome,
   forgotRequestToOtp,
   goToRestaurantManagement,
-  goToRestaurantMenu,
-  goToRestaurantSignup,
-  goToRestaurants,
   goToSupermarketCatalog,
   goToSupermarketProduct,
   goToSignup,
@@ -71,8 +68,11 @@ test("successful customer authentication navigates to Customer Home", () => {
   assert.equal(screen.name === "home" && screen.user.role, "CUSTOMER");
 });
 
-test("login exposes the restaurant registration route; driver accounts are created by JOVO admins", () => {
-  assert.deepEqual(goToRestaurantSignup(prefill), { name: "restaurant-signup", prefill });
+test("there is no restaurant registration, restaurant list or restaurant menu route in v1 (store audit H7)", async () => {
+  const navigation = await import("./navigation");
+  assert.equal("goToRestaurantSignup" in navigation, false);
+  assert.equal("goToRestaurants" in navigation, false);
+  assert.equal("goToRestaurantMenu" in navigation, false);
 });
 
 test("successful admin authentication opens the in-app admin dashboard", () => {
@@ -88,21 +88,7 @@ test("successful admin authentication opens the in-app admin dashboard", () => {
 
 const customer = { id: "1", fullName: "Customer", phone: "+970591234567", role: "CUSTOMER" as const };
 
-test("browsing restaurants carries the current user", () => {
-  const screen = goToRestaurants(customer);
-  assert.equal(screen.name, "restaurants");
-  assert.equal(screen.user.id, customer.id);
-});
-
-test("opening a restaurant navigates to its menu with the current user", () => {
-  const screen = goToRestaurantMenu(customer, { id: "r1", name: "Falafel House" });
-  assert.equal(screen.name, "restaurant-menu");
-  assert.equal(screen.restaurantId, "r1");
-  assert.equal(screen.restaurantName, "Falafel House");
-  assert.equal(screen.user.id, customer.id);
-});
-
-test("leaving restaurant browsing returns to Home for the same user", () => {
+test("a customer's home is the JOVO MARKET home for the same user", () => {
   const screen = homeForUser(customer);
   assert.deepEqual(screen, { name: "home", user: customer });
 });

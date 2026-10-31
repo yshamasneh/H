@@ -73,7 +73,7 @@
   },
   "role": {
     "CUSTOMER": "زبون",
-    "RESTAURANT": "مطعم",
+    "RESTAURANT": "موظف المتجر",
     "DRIVER": "سائق",
     "ADMIN": "مسؤول"
   },

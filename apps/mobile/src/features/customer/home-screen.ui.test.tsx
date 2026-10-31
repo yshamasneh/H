@@ -184,30 +184,20 @@ test("restaurant offers are not shown to customers while restaurants are off", a
   expect(screen.queryByText("Offer r1")).toBeNull();
 });
 
-test("there is nothing about restaurants on the screen while the server has them off", async () => {
-  render(<CustomerHomeScreen {...props()} onOpenRestaurants={jest.fn()} />);
+test("there is nothing about restaurants on the screen (store audit H7)", async () => {
+  render(<CustomerHomeScreen {...props()} />);
   expect(await screen.findByText("Product p1")).toBeTruthy();
   expect(screen.queryByText("Restaurants")).toBeNull();
   expect(screen.queryByText(/coming soon/i)).toBeNull();
   expect(screen.queryByTestId("home-restaurants")).toBeNull();
 });
 
-test("an older server that does not send the flag keeps restaurants hidden", async () => {
-  mocked.getPlatformSettings.mockResolvedValue({ substitutionOptionEnabled: true } as never);
-  render(<CustomerHomeScreen {...props()} onOpenRestaurants={jest.fn()} />);
+test("even a server that turns restaurants on cannot add a restaurant entry to v1", async () => {
+  mocked.getPlatformSettings.mockResolvedValue({ substitutionOptionEnabled: true, restaurantOrderingEnabled: true });
+  render(<CustomerHomeScreen {...props()} />);
   expect(await screen.findByText("Product p1")).toBeTruthy();
   expect(screen.queryByTestId("home-restaurants")).toBeNull();
-});
-
-test("when the server opens restaurants, the entry appears at the bottom and opens the restaurant list", async () => {
-  mocked.getPlatformSettings.mockResolvedValue({ substitutionOptionEnabled: true, restaurantOrderingEnabled: true });
-  const onOpenRestaurants = jest.fn();
-  render(<CustomerHomeScreen {...props()} onOpenRestaurants={onOpenRestaurants} />);
-  expect(await screen.findByTestId("home-restaurants")).toBeTruthy();
-  const [products, restaurants] = renderedOrder(["From JOVO MARKET", "Order from restaurants near you"]);
-  expect(products).toBeLessThan(restaurants);
-  fireEvent.press(screen.getByText("Order from restaurants near you"));
-  expect(onOpenRestaurants).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText("Order from restaurants near you")).toBeNull();
 });
 
 test("a catalogue that cannot be loaded says so and can be retried, instead of showing placeholders for ever", async () => {
@@ -234,7 +224,7 @@ test("in Arabic the same order holds and the restaurant entry stays hidden", asy
   });
   try {
     mocked.listActiveRestaurantOffers.mockResolvedValue([offer("o1")]);
-    render(<CustomerHomeScreen {...props()} onOpenRestaurants={jest.fn()} />);
+    render(<CustomerHomeScreen {...props()} />);
     expect(await screen.findByTestId("home-departments")).toBeTruthy();
     const [search, offers, departments, products] = renderedOrder([
       "ابحث عن منتجات أو علامات تجارية أو أقسام",

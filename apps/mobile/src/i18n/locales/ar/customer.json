@@ -5,10 +5,8 @@
   },
   "home": {
     "welcome": "أهلاً وسهلاً",
-    "localRestaurants": "مطاعم محلية",
     "greeting": "أهلاً {{name}} 👋",
     "greetingSubtitle": "ما الذي تشتهيه اليوم؟",
-    "searchRestaurantsPlaceholder": "ابحث عن مطاعم",
     "supermarketNewService": "خدمة جديدة",
     "supermarketTitle": "سوبر ماركت أونلاين",
     "supermarketDescription": "ابحث عن البقالة حسب القسم أو العلامة التجارية أو المنتج.",
@@ -17,14 +15,11 @@
     "featuredOfferCta": "اضغط للعرض",
     "launchPromoHint": "اضغط للمتابعة",
     "noOffersTitle": "لا توجد عروض نشطة حاليًا",
-    "noOffersText": "ستظهر هنا عروض المطاعم الجديدة فور نشرها.",
     "tasawaqWideOffer": "عرض على مستوى جوفو",
     "offerEndsLabel": "ينتهي في {{date}}",
     "supermarketsSectionTitle": "السوبر ماركت",
     "seeAll": "عرض الكل",
     "supermarketsEmpty": "ستظهر متاجر السوبر ماركت هنا عند افتتاحها.",
-    "restaurantsSectionTitle": "المطاعم",
-    "restaurantsEmpty": "ستظهر المطاعم هنا عند افتتاحها.",
     "openNow": "مفتوح الآن",
     "openNowCash": "مفتوح الآن · الدفع عند الاستلام",
     "myAccount": "حسابي",
@@ -50,8 +45,7 @@
     "noOffersTextMarket": "ستظهر هنا عروض جوفو ماركت الجديدة فور نشرها.",
     "catalogFailedTitle": "تعذّر تحميل المتجر",
     "catalogFailedText": "تحقق من اتصالك ثم حاول مرة أخرى.",
-    "catalogRetry": "إعادة المحاولة",
-    "restaurantsEntryText": "اطلب من المطاعم القريبة منك"
+    "catalogRetry": "إعادة المحاولة"
   },
   "offerDetail": {
     "headerTitle": "العرض",
@@ -100,17 +94,8 @@
     "deleteWebHelper": "يمكنك أيضاً طلب الحذف عبر الموقع: jovops.com/delete-account"
   },
   "restaurants": {
-    "availableRestaurants": "المطاعم المتاحة",
-    "findFavoriteFood": "اعثر على طعامك المفضل",
-    "searchPlaceholder": "ابحث عن مطاعم",
-    "noMatch": "لا توجد مطاعم مطابقة لبحثك.",
-    "openNow": "مفتوح الآن",
-    "menuNotPublished": "لم ينشر هذا المطعم قائمته بعد.",
-    "itemCount": "{{count}} عنصر",
     "viewBasket": "عرض السلة",
-    "tryAgain": "حاول مرة أخرى",
-    "itemOfferLabel": "{{title}} · خصم {{percent}}%",
-    "itemOfferLabelWithMinimum": "{{title}} · خصم {{percent}}% عند طلب أكثر من {{amount}}"
+    "tryAgain": "حاول مرة أخرى"
   },
   "supermarket": {
     "marketLabel": "جوفو ماركت",

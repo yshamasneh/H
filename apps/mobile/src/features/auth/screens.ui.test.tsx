@@ -44,7 +44,6 @@ function renderLogin() {
     <LoginScreen
       onAuthenticated={jest.fn()}
       onSignup={jest.fn()}
-      onRestaurantSignup={jest.fn()}
       onForgotPassword={jest.fn()}
     />
   );

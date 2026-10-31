@@ -108,7 +108,7 @@
     "rejectReasonRequired": "أدخل سبب الرفض قبل رفض هذا المتجر.",
     "rejectButton": "تأكيد الرفض",
     "suspendReasonPlaceholder": "سبب الإيقاف (مطلوب)",
-    "suspendButton": "إيقاف المطعم"
+    "suspendButton": "إيقاف المتجر"
   },
   "drivers": {
     "title": "السائقون",
@@ -277,7 +277,7 @@
   "auditLog": {
     "title": "سجل التدقيق",
     "subtitle": "الإجراءات الإدارية المسجَّلة وأسبابها",
-    "filterPlaceholder": "الإجراء، مثل RESTAURANT_SUSPENDED",
+    "filterPlaceholder": "الإجراء، مثل ORDER_STATUS_CHANGED",
     "filterButton": "تصفية",
     "empty": "لا توجد سجلات مطابقة لهذا الفلتر.",
     "administratorLabel": "المسؤول",
@@ -298,7 +298,7 @@
     "storeScopeLabel": "نطاق المتجر",
     "allStores": "كل المتاجر",
     "marketLabel": "سوبر ماركت",
-    "restaurantLabel": "مطعم",
+    "restaurantLabel": "متجر",
     "selectedLabel": "المحدد: {{name}}",
     "globalDeliveryPromo": "عرض توصيل عام",
     "productLabel": "المنتج",

@@ -37,7 +37,7 @@
     "quickOffers": "Offers"
   },
   "management": {
-    "restaurantWorkspaceTitle": "Restaurant workspace",
+    "restaurantWorkspaceTitle": "Store workspace",
     "supermarketWorkspaceTitle": "Supermarket workspace",
     "restaurantWorkspaceSubtitle": "Profile, categories and menu items",
     "supermarketWorkspaceSubtitle": "Profile, departments and product inventory",
@@ -58,7 +58,7 @@
     "acceptingOrders": "Accepting orders",
     "closedState": "Closed",
     "pendingApprovalNote": "You can prepare the profile and menu now. Customers see it only after approval.",
-    "restaurantNameLabel": "Restaurant name",
+    "restaurantNameLabel": "Store name",
     "supermarketNameLabel": "Supermarket name",
     "descriptionLabel": "Description",
     "addressLabel": "Address",
@@ -215,7 +215,7 @@
     "deliveryAddressLabel": "Delivery address",
     "addressLine": "{{label}} - {{address}}",
     "statusHistoryTitle": "Status history",
-    "noFurtherAction": "No further action is needed from your restaurant for this order.",
+    "noFurtherAction": "No further action is needed from your store for this order.",
     "fulfillmentProposalStatus": "Fulfillment proposal: {{status}}",
     "proposedLineTotal": "Proposed line total: {{amount}}",
     "reviseFulfillment": "Revise fulfillment",

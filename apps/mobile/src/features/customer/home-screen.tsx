@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { displayableImageUri, RemoteImage } from "../../components/remote-image";
 import {
-  getPlatformSettings,
   getSupermarketCatalog,
   listActiveRestaurantOffers,
   listMyNotifications,
@@ -71,12 +70,10 @@ type CatalogFilters = { departmentId?: string; search?: string; focusSearch?: bo
  * the store's products). A section that has nothing to show renders nothing at
  * all, so there are never gaps where an empty section used to be.
  *
- * Restaurants are not part of the launch. The entry point is driven by the
- * server's restaurant gate (`restaurantOrderingEnabled` in the public settings,
- * i.e. RESTAURANT_ORDERING_ENABLED): off means nothing about restaurants is on
- * this screen, on means a Restaurants entry appears at the bottom. Turning
- * restaurants on later is that one setting, not an app release. The restaurant
- * screens, routes and domain are untouched.
+ * Restaurants are not part of JOVO v1 (store audit H7). This screen has no
+ * restaurant entry at all, whatever the server's RESTAURANT_ORDERING_ENABLED
+ * says: offering restaurants to customers again needs a new, reviewed app
+ * release, never a server switch.
  */
 export function CustomerHomeScreen(props: {
   user: PublicUser;
@@ -90,7 +87,6 @@ export function CustomerHomeScreen(props: {
   onDecrementItem: (productId: string) => void;
   onViewCart: () => void;
   onOpenNotifications: () => void;
-  onOpenRestaurants?: () => void;
 }) {
   const { t } = useTranslation(["customer", "common"]);
   const { colors, isDark } = useTheme();
@@ -104,9 +100,6 @@ export function CustomerHomeScreen(props: {
   const [catalogFailed, setCatalogFailed] = useState(false);
   const [offers, setOffers] = useState<RestaurantOffer[] | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  // Whether restaurants are open to customers, from the server. Anything but an explicit true (an
-  // older API, a failed fetch) keeps the restaurant entry point hidden.
-  const [restaurantsEnabled, setRestaurantsEnabled] = useState(false);
   // Discovery shortcuts from what this customer already did: products opened on this device, and
   // products from their delivered orders. Both open the product page, which loads the current price.
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedProduct[]>([]);
@@ -153,13 +146,6 @@ export function CustomerHomeScreen(props: {
             setUnreadCount((await listMyNotifications(accessToken, 1, 1)).unreadCount);
           } catch {
             // A failed unread-count fetch just leaves the badge hidden — not worth surfacing an error for.
-          }
-        })(),
-        (async () => {
-          try {
-            setRestaurantsEnabled((await getPlatformSettings(accessToken)).restaurantOrderingEnabled === true);
-          } catch {
-            // Unknown means hidden: restaurants only appear when the server says they are open.
           }
         })(),
         (async () => {
@@ -460,23 +446,6 @@ export function CustomerHomeScreen(props: {
           </View>
         )}
 
-        {/* Restaurants: only when the server has opened them to customers. Off (the launch state)
-            means there is nothing here at all. */}
-        {restaurantsEnabled && props.onOpenRestaurants ? (
-          <View testID="home-restaurants">
-            <View style={styles.sectionHeader}>
-              <Text accessibilityRole="header" style={styles.sectionTitle}>{t("home.restaurantsSectionTitle")}</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              onPress={props.onOpenRestaurants}
-              style={({ pressed }) => [styles.restaurantsEntry, pressed && styles.pressed]}
-            >
-              <Text style={styles.restaurantsEntryText}>{t("home.restaurantsEntryText")}</Text>
-              <Icon color={customerTheme.colors.textMuted} name={chevron} size="md" />
-            </Pressable>
-          </View>
-        ) : null}
       </ScrollView>
       {showCartDock && props.cart ? <CartBar cart={props.cart} onPress={props.onViewCart} /> : null}
     </SafeAreaView>
@@ -646,6 +615,4 @@ const createStyles = (colors: ThemeColors, customerTheme: CustomerTheme) => Styl
   offerExpiry: { ...text("label"), color: onDark.soft, marginTop: spacing[1] },
   productGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing[3] },
   productCardSlot: { flexBasis: "46%", flexGrow: 1, maxWidth: "50%" },
-  restaurantsEntry: { alignItems: "center", backgroundColor: customerTheme.colors.surface, borderColor: customerTheme.colors.border, borderRadius: radius.lg, borderWidth: 1, flexDirection: "row", gap: spacing[3], minHeight: 64, paddingHorizontal: spacing[4] },
-  restaurantsEntryText: { ...text("bodySm", "semibold"), color: customerTheme.colors.text, flex: 1 },
 });

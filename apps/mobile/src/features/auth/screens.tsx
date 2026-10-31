@@ -54,7 +54,6 @@ type LoginScreenProps = {
   notice?: string;
   onAuthenticated: (result: AuthResult) => Promise<void>;
   onSignup: (prefill: PhonePrefill) => void;
-  onRestaurantSignup: (prefill: PhonePrefill) => void;
   onForgotPassword: (prefill: PhonePrefill) => void;
 };
 
@@ -409,7 +408,6 @@ export function HomeScreen(props: {
   user: PublicUser;
   notice?: string;
   onLogout: () => Promise<void>;
-  onBrowseRestaurants?: () => void;
   onViewOrders?: () => void;
   onManageOrders?: () => void;
   onManageRestaurant?: () => void;
@@ -462,9 +460,6 @@ export function HomeScreen(props: {
           <Text style={styles.roleBadgeText}>{t(`common:role.${props.user.role}`)}</Text>
         </View>
       </View>
-      {props.onBrowseRestaurants ? (
-        <PrimaryButton label={t("home.browseRestaurants")} onPress={props.onBrowseRestaurants} />
-      ) : null}
       {props.onViewOrders ? <SecondaryButton label={t("home.myOrders")} onPress={props.onViewOrders} /> : null}
       {props.onManageOrders ? (
         <PrimaryButton label={t("home.manageOrders")} onPress={props.onManageOrders} />

@@ -5,10 +5,8 @@
   },
   "home": {
     "welcome": "Welcome",
-    "localRestaurants": "Local restaurants",
     "greeting": "Hey {{name}} 👋",
     "greetingSubtitle": "What are you craving today?",
-    "searchRestaurantsPlaceholder": "Search restaurants",
     "supermarketNewService": "NEW SERVICE",
     "supermarketTitle": "Online supermarket",
     "supermarketDescription": "Search groceries by department, brand or product.",
@@ -17,14 +15,11 @@
     "featuredOfferCta": "Tap to view",
     "launchPromoHint": "Tap to continue",
     "noOffersTitle": "No active offers right now",
-    "noOffersText": "New restaurant offers will appear here when they are published.",
     "tasawaqWideOffer": "JOVO-wide offer",
     "offerEndsLabel": "Ends {{date}}",
     "supermarketsSectionTitle": "Supermarkets",
     "seeAll": "See all",
     "supermarketsEmpty": "Supermarkets will appear here when they open.",
-    "restaurantsSectionTitle": "Restaurants",
-    "restaurantsEmpty": "Restaurants will appear here when they open.",
     "openNow": "Open now",
     "openNowCash": "Open now · Cash on delivery",
     "myAccount": "My account",
@@ -50,8 +45,7 @@
     "noOffersTextMarket": "New JOVO MARKET offers will appear here when they are published.",
     "catalogFailedTitle": "We couldn't load the store",
     "catalogFailedText": "Check your connection and try again.",
-    "catalogRetry": "Try again",
-    "restaurantsEntryText": "Order from restaurants near you"
+    "catalogRetry": "Try again"
   },
   "offerDetail": {
     "headerTitle": "Offer",
@@ -100,17 +94,8 @@
     "deleteWebHelper": "You can also request deletion on the web at jovops.com/delete-account."
   },
   "restaurants": {
-    "availableRestaurants": "Available restaurants",
-    "findFavoriteFood": "Find your favourite food",
-    "searchPlaceholder": "Search restaurants",
-    "noMatch": "No restaurants match your search.",
-    "openNow": "Open now",
-    "menuNotPublished": "This restaurant has not published its menu yet.",
-    "itemCount": "{{count}} items",
     "viewBasket": "View basket",
-    "tryAgain": "Try again",
-    "itemOfferLabel": "{{title}} · {{percent}}% off",
-    "itemOfferLabelWithMinimum": "{{title}} · {{percent}}% off over {{amount}}"
+    "tryAgain": "Try again"
   },
   "supermarket": {
     "marketLabel": "JOVO MARKET",

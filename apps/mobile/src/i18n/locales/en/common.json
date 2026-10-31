@@ -73,7 +73,7 @@
   },
   "role": {
     "CUSTOMER": "Customer",
-    "RESTAURANT": "Restaurant",
+    "RESTAURANT": "Store staff",
     "DRIVER": "Driver",
     "ADMIN": "Admin"
   },
