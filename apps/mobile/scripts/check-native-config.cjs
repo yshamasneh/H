@@ -153,6 +153,34 @@ for (const [constant, label] of [["deliveryAlertSound", "delivery alert"], ["sto
   assert.ok(bundledSound.equals(fs.readFileSync(rawSound)), `Android res/raw ${soundFile} differs from assets/sounds; copy it again`);
 }
 
+// Store audit M1: an OTA check must never hold the splash screen; updates apply on the next launch.
+assert.equal(app.updates.fallbackToCacheTimeout, 0, "OTA launch wait must be 0 (store audit M1)");
+
+// Store audit M6: the app-level privacy manifest declares every required-reason API category that
+// the bundled native dependencies declare (Apple does not reliably read static-pod manifests).
+const accessedApiTypes = (app.ios.privacyManifests?.NSPrivacyAccessedAPITypes ?? []).map((entry) => entry.NSPrivacyAccessedAPIType);
+for (const category of ["UserDefaults", "FileTimestamp", "SystemBootTime", "DiskSpace"]) {
+  assert.ok(accessedApiTypes.includes(`NSPrivacyAccessedAPICategory${category}`), `ios.privacyManifests must declare ${category}`);
+}
+assert.equal(app.ios.privacyManifests.NSPrivacyTracking, false, "JOVO does not track users");
+
+// Store audit H8: iOS permission prompts exist in Arabic and English with the same keys.
+const iosLocaleKeys = [
+  "NSLocationWhenInUseUsageDescription",
+  "NSLocationAlwaysAndWhenInUseUsageDescription",
+  "NSLocationAlwaysUsageDescription",
+  "NSCameraUsageDescription",
+  "NSPhotoLibraryUsageDescription"
+];
+for (const language of ["ar", "en"]) {
+  assert.ok(app.locales?.[language], `app.json locales must include ${language}`);
+  const strings = JSON.parse(read(app.locales[language]));
+  for (const key of iosLocaleKeys) assert.ok(strings[key]?.trim(), `${language} iOS locale is missing ${key}`);
+}
+
+// Store audit L1: the camera module was never used; the image picker provides the camera prompt.
+assert.equal(mobilePackage.dependencies["expo-camera"], undefined, "expo-camera must not be a dependency");
+
 for (const requiredAsset of [
   "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp",
   "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.webp",

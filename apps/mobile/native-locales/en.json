@@ -1,0 +1,8 @@
+{
+  "CFBundleDisplayName": "JOVO",
+  "NSLocationWhenInUseUsageDescription": "JOVO uses your location while the app is open: customers can pin their delivery address to check delivery availability and the delivery fee, and drivers share their position with JOVO dispatch to receive and complete deliveries.",
+  "NSLocationAlwaysAndWhenInUseUsageDescription": "Drivers only: during an active delivery, JOVO shares your location with JOVO dispatch even when the app is closed or in the background, for example while you use a navigation app. Nothing is collected in the background when you have no delivery.",
+  "NSLocationAlwaysUsageDescription": "Drivers only: during an active delivery, JOVO shares your location with JOVO dispatch even when the app is closed or in the background. Nothing is collected in the background when you have no delivery.",
+  "NSCameraUsageDescription": "JOVO opens the camera only when store staff choose to take a product photo.",
+  "NSPhotoLibraryUsageDescription": "JOVO opens your photos only when store staff choose a product image to upload."
+}

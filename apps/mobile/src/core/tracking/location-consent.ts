@@ -7,7 +7,7 @@
  * makes an earlier "accepted" no longer count, so drivers are asked again about the new wording.
  */
 
-export const disclosureVersion = 1;
+export const disclosureVersion = 2;
 
 export type ConsentRecord = { decision: "accepted" | "declined"; version: number; at: string };
 export type BackgroundPermission = "granted" | "denied" | "undetermined";

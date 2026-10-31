@@ -13,8 +13,35 @@
       "bundleIdentifier": "com.jovo.app",
       "buildNumber": "17",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleAllowMixedLocalizations": true
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1", "1C8F.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1", "0A2A.1", "3B52.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1", "85F4.1"]
+          }
+        ]
       }
+    },
+    "locales": {
+      "ar": "./native-locales/ar.json",
+      "en": "./native-locales/en.json"
     },
     "android": {
       "package": "com.jovo.app",
@@ -57,9 +84,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "JOVO uses your location only when you choose it to calculate delivery availability and pricing.",
-          "locationAlwaysAndWhenInUsePermission": "During an active delivery, JOVO shares your location with JOVO dispatch even when the app is closed or in the background, for example while you use a navigation app. It is not collected when you have no delivery.",
-          "locationAlwaysPermission": "During an active delivery, JOVO shares your location with JOVO dispatch even when the app is closed or in the background. It is not collected when you have no delivery.",
+          "locationWhenInUsePermission": "JOVO uses your location while the app is open: customers can pin their delivery address to check delivery availability and the delivery fee, and drivers share their position with JOVO dispatch to receive and complete deliveries.",
+          "locationAlwaysAndWhenInUsePermission": "Drivers only: during an active delivery, JOVO shares your location with JOVO dispatch even when the app is closed or in the background, for example while you use a navigation app. Nothing is collected in the background when you have no delivery.",
+          "locationAlwaysPermission": "Drivers only: during an active delivery, JOVO shares your location with JOVO dispatch even when the app is closed or in the background. Nothing is collected in the background when you have no delivery.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
@@ -68,8 +95,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "JOVO accesses your photos only when you choose an image to upload.",
-          "cameraPermission": "JOVO accesses the camera only when you choose to take an image.",
+          "photosPermission": "JOVO opens your photos only when store staff choose a product image to upload.",
+          "cameraPermission": "JOVO opens the camera only when store staff choose to take a product photo.",
           "microphonePermission": false
         }
       ],
@@ -95,7 +122,7 @@
     "updates": {
       "enabled": true,
       "url": "https://u.expo.dev/46a8fe97-9509-4e20-b8b5-a2b11ba6d2e7",
-      "fallbackToCacheTimeout": 30000
+      "fallbackToCacheTimeout": 0
     },
     "extra": {
       "eas": {

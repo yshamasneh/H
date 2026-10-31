@@ -155,7 +155,7 @@
       "whatLabel": "What is collected",
       "what": "Your precise location (GPS position), about every 10 seconds.",
       "whenLabel": "When",
-      "when": "Only while you have an active delivery, including when JOVO is closed or not on screen. It is not collected when you have no delivery, and it stops as soon as the delivery is completed or cancelled.",
+      "when": "In the background, only while you have an active delivery, including when JOVO is closed or not on screen; it stops as soon as the delivery is completed or cancelled. While JOVO is open on screen, your position is also sent once when you open the driver home, refresh it or go online, so dispatch knows which drivers are nearby. Nothing is collected in the background when you have no delivery.",
       "whyLabel": "Why",
       "why": "So JOVO dispatch can see where your delivery is, help if something goes wrong, and keep customers' orders on track.",
       "whoLabel": "Who sees it",
@@ -167,7 +167,7 @@
       "accept": "Continue",
       "decline": "Not now"
     },
-    "reminderBody": "Your location is shared with dispatch only while a delivery is active."
+    "reminderBody": "Your location is shared with dispatch in the background only while a delivery is active."
   },
   "handover": {
     "title": "Cash to hand over to JOVO",
