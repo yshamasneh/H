@@ -59,6 +59,30 @@ type AuditLogRecord = {
   createdAt: Date;
 };
 
+type DeliveryRecord = { id: string; driverId: string | null; status: string };
+type CashCustodyRecord = { id: string; driverUserId: string; status: string };
+type AmountRecord = { payeeKey: string; amountMinor: number };
+type DriverProfileRecord = {
+  userId: string;
+  isOnline: boolean;
+  appState: string | null;
+  appLeaseUntil: Date | null;
+  appSeenAt: Date | null;
+  lastLatitude: number | null;
+  lastLongitude: number | null;
+  lastLocationAt: Date | null;
+};
+type BusinessMemberRecord = { id: string; userId: string; businessId: string; isActive: boolean };
+type DeletionRequestRecord = {
+  id: string;
+  userId: string;
+  status: "PENDING" | "COMPLETED";
+  requestedAt: Date;
+  scheduledFor: Date;
+  blockers: string[];
+  completedAt: Date | null;
+};
+
 export class FakeUsersPrisma {
   readonly users: UserRecord[] = [];
   readonly addresses: AddressRecord[] = [];
@@ -66,6 +90,16 @@ export class FakeUsersPrisma {
   readonly pushDeliveries: PushDeliveryRecord[] = [];
   readonly refreshSessions: RefreshSessionRecord[] = [];
   readonly auditLogs: AuditLogRecord[] = [];
+  // Read-only facts for the deletion rules (store audit H1). Nothing in UsersService may write them.
+  readonly deliveries: DeliveryRecord[] = [];
+  readonly cashCustodies: CashCustodyRecord[] = [];
+  readonly earnings: AmountRecord[] = [];
+  readonly payouts: AmountRecord[] = [];
+  readonly restaurants: Array<{ id: string; ownerUserId: string }> = [];
+  readonly driverProfiles: DriverProfileRecord[] = [];
+  readonly businessMembers: BusinessMemberRecord[] = [];
+  readonly deletionRequests: DeletionRequestRecord[] = [];
+  readonly transactionOptions: unknown[] = [];
   private sequence = 0;
 
   readonly user = {} as any;
@@ -74,6 +108,14 @@ export class FakeUsersPrisma {
   readonly pushDelivery = {} as any;
   readonly refreshSession = {} as any;
   readonly auditLog = {} as any;
+  readonly delivery = {} as any;
+  readonly driverCashCustody = {} as any;
+  readonly partnerEarning = {} as any;
+  readonly partnerSettlement = {} as any;
+  readonly restaurant = {} as any;
+  readonly driverProfile = {} as any;
+  readonly businessMember = {} as any;
+  readonly accountDeletionRequest = {} as any;
 
   constructor() {
     this.user.findUnique = async ({ where }: any) =>
@@ -242,10 +284,83 @@ export class FakeUsersPrisma {
       this.auditLogs.push(entry);
       return entry;
     };
+
+    this.delivery.count = async ({ where }: any) =>
+      this.deliveries.filter((entry) => entry.driverId === where.driverId && where.status.in.includes(entry.status)).length;
+    this.driverCashCustody.count = async ({ where }: any) =>
+      this.cashCustodies.filter((entry) => entry.driverUserId === where.driverUserId && entry.status !== where.status.not).length;
+    const sumFor = (rows: AmountRecord[]) => async ({ where }: any) => {
+      const matches = rows.filter((row) => row.payeeKey === where.payeeKey);
+      return { _sum: { amountMinor: matches.length ? matches.reduce((total, row) => total + row.amountMinor, 0) : null } };
+    };
+    this.partnerEarning.aggregate = sumFor(this.earnings);
+    this.partnerSettlement.aggregate = sumFor(this.payouts);
+    this.restaurant.findUnique = async ({ where }: any) =>
+      this.restaurants.find((entry) => entry.ownerUserId === where.ownerUserId) ?? null;
+    this.driverProfile.updateMany = async ({ where, data }: any) => {
+      const matches = this.driverProfiles.filter((entry) => entry.userId === where.userId);
+      for (const entry of matches) Object.assign(entry, data);
+      return { count: matches.length };
+    };
+    this.businessMember.updateMany = async ({ where, data }: any) => {
+      const matches = this.businessMembers.filter((entry) => entry.userId === where.userId);
+      for (const entry of matches) Object.assign(entry, data);
+      return { count: matches.length };
+    };
+    this.accountDeletionRequest.findUnique = async ({ where }: any) => {
+      const entry = this.deletionRequests.find((candidate) => candidate.userId === where.userId);
+      return entry ? { ...entry, blockers: [...entry.blockers] } : null;
+    };
+    this.accountDeletionRequest.update = async ({ where, data }: any) => {
+      const entry = this.deletionRequests.find((candidate) => candidate.userId === where.userId);
+      if (!entry) throw new Error("missing deletion request");
+      Object.assign(entry, data);
+      return { ...entry };
+    };
+    this.accountDeletionRequest.upsert = async ({ where, create, update }: any) => {
+      const existing = this.deletionRequests.find((candidate) => candidate.userId === where.userId);
+      if (existing) {
+        Object.assign(existing, update);
+        return { ...existing };
+      }
+      const entry: DeletionRequestRecord = {
+        id: randomUUID(),
+        userId: create.userId,
+        status: "PENDING",
+        requestedAt: new Date(),
+        scheduledFor: create.scheduledFor,
+        blockers: create.blockers,
+        completedAt: null
+      };
+      this.deletionRequests.push(entry);
+      return { ...entry };
+    };
+    this.accountDeletionRequest.findMany = async ({ where, take }: any) =>
+      this.deletionRequests
+        .filter((entry) => entry.status === where.status && entry.scheduledFor.getTime() <= where.scheduledFor.lte.getTime())
+        .sort((left, right) => left.scheduledFor.getTime() - right.scheduledFor.getTime())
+        .slice(0, take)
+        .map((entry) => ({ userId: entry.userId }));
   }
 
-  async $transaction<T>(operation: (transaction: this) => Promise<T>): Promise<T> {
+  async $transaction<T>(operation: (transaction: this) => Promise<T>, options?: unknown): Promise<T> {
+    this.transactionOptions.push(options ?? null);
     return operation(this);
+  }
+
+  seedDriverProfile(userId: string): DriverProfileRecord {
+    const profile: DriverProfileRecord = {
+      userId,
+      isOnline: true,
+      appState: "FOREGROUND",
+      appLeaseUntil: new Date(Date.now() + 60_000),
+      appSeenAt: new Date(),
+      lastLatitude: 31.9,
+      lastLongitude: 35.2,
+      lastLocationAt: new Date()
+    };
+    this.driverProfiles.push(profile);
+    return profile;
   }
 
   seedUser(overrides: Partial<UserRecord> = {}): UserRecord {

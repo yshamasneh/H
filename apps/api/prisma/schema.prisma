@@ -313,9 +313,35 @@ model User {
   subscriptionChargesRaised SubscriptionCharge[]    @relation("SubscriptionChargeCreatedBy")
   financialAdjustments      FinancialAdjustment[]   @relation("FinancialAdjustmentCreatedBy")
   financialRateSets         FinancialRateSet[]      @relation("FinancialRateSetCreatedBy")
+  accountDeletionRequest    AccountDeletionRequest?
 
   @@index([role, isActive])
   @@index([platformRoleId])
+}
+
+enum AccountDeletionStatus {
+  PENDING
+  COMPLETED
+}
+
+/// An account holder asked for deletion while the account still had obligations that need the
+/// person's identity to settle: an active delivery, cash still to hand over, or driver earnings not
+/// yet paid. The deletion is scheduled rather than refused; a background sweep completes it on or
+/// after `scheduledFor` once every blocker is cleared. Order and cash records are never deleted.
+model AccountDeletionRequest {
+  id           String                @id @default(uuid()) @db.Uuid
+  userId       String                @unique @db.Uuid
+  status       AccountDeletionStatus @default(PENDING)
+  requestedAt  DateTime              @default(now())
+  scheduledFor DateTime
+  /// The blocker codes seen at the last evaluation (ACTIVE_DELIVERY, OUTSTANDING_CASH, UNSETTLED_EARNINGS).
+  blockers     String[]
+  completedAt  DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
 }
 
 /// A named set of permissions. Permissions are stored as plain strings so a new capability or a

@@ -82,14 +82,15 @@ test("deleteMyAccount anonymizes the customer and scrubs their linked personal d
   assert.equal(prisma.auditLogs[0].entityId, user.id);
 });
 
-test("deleteMyAccount refuses non-customer accounts and leaves their data untouched", async () => {
+test("deleteMyAccount refuses the store's legal owner and leaves their data untouched", async () => {
   const { prisma, service } = createService();
   const owner = prisma.seedUser({ role: UserRole.RESTAURANT, fullName: "Store Owner" });
+  prisma.restaurants.push({ id: "store-1", ownerUserId: owner.id });
   prisma.seedAddress(owner.id, { isDefault: true });
 
   await assert.rejects(
     service.deleteMyAccount(owner.id),
-    hasCode("ACCOUNT_DELETION_SUPPORT_REQUIRED")
+    hasCode("BUSINESS_OWNER_DELETION_REQUIRES_ADMIN")
   );
   // Nothing was anonymized or removed.
   assert.equal(prisma.users[0].fullName, "Store Owner");

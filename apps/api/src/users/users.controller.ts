@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Req, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { AuthenticatedRequest } from "../auth/jwt-auth.guard";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -22,11 +23,26 @@ export class UsersController {
     return this.users.updateProfile(request.user.id, input);
   }
 
+  /**
+   * 204 when the account was deleted (anonymised) now; 202 with the date when a driver's deletion
+   * had to be scheduled until an active delivery, cash custody or earnings are settled.
+   */
   @Delete()
-  @HttpCode(204)
-  @ApiOperation({ summary: "Deactivate and anonymize the authenticated customer account" })
-  deleteAccount(@Req() request: AuthenticatedRequest) {
-    return this.users.deleteMyAccount(request.user.id);
+  @ApiOperation({ summary: "Delete (anonymise) the authenticated account, or schedule it when obligations are outstanding" })
+  async deleteAccount(@Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response: Response) {
+    const outcome = await this.users.deleteMyAccount(request.user.id);
+    if (outcome.status === "SCHEDULED") {
+      response.status(202);
+      return outcome;
+    }
+    response.status(204);
+    return undefined;
+  }
+
+  @Get("deletion")
+  @ApiOperation({ summary: "The authenticated account's scheduled deletion, if any" })
+  deletionRequest(@Req() request: AuthenticatedRequest) {
+    return this.users.getDeletionRequest(request.user.id);
   }
 
   @Get("addresses")
