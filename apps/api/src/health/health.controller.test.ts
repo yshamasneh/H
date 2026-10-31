@@ -69,18 +69,28 @@ test("correcting the invariant makes readiness recover on the next request", asy
   assert.equal((await controller.ready()).status, "ready");
 });
 
-test("readiness reports the commit the process was built from, so a deploy can prove what is running", async () => {
+test("readiness names the service jovo-api and hides the build commit unless HEALTH_EXPOSE_COMMIT=true (store audit L2)", async () => {
   const prisma = { $queryRaw: async () => [{ ok: 1 }] };
   const partners = { validate: async () => ({ ready: true, issues: [] }), logInvalid: () => {} };
   const controller = new HealthController(prisma as never, partners as never);
-  const original = process.env.GIT_SHA;
+  const originalSha = process.env.GIT_SHA;
+  const originalExpose = process.env.HEALTH_EXPOSE_COMMIT;
   try {
     process.env.GIT_SHA = "0123456789abcdef0123456789abcdef01234567";
+    delete process.env.HEALTH_EXPOSE_COMMIT;
+    const hidden = await controller.health();
+    assert.equal(hidden.service, "jovo-api");
+    assert.equal("commit" in hidden, false, "the public health response carries no commit by default");
+    assert.equal(controller.live().service, "jovo-api");
+
+    process.env.HEALTH_EXPOSE_COMMIT = "true";
     assert.equal((await controller.health()).commit, "0123456789abcdef0123456789abcdef01234567");
     delete process.env.GIT_SHA;
     assert.equal((await controller.health()).commit, null, "a hand-built image reports no commit rather than a wrong one");
   } finally {
-    if (original === undefined) delete process.env.GIT_SHA;
-    else process.env.GIT_SHA = original;
+    if (originalSha === undefined) delete process.env.GIT_SHA;
+    else process.env.GIT_SHA = originalSha;
+    if (originalExpose === undefined) delete process.env.HEALTH_EXPOSE_COMMIT;
+    else process.env.HEALTH_EXPOSE_COMMIT = originalExpose;
   }
 });

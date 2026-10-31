@@ -5,6 +5,9 @@ import { PartnerAccountsService } from "../accounting/partner-accounts.service";
 import { ApiException } from "../common/api.exception";
 import { PrismaService } from "../prisma/prisma.service";
 
+/** The public name of this service in health responses. */
+export const healthServiceName = "jovo-api";
+
 @ApiTags("system")
 @Controller("health")
 export class HealthController {
@@ -26,7 +29,7 @@ export class HealthController {
   live() {
     return {
       ok: true,
-      service: "tasawaq-api",
+      service: healthServiceName,
       status: "alive",
       time: new Date().toISOString()
     };
@@ -57,11 +60,12 @@ export class HealthController {
     }
     return {
       ok: true,
-      service: "tasawaq-api",
+      service: healthServiceName,
       status: "ready",
-      // Which commit this process was built from (set by the Docker build), so an operator or the
-      // deploy workflow can confirm the live server runs the code that was just pushed.
-      commit: process.env.GIT_SHA || null,
+      // Which commit this process was built from (set by the Docker build). It is public, so it is
+      // only included when HEALTH_EXPOSE_COMMIT=true (store audit L2): a deploy that verifies the
+      // running commit (the trial workflow) must set it; production does not by default.
+      ...(process.env.HEALTH_EXPOSE_COMMIT === "true" ? { commit: process.env.GIT_SHA || null } : {}),
       database: "connected",
       time: new Date().toISOString()
     };
