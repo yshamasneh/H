@@ -4,6 +4,7 @@ import i18n from "../i18n";
 import type { CountryCode } from "./phone";
 import { ApiError } from "./api-error";
 import type { ApiErrorPayload } from "./api-error";
+import { resolveApiBaseUrl } from "./api-url";
 import { createRefreshCoordinator, sendWithAuthRetry } from "./auth-retry";
 import { fetchWithTimeout, retryPolicyFor, runWithRetry } from "./http-retry";
 import { clearTokens, getRefreshToken, saveTokens } from "./session";
@@ -396,19 +397,13 @@ export type CreateOrderInput = {
 // inline-env-vars plugin only visits MemberExpression, so `process.env?.X`
 // (an OptionalMemberExpression) is silently left un-inlined and reads as
 // undefined in release bundles.
-const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
-const developmentApiUrl =
-  Platform.select({
-    android: "http://10.0.2.2:3000",
-    ios: "http://localhost:3000",
-    default: "http://localhost:3000"
-  }) || "http://localhost:3000";
-
-if (!__DEV__ && (!configuredApiUrl || !configuredApiUrl.startsWith("https://"))) {
-  throw new Error("Production builds require an HTTPS EXPO_PUBLIC_API_URL.");
-}
-
-export const apiBaseUrl = configuredApiUrl || developmentApiUrl;
+// A release native build that would talk to anything but https://api.jovops.com fails at startup
+// with a descriptive error (see api-url.ts) instead of shipping to the store pointed elsewhere.
+export const apiBaseUrl = resolveApiBaseUrl({
+  configured: process.env.EXPO_PUBLIC_API_URL,
+  isDev: __DEV__,
+  platform: Platform.OS
+});
 
 export function requestSignupCode(input: SignupInput): Promise<OtpRequestResult> {
   return request("/api/v1/auth/customer/signup/request-code", { method: "POST", body: input });
