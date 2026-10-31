@@ -1,4 +1,6 @@
-# Reviewer access guide (plan only: no accounts were created and the rate limiter was not changed)
+# Reviewer access guide
+
+Run 2 status: the server can now mark demo accounts (below). No account was created, no login shortcut exists, and the rate limiter was not changed.
 
 **Policy sources (fetched 2026-10-31)**
 
@@ -12,8 +14,23 @@
 |---|---|---|---|---|
 | Review customer | CUSTOMER | [[PLACEHOLDER: +970 number you control]] | Admin console → Users (or sign up once yourself with the OTP) | A strong password, not reused anywhere. One saved address **inside** the delivery zone, set as default, so checkout works from anywhere in the world. |
 | Review driver | DRIVER (approved) | [[PLACEHOLDER]] | Admin → Drivers → Create | Approved. During the review window keep **one demo order** prepared by staff, assigned to this driver and ready for pickup (see §3). |
-| Review store staff | RESTAURANT (member of JOVO MARKET) | [[PLACEHOLDER]] | Store → Staff → Invite | Least privilege: orders and preparation only, **no** price or cost permission. |
+| Review store staff | — | — | **Not recommended.** A store-staff account sees real customers' orders and addresses, and the server refuses to mark store staff as demo accounts. Describe the store screens in the notes instead, or provide screenshots on request. |
 | Admin | — | — | **Do not share.** | The notes describe admin as an internal staff tool; offer a restricted demo admin on request. |
+
+**Mark both accounts as demo accounts (new in run 2).** After creating them, an administrator with `MANAGE_USERS` calls, for each account:
+
+```
+PATCH /api/v1/admin/users/<userId>/demo   {"isDemo": true, "reason": "App review account"}
+```
+
+(There is no admin-web button yet; use the API with an admin token, or ask for a follow-up run to add the button.) What the flag does, enforced by the server and covered by `demo-accounts.e2e.test.ts`:
+
+- Orders placed by a demo customer are stored with `Order.isDemo = true`.
+- When such an order is ready for pickup, only **demo** drivers are alerted (push, in-app and socket). Real drivers never see it in "available deliveries" and get 404 if they try to accept it. A demo driver never sees or accepts a real order.
+- A demo delivery can be accepted, picked up and started (so the reviewer sees the location disclosure and background tracking), but **delivered** or **failed** is refused with `DEMO_ORDER_CANNOT_COMPLETE`. Those two steps are what write the financial record, cash custody and earnings, so a demo order never enters accounting or settlement. An administrator cancels it afterwards.
+- Only CUSTOMER and DRIVER accounts can be marked (`DEMO_ROLE_NOT_ALLOWED` otherwise). A driver with an active delivery cannot switch sides.
+- Every change is in the audit log (`USER_MARKED_DEMO` / `USER_UNMARKED_DEMO`).
+- **Still true:** the real store (JOVO MARKET) receives the demo customer's order on its board. Staff must recognise the review customer's name and prepare/cancel it as in §3. Analytics and dashboards do not filter demo orders yet.
 
 Rules:
 
@@ -29,9 +46,11 @@ Rules:
 >
 > **Login:** phone number + password. Choose country code +970 and enter the number exactly as given. No SMS code is needed to log in; SMS codes are used only for new sign-ups and password resets, which need a Palestinian or Israeli number.
 >
-> **Customer account:** a delivery address inside the zone is already saved. Please place at most one test order; our team cancels test orders.
+> **Browsing without an account:** on the first screen, "Browse without an account" opens the store catalogue, search and offers. An account is only needed to order, see orders or manage personal data.
 >
-> **Driver account:** an order is already assigned. Open it and start the delivery. You will see our location disclosure, then the system location prompt. The driver's location is shared with JOVO dispatch only during an active delivery, including in the background so dispatch can follow the delivery while the driver uses a navigation app. It stops when the delivery ends.
+> **Customer account:** a delivery address inside the zone is already saved. Please place at most one test order. It is marked as a review order: no real driver is sent and our team cancels it.
+>
+> **Driver account:** a review order is waiting under "available deliveries" (switch online first). Accept it and start the delivery. The final "delivered" step is disabled for review orders, which is expected. You will see our location disclosure, then the system location prompt. The driver's location is shared with JOVO dispatch only during an active delivery, including in the background so dispatch can follow the delivery while the driver uses a navigation app. It stops when the delivery ends.
 >
 > **Store-staff account:** the JOVO MARKET order board and order preparation.
 >
@@ -47,9 +66,11 @@ Rules:
 >
 > **الدخول:** برقم الهاتف وكلمة المرور. اختر مفتاح الدولة +970 وأدخل الرقم كما هو. لا حاجة لرمز SMS لتسجيل الدخول؛ الرمز فقط لإنشاء حساب جديد أو استعادة كلمة المرور.
 >
-> **حساب الزبون:** يوجد عنوان محفوظ داخل منطقة التوصيل. يرجى عدم إرسال أكثر من طلب تجريبي واحد، وسنلغي الطلبات التجريبية.
+> **التصفح بدون حساب:** في الشاشة الأولى يفتح خيار «تصفّح بدون حساب» كتالوج المتجر والبحث والعروض. الحساب مطلوب فقط للطلب ومتابعة الطلبات وإدارة البيانات الشخصية.
 >
-> **حساب السائق:** يوجد طلب مُسند جاهز. افتح الطلب وابدأ التوصيل، وسيظهر إفصاح الموقع ثم طلب إذن النظام. يُشارك موقع السائق مع إدارة JOVO فقط أثناء التوصيلة النشطة، بما في ذلك في الخلفية أثناء استخدام تطبيق ملاحة، ويتوقف عند انتهاء التوصيلة.
+> **حساب الزبون:** يوجد عنوان محفوظ داخل منطقة التوصيل. يرجى عدم إرسال أكثر من طلب تجريبي واحد؛ يُعلَّم كطلب مراجعة فلا يُرسل إليه سائق حقيقي، وسنلغيه.
+>
+> **حساب السائق:** يوجد طلب مراجعة ضمن «التوصيلات المتاحة» (فعّل وضع الاتصال أولًا). اقبله وابدأ التوصيل، علمًا أن خطوة «تم التسليم» معطّلة لطلبات المراجعة وهذا متوقع. وسيظهر إفصاح الموقع ثم طلب إذن النظام. يُشارك موقع السائق مع إدارة JOVO فقط أثناء التوصيلة النشطة، بما في ذلك في الخلفية أثناء استخدام تطبيق ملاحة، ويتوقف عند انتهاء التوصيلة.
 >
 > **حساب موظف المتجر:** لوحة طلبات جوفو ماركت وتجهيز الطلبات.
 >
@@ -72,19 +93,12 @@ Rules:
 - No driver is dispatched to a real address. The demo address should be the store's own address, or [[PLACEHOLDER: a safe address inside the zone]].
 - Because the order is cancelled, no cash custody or earnings are created. Check with the admin accounting view afterwards.
 
-**Driver demo order**
+**Driver demo order (run 2: enforced by the server)**
 
-Created by staff on the review customer account, assigned to the review driver, kept in "ready for pickup".
-
-- If the reviewer completes it, it goes through as a normal delivered cash order with custody of the order total.
-- **Recommended:** keep the demo order total tiny (one low-price item) and settle it the same day.
-- Alternative: cancel it from admin before the reviewer reaches "delivered".
-
-**Optional future code change (not done; needs an owner decision)**
-
-- A server flag `REVIEW_ACCOUNT_PHONES` that tags orders from those phones as `isTest`.
-- Such orders would be excluded from notifications to real drivers and from analytics.
-- This changes order behaviour, so it was not implemented.
+- Have staff move the demo customer's order to "ready for pickup". Only the demo driver is alerted.
+- The reviewer can accept, pick up and start it; "delivered" and "failed" are refused, so no cash custody or earnings can be created.
+- After the review, an administrator cancels the order (reason "review test").
+- The older advice ("keep the total tiny and settle it the same day") is no longer needed for demo-marked accounts. It still applies if you skip the demo flag.
 
 ## 4. Login back-off and demo phones (M8)
 

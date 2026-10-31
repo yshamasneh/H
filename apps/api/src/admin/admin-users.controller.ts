@@ -7,7 +7,7 @@ import { RequirePermission } from "../common/decorators/require-permission.decor
 import { RolesGuard } from "../common/guards/roles.guard";
 import { PermissionsGuard } from "../common/guards/permissions.guard";
 import { UserRole } from "../generated/prisma/client";
-import { AdminUsersQueryDto, AssignPlatformRoleDto, CreateAdminUserDto, SetUserActiveDto } from "./admin.dto";
+import { AdminUsersQueryDto, AssignPlatformRoleDto, CreateAdminUserDto, SetUserActiveDto, SetUserDemoDto } from "./admin.dto";
 import { AdminService } from "./admin.service";
 
 @ApiTags("admin")
@@ -49,6 +49,16 @@ export class AdminUsersController {
     @Body() input: SetUserActiveDto
   ) {
     return this.admin.setUserActive(request.user.id, userId, input);
+  }
+
+  @Patch(":userId/demo")
+  @ApiOperation({ summary: "Mark or unmark an app-review demo account (customers and drivers only)" })
+  setDemo(
+    @Req() request: AuthenticatedRequest,
+    @Param("userId", new ParseUUIDPipe()) userId: string,
+    @Body() input: SetUserDemoDto
+  ) {
+    return this.admin.setUserDemo(request.user.id, userId, input);
   }
 
   @Patch(":userId/platform-role")

@@ -130,6 +130,19 @@ export class SetUserActiveDto {
   reason!: string;
 }
 
+/** Store audit B6/M7: mark or unmark an app-review demo account. */
+export class SetUserDemoDto {
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  isDemo!: boolean;
+
+  @ApiProperty({ example: "Google Play review account" })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  reason!: string;
+}
+
 export class AssignPlatformRoleDto {
   @ApiPropertyOptional({ enum: platformAssignableRoleKeys, description: "Omit to remove the platform role." })
   @IsOptional()

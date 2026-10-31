@@ -45,6 +45,8 @@ export type AdminUserView = {
   phone: string;
   role: UserRole;
   isActive: boolean;
+  /** Store audit B6/M7: an app-review demo account. */
+  isDemo: boolean;
   phoneVerifiedAt: Date | null;
   createdAt: Date;
 };

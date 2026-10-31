@@ -279,6 +279,9 @@ model User {
   platformRoleId            String?                 @db.Uuid
   phoneVerifiedAt           DateTime?
   isActive                  Boolean                 @default(true)
+  /// Store audit B6/M7: an app-review demo account, marked by an administrator. Demo orders never
+  /// reach real drivers and are never completed into financial records.
+  isDemo                    Boolean                 @default(false)
   tokenVersion              Int                     @default(0)
   createdAt                 DateTime                @default(now())
   updatedAt                 DateTime                @updatedAt
@@ -640,6 +643,8 @@ model Order {
   restaurantId             String                @db.Uuid
   status                   OrderStatus           @default(PLACED)
   paymentMethod            OrderPaymentMethod
+  /// Copied from the customer's User.isDemo when the order is placed (store audit M7).
+  isDemo                   Boolean               @default(false)
   deliveryLabel            String
   deliveryAddressLine      String
   deliveryLatitude         Float?

@@ -632,13 +632,20 @@ export class DriversService {
       : { deliveryId, route: null, unavailableReason: "UNAVAILABLE" };
   }
 
-  async listAvailableDeliveries(): Promise<DeliveryView[]> {
+  async listAvailableDeliveries(driverUserId?: string): Promise<DeliveryView[]> {
+    // Store audit M7: a demo driver sees only demo orders and a real driver never sees them.
+    const isDemoDriver = driverUserId ? await this.isDemoUser(driverUserId) : false;
     const deliveries = await this.prisma.delivery.findMany({
-      where: { status: DeliveryStatus.PENDING_ASSIGNMENT },
+      where: { status: DeliveryStatus.PENDING_ASSIGNMENT, order: { isDemo: isDemoDriver } },
       include: deliveryInclude,
       orderBy: { createdAt: "asc" }
     });
     return deliveries.map(toDeliveryView);
+  }
+
+  private async isDemoUser(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { isDemo: true } });
+    return user?.isDemo === true;
   }
 
   async listOwnDeliveries(driverUserId: string, page: number, pageSize: number): Promise<Page<DeliveryView>> {
@@ -689,6 +696,12 @@ export class DriversService {
           "DELIVERY_ORDER_NOT_ACTIVE",
           "This order is no longer awaiting delivery."
         );
+      }
+      // Store audit M7: demo and real work never mix. Reported as not found so a real driver
+      // learns nothing about a demo order (and a demo driver nothing about a real one).
+      const driverIsDemo = (await tx.user.findUnique({ where: { id: driverUserId }, select: { isDemo: true } }))?.isDemo === true;
+      if ((claimedOrder.isDemo === true) !== driverIsDemo) {
+        throw deliveryNotFound();
       }
       const claimed = await tx.delivery.updateMany({
         where: { id: deliveryId, status: DeliveryStatus.PENDING_ASSIGNMENT, driverId: null },
@@ -757,6 +770,16 @@ export class DriversService {
           409,
           "DELIVERY_ORDER_NOT_ACTIVE",
           "This order is no longer awaiting delivery."
+        );
+      }
+      // Store audit M7: completing (or failing) a delivery is what writes the order's financial
+      // record, cash custody and earnings. A demo order must never get there, so it stops before
+      // any of that code runs; an administrator cancels it instead. No financial code is changed.
+      if (order.isDemo === true && (targetStatus === DeliveryStatus.DELIVERED || targetStatus === DeliveryStatus.FAILED)) {
+        throw new ApiException(
+          409,
+          "DEMO_ORDER_CANNOT_COMPLETE",
+          "This is an app-review demo order. It cannot be completed; an administrator will cancel it."
         );
       }
 

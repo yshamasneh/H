@@ -124,11 +124,15 @@ export class OrdersService {
       // layer computes later reads these, so a rate changed next month can never restate what this
       // order was worth.
       const rateSet = await resolveCurrentRateSet(tx);
+      // Store audit M7: an order placed by an app-review demo account is marked at birth, so
+      // dispatch keeps it away from real drivers and it can never be completed into money.
+      const customer = await tx.user.findUnique({ where: { id: customerId }, select: { isDemo: true } });
 
       const created = await tx.order.create({
         data: {
           customerId,
           idempotencyKey,
+          isDemo: customer?.isDemo === true,
           restaurantId: restaurant.id,
           status: OrderStatus.PLACED,
           paymentMethod: input.paymentMethod,
@@ -765,12 +769,19 @@ export class OrdersService {
         // the job. Written in this transaction: the delivery and its alerts commit or roll back
         // together, and the worker (not this request) talks to Expo. The body deliberately names only
         // the pickup store — a lock-screen notification must not expose the customer's address.
-        await createNotificationsForUsers(tx, emitter, await findDispatchableDriverIds(tx), {
+        // Store audit M7: a demo order alerts only demo drivers, a real order only real drivers.
+        const isDemoOrder = (await tx.order.findUnique({ where: { id: orderId }, select: { isDemo: true } }))?.isDemo === true;
+        const driverIds = await findDispatchableDriverIds(tx, new Date(), isDemoOrder);
+        await createNotificationsForUsers(tx, emitter, driverIds, {
           type: NotificationType.DELIVERY_AVAILABLE,
           ...copy.deliveryAvailable(restaurant.name),
           relatedEntityId: delivery.id
         });
-        emitter.emitToDrivers("delivery.available", { deliveryId: delivery.id, orderId });
+        if (isDemoOrder) {
+          for (const driverId of driverIds) emitter.emitToUser(driverId, "delivery.available", { deliveryId: delivery.id, orderId });
+        } else {
+          emitter.emitToDrivers("delivery.available", { deliveryId: delivery.id, orderId });
+        }
       }
       if (targetStatus === OrderStatus.REJECTED) {
         await this.restoreTrackedInventory(tx, orderId);

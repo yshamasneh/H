@@ -211,6 +211,8 @@ export class FakeOrdersPrisma {
   readonly orderItem = {} as any;
   readonly delivery = {} as any;
   readonly driverProfile = {} as any;
+  /** Only what order code reads about a user: the demo flag (store audit M7). No fake user is a demo account. */
+  readonly user = { findUnique: async () => ({ isDemo: false }) } as any;
   readonly notification = {} as any;
   readonly pushToken = {} as any;
   readonly pushDelivery = {} as any;

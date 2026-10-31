@@ -13,7 +13,9 @@ import { activeDeliveryStatuses } from "./delivery.rules";
  */
 export async function findDispatchableDriverIds(
   tx: Prisma.TransactionClient,
-  now: Date = new Date()
+  now: Date = new Date(),
+  /** Store audit M7: demo orders go to demo drivers only, real orders to real drivers only. */
+  isDemoOrder = false
 ): Promise<string[]> {
   const online = await tx.driverProfile.findMany({
     where: {
@@ -22,7 +24,7 @@ export async function findDispatchableDriverIds(
       // The app must be running. A stale online flag on a phone whose app was closed has no lease,
       // so it is not alerted at all (see presence.rules.ts).
       appLeaseUntil: { gt: now },
-      user: { isActive: true }
+      user: { isActive: true, isDemo: isDemoOrder }
     },
     select: { userId: true }
   });

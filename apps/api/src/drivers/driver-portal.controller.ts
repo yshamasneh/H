@@ -76,8 +76,8 @@ export class DriverPortalController {
 
   @Get("me/deliveries/available")
   @ApiOperation({ summary: "List unclaimed deliveries any online driver may accept" })
-  listAvailable() {
-    return this.drivers.listAvailableDeliveries();
+  listAvailable(@Req() request: AuthenticatedRequest) {
+    return this.drivers.listAvailableDeliveries(request.user.id);
   }
 
   @Get("me/deliveries")

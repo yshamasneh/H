@@ -1997,3 +1997,20 @@ test("the customer's own responses never carry the phone or name keys at all", a
     assert.equal("customerName" in view, false);
   }
 });
+
+test("store audit M7: an order placed by a demo account is marked as a demo order", async () => {
+  const { prisma, service } = createService();
+  const restaurant = prisma.seedRestaurant();
+  const menuItem = prisma.seedMenuItem(restaurant.id, { priceMinor: 1500 });
+  const captured: boolean[] = [];
+  const realCreate = prisma.order.create;
+  prisma.order.create = async (args: { data: { isDemo?: boolean } }) => {
+    captured.push(args.data.isDemo === true);
+    return realCreate(args);
+  };
+  prisma.user.findUnique = async () => ({ isDemo: true });
+  await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  prisma.user.findUnique = async () => ({ isDemo: false });
+  await service.createOrder(randomUUID(), baseInput(restaurant.id, menuItem.id) as never);
+  assert.deepEqual(captured, [true, false]);
+});

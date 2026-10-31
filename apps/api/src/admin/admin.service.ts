@@ -20,6 +20,7 @@ import type {
   AssignPlatformRoleDto,
   CreateAdminUserDto,
   SetUserActiveDto,
+  SetUserDemoDto,
   UserAudience
 } from "./admin.dto";
 import type { AdminUserView, AuditLogEntryView, CustomerDetailView, DashboardOverview, Page } from "./admin.types";
@@ -263,6 +264,40 @@ export class AdminService {
   }
 
   /**
+   * Store audit B6/M7: marks an app-review demo account. Only customers and drivers can be demo
+   * accounts: a demo store-staff account would see real customers' orders. It is a label, not a
+   * login shortcut: the account signs in exactly like any other, with its own password.
+   */
+  async setUserDemo(actorUserId: string, userId: string, input: SetUserDemoDto): Promise<AdminUserView> {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (!user) throw new ApiException(404, "USER_NOT_FOUND", "This user account does not exist.");
+      if (user.role !== UserRole.CUSTOMER && user.role !== UserRole.DRIVER) {
+        throw new ApiException(409, "DEMO_ROLE_NOT_ALLOWED", "Only customer and driver accounts can be demo accounts.");
+      }
+      if (user.isDemo === input.isDemo) {
+        throw new ApiException(409, "USER_DEMO_UNCHANGED", "This account is already in that state.");
+      }
+      if (user.role === UserRole.DRIVER) {
+        // Switching sides while holding work would mix demo and real deliveries.
+        const active = await tx.delivery.count({ where: { driverId: userId, status: { in: ["ASSIGNED", "PICKED_UP", "ON_THE_WAY"] } } });
+        if (active > 0) throw new ApiException(409, "DEMO_DRIVER_HAS_ACTIVE_DELIVERY", "Finish or reassign the driver's current delivery first.");
+      }
+      const next = await tx.user.update({ where: { id: userId }, data: { isDemo: input.isDemo } });
+      await writeAuditLog(tx, {
+        actorUserId,
+        action: input.isDemo ? "USER_MARKED_DEMO" : "USER_UNMARKED_DEMO",
+        entityType: "User",
+        entityId: userId,
+        reason: input.reason,
+        metadata: { role: user.role, toIsDemo: input.isDemo }
+      });
+      return next;
+    });
+    return toAdminUserView(updated);
+  }
+
+  /**
    * Suspends or restores an account. Deliberately not a delete: orders reference their customer and
    * business, and a financial record must always resolve to a person.
    */
@@ -410,6 +445,7 @@ function toAdminUserView(user: {
   phone: string;
   role: UserRole;
   isActive: boolean;
+  isDemo?: boolean;
   phoneVerifiedAt: Date | null;
   createdAt: Date;
 }): AdminUserView {
@@ -419,6 +455,7 @@ function toAdminUserView(user: {
     phone: user.phone,
     role: user.role,
     isActive: user.isActive,
+    isDemo: user.isDemo === true,
     phoneVerifiedAt: user.phoneVerifiedAt,
     createdAt: user.createdAt
   };
