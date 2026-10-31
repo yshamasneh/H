@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import i18n from "../i18n";
 import { colors, radius, spacing } from "../theme/tokens";
 import { text } from "../theme/typography";
+import { appErrorReporter } from "../core/app-error-reporter";
 
 type Props = {
   children: ReactNode;
@@ -34,6 +35,8 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: { componentStack?: string | null }) {
     // Keep the native console path too, so wireless logcat still captures it.
     console.error("[ErrorBoundary]", error?.message, info?.componentStack ?? "");
+    // Store audit M2: a no-op unless an error-report endpoint is configured.
+    appErrorReporter.report(error, { fatal: false, context: "render" });
   }
 
   handleReset = () => {

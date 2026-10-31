@@ -3,6 +3,9 @@ import './src/i18n/rtl-preset';
 // with no screen mounted (the driver is in another app during a delivery).
 import './src/core/background-location';
 import { registerRootComponent } from 'expo';
+import { installGlobalErrorReporting } from './src/core/app-error-reporter';
 import App from './App';
 
+// Store audit M2: does nothing unless EXPO_PUBLIC_ERROR_REPORT_URL is set.
+installGlobalErrorReporting();
 registerRootComponent(App);
