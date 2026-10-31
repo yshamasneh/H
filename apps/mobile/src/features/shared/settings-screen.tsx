@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { deleteMyAccount, registerMyPushToken, unregisterMyPushToken, type PublicUser } from "../../core/api";
+import { LegalSettingsRows } from "../../components/legal-links";
+import { deleteMyAccount, getMyDeletionRequest, registerMyPushToken, unregisterMyPushToken, type PublicUser } from "../../core/api";
 import { readError } from "../../core/errors";
 import {
   clearStoredPushToken,
@@ -18,6 +19,7 @@ import { Icon, backIconName, disclosureIconName, type IconName } from "../../the
 import { radius, spacing, type ThemeColors } from "../../theme/tokens";
 import { useTheme } from "../../theme/theme-context";
 import { text } from "../../theme/typography";
+import { canSelfDelete, formatDeletionDate } from "./account-deletion.rules";
 
 /**
  * The one Settings screen for every role. The customer entry point (Account
@@ -38,7 +40,7 @@ export function SettingsScreen(props: {
   onManageAccount?: () => void;
   onDeleted?: () => Promise<void>;
 }) {
-  const { t } = useTranslation(["customer", "common"]);
+  const { t, i18n } = useTranslation(["customer", "common"]);
   const { colors, isDark, setMode } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -47,12 +49,30 @@ export function SettingsScreen(props: {
   const [pushError, setPushError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // A driver's deletion can be scheduled until a delivery, cash or earnings are settled (store audit H1).
+  const [scheduledFor, setScheduledFor] = useState<string | null>(null);
+  const isCustomer = props.user.role === "CUSTOMER";
+  const showDelete = Boolean(props.onDeleted) && canSelfDelete(props.user.role);
 
   useEffect(() => {
     void Promise.all([getStoredPushToken(), getStoredPushTokenOwner()]).then(([stored, ownerUserId]) => {
       setPushEnabled(Boolean(stored) && (!ownerUserId || ownerUserId === props.user.id));
     });
   }, [props.user.id]);
+
+  useEffect(() => {
+    if (props.user.role !== "DRIVER") return;
+    void (async () => {
+      try {
+        const accessToken = await getAccessToken();
+        if (!accessToken) return;
+        const pending = await getMyDeletionRequest(accessToken);
+        if (pending.status === "SCHEDULED") setScheduledFor(pending.scheduledFor);
+      } catch {
+        // An older API without the endpoint, or offline: the card simply shows no schedule.
+      }
+    })();
+  }, [props.user.id, props.user.role]);
 
   async function confirmLogout() {
     const proceed = await confirm(
@@ -84,7 +104,17 @@ export function SettingsScreen(props: {
     try {
       const accessToken = await getAccessToken();
       if (!accessToken) throw new Error(t("common:sessionExpired"));
-      await deleteMyAccount(accessToken);
+      const result = await deleteMyAccount(accessToken);
+      if (result.status === "SCHEDULED") {
+        // Not deleted yet: the person keeps their session to finish the delivery or hand over cash.
+        setScheduledFor(result.scheduledFor);
+        setDeleting(false);
+        Alert.alert(
+          t("account.deleteScheduledTitle"),
+          t("account.deleteScheduledBody", { date: formatDeletionDate(result.scheduledFor, i18n.language) })
+        );
+        return;
+      }
       await clearStoredPushToken();
       await props.onDeleted();
     } catch (requestError) {
@@ -193,12 +223,22 @@ export function SettingsScreen(props: {
           ) : null}
         </SectionCard>
 
-        {props.onDeleted ? (
+        <SectionCard icon="info" title={t("settings.legalSectionTitle")}>
+          <LegalSettingsRows />
+        </SectionCard>
+
+        {showDelete ? (
           <View style={[styles.card, styles.dangerCard]}>
             <Text style={styles.dangerTitle}>{t("account.deleteAccountTitle")}</Text>
             <Text style={styles.dangerHelper}>{t("account.deleteAccountHelper")}</Text>
+            <Text style={styles.dangerHelper}>{t("account.deleteWebHelper")}</Text>
+            {scheduledFor ? (
+              <Text style={styles.dangerHelper} testID="deletion-scheduled">
+                {t("account.deleteScheduledStatus", { date: formatDeletionDate(scheduledFor, i18n.language) })}
+              </Text>
+            ) : null}
             {deleteError ? <Text style={styles.deleteError}>{deleteError}</Text> : null}
-            <Pressable disabled={deleting} onPress={() => void removeAccount()} style={styles.deleteButton}>
+            <Pressable accessibilityRole="button" disabled={deleting} onPress={() => void removeAccount()} style={styles.deleteButton}>
               {deleting ? (
                 <ActivityIndicator color={colors.error} />
               ) : (
@@ -206,7 +246,15 @@ export function SettingsScreen(props: {
               )}
             </Pressable>
           </View>
-        ) : (
+        ) : props.user.role === "ADMIN" ? (
+          <View style={styles.card}>
+            <Text style={styles.dangerTitle}>{t("account.deleteAccountTitle")}</Text>
+            <Text style={styles.dangerHelper}>{t("account.deleteAdminNote")}</Text>
+          </View>
+        ) : null}
+
+        {/* Customers sign out from their Account tab; every other role signs out here. */}
+        {isCustomer && showDelete ? null : (
           <Pressable disabled={loggingOut} onPress={() => void confirmLogout()} style={styles.logoutButton}>
             {loggingOut ? (
               <ActivityIndicator color={colors.error} />

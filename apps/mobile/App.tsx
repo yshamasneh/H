@@ -737,7 +737,8 @@ function TasawaQApp() {
       return (
         <SettingsScreen
           onBack={() => setScreen(screen.user.role === "ADMIN" ? goToAdminMore(screen.user) : homeForUser(screen.user))}
-          onDeleted={screen.user.role === "CUSTOMER" ? handleLogout : undefined}
+          // Store audit H1: customers, drivers and store staff can delete their own account.
+          onDeleted={screen.user.role === "ADMIN" ? undefined : handleLogout}
           onLogout={handleLogout}
           onManageAccount={
             screen.user.role === "CUSTOMER" ? () => setScreen(goToAccount(screen.user)) : undefined

@@ -426,8 +426,24 @@ export function updateMyProfile(
   return request("/api/v1/users/me", { method: "PATCH", body: input, accessToken });
 }
 
-export function deleteMyAccount(accessToken: string): Promise<void> {
-  return request("/api/v1/users/me", { method: "DELETE", accessToken });
+/** DELETED: the account is gone now. SCHEDULED: a driver's deletion waits for open obligations. */
+export type AccountDeletionResult =
+  | { status: "DELETED" }
+  | { status: "SCHEDULED"; scheduledFor: string; blockers: string[] };
+
+/**
+ * 204 means deleted now; 202 carries the scheduled date (store audit H1). An older API that
+ * answers 204 for customers only is read the same way.
+ */
+export async function deleteMyAccount(accessToken: string): Promise<AccountDeletionResult> {
+  const result = await request<AccountDeletionResult | undefined>("/api/v1/users/me", { method: "DELETE", accessToken });
+  return result && result.status === "SCHEDULED" ? result : { status: "DELETED" };
+}
+
+export function getMyDeletionRequest(
+  accessToken: string
+): Promise<{ status: "NONE" } | { status: "SCHEDULED"; scheduledFor: string; blockers: string[] }> {
+  return request("/api/v1/users/me/deletion", { accessToken });
 }
 
 export function listMyAddresses(accessToken: string): Promise<SavedAddress[]> {
