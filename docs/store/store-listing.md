@@ -36,7 +36,7 @@ Arabic is the primary listing language; English is the second. This replaces the
 
 > JOVO هو تطبيق التوصيل الرسمي لمتجر «جوفو ماركت» (JOVO MARKET) في [[PLACEHOLDER: اسم البلدة / منطقة الخدمة]].
 >
-> • تصفّح أقسام المتجر وابحث عن المنتجات والعلامات التجارية.
+> • تصفّح أقسام المتجر وابحث عن المنتجات والعلامات التجارية، حتى قبل إنشاء حساب.
 > • أضف ما تحتاجه إلى السلة واختر عنوان التوصيل على الخريطة.
 > • يُظهر لك التطبيق قبل التأكيد هل عنوانك داخل منطقة التوصيل ([[PLACEHOLDER: نصف قطر التوصيل بالكيلومتر]] كم من المتجر)، مع رسوم التوصيل والإجمالي.
 > • ادفع نقدًا للسائق عند الاستلام، فلا بطاقات ولا مدفوعات داخل التطبيق.
@@ -69,7 +69,7 @@ Arabic is the primary listing language; English is the second. This replaces the
 
 > JOVO is the official delivery app of JOVO MARKET in [[PLACEHOLDER: town / service area]].
 >
-> • Browse the store's departments and search products and brands.
+> • Browse the store's departments and search products and brands, even before creating an account.
 > • Add what you need to your cart and pick your delivery address on the map.
 > • Before you confirm, the app shows whether your address is inside the delivery area ([[PLACEHOLDER: delivery radius in km]] km from the store), the delivery fee and the total.
 > • Pay the driver in cash on delivery: no cards, no in-app payments.
@@ -90,7 +90,7 @@ Arabic is the primary listing language; English is the second. This replaces the
 
 ## Screenshots to capture
 
-Capture these from a **release** build signed in with the demo accounts (never real customer data). Arabic first, then English.
+Capture these from a **release** build signed in with the demo accounts (marked as demo accounts, `reviewer-access-guide.md` §1) (never real customer data). Arabic first, then English.
 
 1. Customer home (search, offers, departments).
 2. A department catalogue.

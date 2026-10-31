@@ -1,11 +1,12 @@
 # Google Play Data safety and Apple App Privacy answers
 
-These answers are derived from the code on branch `store-remediation-1`; see `docs/release-readiness/privacy-data-inventory.md` for the evidence behind each line.
+These answers are derived from the code on branch `store-remediation-2` (re-checked in run 2); see `docs/release-readiness/privacy-data-inventory.md` for the evidence behind each line.
 
 **Changes from audit §4**
 
 - Email is added as optional (customers can add it in Account, `features/customer/account-screen.tsx:146`).
-- Crash and diagnostics data is confirmed as not collected by the app (there is no crash SDK; M2 is not implemented).
+- Crash and diagnostics data is **not collected as shipped**: run 2 added a vendor-neutral reporter that stays off unless `EXPO_PUBLIC_ERROR_REPORT_URL` is set at build time. **The build that sets it must ship with these answers changed** (Google: App info and performance → Crash logs = collected, not shared, processed ephemerally: no, collection required (users cannot turn it off), purpose App functionality. Apple: Diagnostics → Crash Data, not linked to the user, not used for tracking).
+- Run 2: guests can browse without an account (no data collected for them). Reverse geocoding now goes through the JOVO API: the chosen map point (already declared as precise location) reaches Nominatim from the server, not the device. No answer changes.
 - Payment info is confirmed as not collected.
 
 **Policy sources (fetched 2026-10-31)**
@@ -44,7 +45,7 @@ These answers are derived from the code on branch `store-remediation-1`; see `do
 | App activity → Other actions | Yes (driver shift and app open/background state) | Required for drivers | App functionality | No |
 | App activity → App interactions, in-app search history | No (searches are sent to the API to return results but are not stored; the request log keeps the path only) | — | — | Yes |
 | Device or other IDs | Yes (push-notification token) | Optional | App functionality | No |
-| App info and performance → Crash logs, Diagnostics | **No** (no crash SDK today) | — | — | — |
+| App info and performance → Crash logs, Diagnostics | **No** while `EXPO_PUBLIC_ERROR_REPORT_URL` is unset (run 2 reporter is off by default); **Yes, not shared** once it is set | — | — | — |
 | Messages, Contacts, Calendar, Health, Fitness, Audio, Files and docs, Web browsing | No | — | — | — |
 
 ## Apple: App Privacy ("nutrition label")

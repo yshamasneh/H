@@ -14,6 +14,8 @@ Every [[PLACEHOLDER: ...]] must be filled by the owner and the text reviewed by 
 
 ## البيانات التي نجمعها
 
+**التصفح بدون حساب:** يمكنك تصفّح المتجر والبحث والعروض دون حساب. في هذه الحالة لا نجمع أي بيانات شخصية؛ تبقى السلة والمنتجات التي شاهدتها على جهازك فقط، ويرى خادمنا طلبات الكتالوج كأي موقع ويب (عنوان IP لأغراض الحماية من الإساءة).
+
 **كل الحسابات**
 
 - الاسم الكامل ورقم الهاتف وكلمة المرور (نحفظها مشفّرة بطريقة لا يمكن عكسها، ولا نطّلع عليها).
@@ -78,10 +80,10 @@ Every [[PLACEHOLDER: ...]] must be filled by the owner and the text reviewed by 
 - **Backblaze B2:** نسخ احتياطية مشفّرة لقاعدة البيانات.
 - **TweetSMS:** إرسال رموز التحقق برسالة نصية إلى رقمك.
 - **Expo Push Service، وGoogle Firebase Cloud Messaging، وApple Push Notification service:** إيصال الإشعارات إلى جهازك.
-- **OpenStreetMap Nominatim:** تحويل الموقع على الخريطة إلى عنوان مقروء. يُرسل الموقع المختار من جهازك مباشرة.
+- **OpenStreetMap Nominatim:** تحويل الموقع على الخريطة إلى عنوان مقروء. يرسل خادم JOVO النقطة المختارة فقط، دون اسمك أو رقمك أو عنوان جهازك (IP).
 - **مزوّد خرائط الأقمار الصناعية Esri ArcGIS على أندرويد ونسخة الويب، وخرائط Apple على iOS:** عرض الخريطة. يرى المزوّد عنوان الشبكة (IP) ومنطقة الخريطة المعروضة.
 - **Vercel:** استضافة نسخة الويب ولوحة الإدارة.
-- **[[PLACEHOLDER: مزوّد تتبّع أخطاء الخادم]]:** تقارير أخطاء الخادم.
+- **[[PLACEHOLDER: مزوّد تتبّع أخطاء الخادم]]:** تقارير أخطاء الخادم، وتقارير أعطال التطبيق إذا فعّلناها (اسم الخطأ ونصه المختصر وإصدار التطبيق ونوع النظام فقط، دون أي بيانات تعريفية أو موقع).
 - **تطبيق الملاحة** (خرائط Google على أندرويد، وخرائط Apple على iOS): يستلم موقع التسليم عندما يفتحه السائق بنفسه.
 
 قد نكشف البيانات للجهات الرسمية عند وجود التزام قانوني صحيح.
@@ -130,6 +132,8 @@ Every [[PLACEHOLDER: ...]] must be filled by the owner and the text reviewed by 
 JOVO is a delivery service for a single store, JOVO MARKET, in [[PLACEHOLDER: town / service area]]. Payment is cash on delivery only. The operator responsible for your data is [[PLACEHOLDER: operator legal name]], [[PLACEHOLDER: legal address]]. Privacy contact: [[PLACEHOLDER: privacy email]] or [[PLACEHOLDER: support phone]].
 
 ## Data we collect
+
+**Browsing without an account:** you can browse the store, search and see offers without an account. We then collect no personal data; your cart and recently viewed products stay on your device, and our server sees catalogue requests like any website (IP address, for abuse protection).
 
 **All accounts**
 
@@ -195,10 +199,10 @@ We do not sell your data, and we do not use it for advertising.
 - **Backblaze B2:** encrypted database backups.
 - **TweetSMS:** sends verification codes by SMS to your number.
 - **Expo Push Service, Google Firebase Cloud Messaging and Apple Push Notification service:** deliver notifications to your device.
-- **OpenStreetMap Nominatim:** turns a map point into a readable address. The chosen point is sent directly from your device.
+- **OpenStreetMap Nominatim:** turns a map point into a readable address. The JOVO server sends only the chosen point, without your name, number or device IP address.
 - **Esri ArcGIS satellite map tiles (Android and web) and Apple Maps (iOS):** map display. The provider sees your IP address and the map area being shown.
 - **Vercel:** hosting for the web version and the admin console.
-- **[[PLACEHOLDER: server error-tracking provider]]:** server error reports.
+- **[[PLACEHOLDER: server error-tracking provider]]:** server error reports, and app error reports if we turn them on (error name, a short masked message, app version and platform only; no identifiers or location).
 - **The navigation app** (Google Maps on Android, Apple Maps on iOS): receives the delivery point when the driver opens it.
 
 We may disclose data to authorities where there is a valid legal obligation.

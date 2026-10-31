@@ -40,6 +40,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
 <h2>من نحن</h2>
 <p>تطبيق JOVO هو خدمة توصيل لمتجر واحد هو «جوفو ماركت» (JOVO MARKET) في <mark class="ph">[[PLACEHOLDER: اسم البلدة / منطقة الخدمة]]</mark>، والدفع نقدًا عند الاستلام فقط. الجهة المشغلة والمسؤولة عن بياناتك هي <mark class="ph">[[PLACEHOLDER: الاسم القانوني للجهة المشغلة]]</mark>، وعنوانها <mark class="ph">[[PLACEHOLDER: العنوان القانوني]]</mark>. للتواصل بشأن الخصوصية: <mark class="ph">[[PLACEHOLDER: بريد الخصوصية]]</mark> أو <mark class="ph">[[PLACEHOLDER: رقم هاتف الدعم]]</mark>.</p>
 <h2>البيانات التي نجمعها</h2>
+<p><strong>التصفح بدون حساب:</strong> يمكنك تصفّح المتجر والبحث والعروض دون حساب. في هذه الحالة لا نجمع أي بيانات شخصية؛ تبقى السلة والمنتجات التي شاهدتها على جهازك فقط، ويرى خادمنا طلبات الكتالوج كأي موقع ويب (عنوان IP لأغراض الحماية من الإساءة).</p>
 <p><strong>كل الحسابات</strong></p>
 <ul>
 <li>الاسم الكامل ورقم الهاتف وكلمة المرور (نحفظها مشفّرة بطريقة لا يمكن عكسها، ولا نطّلع عليها).</li>
@@ -99,10 +100,10 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
 <li><strong>Backblaze B2:</strong> نسخ احتياطية مشفّرة لقاعدة البيانات.</li>
 <li><strong>TweetSMS:</strong> إرسال رموز التحقق برسالة نصية إلى رقمك.</li>
 <li><strong>Expo Push Service، وGoogle Firebase Cloud Messaging، وApple Push Notification service:</strong> إيصال الإشعارات إلى جهازك.</li>
-<li><strong>OpenStreetMap Nominatim:</strong> تحويل الموقع على الخريطة إلى عنوان مقروء. يُرسل الموقع المختار من جهازك مباشرة.</li>
+<li><strong>OpenStreetMap Nominatim:</strong> تحويل الموقع على الخريطة إلى عنوان مقروء. يرسل خادم JOVO النقطة المختارة فقط، دون اسمك أو رقمك أو عنوان جهازك (IP).</li>
 <li><strong>مزوّد خرائط الأقمار الصناعية Esri ArcGIS على أندرويد ونسخة الويب، وخرائط Apple على iOS:</strong> عرض الخريطة. يرى المزوّد عنوان الشبكة (IP) ومنطقة الخريطة المعروضة.</li>
 <li><strong>Vercel:</strong> استضافة نسخة الويب ولوحة الإدارة.</li>
-<li><strong><mark class="ph">[[PLACEHOLDER: مزوّد تتبّع أخطاء الخادم]]</mark>:</strong> تقارير أخطاء الخادم.</li>
+<li><strong><mark class="ph">[[PLACEHOLDER: مزوّد تتبّع أخطاء الخادم]]</mark>:</strong> تقارير أخطاء الخادم، وتقارير أعطال التطبيق إذا فعّلناها (اسم الخطأ ونصه المختصر وإصدار التطبيق ونوع النظام فقط، دون أي بيانات تعريفية أو موقع).</li>
 <li><strong>تطبيق الملاحة</strong> (خرائط Google على أندرويد، وخرائط Apple على iOS): يستلم موقع التسليم عندما يفتحه السائق بنفسه.</li>
 </ul>
 <p>قد نكشف البيانات للجهات الرسمية عند وجود التزام قانوني صحيح.</p>
@@ -139,6 +140,7 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
 <h2>Who we are</h2>
 <p>JOVO is a delivery service for a single store, JOVO MARKET, in <mark class="ph">[[PLACEHOLDER: town / service area]]</mark>. Payment is cash on delivery only. The operator responsible for your data is <mark class="ph">[[PLACEHOLDER: operator legal name]]</mark>, <mark class="ph">[[PLACEHOLDER: legal address]]</mark>. Privacy contact: <mark class="ph">[[PLACEHOLDER: privacy email]]</mark> or <mark class="ph">[[PLACEHOLDER: support phone]]</mark>.</p>
 <h2>Data we collect</h2>
+<p><strong>Browsing without an account:</strong> you can browse the store, search and see offers without an account. We then collect no personal data; your cart and recently viewed products stay on your device, and our server sees catalogue requests like any website (IP address, for abuse protection).</p>
 <p><strong>All accounts</strong></p>
 <ul>
 <li>Full name, phone number and password. The password is stored only as a one-way hash, and we never see it.</li>
@@ -198,10 +200,10 @@ footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line)
 <li><strong>Backblaze B2:</strong> encrypted database backups.</li>
 <li><strong>TweetSMS:</strong> sends verification codes by SMS to your number.</li>
 <li><strong>Expo Push Service, Google Firebase Cloud Messaging and Apple Push Notification service:</strong> deliver notifications to your device.</li>
-<li><strong>OpenStreetMap Nominatim:</strong> turns a map point into a readable address. The chosen point is sent directly from your device.</li>
+<li><strong>OpenStreetMap Nominatim:</strong> turns a map point into a readable address. The JOVO server sends only the chosen point, without your name, number or device IP address.</li>
 <li><strong>Esri ArcGIS satellite map tiles (Android and web) and Apple Maps (iOS):</strong> map display. The provider sees your IP address and the map area being shown.</li>
 <li><strong>Vercel:</strong> hosting for the web version and the admin console.</li>
-<li><strong><mark class="ph">[[PLACEHOLDER: server error-tracking provider]]</mark>:</strong> server error reports.</li>
+<li><strong><mark class="ph">[[PLACEHOLDER: server error-tracking provider]]</mark>:</strong> server error reports, and app error reports if we turn them on (error name, a short masked message, app version and platform only; no identifiers or location).</li>
 <li><strong>The navigation app</strong> (Google Maps on Android, Apple Maps on iOS): receives the delivery point when the driver opens it.</li>
 </ul>
 <p>We may disclose data to authorities where there is a valid legal obligation.</p>
