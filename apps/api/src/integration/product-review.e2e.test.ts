@@ -114,8 +114,30 @@ test("pending-review products are hidden from customers and kept for staff", { s
     assert.equal((await prisma.menuItem.findUniqueOrThrow({ where: { id: pending.id } })).reviewStatus, "PENDING_REVIEW", "editing does not approve");
   });
 
-  await context.test("once approved the product is visible and orderable", async () => {
-    await prisma.menuItem.update({ where: { id: pending.id }, data: { reviewStatus: "APPROVED", reviewedAt: new Date() } });
+  await context.test("admin review queue: filter, counter, search by name and barcode; customers are refused", async () => {
+    const blocked = await product("Review vodka 70cl", { reviewStatus: "PENDING_REVIEW" });
+    const list = await http.get("/api/v1/admin/products").query({ reviewStatus: "PENDING_REVIEW", restaurantId: store.id }).set("Authorization", `Bearer ${adminToken}`).expect(200);
+    assert.equal(list.body.pendingReviewCount, 2);
+    assert.deepEqual(list.body.items.map((item: { id: string }) => item.id).sort(), [blocked.id, pending.id].sort());
+    const byBarcode = await http.get("/api/v1/admin/products").query({ search: "0072940001234" }).set("Authorization", `Bearer ${adminToken}`).expect(200);
+    assert.deepEqual(byBarcode.body.items.map((item: { id: string }) => item.id), [pending.id]);
+    const byName = await http.get("/api/v1/admin/products").query({ search: "pending zaatar" }).set("Authorization", `Bearer ${adminToken}`).expect(200);
+    assert.equal(byName.body.items[0]?.barcode, "0072940001234", "barcodes stay strings with their leading zeros");
+    await http.get("/api/v1/admin/products").set("Authorization", `Bearer ${customerToken}`).expect(403);
+    await http.post("/api/v1/admin/products/approve").set("Authorization", `Bearer ${ownerToken}`).send({ itemIds: [pending.id] }).expect(403);
+    const refused = await http.post("/api/v1/admin/products/approve").set("Authorization", `Bearer ${adminToken}`).send({ itemIds: [blocked.id] }).expect(201);
+    assert.deepEqual(refused.body.approved, []);
+    assert.equal(refused.body.refused[0]?.id, blocked.id);
+    assert.equal((await prisma.menuItem.findUniqueOrThrow({ where: { id: blocked.id } })).reviewStatus, "PENDING_REVIEW");
+  });
+
+  await context.test("once approved through the admin route the product is visible and orderable", async () => {
+    const approval = await http.post("/api/v1/admin/products/approve").set("Authorization", `Bearer ${adminToken}`).send({ itemIds: [pending.id, approved.id] }).expect(201);
+    assert.deepEqual(approval.body.approved, [pending.id]);
+    assert.deepEqual(approval.body.alreadyApproved, [approved.id]);
+    const stored = await prisma.menuItem.findUniqueOrThrow({ where: { id: pending.id } });
+    assert.ok(stored.reviewedAt && stored.reviewedByUserId);
+    assert.equal(await prisma.auditLog.count({ where: { action: "PRODUCTS_APPROVED", entityId: pending.id } }), 1);
     const catalog = await http.get(`/api/v1/supermarkets/${store.id}/catalog`).expect(200);
     assert.ok(catalog.body.products.some((item: { id: string }) => item.id === pending.id));
     await http.post("/api/v1/orders/quote").set("Authorization", `Bearer ${customerToken}`).send(orderInput(pending.id)).expect(201);

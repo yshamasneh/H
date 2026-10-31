@@ -99,7 +99,8 @@
       "reports": "المبيعات",
       "analytics": "التحليلات",
       "liveMap": "الخريطة المباشرة",
-      "productOffers": "عروض المنتجات"
+      "productOffers": "عروض المنتجات",
+      "productReview": "مراجعة المنتجات"
     },
     "signedInAs": "تم تسجيل الدخول باسم",
     "signOut": "تسجيل الخروج",
@@ -1426,5 +1427,42 @@
     "approvedNotice": "تمت الموافقة على السائق.",
     "rejectedNotice": "تم رفض الطلب.",
     "suspendedNotice": "تم إيقاف السائق."
+  },
+  "productReview": {
+    "title": "مراجعة المنتجات",
+    "subtitle": "{{count}} منتج بانتظار المراجعة. المنتجات قيد المراجعة مخفية عن الزبائن حتى الموافقة عليها.",
+    "filters": {
+      "PENDING_REVIEW": "بانتظار المراجعة",
+      "APPROVED": "معتمد",
+      "ALL": "الكل"
+    },
+    "search": "ابحث بالاسم أو الباركود أو رمز المنتج",
+    "approveSelected": "اعتماد المحدد ({{count}})",
+    "approve": "اعتماد",
+    "edit": "تعديل",
+    "selectAll": "تحديد كل المنتجات قيد المراجعة في هذه الصفحة",
+    "select": "تحديد {{name}}",
+    "noImage": "بدون صورة",
+    "empty": "لا توجد منتجات مطابقة.",
+    "columns": {
+      "image": "الصورة",
+      "name": "الاسم",
+      "barcode": "الباركود",
+      "store": "المتجر",
+      "price": "السعر",
+      "status": "الحالة"
+    },
+    "editTitle": "تعديل المنتج",
+    "brand": "العلامة التجارية",
+    "category": "القسم",
+    "description": "الوصف",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "saved": "تم حفظ المنتج. لم تتغير حالة مراجعته.",
+    "invalidPrice": "أدخل سعرًا صحيحًا أكبر من صفر.",
+    "approvedNotice": "اعتُمد {{approved}}. رُفض (منتج ممنوع) {{refused}}. تُخطّي {{skipped}}.",
+    "loadError": "تعذر تحميل المنتجات.",
+    "approveError": "تعذر اعتماد المنتجات.",
+    "saveError": "تعذر حفظ المنتج."
   }
 }

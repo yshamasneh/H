@@ -5,6 +5,8 @@ import { RolesGuard } from "../common/guards/roles.guard";
 import { OffersModule } from "../offers/offers.module";
 import { UploadsModule } from "../uploads/uploads.module";
 import { AdminRestaurantsController } from "./admin-restaurants.controller";
+import { AdminProductsController } from "./admin-products.controller";
+import { ProductReviewService } from "./product-review.service";
 import { BusinessStaffController } from "./business-staff.controller";
 import { BusinessStaffService } from "./business-staff.service";
 import { MenuService } from "./menu.service";
@@ -20,8 +22,9 @@ import { RestaurantsService } from "./restaurants.service";
     SupermarketsController,
     RestaurantPortalController,
     BusinessStaffController,
-    AdminRestaurantsController
+    AdminRestaurantsController,
+    AdminProductsController
   ],
-  providers: [RestaurantsService, MenuService, BusinessStaffService, JwtAuthGuard, RolesGuard]
+  providers: [RestaurantsService, MenuService, ProductReviewService, BusinessStaffService, JwtAuthGuard, RolesGuard]
 })
 export class RestaurantsModule {}

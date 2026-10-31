@@ -99,7 +99,8 @@
       "reports": "Sales",
       "analytics": "Analytics",
       "liveMap": "Live map",
-      "productOffers": "Product offers"
+      "productOffers": "Product offers",
+      "productReview": "Product review"
     },
     "signedInAs": "Signed in as",
     "signOut": "Sign out",
@@ -1410,5 +1411,42 @@
     "approvedNotice": "Driver approved.",
     "rejectedNotice": "Application rejected.",
     "suspendedNotice": "Driver suspended."
+  },
+  "productReview": {
+    "title": "Product review",
+    "subtitle": "{{count}} product(s) awaiting review. Pending products are hidden from customers until approved.",
+    "filters": {
+      "PENDING_REVIEW": "Pending review",
+      "APPROVED": "Approved",
+      "ALL": "All"
+    },
+    "search": "Search by name, barcode or SKU",
+    "approveSelected": "Approve selected ({{count}})",
+    "approve": "Approve",
+    "edit": "Edit",
+    "selectAll": "Select all pending products on this page",
+    "select": "Select {{name}}",
+    "noImage": "No image",
+    "empty": "No products match.",
+    "columns": {
+      "image": "Image",
+      "name": "Name",
+      "barcode": "Barcode",
+      "store": "Store",
+      "price": "Price",
+      "status": "Status"
+    },
+    "editTitle": "Edit product",
+    "brand": "Brand",
+    "category": "Category",
+    "description": "Description",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Product saved. Its review state did not change.",
+    "invalidPrice": "Enter a valid price greater than zero.",
+    "approvedNotice": "Approved {{approved}}. Refused (restricted) {{refused}}. Skipped {{skipped}}.",
+    "loadError": "Could not load products.",
+    "approveError": "Could not approve the products.",
+    "saveError": "Could not save the product."
   }
 }

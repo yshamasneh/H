@@ -36,6 +36,7 @@ const platformNav: NavItem[] = [
   { to: "/drivers", labelKey: "layout.nav.drivers", icon: "✈", end: true, permission: "MANAGE_DRIVERS", group: "operations" },
   { to: "/drivers/live", labelKey: "layout.nav.liveMap", icon: "⌖", permission: "MANAGE_DRIVERS", group: "operations" },
   { to: "/restaurants", labelKey: "layout.nav.restaurants", icon: "♨", permission: "MANAGE_BUSINESSES", group: "network" },
+  { to: "/products/review", labelKey: "layout.nav.productReview", icon: "✓", permission: "MANAGE_BUSINESSES", group: "network" },
   { to: "/users", labelKey: "layout.nav.users", icon: "●", permission: "MANAGE_USERS", group: "network" },
   { to: "/offers", labelKey: "layout.nav.offers", icon: "%", anyPermission: ["MANAGE_OFFERS", "MANAGE_BUSINESSES"], group: "network" },
   { to: "/notifications", labelKey: "layout.nav.notifications", icon: "✉", permission: "MANAGE_NOTIFICATIONS", group: "network" },

@@ -30,6 +30,7 @@ import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { OffersHubPage } from "./pages/OffersHubPage";
 import { BusinessOffersPage } from "./pages/business/BusinessOffersPage";
 import { OperatingCostsPage } from "./pages/business/OperatingCostsPage";
+import { ProductReviewPage } from "./pages/ProductReviewPage";
 
 export default function App() {
   const { t } = useTranslation();
@@ -80,6 +81,7 @@ function PlatformRoutes() {
         <Route element={<BusinessReportsPage />} path="reports" />
         <Route element={<StaffPage />} path="staff" />
       </Route>
+      <Route element={<ProductReviewPage />} path="/products/review" />
       <Route element={<OrdersPage />} path="/orders" />
       <Route element={<AnalyticsPage />} path="/analytics" />
       <Route element={<OrderDetailPage />} path="/orders/:orderId" />
