@@ -208,3 +208,27 @@ This run does not touch `products/`. The licence-audit template is `docs/release
 2. Fill `source_url_or_supplier`, `licence_or_permission` and `evidence_location` (an email, contract or folder).
 3. The owner reviews every `retailer_site` and `unknown` row and decides to replace or keep it. Apple 5.2 requires content "you created or that you have a license to use".
 4. `has_watermark_or_third_party_logo`: yes or no, for any watermark or a retailer's own logo. A manufacturer's brand printed on the product pack is normal.
+
+<a id="h8-run2"></a>
+## H4 / H8 — run 2 verification (location behaviour vs disclosure)
+
+`ACCESS_BACKGROUND_LOCATION` is kept (owner instruction). Re-checked against the current code on `store-remediation-2`:
+
+| Path | When it sends a position | Evidence |
+|---|---|---|
+| Background task (`expo-location` updates, OS task `deliveryTrackingTask`) | Only while the driver has an active delivery (ASSIGNED, PICKED_UP, ON_THE_WAY). The server answers each report with `hasActiveDelivery`; the reporter stops the task when it is false. | `apps/mobile/src/core/background-location.ts:42-80`, `src/core/tracking/tracking-reporter.ts`, `src/features/driver/screens.tsx:175` (`useDriverLocationTracking(hasActiveDelivery, …)`), `apps/api/src/drivers/drivers.service.ts` `updateOwnLocation` (returns `hasActiveDelivery`) |
+| Foreground one-shot (`refreshLocation`) | Once when the driver home opens, on pull-to-refresh and when going online, **even with no delivery and even while offline**, only while the app is on screen. | `apps/mobile/src/features/driver/screens.tsx:117-126, 162-165, 187-190, 205-207` |
+| Customer | Never in the background; only when the customer taps "locate me" on the address map. | privacy policy §2 |
+
+**Verdict: the disclosure matches the behaviour.** The driver disclosure (`driver.json` → `tracking.disclosure.when`, disclosure version 2, Arabic and English), the privacy policy (Arabic line 35, English line 152) and the Play declaration text all describe the foreground one-shot report. No background collection happens without an active delivery. The code was not changed in this run: `driver/screens.tsx` may still hold the owner's local uncommitted change (run 1 note), and narrowing the one-shot report would change dispatch (who is "nearby"). Option kept for the owner (D3): guard `refreshLocation()` with `isOnline || hasActiveDelivery` and shorten the disclosure accordingly (bump `disclosureVersion` to 3).
+
+**Device test that must pass before the Play submission (NOT run here: needs a real Android 13+ phone and a release-signed build)**
+
+1. Install the closed-test build; sign in as an approved driver; go online; accept a delivery (use the demo driver and a demo order, see `reviewer-access-guide.md`).
+2. Confirm the order: JOVO's prominent disclosure first, then the system foreground prompt, then "Allow all the time" (background) in system settings.
+3. Start the delivery, then open Google Maps (or Waze) navigation and lock the screen for 5 minutes.
+4. Expected: the persistent "JOVO is sharing your location for this delivery" notification stays visible; in the admin live map (or `DriverProfile.lastLocationAt`) the position updates about every 10 s while JOVO is not on screen.
+5. Move the delivery out of the active states (an admin cancels the demo order). Expected: within one report the notification disappears and `lastLocationAt` stops changing.
+6. With no delivery, put JOVO in the background for 5 minutes: `lastLocationAt` must not change.
+7. Revoke background permission in system settings during a delivery: tracking continues only while JOVO is on screen, and the app explains how to re-enable it.
+8. Record the screen for steps 2–4 (≤ 30 s) for the Play background-location video.
