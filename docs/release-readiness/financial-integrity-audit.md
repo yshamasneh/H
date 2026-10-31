@@ -1,3 +1,15 @@
+# Financial integrity — run 3 additions (report-only)
+
+**Nothing financial was changed.** New tests only:
+
+- `integration/order-lifecycle.e2e.test.ts` (PostgreSQL, HTTP, synthetic data; passed twice in a row): idempotent placement (same key → one order), PLACED → ACCEPTED → PREPARING → packed → READY_FOR_PICKUP → driver accept → PICKED_UP → ON_THE_WAY → DELIVERED with exactly one `OrderFinancialRecord` and one `DriverCashCustody`; status history recorded in order; delivered orders refuse cancellation and store status changes (409); a customer cancellation of a PLACED order records no money and returns the reserved stock; a cancelled order cannot be accepted.
+- Product review (run 3 task 1) adds a refusal **before** pricing for PENDING_REVIEW products; quotes and totals for approved products are untouched (`product-review.e2e` asserts a 201 quote once approved).
+- The catalogue importer writes `priceMinor`/`costPriceMinor` exactly as given (no rounding; values with more than two decimals are refused) and never changes a hand-edited product. Note for the owner: an import that **changes the price of an already approved product** updates it immediately (review status kept). If you want price changes from imports to require re-approval, that is a policy decision (not implemented).
+
+**Suspicious findings in run 3:** none new. F1–F3, F9, F10 remain open as described below.
+
+---
+
 # Financial integrity audit — run 2 (`store-remediation-2`, report-only)
 
 **Rule kept:** no formula, percentage, fee, commission, earning or settlement rule was changed. `apps/api/src/accounting/**`, `orders/pricing.ts` and the settlement code were not edited.

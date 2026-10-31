@@ -40,7 +40,8 @@ if (build.status !== 0) {
       "dist/integration/demo-accounts.e2e.test.js",
       "dist/integration/delivery-claim-race.e2e.test.js",
       "dist/integration/product-review.e2e.test.js",
-      "dist/integration/catalogue-import.e2e.test.js"
+      "dist/integration/catalogue-import.e2e.test.js",
+      "dist/integration/order-lifecycle.e2e.test.js"
     ],
     {
       cwd: apiDirectory,
