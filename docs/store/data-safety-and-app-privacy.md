@@ -6,6 +6,7 @@ These answers are derived from the code on branch `store-remediation-2` (re-chec
 
 - Email is added as optional (customers can add it in Account, `features/customer/account-screen.tsx:146`).
 - Crash and diagnostics data is **not collected as shipped**: run 2 added a vendor-neutral reporter that stays off unless `EXPO_PUBLIC_ERROR_REPORT_URL` is set at build time. **The build that sets it must ship with these answers changed** (Google: App info and performance → Crash logs = collected, not shared, processed ephemerally: no, collection required (users cannot turn it off), purpose App functionality. Apple: Diagnostics → Crash Data, not linked to the user, not used for tracking).
+- Run 3 re-check: the product review queue, catalogue importer, production self-check and demo-account flag are server/admin features that collect nothing new from app users. **No answer changes.** The guest home now calls the public delivery-area route (no personal data).
 - Run 2: guests can browse without an account (no data collected for them). Reverse geocoding now goes through the JOVO API: the chosen map point (already declared as precise location) reaches Nominatim from the server, not the device. No answer changes.
 - Payment info is confirmed as not collected.
 
